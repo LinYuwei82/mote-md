@@ -1,8 +1,9 @@
 # Mote 新架构方案：Qt 外壳 + 系统 WebView
 
 状态：MVP 已跑通（打开 → 编辑 → 保存 → 未保存提示），并已补齐代码块语法高亮与
-行号、TOC 侧栏、缩放、源码模式。旧纯 Qt 文本引擎实现保留在仓库根目录（默认不启用，
-`MOTE_LEGACY_QT=1` 时回退），并备份于 `backup/qt-text-engine-20261109/`。
+行号、TOC 侧栏、缩放、源码模式。旧纯 Qt 文本引擎的实现在 `src/mainwindow.*`、
+`src/previewview.*`、`src/codehighlighter.*`（默认不启用，`MOTE_LEGACY_QT=1` 时回退），
+并备份于 `backup/qt-text-engine-20261109/`。
 
 ## 1. 分层与职责边界
 
@@ -347,7 +348,7 @@ base64 后 `post({type:'image', source:'paste', …})`；原生解码写盘并�
 | --- | --- | --- |
 | 编译 | 通过 | `qmake6` + `make`，无警告级错误；`macwebview.mm` 走 `OBJECTIVE_SOURCES` |
 | WKWebView 挂载 | 通过 | Qt 原生子视图内显示，窗口缩放时跟随 |
-| 包内资源加载 | 通过 | `://web/editor.html|css|js` 由 qrc 读出并内联，无外部文件依赖 |
+| 包内资源加载 | 通过 | `:/web/editor.html|css|js` 由 qrc 读出并内联，无外部文件依赖 |
 | 打开 .md | 通过 | 启动参数与「打开」按钮均走 `openFile`，标题/正文/状态栏同步 |
 | 块级渲染 | 通过 | 标题、段落、行内代码与链接、代码块（含行号）、表格均按渲染态显示 |
 | 图片相对路径 | 通过 | 以 md 所在目录为 baseURL，`sample-diagram.png` 正常显示 |

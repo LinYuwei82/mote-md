@@ -17,7 +17,7 @@ SMOKE=1
 for arg in "$@"; do
     case "$arg" in
         --no-smoke) SMOKE=0 ;;
-        -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        -h|--help) sed -n '2,9p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) printf '未知参数：%s（可用：--no-smoke）\n' "$arg" >&2; exit 2 ;;
     esac
 done

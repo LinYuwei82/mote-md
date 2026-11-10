@@ -64,7 +64,9 @@ git status -sb
 4. 才在 `main` 上打 `vX.Y.Z` 并推；
 5. 另一台 `git pull` 对齐。
 
-版本号唯一来源是 `Mote.pro` 的 `VERSION`：`Info.plist` 的 `@FULL_VERSION@`、发行说明与 DMG 文件名都从它派生，不允许另写一份。
+版本号以 `Mote.pro` 的 `VERSION` 为准：`Info.plist` 的 `@FULL_VERSION@`、发行说明与 DMG 文件名都从它派生。
+`resources/win/app.rc` 里的 FILEVERSION/PRODUCTVERSION 是 rc.exe 直接编译的，qmake 不会替换，
+**每次改版本都要手工同步**；改完在两台机器上各构建一次，并在 Windows 产物属性里确认版本一致。
 
 ## 6. 已知事故记录
 

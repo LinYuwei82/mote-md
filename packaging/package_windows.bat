@@ -14,11 +14,11 @@ REM    4) WebView2 SDK（NuGet 包 Microsoft.Web.WebView2）解压在仓库外，
 REM       默认 C:\dev\webview2sdk\pkg，可用 WEBVIEW2_SDK 覆盖
 REM
 REM  用法（在项目根目录的命令行中）：
-REM    set QTDIR=C:\Qt\6.8.0\msvc2022_64
+REM    set QTDIR=C:\Qt\6.11.1\msvc2022_64
 REM    packaging\package_windows.bat
 REM
 REM    使用 MinGW 套件时：
-REM    set QTDIR=C:\Qt\6.8.0\mingw_64
+REM    set QTDIR=C:\Qt\6.11.1\mingw_64
 REM    set USE_MINGW=1
 REM    packaging\package_windows.bat
 REM
@@ -33,8 +33,8 @@ set "OUT=%DIST%\%OUTNAME%"
 if "%WEBVIEW2_SDK%"=="" set "WEBVIEW2_SDK=C:\dev\webview2sdk\pkg"
 
 if "%QTDIR%"=="" (
-    echo [错误] 请先设置 QTDIR 指向 Qt6 安装目录，例如：
-    echo        set QTDIR=C:\Qt\6.8.0\msvc2022_64
+    echo [错误] 请先设置 QTDIR 指向 Qt 6 安装目录，例如：
+    echo        set QTDIR=C:\Qt\6.11.1\msvc2022_64
     exit /b 1
 )
 if not exist "%QTDIR%\bin\qmake.exe" (
@@ -52,10 +52,18 @@ if not exist "%WEBVIEW2_SDK%\build\native\x64\WebView2Loader.dll" (
 )
 
 echo [1/6] 清理旧的构建与产物目录
-if exist "%BUILD%" rmdir /s /q "%BUILD%"
-if exist "%DIST%" rmdir /s /q "%DIST%"
+if exist "%BUILD%" (
+    rmdir /s /q "%BUILD%"
+    if errorlevel 1 goto :fail
+)
+if exist "%DIST%" (
+    rmdir /s /q "%DIST%"
+    if errorlevel 1 goto :fail
+)
 mkdir "%BUILD%"
+if errorlevel 1 goto :fail
 mkdir "%DIST%"
+if errorlevel 1 goto :fail
 
 echo [2/6] qmake 生成工程
 pushd "%BUILD%"
@@ -80,6 +88,7 @@ popd
 
 echo [4/6] 复制可执行文件并部署 Qt 依赖（windeployqt）
 mkdir "%OUT%"
+if errorlevel 1 goto :fail
 copy /y "%EXE%" "%OUT%\" >nul
 if errorlevel 1 goto :fail
 
@@ -107,14 +116,20 @@ del /q "%OUT%\*.lib" 2>nul
 
 REM 示例文档（与 macOS 包保持一致）
 mkdir "%OUT%\samples"
+if errorlevel 1 goto :fail
 copy /y "%ROOT%\resources\samples\welcome.md" "%OUT%\samples\" >nul
+if errorlevel 1 goto :fail
 copy /y "%ROOT%\resources\samples\sample-diagram.png" "%OUT%\samples\" >nul
+if errorlevel 1 goto :fail
 
 REM 内置字体是嵌入二进制 OFL 授权文件（SIL Open Font License 要求随附）
 mkdir "%OUT%\licenses"
+if errorlevel 1 goto :fail
 copy /y "%ROOT%\resources\fonts\OFL.txt" "%OUT%\licenses\JetBrainsMono-OFL.txt" >nul
+if errorlevel 1 goto :fail
 REM 项目自身的 AGPL-3.0 全文随包分发（绿色版与安装包共用这份目录）
 copy /y "%ROOT%\LICENSE" "%OUT%\licenses\LICENSE-AGPL-3.0.txt" >nul
+if errorlevel 1 goto :fail
 
 echo [6/6] 压缩为 zip
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^

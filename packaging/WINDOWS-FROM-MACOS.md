@@ -130,11 +130,11 @@ macOS 侧如有未推送的提交，先 `git push` 再 clone；双机协作流�
 
 | 项目 | 建议 | 说明 |
 | --- | --- | --- |
-| Qt | **6.11.x**，与本机 6.11.1 对齐 | 工程使用 `QT += core gui widgets`，代码里用了 Qt 6 的 Markdown 导入结果（`QTextBlockFormat::BlockCodeLanguage`、`nonBreakableLines`）。不同小版本的 Markdown 导入细节可能有差异，会影响代码块首行、表格空块这类行为 |
-| 备选 | Qt 6.8 LTS（MSVC 2022 64-bit） | 能编译，但上述行为需重新验证（见第 7 节） |
+| Qt | **最低 6.5，推荐 6.11.1**（与本机 6.11.1 对齐，版本要求以 `PACKAGING.md` 2.1 为准） | 工程使用 `QT += core gui widgets`，代码里用了 Qt 6 的 Markdown 导入结果（`QTextBlockFormat::BlockCodeLanguage`、`nonBreakableLines`）。不同小版本的 Markdown 导入细节可能有差异，会影响代码块首行、表格空块这类行为 |
+| 备选 | 更低的小版本（如 6.8 LTS）未验证 | 若使用需按第 7 节重新验证上述行为 |
 | 位数 | 只支持 64 位 | 不要装 32 位套件 |
 | 编译器 | MSVC 2022（推荐）或 MinGW 64-bit | 二者**不能混用**：用 MSVC 的 Qt 必须配 MSVC 工具链，反之亦然 |
-| Qt5 | 不支持 | 工程用了 Qt6 API（`QFont::setFamilies` 等） |
+| Qt5 | 不支持 | 工程用了 Qt 6 API（`QFont::setFamilies` 等） |
 
 ### 3.2 Qt Online Installer 勾选
 
@@ -142,7 +142,7 @@ macOS 侧如有未推送的提交，先 `git push` 再 clone；双机协作流�
 
 需要勾的组件：
 
-- `Qt` → `Qt 6.11.x` → **`MSVC 2022 64-bit`**（推荐）
+- `Qt` → `Qt 6.11.1` → **`MSVC 2022 64-bit`**（推荐）
   - 或 `MinGW 64-bit`（想「拷贝即用、不装 VC 运行库」时选）
 - 选 MinGW 方案时，还要在 `Developer and Designer Tools` 里勾对应的
   **`MinGW 13.x 64-bit`**（Qt 6.8 起通常是 `mingw1310_64`，以 `C:\Qt\Tools` 下实际目录名为准）
@@ -207,7 +207,7 @@ where qmake
 where windeployqt
 ```
 
-- `qmake -v` 输出 `Using Qt version 6.11.x`，且路径在 `%QTDIR%\bin` 下；
+- `qmake -v` 输出 `Using Qt version 6.11.1`（或你所装的最低 6.5 及以上的版本），且路径在 `%QTDIR%\bin` 下；
 - 再按方案确认 `where nmake`（MSVC）或 `where mingw32-make`（MinGW）能找到。
 
 **不要同时把 MSVC 与 MinGW 两套 Qt 的 `bin` 放进同一个 PATH**：`where qmake`
@@ -249,7 +249,7 @@ PowerShell 里当前目录不会自动执行，需要写 `.\packaging\package_wi
 里的空格/中文支持不稳定**（`nmake` 在含空格目录里常直接失败，MSVC 在中文路径下
 偶发乱码）。请把项目放在：
 
-- ✅ `C:\dev\Mote`、`D:\work\mdviewer`
+- ✅ `C:\dev\Mote`、`D:\work\Mote`
 - ❌ `C:\Users\张三\Desktop\新建文件夹\`、`C:\My Projects\Mote Project\`
 - ❌ OneDrive / 坚果云同步目录（文件被占用会导致第 1 步删除失败）
 
@@ -336,7 +336,7 @@ MinGW 方案会额外带 `libgcc_s_seh-1.dll`、`libstdc++-6.dll`、`libwinpthre
 
 | 报错 | 原因 | 处理 |
 | --- | --- | --- |
-| `[错误] 请先设置 QTDIR 指向 Qt6 安装目录` | 没设 `QTDIR` | 按 4.1 / 4.2 设置后重开命令行 |
+| `[错误] 请先设置 QTDIR 指向 Qt 6 安装目录` | 没设 `QTDIR` | 按 4.1 / 4.2 设置后重开命令行 |
 | `[错误] 找不到 ...\bin\qmake.exe` | `QTDIR` 写错（例如漏了 `msvc2022_64` 这一级，或版本号不对） | 到 `C:\Qt` 下核对实际目录名，例如 `C:\Qt\6.11.1\msvc2022_64` |
 | `[错误] 找不到 ...\bin\windeployqt.exe` | 同上，或只装了 Qt Creator 没装 Qt 版本 | 用 Qt Maintenance Tool 补装对应套件 |
 | `'nmake' 不是内部或外部命令` | 没在 VS 开发者命令行里，或没装 VS 生成工具 | 从「x64 Native Tools Command Prompt for VS 2022」打开；或按 4.1 手动 `call VsDevCmd.bat -arch=x64` |
@@ -346,7 +346,7 @@ MinGW 方案会额外带 `libgcc_s_seh-1.dll`、`libstdc++-6.dll`、`libwinpthre
 | qmake 成功但链接时找不到 `Qt6Widgets.lib` | `QTDIR` 对应的是 MinGW 版，却用 nmake 链接 | 换对应套件，或改用 `USE_MINGW=1` |
 | `windeployqt` 报 `Unable to find dependent libraries of ...Mote.exe` | exe 与 windeployqt 不是同一套 Qt 构建 | 用 `%QTDIR%\bin\windeployqt.exe`，并确保 exe 由同一 `%QTDIR%` 的 qmake 生成 |
 | 第 1 步 `rmdir` 失败 / 目录非空 | `dist`、`build` 里有正在运行的程序或资源管理器占用 | 关闭已启动的 `Mote.exe` 与打开这些目录的窗口后重试 |
-| `Compress-Archive` 报路径过长/被占用 | 压缩时目标 zip 正在被打开，或路径过长 | 关闭占用；把项目放在较短路径（如 `C:\dev\mdviewer`） |
+| `Compress-Archive` 报路径过长/被占用 | 压缩时目标 zip 正在被打开，或路径过长 | 关闭占用；把项目放在较短路径（如 `C:\dev\Mote`） |
 | `qmake` 在含空格路径下有奇怪报错 | 构建工具对空格路径支持差 | 移到 `C:\dev\Mote` 这类路径 |
 | `rc.exe` / `app.ico` 相关错误 | `.rc` 里写的是相对路径 `app.ico` | 确认 `resources\win\app.rc` 与 `app.ico` 在同一目录；必要时把 `app.rc` 中的 `"app.ico"` 改成绝对路径 |
 
@@ -360,7 +360,7 @@ MinGW 方案会额外带 `libgcc_s_seh-1.dll`、`libstdc++-6.dll`、`libwinpthre
    `RC_FILE` 图标编译，均未在 Windows 实机执行。
 2. **`windeployqt` 的实际输出**：具体复制了哪些 DLL/插件，需你在 `dist\Mote-Windows\`
    里核对（尤其 `platforms\qwindows.dll`）。
-3. **Qt 版本行为差异**：若 Windows 上装的不是 6.11.x，Markdown 导入的
+3. **Qt 版本行为差异**：若 Windows 上装的不是推荐的 6.11.1（版本要求见 3.1），Markdown 导入的
    `BlockCodeLanguage`、`nonBreakableLines`、表格空块行为可能与 macOS 不同，
    需重点复查「代码块首行高亮」「行号数量」「表格紧跟代码块」三项。
 4. **Windows 字体渲染**：Light 字重与行号的观感在 DirectWrite 下与 macOS CoreText

@@ -9,7 +9,7 @@
 - **问题**：早期用 `QTextDocument`/自绘做编辑器（`backup/` 里留有快照），排版能力与 Markdown 语义（表格、代码块、行内标记）都要自己实现，维护成本高。
 - **选择**：Qt 只做窗口、菜单、文件与打包；正文交给系统 WebView（macOS 为 WKWebView，Windows 计划 WebView2），用 HTML/CSS 渲染 Markdown。
 - **理由**：排版、选择、输入法、滚动交给系统内核；前端可以用成熟的 HTML/CSS 表达块结构，迭代速度远高于自绘。重构后正文层为零第三方前端依赖（无框架、无 bundler）。
-- **代价**：包体积受 Qt 制约，与架构无关。当前 zip 30,904,323 字节（约 30 MB），解压 75 MB，其中 `libicudata` 约 32 MB、Qt 框架约 18 MB（见 `packaging/PACKAGING.md`）。想压到 40 MB 以内需要换不带 ICU 的 Qt 构建，尚未做。
+- **代价**：包体积受 Qt 制约，与架构无关。当前 zip 30,919,184 字节（约 30 MB，与 `dist/` 现有一致），解压 75 MB，其中 `libicudata` 约 32 MB、Qt 框架约 18 MB（见 `packaging/PACKAGING.md`）。想压到 40 MB 以内需要换不带 ICU 的 Qt 构建，尚未做。
 - **与 Typora 的体积对比**：立项时以 Typora 作为体积参照，但仓库内没有保留当时的对比数字，**未验证**；当前可引用的只有上面这组实测值。
 
 ### 2. 行内编辑的「零位移」
@@ -59,7 +59,7 @@
 - **问题**：macOS 的 NSMenu 在网页 `keydown` 之前消费 key equivalent；`Cmd+Z` 甚至会走 responder chain 的 `undo:`，绕开页面。
 - **选择**：所有会在 WebView 内生效的组合键都注册成原生 QAction（撤销/重做另接 `NSEvent` local monitor）。
 - **理由**：否则「菜单里有、按了没反应」；`Cmd+Shift+Z` 还曾被匹配到「撤销」项（NSMenu 匹配字母时忽略 Shift）。
-- **代价**：菜单项与前端处理逻辑要成对维护；新增快捷键必须检查与现有 23 项是否重复（`MOTE_KEYLOG=1` 会打印全表）。
+- **代价**：菜单项与前端处理逻辑要成对维护；新增快捷键必须检查与现有项是否重复（`MOTE_KEYLOG=1` 会打印全表）。
 
 ### 9. 右键菜单前的选区折叠
 

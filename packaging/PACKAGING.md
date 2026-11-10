@@ -239,7 +239,7 @@ dist/Mote-macOS-0.3.0.dmg          # 33 MB（34,252,460 字节，--dmg 才有）
 
 | 项目 | 结果 |
 | --- | --- |
-| zip 体积 | **30,909,313 字节（约 30 MB）**，满足 40 MB 以内的分发目标 |
+| zip 体积（该次构建，历史记录，与当前 `dist/` 略有差异） | **30,909,313 字节（约 30 MB）**，满足 40 MB 以内的分发目标 |
 | 解压后 `.app` | 75 MB（其中 Qt 自带 `libicudata.78.dylib` 32 MB、Qt 框架约 18 MB） |
 | SHA256 | `386b6fdcfad8f345e63d1215c49fd83567449e344ef917daf1dc6be22ddee7e0` |
 | 新增依赖 | `/System/Library/Frameworks/WebKit.framework`（系统框架，**不增加包体**） |
@@ -313,10 +313,10 @@ dist/Mote-macOS-0.3.0.dmg          # 33 MB（34,252,460 字节，--dmg 才有）
 | 零位移数据（单块转换） | 通过 | 5 段文档把第 2 段转代码块：`tops` 由 `[45,92,139,186,233]` → `[45,92,186,233,280]`；上方块`top` 不变，下方块整体 +47px，恰等于被转换块的高度增量，没有额外抖动 |
 | 斜杠菜单 | 通过 | 行首输入 `/` 弹出 12 项；输入 `code` 过滤为「代码块 / 行内代码」；`ArrowDown` 两次高亮「表格」、`Enter` 插入 2×2 表格且光标在首个 `th`；`#slash-menu` 关闭即移除 |
 | 斜杠 Esc | 通过 | 输入 `/quo` 后 `Esc`：浮层消失、块原文回到 `""`（连同 `/quo` 一起删除），没有残留节点或半截命令 |
-| 斜杠插入代码块 | 通过 | `/code` + `Enter`：得到 ` ```\n…\n``` `，光标在正文首行；随后直接输入 `console.log(1);` 落在代码体内（截图 `slash-result.png`） |
+| 斜杠插入代码块 | 通过 | `/code` + `Enter`：得到 ` ```\n…\n``` `，光标在正文首行；随后直接输入 `console.log(1);` 落在代码体内 |
 | 右键「转为」 | 通过 | 右键块弹出 `#turn-menu`（正文 / 标题 1-3 / 无序 / 有序 / 引用 / 代码块）；点「代码块」后该块整体包进围栏、其余块只随高度平移；已是目标类型再执行保持不动 |
 | 源码模式格式 | 通过 | 源码态选中 5 字 → `bold` 得 `**第一段文字**`，一次撤销还原；`h2` 得 `## 第一段文字`；切回渲染态 `raw/textContent` 一致 |
-| 重新打包后包内复测 | 通过 | 干净目录解压最终包（30,904,323 字节）后，在包内 `Mote.app` 上复跑：两次 `Cmd+N` 均为 `未命名 - Mote`/`dirty=0`、1 个空块、`bare` 占位、toc 0、无查找条、16.5px；注入真实 `Cmd+B` 后 `**第二段文字。**`（`raw === textContent`）；斜杠 `/code` 过滤出「代码块/行内代码」，`Enter` 插入围栏块且 `#slash-menu` 已移除；`正文→标题 1` 得 `# 第一段文字。`（同类型再执行不变，一次撤销还原）；5 段文档第 2 段→代码块 `tops` 由 `[45,92,139,186,233]`→`[45,92,186,233,280]`；3 段→无序列表合成单块 3 项、一次撤销回 3 段 |
+| 重新打包后包内复测 | 通过 | 干净目录解压 2026-11-10 该次重新打包的最终包（30,904,323 字节，历史记录）后，在包内 `Mote.app` 上复跑：两次 `Cmd+N` 均为 `未命名 - Mote`/`dirty=0`、1 个空块、`bare` 占位、toc 0、无查找条、16.5px；注入真实 `Cmd+B` 后 `**第二段文字。**`（`raw === textContent`）；斜杠 `/code` 过滤出「代码块/行内代码」，`Enter` 插入围栏块且 `#slash-menu` 已移除；`正文→标题 1` 得 `# 第一段文字。`（同类型再执行不变，一次撤销还原）；5 段文档第 2 段→代码块 `tops` 由 `[45,92,139,186,233]`→`[45,92,186,233,280]`；3 段→无序列表合成单块 3 项、一次撤销回 3 段 |
 
 按键链路（本轮修复，详见架构文档 §2.4）：macOS 原生「编辑」菜单会在页面 `keydown`
 之前吃掉 `Cmd+Z`，且 NSMenu 匹配字母快捷键时忽略 Shift，导致 `Cmd+Shift+Z` 命中「撤销」。
@@ -426,7 +426,7 @@ NSMenu key equivalent 消费），右键用 **`cliclick` 真实鼠标事件**；
   1–3 级标题互切时只保留一个前缀，不会叠加。
 - 原生格式菜单占用了 `Cmd+1/2/3`、`Cmd+Shift+7/8/B/C/K/T`；目录快捷键因此从 `Cmd+Shift+T`
   改为 `Cmd+Shift+L`。`Cmd+0` 仍是「实际大小」（缩放复位），所以「正文」菜单项没有快捷键。
-- 解压后 74 MB 主要来自 Homebrew Qt 的 ICU 数据（32 MB）与 Qt 框架，架构调整
+- 解压后 75 MB 主要来自 Homebrew Qt 的 ICU 数据（32 MB）与 Qt 框架，架构调整
   不会改变这部分；要把解压体积压到 40 MB 以内，需要换用不带 ICU 的 Qt 构建，
   或把外壳也移出 Qt（不在本轮范围）。
 
@@ -478,7 +478,7 @@ NSMenu key equivalent 消费），右键用 **`cliclick` 真实鼠标事件**；
 方式同前：鼠标用 `cliclick` 真实事件、`Cmd+Click` 经 System Events 的 ⌘ 修饰键 + 真实点击，
 页面侧每步前采样 `dataset.raw`、`textContent`、块几何、`getComputedStyle`，并用
 `elementFromPoint` 做命中测试。**最终包**解压到全新目录 `/tmp/clean-test3` 后复跑，
-下表数据均来自包内 `Mote.app`（`dist/Mote-macOS.zip`，30,919,297 字节）。
+下表数据均来自包内 `Mote.app`（2026-11-10 该次最终包，30,919,297 字节，与当前 `dist/Mote-macOS.zip` 的 30,919,184 字节略有差异）。
 带指针的截图用**整屏** `screencapture -x -C` 再按窗口矩形裁切（`-R` 区域模式实测不含指针）。
 
 **批次 A：链接交互**
@@ -488,7 +488,7 @@ NSMenu key equivalent 消费），右键用 **`cliclick` 真实鼠标事件**；
 | 渲染样式 | 通过 | 4 个链接的计算样式均为 `color:rgb(47,111,237)`、`text-decoration-line:underline`、`cursor:pointer`；文字可识别为链接，零宽标记 `[` `](url)` 仍不占位 |
 | 普通点击 | 通过 | 点链接文字后仅块 0 进入编辑态（`editing:[true,false,false,false]`），页面 URL 仍是 `.mote-preview-*.html`，`dataset.raw` 与 `textContent` 不变 |
 | 编辑态形态 | 通过 | 编辑态下 `a.md-link` 退化为普通文本（`cursor:text`），显示原始 `[示例站点](https://example.com)` |
-| 复制输出 | 通过 | 产品自身 `copy` 处理器输出 `链接：[示例站点](https://example.com)`，与 `dataset.raw` 逐字相等（`equalsRaw:true`）；验证走合成 `DataTransfer`（见 §5.6） |
+| 复制输出 | 通过 | 产品自身 `copy` 处理器输出 `链接：[示例站点](https://example.com)`，与 `dataset.raw` 逐字相等（`equalsRaw:true`）；验证走合成 `DataTransfer`（见 §5 第 6 条） |
 | `Cmd+Click` 外部链接 | 通过 | 前台应用变为 `Safari`；页面 URL 不变；导航被拦截（`MoteNavigationDelegate` 除首次加载外一律 Cancel，本次未产生导航，`nav blocked` 日志 0 条） |
 | `Cmd+Click` 相对 `.md` | 通过 | 应用内打开 `other.md`（2 块，`['# 另一篇','被链接打开的文件。']`），走「未保存确认 → 打开」；日志 `QT openLink href=other.md base=/tmp/verify-mote/cases/` |
 | 目标不存在 | 通过 | 弹原生提示框（窗口数 2）、Esc 关闭后进程存活（`alive:true`）、原文档 `dataset.raw` 不变；截图 `screenshots/link-missing-dialog.png` |
@@ -528,7 +528,7 @@ NSMenu key equivalent 消费），右键用 **`cliclick` 真实鼠标事件**；
 `'</head>'` 字面量**也一起替换了，导致导出的 HTML 凭空多出一个 `file://` 的 `<base>`。
 改为只替换第一处（模板自己的 `</head>`，`src/macwebview.mm`）后，`grep file://` 从 1 变 0。
 
-PDF 导出的可行性评估见 §5.5（结论：不提供，理由是实测数据不支持）。
+PDF 导出的可行性评估见 §5 第 5 条（结论：不提供，理由是实测数据不支持）。
 
 ### 1.14 DMG 分发：拖拽安装（2026-11-10，最终包）
 
@@ -598,7 +598,7 @@ bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-ma
 上传步骤：
 
 1. 打开仓库页 `https://gitee.com/lin-yuwei168/mote-md`，在顶部/右侧找到 **「发行版」**（Release）；
-2. 点 **「新建发行版」**（或「创建 Release」），填标签（如 `v1.0.1`）、发行版标题与说明；
+2. 点 **「新建发行版」**（或「创建 Release」），填标签（如 `v0.3.0`）、发行版标题与说明；
 3. 在 **「上传附件」** 区域选择 `dist/Mote-macOS-0.3.0.dmg`（可同时添加 `dist/Mote-macOS.zip`）；
 4. 需要的话勾选「这是一个预览版本」，然后 **「发布」**；
 5. 发布后在发行版详情页能看到附件与大小，下载链接形如
@@ -621,7 +621,8 @@ bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-ma
 ### 2.1 前置条件
 
 1. Windows 10/11 x64。
-2. 安装 **Qt 6.5 以上**（Qt Online Installer），勾选：
+2. 安装 **Qt 6.5 以上**（Qt Online Installer），推荐 **6.11.1**（与本机打包环境一致；
+   更早的 6.x 未验证），勾选：
    - `MSVC 2022 64-bit`（推荐，需配合 Visual Studio 生成工具），或
    - `MinGW 64-bit`（推荐给「不想装运行库」的场景，脚本会带上 GCC 运行库 DLL）。
 3. 若用 MSVC：安装 Visual Studio 2022 生成工具（含「使用 C++ 的桌面开发」），
@@ -633,14 +634,14 @@ bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-ma
 在项目根目录的命令行中执行：
 
 ```bat
-set QTDIR=C:\Qt\6.8.0\msvc2022_64
+set QTDIR=C:\Qt\6.11.1\msvc2022_64
 packaging\package_windows.bat
 ```
 
 MinGW 套件：
 
 ```bat
-set QTDIR=C:\Qt\6.8.0\mingw_64
+set QTDIR=C:\Qt\6.11.1\mingw_64
 set USE_MINGW=1
 packaging\package_windows.bat
 ```
@@ -674,7 +675,7 @@ dist\Mote-Windows\
 ### 2.3 手动逐步执行（不用脚本时）
 
 ```bat
-set QTDIR=C:\Qt\6.8.0\msvc2022_64
+set QTDIR=C:\Qt\6.11.1\msvc2022_64
 set WEBVIEW2_SDK=C:\path\to\Microsoft.Web.WebView2
 mkdir build && cd build
 %QTDIR%\bin\qmake.exe ..\Mote.pro
@@ -725,7 +726,7 @@ copy LICENSE dist\Mote-Windows\licenses\LICENSE-AGPL-3.0.txt
 - [ ] 正文字号 16.5pt、字重偏细，标题 Bold/DemiBold 仍与正文有明显层级差
 - [ ] 左侧目录层级正确，点击可跳转，滚动时当前标题高亮
 - [ ] 缩放正常（macOS 为 `Cmd+=` / `Cmd+-` / `Cmd+0`，100% 即 16.5pt，范围 0.6–2.6），侧栏布局不受影响
-- [ ] 源码模式（macOS 为 `Cmd+/`）可在整篇 Markdown 与所见即所得之间切换，切换后撤销历史与未保存标记仍连续
+- [ ] 源码模式（macOS 为 `Cmd+E`，备选 `Cmd+/`）可在整篇 Markdown 与所见即所得之间切换，切换后撤销历史与未保存标记仍连续
 - [ ] 修改后保存（macOS 为 `Cmd+S`），重新打开文件内容已更新；关闭时有未保存提示
 - [ ] 拖拽 `.md` 文件到窗口可打开；`Ctrl+O` 文件对话框可打开
 - [ ] 新建（macOS 为 `Cmd+N`）得到空白文档，标题「未命名 - Mote」，目录/查找/缩放已复位；有未保存修改时先问「保存 / 不保存 / 取消」
@@ -739,21 +740,26 @@ copy LICENSE dist\Mote-Windows\licenses\LICENSE-AGPL-3.0.txt
 
 ## 4. 资源与路径策略
 
+> qrc 资源、图标与字体对两条路径相同；凡涉及 `QTextDocument` / `QTextBrowser` 的条目只适用于
+> **旧 Qt 文本引擎**（`MOTE_LEGACY_QT=1` 时启用，实现位于 `src/previewview.*`、
+> `src/codehighlighter.*`）。默认路径是 WebView 架构，见 `docs/WEBVIEW-ARCHITECTURE.md`。
+
 - 图标、样式表、内置示例文档都通过 `resources/resources.qrc` 编进可执行文件，
   运行时用 `:/icons/...`、`:/styles/app.qss`、`:/samples/welcome.md` 访问，**不依赖外部路径**。
-- 打开的 md 文档以**该文件所在目录**作为基地址（`QTextDocument::setBaseUrl`），
-  因此文档里的相对图片路径在打包后依然能解析。
+- （旧引擎）打开的 md 文档以**该文件所在目录**作为基地址（`QTextDocument::setBaseUrl`），
+  因此文档里的相对图片路径在打包后依然能解析。WebView 路径对应的是页内 `<base href>`。
 - 内置示例文档的基地址是 `qrc:/samples/`，示例图片也一并打包在 qrc 中。
 - Windows 的 exe 图标走 `.rc` + `RC_FILE`；macOS 的 `.app` 图标走 `ICON = app.icns`
   与自定义 `Info.plist`（`CFBundleIconFile`）。
-- 代码高亮的语言标识直接来自 Qt 的 markdown 导入结果（`QTextBlockFormat` 的
+- （旧引擎）代码高亮的语言标识直接来自 Qt 的 markdown 导入结果（`QTextBlockFormat` 的
   `BlockCodeLanguage` 属性），由自写的 `src/codehighlighter.cpp` 逐行扫描着色，
   **没有引入任何第三方 Markdown 解析或高亮库**；找不到标识或语言不认识时不着色。
+  WebView 路径用 `resources/web/editor.js` 里自写的着色器，同样不依赖第三方库。
 - 代码字体 JetBrains Mono 以 `.ttf` 形式放在 `resources/fonts/`（Light / Regular / Bold）
   并由 qrc 编入可执行文件，运行时不依赖系统已安装字体；`OFL.txt` 同时随 qrc 与发布目录
   的 `licenses/` 提供。回退链为 JetBrains Mono → Menlo → SF Mono → 系统等宽，
   改动字体时不要破坏这条链。
-- 预览文档先在脱离视图的 `QTextDocument` 上完成解析、样式与高亮，再一次性
+- （旧引擎）预览文档先在脱离视图的 `QTextDocument` 上完成解析、样式与高亮，再一次性
   `setDocument()` 交给 `QTextBrowser`。不要把这些格式操作改回“边挂载边修改”，
   否则大文档会因反复重排慢到数秒（见 1.6）。
 

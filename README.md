@@ -83,7 +83,7 @@ Windows 用 `packaging/package_windows.bat` 构建并产出绿色版 zip，安�
 - **深色模式只覆盖正文区域**：网页侧（正文、标题、引用、表格、行内代码、代码块与语法高亮、目录、查找高亮、斜杠浮层）全部跟随主题；状态栏在深色下单独上色。工具栏与菜单栏仍是系统原生外观，不随文档主题变化。
 - **链接只支持两种跳转**：`Cmd+Click` 外部链接（http/https/mailto）与相对路径的 `.md`；**锚点链接**（`#标题`）因为没有生成标题锚点，只在状态栏提示「暂不支持」；**图片**按 `img` 渲染，没有 `<a>` 包裹，`Cmd+Click` 不触发任何跳转（相对路径图片仍按文档目录正常显示与导出内嵌）。
 - **导出 HTML 是「网页快照」**：单文件、无外部依赖、无脚本；导出后不提供任何交互（链接仍可点，但任务复选框是静态图形）。
-- **不提供导出 PDF**：`WKWebView` 的 `createPDFWithConfiguration:`（macOS 11+）配置只有 `rect`，只能出**单张长页**、无法分页；唯一的分页路径 `printOperationWithPrintInfo:` 在本机（macOS 26.2）三种参数组合下都会失控——20 秒内写出 408–982 MB 且不返回，只能杀进程。因此不做半成品，详见 [packaging/PACKAGING.md](packaging/PACKAGING.md) 的评估记录。
+- **不提供导出 PDF**：`WKWebView` 的 `createPDFWithConfiguration:`（macOS 11+）配置只有 `rect` 与 `allowTransparentBackground` 两个属性（前者定页尺寸，后者只影响背景是否透明），只能出**单张长页**、无法分页；唯一的分页路径 `printOperationWithPrintInfo:` 在本机（macOS 26.2）三种参数组合下都会失控——20 秒内写出 408–982 MB 且不返回，只能杀进程。因此不做半成品，详见 [packaging/PACKAGING.md](packaging/PACKAGING.md) 的评估记录。
 - **任务复选框的复制**：复制处理器剔除隐藏标记；脚本用 `DataTransfer` 走产品同一条 `copy` 处理逻辑验证，真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 - 目录在源码模式下隐藏；正在编辑的块在重排前标题高亮可能滞后一帧。
 
