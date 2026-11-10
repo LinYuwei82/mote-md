@@ -1020,8 +1020,9 @@
       return '<li' + style + '>' + head + renderInline(rest) + '</li>';
     return '<li class="task"' + style + '>' + head
       // 任务标记不做成原子对象：编辑态它显示为可见文本，光标可以进入并用键盘
-      // 把 [ ] 改成 [x]；渲染态 font-size:0 隐藏，由复选框代替。
-      + (INLINE_PROTO ? '<span class="mk mk-task">' + escapeHtml(task[0]) + '</span>' : '')
+      // 把 [ ] 改成 [x]；渲染态 font-size:0 隐藏，由复选框代替。文字包一层 <i>，
+      // 编辑态才能绝对定位压到复选框那块占位上，做到进出编辑态零位移。
+      + (INLINE_PROTO ? '<span class="mk mk-task"><i>' + escapeHtml(task[0]) + '</i></span>' : '')
       + '<input type="checkbox" class="task-check" contenteditable="false" tabindex="-1"'
       + (task[1] === ' ' ? '' : ' checked') + '>'
       + renderInline(rest.slice(task[0].length)) + '</li>';

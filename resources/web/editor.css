@@ -542,22 +542,30 @@ body.inline-proto .block.editing .mk.mk-live > i { opacity: 1; }
   transform: rotate(45deg);
 }
 
-/* 编辑态：隐藏控件，把零宽标记还原成可见文本，键盘可直接把 [ ] 改成 [x] */
-.block.editing li > input.task-check { display: none; }
+/* 编辑态：控件只隐身、保留占位（display:none 会让整行文字左移一个复选框宽度），
+   标记文字用绝对定位压在那块占位上，仍然零前进宽度，因此进出编辑态文字不位移。 */
+.block.editing li > input.task-check { visibility: hidden; }
 
 .block.editing .mk.mk-task { font-size: inherit; }
 
-.block.editing .mk.mk-task > i {
-  position: static;
+body.inline-proto .block.editing .mk.mk-task > i {
+  position: absolute;
+  /* 往左让出一点，"]" 才不会贴住后面的任务文字：只借左侧留白，不动文字位置 */
+  left: -0.22em;
+  top: 0;
+  right: auto;
+  bottom: auto;
   opacity: 1;
   font-size: inherit;
   font-family: inherit;
   line-height: inherit;
   letter-spacing: inherit;
   color: inherit;
-  bottom: auto;
-  left: auto;
-  right: auto;
+  white-space: pre;
+  /* 标记文字要能用鼠标点、用键盘改，不受提示标签的禁用规则影响 */
+  pointer-events: auto;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* 标题标记挂在标题文字左侧（进入父级左侧留白），零宽、不推文字。
