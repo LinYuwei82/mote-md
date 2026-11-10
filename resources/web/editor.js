@@ -698,6 +698,44 @@
     gutter._count = count;
   }
 
+  // 行号栏是「1<br>2<br>3」结构，每个文本节点恰好是一行。点行号时按纵向命中
+  // 判断点了第几行：横向命中点（框右侧 +2）在长行时会落到 <code> 外面，取不到
+  // 代码里的偏移，只能退化成块首。
+  function gutterLineAt(gutter, y) {
+    var line = -1;
+    var best = Infinity;
+    var index = -1;
+    for (var node = gutter.firstChild; node; node = node.nextSibling) {
+      if (node.nodeType !== 3)
+        continue;
+      index++;
+      var range = document.createRange();
+      range.selectNodeContents(node);
+      var rect = range.getBoundingClientRect();
+      if (y >= rect.top && y <= rect.bottom)
+        return index;
+      var distance = y < rect.top ? rect.top - y : y - rect.bottom;
+      if (distance < best) {
+        best = distance;
+        line = index;
+      }
+    }
+    return line < 0 ? 0 : line;
+  }
+
+  // 第 line 行（0 起）在 <code> 文本里的起始下标
+  function codeLineStart(code, line) {
+    var text = code.textContent;
+    var offset = 0;
+    for (var i = 0; i < line; i++) {
+      var next = text.indexOf('\n', offset);
+      if (next < 0)
+        return text.length;
+      offset = next + 1;
+    }
+    return offset;
+  }
+
   function renderCode(el, code, lang) {
     // 结尾的 \n 属于正文（末行之后的空行），不能再剥掉，否则编辑-重排往返会
     // 悄悄少一行；围栏前那个 \n 已由 renderBlock 的匹配式吃掉。
@@ -2442,11 +2480,7 @@
       var code = codeEl(el);
       if (!code)
         return;
-      var box = gutter.getBoundingClientRect();
-      var hit = document.caretRangeFromPoint(box.right + 2, event.clientY);
-      var offset = hit ? offsetIn(code, hit.startContainer, hit.startOffset) : -1;
-      if (offset < 0)
-        offset = 0;
+      var offset = codeLineStart(code, gutterLineAt(gutter, event.clientY));
       if (el.classList.contains('editing')) {
         setSelectionRange(code, offset);
       } else {
