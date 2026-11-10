@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("Mote"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.0.0"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("0.2.0"));
     QCoreApplication::setOrganizationName(QStringLiteral("Mote"));
     QApplication::setApplicationDisplayName(QStringLiteral("Mote"));
 
