@@ -1900,13 +1900,24 @@
   // 落在标记之后会让新输入跑到 `|` 外面，重排时那一行会凭空多出一列。
   function caretInCellEnd(cell) {
     var nodes = editableTextNodes(cell);
-    if (!nodes.length) {
-      caretAtEdge(cell, false);
-      return;
-    }
-    var last = nodes[nodes.length - 1];
     var range = document.createRange();
-    range.setStart(last, last.nodeValue.length);
+    if (!nodes.length) {
+      // 空格子里没有可依附的可见文本：光标要放在尾部结构标记（| / \n）之前。
+      // 放到单元格末尾（标记之后）时，新输入会写到分隔符外面，重排多出一列。
+      var i = cell.childNodes.length;
+      while (i > 0) {
+        var prev = cell.childNodes[i - 1];
+        if (prev.nodeType === 1 && prev.classList
+            && (prev.classList.contains('mk-pipe') || prev.classList.contains('mk-nl')))
+          i--;
+        else
+          break;
+      }
+      range.setStart(cell, i);
+    } else {
+      var last = nodes[nodes.length - 1];
+      range.setStart(last, last.nodeValue.length);
+    }
     range.collapse(true);
     var selection = window.getSelection();
     selection.removeAllRanges();
@@ -1916,8 +1927,17 @@
   // 光标必须落在单元格里：一旦落到表格外，后续输入会写进块级文本（甚至 <hr>
   // 外侧），原文就坏了。这里只兜底，不改变正常点击的位置。
   function ensureCellCaret(el) {
-    if (activeCell(el))
+    var cell = activeCell(el);
+    if (cell) {
+      // 元素级光标停在单元格末尾（尾部 | 之后）同样会写坏原文：新输入会跑到
+      // 分隔符外面，下次重排那一行就多出一列。收回到可见文本末尾。
+      var selection = window.getSelection();
+      var range = selection.rangeCount ? selection.getRangeAt(0) : null;
+      if (range && range.collapsed && range.startContainer === cell
+          && range.startOffset >= cell.childNodes.length)
+        caretInCellEnd(cell);
       return;
+    }
     var first = el.querySelector('th, td');
     if (first)
       caretInCellEnd(first);
@@ -4705,7 +4725,10 @@
       if (host !== el) {
         el.classList.add('editing');
         el.focus();
-        setSelectionRange(el, el.textContent.length);
+        // 不能直接 setSelectionRange：表格末尾的偏移会落在尾部 | 标记之后，
+        // 之后的输入就写到分隔符外面去了。placeBlockCaret 会带上
+        // ensureCellCaret 把光标收回单元格可见文本里。
+        placeBlockCaret(el, el.textContent.length);
       }
     }
     openTurnMenu(event.clientX, event.clientY);
