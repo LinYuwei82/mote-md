@@ -3180,34 +3180,23 @@
     reader.readAsDataURL(file);
   }
 
-  // 粘贴统一转为纯文本，避免把富文本结构带进 Markdown；粘贴整体作为一个撤销步骤
-  root.addEventListener('paste', function (event) {
-    var clipboard = event.clipboardData || window.clipboardData;
-    if (!clipboard)
-      return;
-    var picture = clipboardImageFile(clipboard);
-    if (picture) {
-      event.preventDefault();
-      postImageFile(picture, 'paste');
-      return;
-    }
-    var text = clipboard.getData('text/plain');
-    var el = blockOf(event.target);
+  // 把一段纯文本插到目标块：语言徽标、表格与代码块各有专门路径，其余按普通
+  // 文本插入。原生粘贴事件与外壳剪贴板入口（菜单/快捷键/右键）共用这一实现。
+  function insertPastedText(text, el) {
+    text = String(text === undefined || text === null ? '' : text);
     if (el && isCodeBlock(el) && selectionInsideLang(el)) {
       // 徽标里粘贴：只按纯文本改语言名（和手输一样剔除空白/反引号），
       // 否则会落到下面代码块分支，被 insertCodeText 的兜底追加到正文末尾。
-      event.preventDefault();
       commitHistory();
-      document.execCommand('insertText', false, String(text).replace(/[\s`]/g, ''));
+      document.execCommand('insertText', false, text.replace(/[\s`]/g, ''));
       setTimeout(commitHistory, 0);
       return;
     }
     if (el && el.classList.contains('table')) {
       // 单元格是单行结构：整张 Markdown 表格直接替换当前表格；其余多行文本
       // 压成一行插入（换行会被 WebKit 变成 <div>/<br>，把表格结构写坏）。
-      event.preventDefault();
       commitHistory();
-      var raw = String(text).replace(/\r\n?/g, '\n');
+      var raw = text.replace(/\r\n?/g, '\n');
       var rows = raw.split('\n');
       if (isTableSource(rows)) {
         renderBlock(el, raw.replace(/\n+$/, ''));
@@ -3226,28 +3215,37 @@
     }
     if (el && isCodeBlock(el)) {
       // 代码块直接按字符插入，多行粘贴不会变成 <div>/<br>，结构始终是行文本
-      event.preventDefault();
       commitHistory();
-      if (!insertCodeText(el, String(text).replace(/\r\n?/g, '\n')))
+      if (!insertCodeText(el, text.replace(/\r\n?/g, '\n')))
         document.execCommand('insertText', false, text);
       scheduleDirty();
       scheduleCommit();
       setTimeout(commitHistory, 0);
       return;
     }
-    event.preventDefault();
     commitHistory();
     document.execCommand('insertText', false, text);
     setTimeout(commitHistory, 0);
+  }
+
+  // 粘贴统一转为纯文本，避免把富文本结构带进 Markdown；粘贴整体作为一个撤销步骤
+  root.addEventListener('paste', function (event) {
+    var clipboard = event.clipboardData || window.clipboardData;
+    if (!clipboard)
+      return;
+    var picture = clipboardImageFile(clipboard);
+    if (picture) {
+      event.preventDefault();
+      postImageFile(picture, 'paste');
+      return;
+    }
+    event.preventDefault();
+    insertPastedText(clipboard.getData('text/plain'), blockOf(event.target));
   });
 
   // 复制时剔除行号栏。CSS 的 user-select:none 只约束真实拖选，
   // 程序化 Range 仍会把 gutter 文本算进选区，这里统一兜底。
-  document.addEventListener('copy', function (event) {
-    var selection = window.getSelection();
-    if (!selection || selection.isCollapsed || !selection.rangeCount || !event.clipboardData)
-      return;
-    var fragment = selection.getRangeAt(0).cloneContents();
+  function cleanCopyFragment(fragment) {
     // 视觉换行在纯文本里还原成真正的换行。<br> 与零宽换行标记是同一处换行的
     // 两种表示（标记只负责 textContent），同一位置只保留一个 \n。
     var nls = fragment.querySelectorAll ? fragment.querySelectorAll('.mk-nl') : [];
@@ -3267,8 +3265,6 @@
     // 行号栏、零宽标记与语言徽标都不属于正文：复制时要剔除。表格例外——表格里
     // 的 |、对齐行与换行就是原文，复制出去必须能原样贴回 Markdown。
     var junk = fragment.querySelectorAll ? fragment.querySelectorAll('.gutter, .mk, .code-lang') : [];
-    if (!junk.length && !brs.length && !nls.length)
-      return;
     for (var i = 0; i < junk.length; i++) {
       if (junk[i].closest && junk[i].closest('table'))
         continue;
@@ -3283,7 +3279,40 @@
         continue;
       junk[i].parentNode.removeChild(junk[i]);
     }
-    event.clipboardData.setData('text/plain', fragment.textContent);
+    return fragment.textContent;
+  }
+
+  // 选区 → 纯文本。块与块之间必须补一个换行：textContent 会把相邻块的文字
+  // 直接粘在一起（跨两段复制曾得到「第一段第二段」）。块内仍按复制规则清理。
+  // 复制、剪切与右键菜单共用这一个口径。
+  function selectionPlainText() {
+    var selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount)
+      return '';
+    var range = selection.getRangeAt(0);
+    var blocks = selectedBlocks();
+    var parts = [];
+    for (var i = 0; i < blocks.length; i++) {
+      var el = blocks[i];
+      var sub = document.createRange();
+      sub.selectNodeContents(el);
+      if (el.contains(range.startContainer))
+        sub.setStart(range.startContainer, range.startOffset);
+      if (el.contains(range.endContainer))
+        sub.setEnd(range.endContainer, range.endOffset);
+      parts.push(cleanCopyFragment(sub.cloneContents()));
+    }
+    return parts.join('\n');
+  }
+
+  // 原生 copy 事件：只在编辑区接管，源码模式交给 textarea 自己。
+  document.addEventListener('copy', function (event) {
+    if (!event.clipboardData || mode === 'source')
+      return;
+    var text = selectionPlainText();
+    if (!text)
+      return;
+    event.clipboardData.setData('text/plain', text);
     event.preventDefault();
   });
 
@@ -5027,6 +5056,35 @@
     // 供原生菜单 / 快捷键直接驱动（不依赖页面是否收到 keydown）
     format: function (name) {
       formatAction(String(name === undefined || name === null ? '' : name));
+    },
+    // 剪贴板：外壳菜单 / 快捷键 / 右键菜单的唯一下发点。平台 WebView 没有
+    // 可编程的编辑命令接口（WKWebView 的 copy:/paste: 只存在于菜单响应链，
+    // WebView2 只有自带加速键），所以复制/剪切由页面算出纯文本经 clipboardWrite
+    // 交给外壳写系统剪贴板；粘贴由外壳读剪贴板后回灌，插入路径与原生粘贴一致。
+    clipboardCopy: function (cut) {
+      if (mode === 'source')
+        return false;
+      var text = selectionPlainText();
+      if (!text)
+        return false;
+      post({ type: 'clipboardWrite', text: text });
+      if (cut) {
+        commitHistory();
+        document.execCommand('delete');
+        scheduleDirty();
+        scheduleCommit();
+        setTimeout(commitHistory, 0);
+      }
+      return true;
+    },
+    clipboardPaste: function (text) {
+      var selection = window.getSelection();
+      var node = selection && selection.rangeCount ? selection.anchorNode : null;
+      var el = node ? blockOf(node) : null;
+      if (mode === 'source' || !el)
+        return false;
+      insertPastedText(text, el);
+      return true;
     },
     // 右键「转为」/ 工具栏下拉：不做 toggle，已是目标类型保持不动
     convert: function (kind) {

@@ -2,12 +2,17 @@
 
 #include "webpage.h"
 
+#include <QBuffer>
+#include <QClipboard>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
+#include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMimeData>
 #include <QRegularExpression>
 
 #include <cstdio>
@@ -186,6 +191,48 @@ void WebViewBase::redo()
     if (keyLogEnabled())
         std::fprintf(stderr, "NATIVE -> JS redo\n");
     evaluateJs(QStringLiteral("window.mote && window.mote.redo();"));
+}
+
+void WebViewBase::clipboardCommand(const QString &command)
+{
+    if (keyLogEnabled())
+        std::fprintf(stderr, "NATIVE -> JS clipboard %s\n", command.toUtf8().constData());
+
+    // 默认实现供 Windows 宿主使用：WebView2 没有给宿主的编辑命令接口，菜单与
+    // 快捷键怎么算都只能落到页面。macOS 在 MacWebView 里覆盖为 AppKit 响应链。
+    if (command == QLatin1String("copy") || command == QLatin1String("cut")) {
+        // 页面算出纯文本后经 clipboardWrite 回传，由这里写进系统剪贴板；
+        // 剪切由页面在同一步里删掉选区，两端都走自建历史栈。
+        evaluateJs(QStringLiteral("window.mote && window.mote.clipboardCopy(%1);")
+                       .arg(command == QLatin1String("cut") ? QStringLiteral("true")
+                                                           : QStringLiteral("false")));
+        return;
+    }
+    if (command != QLatin1String("paste"))
+        return;
+
+    const QMimeData *data = QGuiApplication::clipboard()->mimeData();
+    if (!data)
+        return;
+    // 图片优先：与页面原生粘贴分支同口径，落盘与插入仍走 saveImageBytes
+    if (data->hasImage()) {
+        const QImage image = qvariant_cast<QImage>(data->imageData());
+        if (!image.isNull()) {
+            QByteArray bytes;
+            QBuffer buffer(&bytes);
+            buffer.open(QIODevice::WriteOnly);
+            if (image.save(&buffer, "PNG")) {
+                saveImageBytes(bytes, QStringLiteral("image/png"),
+                               QStringLiteral("paste"), true);
+                return;
+            }
+        }
+    }
+    const QString text = data->text();
+    if (text.isEmpty())
+        return;
+    evaluateJs(QStringLiteral("window.mote && window.mote.clipboardPaste(%1);")
+                   .arg(moteJsonLiteral(text)));
 }
 
 void WebViewBase::toggleToc()
@@ -392,6 +439,11 @@ void WebViewBase::handleMessage(const QString &json)
                        message.value(QStringLiteral("mime")).toString(),
                        message.value(QStringLiteral("name")).toString(),
                        source != QLatin1String("drop"));
+        return;
+    }
+    if (type == QLatin1String("clipboardWrite")) {
+        // 页面算好的纯文本落到系统剪贴板（复制/剪切共用这一条回路）
+        QGuiApplication::clipboard()->setText(message.value(QStringLiteral("text")).toString());
         return;
     }
     if (type == QLatin1String("openLink")) {

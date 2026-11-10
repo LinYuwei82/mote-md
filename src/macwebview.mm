@@ -318,6 +318,29 @@ void MacWebView::ensureWebView()
     }
 }
 
+void MacWebView::clipboardCommand(const QString &command)
+{
+    if (!m_webView)
+        return;
+    SEL action = nullptr;
+    if (command == QLatin1String("cut"))
+        action = @selector(cut:);
+    else if (command == QLatin1String("copy"))
+        action = @selector(copy:);
+    else if (command == QLatin1String("paste"))
+        action = @selector(paste:);
+    if (!action)
+        return;
+    if (![static_cast<WKWebView *>(m_webView) window])
+        return;
+    // 标准编辑动作只存在于 AppKit 的响应链里（cut:/copy:/paste: 由 WebKit 的输入
+    // 视图实现）：交给第一响应者自己执行，剪贴板读写、选区删除与页面 copy/cut/paste
+    // 事件全部按系统默认路径走，页面的纯文本清理逻辑照常生效。
+    // 早先菜单里没有这三项，AppKit 就没有对应的 key equivalent，WKWebView 收不到
+    // 命令，Cmd+C/X/V 因此完全无反应。
+    [NSApp sendAction:action to:nil from:nil];
+}
+
 void MacWebView::ensureHost()
 {
     ensureWebView();

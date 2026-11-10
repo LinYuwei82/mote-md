@@ -14,6 +14,8 @@ public:
     explicit MacWebView(QWidget *parent = nullptr);
     ~MacWebView() override;
 
+    void clipboardCommand(const QString &command) override;
+
 protected:
     void showEvent(QShowEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;

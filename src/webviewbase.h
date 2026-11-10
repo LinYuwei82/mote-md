@@ -32,6 +32,7 @@ public:
     void notifySaved(const QString &text) override;
     void undo() override;
     void redo() override;
+    void clipboardCommand(const QString &command) override;
     void toggleToc() override;
     void toggleSource() override;
     void zoomBy(int steps) override;
