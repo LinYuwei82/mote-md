@@ -59,11 +59,12 @@ bool keyLogEnabled()
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender
 {
     if (moteOwner) {
-        for (NSString *path in [self moteDraggedPaths:sender]) {
-            const QString local = QString::fromNSString(path);
-            if (isMarkdownPath(local) || isImagePath(local))
-                return NSDragOperationCopy;
-        }
+        QStringList paths;
+        for (NSString *path in [self moteDraggedPaths:sender])
+            paths << QString::fromNSString(path);
+        // 「能否接受」由共享层判定，与 Windows 的 OLE 拖放口径一致
+        if (moteOwner->acceptsNativeFileDrop(paths))
+            return NSDragOperationCopy;
     }
     return [super draggingEntered:sender];
 }

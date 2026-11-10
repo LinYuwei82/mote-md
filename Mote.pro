@@ -47,10 +47,10 @@ win32 {
     }
 
     INCLUDEPATH += $$WEBVIEW2_SDK/build/native/include
-    SOURCES += src/webview_win.cpp
-    HEADERS += src/webview_win.h
-    # COM 基础库：CoTaskMemFree / IID_IUnknown
-    LIBS += -lole32 -luuid
+    SOURCES += src/webview_win.cpp src/webview_win_drop.cpp
+    HEADERS += src/webview_win.h src/webview_win_drop.h
+    # COM 基础库：CoTaskMemFree / IID_IUnknown；shell32 提供 CF_HDROP 解析
+    LIBS += -lole32 -luuid -lshell32
 
     # 绿色版/开发运行都需要 exe 同级的 WebView2Loader.dll
     WEBVIEW2_LOADER = $$WEBVIEW2_SDK/build/native/x64/WebView2Loader.dll

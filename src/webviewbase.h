@@ -7,6 +7,11 @@
 #include <QStringList>
 #include <QUrl>
 
+// 共享的拖放路径判定：macOS 的 NSView 拖放与 Windows 的 OLE IDropTarget 共用，
+// 保证两端「哪些文件可以拖入」的口径一致。
+bool moteIsMarkdownPath(const QString &path);
+bool moteIsImagePath(const QString &path);
+
 // macOS / Windows 宿主的公共实现：消息协议分发、图片落盘、原生拖放，
 // 以及「页面就绪前缓存待注入文档」的状态机。平台子类只提供三个钩子：
 // ensureHost（创建原生 WebView）、evaluateJs（执行脚本）、loadPage（加载页面）。
@@ -42,6 +47,10 @@ public:
     // .md 发 fileDropRequested 交给外壳打开；图片复制进 assets/ 并插入页面。
     // 返回 true 表示至少处理了一个文件。
     bool handleNativeFileDrop(const QStringList &paths);
+
+    // 拖放能否接受：只要含一个可识别的 .md 或图片就返回 true。
+    // 供原生拖放层在 DragEnter/DragOver 阶段决定光标效果。
+    bool acceptsNativeFileDrop(const QStringList &paths) const;
 
 protected:
     // 创建原生 WebView（可重复调用，内部自行判重）

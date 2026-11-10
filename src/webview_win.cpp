@@ -1,6 +1,7 @@
 #include "webview_win.h"
 
 #include "webpage.h"
+#include "webview_win_drop.h"
 
 #include <QAction>
 #include <QCoreApplication>
@@ -317,6 +318,12 @@ WebView2Editor::~WebView2Editor()
     if (!m_pageFile.isEmpty())
         QFile::remove(m_pageFile);
 
+    // 窗口销毁前撤销注册；OLE 目标自身带引用计数，Release 后由 COM 回收
+    if (m_dropTarget) {
+        moteDropRevoke(m_hostHwnd, m_dropTarget);
+        m_dropTarget = nullptr;
+    }
+
     if (m_webView) {
         auto *web = static_cast<ICoreWebView2 *>(m_webView);
         if (m_messageToken)
@@ -355,6 +362,9 @@ void WebView2Editor::ensureHost()
         showUnavailable(tr("无法创建窗口句柄。"));
         return;
     }
+
+    // 拖放注册独立于 WebView2：拿得到真实路径，.md 打开/图片落盘都由共享层处理
+    ensureDropTarget();
 
     // 优先从 exe 同级目录加载（打包附带），其次走系统搜索路径
     m_loader = LoadLibraryW(L"WebView2Loader.dll");
@@ -447,6 +457,11 @@ void WebView2Editor::onControllerReady(long hr, void *controller)
 
     configureWebView();
 
+    // 宿主已接管拖放时关掉 WebView2 自己的，避免两套目标互相抢；
+    // 注册失败（例如线程不在 STA）则保持原状，页面内 drop 事件继续兜底。
+    if (m_dropTarget)
+        disableWebViewExternalDrop();
+
     m_controllerReady = true;
     updateBounds();
     ctrl->put_IsVisible(TRUE);
@@ -511,6 +526,45 @@ void WebView2Editor::updateBounds()
         return;
     RECT bounds{0, 0, qMax(0, width()), qMax(0, height())};
     static_cast<ICoreWebView2Controller *>(m_controller)->put_Bounds(bounds);
+}
+
+void WebView2Editor::ensureDropTarget()
+{
+    if (m_dropTarget || !m_hostHwnd)
+        return;
+
+    MoteDropCallbacks callbacks;
+    callbacks.canAccept = [this](const QStringList &paths) {
+        return acceptsNativeFileDrop(paths);
+    };
+    // Drop 回调在下一轮事件循环执行；用 QPointer 防止控件已销毁
+    callbacks.perform = [owner = QPointer<WebView2Editor>(this)](const QStringList &paths) {
+        if (owner)
+            owner->handleNativeFileDrop(paths);
+    };
+
+    m_dropTarget = moteDropRegister(m_hostHwnd, callbacks);
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
+        std::fprintf(stderr, "WIN drop target %s\n",
+                     m_dropTarget ? "registered" : "unavailable (page fallback)");
+    }
+}
+
+void WebView2Editor::disableWebViewExternalDrop()
+{
+    auto *controller = static_cast<ICoreWebView2Controller *>(m_controller);
+    if (!controller)
+        return;
+
+    // AllowExternalDrop 在 ICoreWebView2Controller4 上（运行时较旧时 QI 失败，
+    // 此时保持默认，仍可退回页面内 drop 事件）
+    ICoreWebView2Controller4 *controller4 = nullptr;
+    if (SUCCEEDED(controller->QueryInterface(
+            IID_ICoreWebView2Controller4, reinterpret_cast<void **>(&controller4)))
+        && controller4) {
+        controller4->put_AllowExternalDrop(FALSE);
+        controller4->Release();
+    }
 }
 
 void WebView2Editor::evaluateJs(const QString &js)

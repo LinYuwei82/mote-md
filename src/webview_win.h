@@ -42,11 +42,17 @@ private:
     void updateBounds();
     void showUnavailable(const QString &reason);
 
+    // 系统级拖放：宿主窗口注册自建 IDropTarget，并关掉 WebView2 自己的拖放，
+    // 这样才能拿到拖入文件的真实路径（页面内 drop 事件只有兜底作用）。
+    void ensureDropTarget();
+    void disableWebViewExternalDrop();
+
     void *m_environment = nullptr; // ICoreWebView2Environment *
     void *m_controller = nullptr;  // ICoreWebView2Controller *
     void *m_webView = nullptr;     // ICoreWebView2 *
     void *m_loader = nullptr;      // WebView2Loader.dll 模块句柄
     void *m_hostHwnd = nullptr;    // 本控件的原生 HWND
+    void *m_dropTarget = nullptr;  // 自建 IDropTarget（见 webview_win_drop.cpp）
     qint64 m_messageToken = 0;     // WebMessageReceived 注册令牌
     qint64 m_accelToken = 0;       // AcceleratorKeyPressed 注册令牌
 

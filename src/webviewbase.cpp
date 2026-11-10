@@ -19,24 +19,6 @@ bool keyLogEnabled()
     return qEnvironmentVariableIsSet("MOTE_KEYLOG");
 }
 
-bool isMarkdownPath(const QString &path)
-{
-    const QString suffix = QFileInfo(path).suffix().toLower();
-    return suffix == QLatin1String("md") || suffix == QLatin1String("markdown")
-        || suffix == QLatin1String("mdown") || suffix == QLatin1String("mkd")
-        || suffix == QLatin1String("txt");
-}
-
-bool isImagePath(const QString &path)
-{
-    static const QStringList extensions = {
-        QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"),
-        QStringLiteral("gif"), QStringLiteral("webp"), QStringLiteral("heic"),
-        QStringLiteral("tif"), QStringLiteral("tiff"), QStringLiteral("bmp")
-    };
-    return extensions.contains(QFileInfo(path).suffix().toLower());
-}
-
 // ---- 图片落盘命名 ----
 // 扩展名优先取原文件名，其次按 MIME；都没命中就按 PNG。
 QString imageExtension(const QString &mime, const QString &name)
@@ -80,6 +62,24 @@ QString uniqueAssetName(const QString &dir, const QString &base, const QString &
 }
 
 } // namespace
+
+bool moteIsMarkdownPath(const QString &path)
+{
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    return suffix == QLatin1String("md") || suffix == QLatin1String("markdown")
+        || suffix == QLatin1String("mdown") || suffix == QLatin1String("mkd")
+        || suffix == QLatin1String("txt");
+}
+
+bool moteIsImagePath(const QString &path)
+{
+    static const QStringList extensions = {
+        QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"),
+        QStringLiteral("gif"), QStringLiteral("webp"), QStringLiteral("heic"),
+        QStringLiteral("tif"), QStringLiteral("tiff"), QStringLiteral("bmp")
+    };
+    return extensions.contains(QFileInfo(path).suffix().toLower());
+}
 
 void WebViewBase::setMarkdown(const QString &text, const QUrl &baseDir)
 {
@@ -258,18 +258,27 @@ bool WebViewBase::saveImageFile(const QString &path)
     return saveImageBytes(in.readAll(), QString(), QFileInfo(path).fileName(), false);
 }
 
+bool WebViewBase::acceptsNativeFileDrop(const QStringList &paths) const
+{
+    for (const QString &path : paths) {
+        if (moteIsMarkdownPath(path) || moteIsImagePath(path))
+            return true;
+    }
+    return false;
+}
+
 bool WebViewBase::handleNativeFileDrop(const QStringList &paths)
 {
     bool recognized = false;
     for (const QString &path : paths) {
-        if (isMarkdownPath(path)) {
+        if (moteIsMarkdownPath(path)) {
             recognized = true;
             emit fileDropRequested(QFileInfo(path).absoluteFilePath());
             return true;
         }
     }
     for (const QString &path : paths) {
-        if (isImagePath(path)) {
+        if (moteIsImagePath(path)) {
             recognized = true;
             saveImageFile(path);
         }
