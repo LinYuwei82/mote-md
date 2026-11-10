@@ -17,7 +17,7 @@
 
 ### 1.1 环境
 
-- macOS（Apple Silicon，arm64）
+- macOS 14 及以上（Apple Silicon，arm64）；更早的系统未经测试
 - Qt 6.11.1（Homebrew，`qmake6` / `macdeployqt` 在 PATH 中）
 - Xcode Command Line Tools（提供 `codesign`、`iconutil`、`strip`）
 - 工程目录：`/Users/lin/Projects/mote`（不在 iCloud 同步范围，避免每次构建都触发同步）

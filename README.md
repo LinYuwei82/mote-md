@@ -28,7 +28,7 @@
 
 依赖：
 
-- macOS（Apple Silicon，arm64）
+- macOS 14 及以上（Apple Silicon，arm64）；构建目标为 `-mmacosx-version-min=14.0`，更早的系统未经测试
 - Qt 6.x（开发时使用 Homebrew 的 6.11.1，要求 `qmake6` 与 `macdeployqt` 在 `PATH` 中）
 - Xcode Command Line Tools（`make`、`codesign`、`iconutil`、`strip`）
 
