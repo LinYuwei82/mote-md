@@ -130,4 +130,6 @@ backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建
   发布包内 `licenses/JetBrainsMono-OFL.txt`。
 - **系统 WebKit**：macOS 自带框架，不随包分发。
 
-本仓库目前没有附带开源许可证文件；在明确许可证之前，默认保留所有权利。
+## 许可证
+
+Mote 以 **GNU General Public License v3.0（GPL-3.0）** 发布，完整条文见仓库根目录的 [LICENSE](LICENSE)。
