@@ -192,8 +192,10 @@ void *moteDropRegister(void *hwnd, const MoteDropCallbacks &callbacks, QString *
         target->Release();
         return nullptr;
     }
-    // 引用计数 1 由调用方持有；RegisterDragDrop 自己另持一份
-    return target;
+    // 引用计数 1 由调用方持有；RegisterDragDrop 自己另持一份。
+    // 返回接口指针（而非 DropTarget*）：DropTarget 是多重继承，
+    // void* 再 static_cast 回 IDropTarget* 时不会做 this 调整，必须存调整后的指针。
+    return static_cast<IDropTarget *>(target);
 }
 
 void moteDropRevoke(void *hwnd, void *target)

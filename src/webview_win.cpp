@@ -82,6 +82,43 @@ QString filePathOf(const QString &dir)
         QStringLiteral(".mote-preview-%1.html").arg(QCoreApplication::applicationPid()));
 }
 
+// ---- 拖放实际命中的子窗口 ----
+// WebView2 把页面渲染在 msedgewebview2 进程的子 HWND 里：Chrome_WidgetWin_1
+// 包住 Chrome_RenderWidgetHostHWND，鼠标命中的是后者。OLE 拖放按 WindowFromPoint
+// 派发，注册在宿主窗口上的 IDropTarget 永远收不到，所以要把目标挂到子窗口上。
+struct DropWindowSearch
+{
+    HWND render = nullptr; // Chrome_RenderWidgetHostHWND（优先）
+    HWND widget = nullptr; // Chrome_WidgetWin_1（退而求其次）
+};
+
+BOOL CALLBACK dropWindowProc(HWND hwnd, LPARAM param)
+{
+    auto *search = reinterpret_cast<DropWindowSearch *>(param);
+    wchar_t name[64] = {};
+    if (GetClassNameW(hwnd, name, 64) <= 0)
+        return TRUE;
+
+    if (wcscmp(name, L"Chrome_RenderWidgetHostHWND") == 0) {
+        if (!search->render || (!IsWindowVisible(search->render) && IsWindowVisible(hwnd)))
+            search->render = hwnd;
+    } else if (wcscmp(name, L"Chrome_WidgetWin_1") == 0) {
+        if (!search->widget || (!IsWindowVisible(search->widget) && IsWindowVisible(hwnd)))
+            search->widget = hwnd;
+    }
+    return TRUE; // 继续枚举：两层子窗口都要看到
+}
+
+// 返回实际承接鼠标/拖放的子窗口；没找到返回空，调用方退回宿主窗口。
+HWND findDropWindow(HWND host)
+{
+    if (!host || !IsWindow(host))
+        return nullptr;
+    DropWindowSearch search;
+    EnumChildWindows(host, dropWindowProc, reinterpret_cast<LPARAM>(&search));
+    return search.render ? search.render : search.widget;
+}
+
 // ---- 最小 COM 引用计数基类 ----
 class RefCounted
 {
@@ -369,6 +406,45 @@ private:
     QPointer<WebView2Editor> m_owner;
 };
 
+// 导航完成：页面重建后 WebView2 的子 HWND 可能被换掉（换文档、进程重建），
+// 旧句柄上的注册会悬空、拖放静默失效，这里重新找当前子窗口并换绑。
+class NavigationCompletedHandler final
+    : public RefCounted
+    , public ICoreWebView2NavigationCompletedEventHandler
+{
+public:
+    explicit NavigationCompletedHandler(WebView2Editor *owner) : m_owner(owner) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **ppv) override
+    {
+        if (!ppv)
+            return E_POINTER;
+        if (riid == IID_IUnknown || riid == IID_ICoreWebView2NavigationCompletedEventHandler) {
+            *ppv = static_cast<ICoreWebView2NavigationCompletedEventHandler *>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return RefCounted::AddRef(); }
+    ULONG STDMETHODCALLTYPE Release() override { return RefCounted::Release(); }
+
+    HRESULT STDMETHODCALLTYPE Invoke(
+        ICoreWebView2 *sender,
+        ICoreWebView2NavigationCompletedEventArgs *args) override
+    {
+        Q_UNUSED(sender)
+        Q_UNUSED(args)
+        if (m_owner)
+            m_owner->refreshDropTarget();
+        return S_OK;
+    }
+
+private:
+    QPointer<WebView2Editor> m_owner;
+};
+
 // 注入回执：把 ExecuteScript 的返回值（JSON）交回宿主，用于确认正文真的进了页面。
 // ExecuteScript 的 HRESULT 只反映「脚本是否被提交」，页面里抛异常照样是 S_OK。
 class ScriptResultHandler final
@@ -493,10 +569,12 @@ WebView2Editor::~WebView2Editor()
     if (!m_pageFile.isEmpty())
         QFile::remove(m_pageFile);
 
-    // 窗口销毁前撤销注册；OLE 目标自身带引用计数，Release 后由 COM 回收
+    // 窗口销毁前撤销注册；OLE 目标自身带引用计数，Release 后由 COM 回收。
+    // 注册可能挂在 WebView2 子窗口上，必须用当初注册的那个 HWND 成对撤销。
     if (m_dropTarget) {
-        moteDropRevoke(m_hostHwnd, m_dropTarget);
+        moteDropRevoke(m_dropHwnd, m_dropTarget);
         m_dropTarget = nullptr;
+        m_dropHwnd = nullptr;
     }
 
     if (m_webView) {
@@ -507,6 +585,8 @@ WebView2Editor::~WebView2Editor()
             web->remove_NavigationStarting(tokenOf(m_navToken));
         if (m_newWindowToken)
             web->remove_NewWindowRequested(tokenOf(m_newWindowToken));
+        if (m_navDoneToken)
+            web->remove_NavigationCompleted(tokenOf(m_navDoneToken));
     }
     if (m_controller) {
         auto *controller = static_cast<ICoreWebView2Controller *>(m_controller);
@@ -645,6 +725,10 @@ void WebView2Editor::onControllerReady(long hr, void *controller)
 
     configureWebView();
 
+    // 控制器就绪后重新找 WebView2 的子窗口，把拖放目标从宿主换绑到实际命中处；
+    // 此时子窗口可能还没建，找不到就继续留在宿主上，等 NavigationCompleted 再试。
+    ensureDropTarget();
+
     // 宿主已接管拖放时关掉 WebView2 自己的，避免两套目标互相抢；
     // 注册失败（例如线程不在 STA）则保持原状，页面内 drop 事件继续兜底。
     if (m_dropTarget)
@@ -709,6 +793,11 @@ void WebView2Editor::configureWebView()
     newWindowHandler->Release();
     m_newWindowToken = token.value;
 
+    auto *navDoneHandler = new NavigationCompletedHandler(this);
+    web->add_NavigationCompleted(navDoneHandler, &token);
+    navDoneHandler->Release();
+    m_navDoneToken = token.value;
+
     auto *accelHandler = new AcceleratorKeyHandler(this);
     static_cast<ICoreWebView2Controller *>(m_controller)
         ->add_AcceleratorKeyPressed(accelHandler, &token);
@@ -743,8 +832,28 @@ void WebView2Editor::updateBounds()
 
 void WebView2Editor::ensureDropTarget()
 {
-    if (m_dropTarget || !m_hostHwnd)
+    if (!m_hostHwnd)
         return;
+    HWND host = static_cast<HWND>(m_hostHwnd);
+    if (!IsWindow(host))
+        return;
+
+    // 优先挂到实际命中鼠标的子窗口；找不到子窗口（WebView2 未就绪/结构变化）
+    // 就退回宿主窗口，保持页面内 drop 兜底与旧行为。
+    HWND wanted = findDropWindow(host);
+    if (!wanted)
+        wanted = host;
+
+    // 已挂稳：注册还在，且目标窗口没被重建替换
+    if (m_dropTarget && m_dropHwnd == wanted && IsWindow(static_cast<HWND>(m_dropHwnd)))
+        return;
+
+    // 换绑前先成对撤销旧窗口上的注册，避免句柄悬空
+    if (m_dropTarget) {
+        moteDropRevoke(m_dropHwnd, m_dropTarget);
+        m_dropTarget = nullptr;
+        m_dropHwnd = nullptr;
+    }
 
     MoteDropCallbacks callbacks;
     callbacks.canAccept = [this](const QStringList &paths) {
@@ -757,11 +866,23 @@ void WebView2Editor::ensureDropTarget()
     };
 
     QString dropError;
-    m_dropTarget = moteDropRegister(m_hostHwnd, callbacks, &dropError);
+    void *target = moteDropRegister(wanted, callbacks, &dropError);
+    if (!target && wanted != host) {
+        // 子窗口注册失败（例如它属于别的进程且拒绝）：退回宿主窗口
+        target = moteDropRegister(host, callbacks, &dropError);
+        if (target)
+            wanted = host;
+    }
+
+    m_dropTarget = target;
+    m_dropHwnd = target ? wanted : nullptr;
 
     if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
         if (m_dropTarget) {
-            std::fprintf(stderr, "WIN drop target registered\n");
+            wchar_t name[64] = {};
+            GetClassNameW(static_cast<HWND>(m_dropHwnd), name, 64);
+            std::fprintf(stderr, "WIN drop target registered on %ls (host=%p)\n",
+                         name, static_cast<void *>(host));
         } else {
             std::fprintf(stderr, "WIN drop target unavailable (page fallback): %s\n",
                          dropError.toUtf8().constData());
@@ -777,6 +898,13 @@ void WebView2Editor::ensureDropTarget()
                                   "拖入图片可能拿不到真实文件路径。").arg(detail));
         });
     }
+}
+
+void WebView2Editor::refreshDropTarget()
+{
+    // 导航完成时子窗口可能刚重建：立即试一次，稍后再确认一次（拿最终句柄）。
+    QTimer::singleShot(0, this, [this]() { ensureDropTarget(); });
+    QTimer::singleShot(500, this, [this]() { ensureDropTarget(); });
 }
 
 void WebView2Editor::disableWebViewExternalDrop()

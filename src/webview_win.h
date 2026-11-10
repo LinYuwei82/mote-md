@@ -29,6 +29,13 @@ public:
     bool onNavigationStarting(const QString &uri);
     // 页面要求开新窗口（target=_blank / window.open）：交回外壳的「打开链接」出口
     void onExternalUrl(const QString &url);
+    // 注入回执：ExecuteScript 返回 S_OK 只代表脚本被提交，JS 抛异常或 window.mote
+    // 还没就位时它照样是 S_OK。只有脚本显式返回 'ok' 才清 pending。
+    // 由 ScriptResultHandler（COM 完成回调）调用，需与其它回调入口同属 public。
+    void onInjectResult(long hr, const QString &resultJson, bool chunked);
+    // 导航完成后重绑拖放目标：WebView2 的子窗口可能在导航/重建后被替换，
+    // 句柄悬空会导致拖放静默失效。
+    void refreshDropTarget();
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -53,12 +60,10 @@ private:
     void reportNavigationFailure(const QString &step, long hr);
     // 大文档注入的回落通道：分片 ExecuteScript，每片单独受脚本体积预算约束
     bool injectChunked(const QString &text);
-    // 注入回执：ExecuteScript 返回 S_OK 只代表脚本被提交，JS 抛异常或 window.mote
-    // 还没就位时它照样是 S_OK。只有脚本显式返回 'ok' 才清 pending。
-    void onInjectResult(long hr, const QString &resultJson, bool chunked);
 
-    // 系统级拖放：宿主窗口注册自建 IDropTarget，并关掉 WebView2 自己的拖放，
-    // 这样才能拿到拖入文件的真实路径（页面内 drop 事件只有兜底作用）。
+    // 系统级拖放：优先注册到 WebView2 实际命中拖放的子窗口（Chrome_WidgetWin_1 /
+    // Chrome_RenderWidgetHostHWND），注册不到时退回宿主窗口；无论挂在哪，
+    // 交付逻辑都由共享层的路径判定处理。
     void ensureDropTarget();
     void disableWebViewExternalDrop();
 
@@ -68,10 +73,12 @@ private:
     void *m_loader = nullptr;      // WebView2Loader.dll 模块句柄
     void *m_hostHwnd = nullptr;    // 本控件的原生 HWND
     void *m_dropTarget = nullptr;  // 自建 IDropTarget（见 webview_win_drop.cpp）
+    void *m_dropHwnd = nullptr;    // 拖放实际注册到的 HWND（子窗口或宿主）
     qint64 m_messageToken = 0;     // WebMessageReceived 注册令牌
     qint64 m_accelToken = 0;       // AcceleratorKeyPressed 注册令牌
     qint64 m_navToken = 0;         // NavigationStarting 注册令牌
     qint64 m_newWindowToken = 0;   // NewWindowRequested 注册令牌
+    qint64 m_navDoneToken = 0;     // NavigationCompleted 注册令牌（用于重绑拖放）
 
     bool m_initialized = false;
     bool m_controllerReady = false;
