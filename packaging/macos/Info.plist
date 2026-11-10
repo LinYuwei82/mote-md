@@ -17,9 +17,9 @@
 	<key>CFBundleSignature</key>
 	<string>${QMAKE_PKGINFO_TYPEINFO}</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.0</string>
+	<string>@FULL_VERSION@</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.0</string>
+	<string>@FULL_VERSION@</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>zh_CN</string>
 	<key>CFBundleAllowMixedLocalizations</key>

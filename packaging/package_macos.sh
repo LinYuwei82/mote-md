@@ -2,7 +2,7 @@
 # macOS 打包脚本：编译 -> macdeployqt -> 清理冗余插件/框架 -> 清理扩展属性 -> 临时签名 -> 打 zip
 # 用法：
 #   bash packaging/package_macos.sh           # 只出 dist/Mote-macOS.zip（原有流程）
-#   bash packaging/package_macos.sh --dmg     # 额外出 dist/Mote-macOS.dmg（拖拽安装）
+#   bash packaging/package_macos.sh --dmg     # 额外出 dist/Mote-macOS-<版本>.dmg（拖拽安装）
 set -euo pipefail
 
 WITH_DMG=0
@@ -25,7 +25,6 @@ BUILD_DIR="${TMPDIR:-/tmp}/mote-build"
 DIST_DIR="$ROOT/dist"
 PKG_NAME="${APP_NAME}-macOS"
 ZIP_PATH="$DIST_DIR/${PKG_NAME}.zip"
-DMG_PATH="$DIST_DIR/${PKG_NAME}.dmg"
 # 进度编号随是否产出 DMG 变化
 TOTAL=7
 [ "$WITH_DMG" -eq 1 ] && TOTAL=8
@@ -46,6 +45,12 @@ make -j"$(sysctl -n hw.ncpu)"
 
 APP_PATH="$BUILD_DIR/${APP_NAME}.app"
 [ -d "$APP_PATH" ] || { echo "错误：构建失败，未生成 $APP_PATH"; exit 1; }
+
+# DMG 文件名带版本号：版本直接读构建产物里的 Info.plist（qmake 已按 Mote.pro 的
+# VERSION 填好 @FULL_VERSION@），脚本里不再另存一份版本号。
+APP_VERSION="$(plutil -extract CFBundleShortVersionString raw "$APP_PATH/Contents/Info.plist")"
+[ -n "$APP_VERSION" ] || { echo "错误：无法从 $APP_PATH 读取版本号"; exit 1; }
+DMG_PATH="$DIST_DIR/${PKG_NAME}-${APP_VERSION}.dmg"
 
 echo "==> 3/${TOTAL} macdeployqt 部署 Qt 框架与插件"
 "$MACDEPLOYQT" "$APP_PATH" -always-overwrite -no-codesign -libpath="$QT_LIB"

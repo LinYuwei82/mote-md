@@ -8,6 +8,13 @@ CONFIG += c++20 warn_on
 CONFIG -= debug_and_release
 CONFIG += release
 
+# 版本号唯一来源是上面的 VERSION：
+#   - macOS：Info.plist 里用 @FULL_VERSION@ 占位，qmake 生成 bundle 时替换
+#   - 程序内：main.cpp 用 MOTE_VERSION 设置 applicationVersion()
+# Windows 的 app.rc 由 rc.exe 直接编译，qmake 不替换其内容，需手工同步
+# （见 resources/win/app.rc 顶部注释）。
+DEFINES += MOTE_VERSION=\\\"$$VERSION\\\"
+
 SOURCES += \
     src/main.cpp \
     src/mainwindow.cpp \

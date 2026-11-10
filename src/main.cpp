@@ -11,7 +11,8 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("Mote"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.2.0"));
+    // 版本号由 Mote.pro 的 VERSION 经 -DMOTE_VERSION 传入，不在这里写第二份
+    QCoreApplication::setApplicationVersion(QStringLiteral(MOTE_VERSION));
     QCoreApplication::setOrganizationName(QStringLiteral("Mote"));
     QApplication::setApplicationDisplayName(QStringLiteral("Mote"));
 

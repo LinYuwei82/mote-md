@@ -4,8 +4,8 @@
 ;  构建方式（先准备绿色版目录 dist\Mote-Windows）：
 ;    powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 ;
-;  版本号由 build_installer.ps1 从 Mote.pro 的 VERSION 读取，
-;  也可以手动指定：ISCC.exe /DMyAppVersion=1.0.0 packaging\mote.iss
+;  版本号由 build_installer.ps1 从 Mote.pro 的 VERSION 读取，再以 /DMyAppVersion 传入；
+;  手工编译时必须自己传：ISCC.exe /DMyAppVersion=0.2.0 packaging\mote.iss
 ;
 ;  安装形态：按用户安装（LocalAppData），无需管理员；带卸载程序。
 ;  .md 关联：独立 ProgID Mote.md + 可选接管默认程序，卸载时只清理自己写入的项。
@@ -17,8 +17,10 @@
 #define MyAppProgId "Mote.md"
 #define MyAppUrl "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 
+; 文件里不写默认版本：漏传 /DMyAppVersion 时直接编译失败，
+; 避免安装包悄悄带上与 Mote.pro 不一致的版本号
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.0"
+  #error MyAppVersion 未定义：请用 ISCC /DMyAppVersion=x.y.z 编译（build_installer.ps1 会自动读取 Mote.pro 的 VERSION）
 #endif
 
 [Setup]
