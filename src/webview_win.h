@@ -46,6 +46,14 @@ private:
     void updateBounds();
     void showUnavailable(const QString &reason);
 
+    // 可见失败提示：覆盖层 + errorOccurred（win32 构建没有控制台，stderr 看不见）。
+    // 导航失败用它，成功导航前先清掉，避免旧提示盖住新页面。
+    void showFailureOverlay(const QString &title, const QString &body);
+    void clearFailureOverlay();
+    void reportNavigationFailure(const QString &step, long hr);
+    // 大文档注入的回落通道：分片 ExecuteScript，每片单独受脚本体积预算约束
+    bool injectChunked(const QString &text);
+
     // 系统级拖放：宿主窗口注册自建 IDropTarget，并关掉 WebView2 自己的拖放，
     // 这样才能拿到拖入文件的真实路径（页面内 drop 事件只有兜底作用）。
     void ensureDropTarget();
@@ -64,11 +72,11 @@ private:
 
     bool m_initialized = false;
     bool m_controllerReady = false;
-    bool m_unavailableShown = false;
+    bool m_unavailableShown = false; // WebView2 运行时缺失：覆盖层是终态，只提示一次
     QUrl m_deferredDir;
     bool m_hasDeferredLoad = false;
     QString m_pageFile;            // 文档目录下的临时页面文件，退出/换文档时删除
-    QLabel *m_unavailable = nullptr;
+    QLabel *m_unavailable = nullptr; // 覆盖层（WebView2 缺失 / 导航失败的可见提示）
 };
 
 #endif // WEBVIEW_WIN_H

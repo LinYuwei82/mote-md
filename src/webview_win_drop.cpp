@@ -147,12 +147,20 @@ private:
     bool m_acceptable = false;
 };
 
+QString hrString(HRESULT hr)
+{
+    return QStringLiteral("0x%1").arg(static_cast<quint32>(hr), 8, 16, QLatin1Char('0'));
+}
+
 } // namespace
 
-void *moteDropRegister(void *hwnd, const MoteDropCallbacks &callbacks)
+void *moteDropRegister(void *hwnd, const MoteDropCallbacks &callbacks, QString *error)
 {
-    if (!hwnd)
+    if (!hwnd) {
+        if (error)
+            *error = QStringLiteral("宿主窗口句柄为空");
         return nullptr;
+    }
 
     // OLE 拖放要求 STA。Qt 主线程通常已初始化过 OLE；没初始化时这里补一次，
     // 已处于 MTA 则直接放弃，保留 WebView2 自带拖放与页面 drop 事件兜底。
@@ -160,9 +168,15 @@ void *moteDropRegister(void *hwnd, const MoteDropCallbacks &callbacks)
     APTTYPEQUALIFIER qualifier = APTTYPEQUALIFIER_NONE;
     const HRESULT apartment = CoGetApartmentType(&type, &qualifier);
     if (apartment == CO_E_NOTINITIALIZED) {
-        if (FAILED(OleInitialize(nullptr)))
+        const HRESULT initialized = OleInitialize(nullptr);
+        if (FAILED(initialized)) {
+            if (error)
+                *error = QStringLiteral("OleInitialize 失败 %1").arg(hrString(initialized));
             return nullptr;
+        }
     } else if (apartment == S_OK && type != APTTYPE_STA && type != APTTYPE_MAINSTA) {
+        if (error)
+            *error = QStringLiteral("当前线程不是 STA 套间（类型 %1）").arg(static_cast<int>(type));
         return nullptr;
     }
 
@@ -173,6 +187,8 @@ void *moteDropRegister(void *hwnd, const MoteDropCallbacks &callbacks)
             std::fprintf(stderr, "WIN RegisterDragDrop failed 0x%08lx (apartment type %d)\n",
                          static_cast<unsigned long>(registered), static_cast<int>(type));
         }
+        if (error)
+            *error = QStringLiteral("RegisterDragDrop 失败 %1").arg(hrString(registered));
         target->Release();
         return nullptr;
     }

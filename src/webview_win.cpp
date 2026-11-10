@@ -15,6 +15,7 @@
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QStandardPaths>
+#include <QStringList>
 #include <QTimer>
 #include <QUrl>
 #include <QWidget>
@@ -416,6 +417,32 @@ QString hrText(long hr)
     return QStringLiteral("0x%1").arg(static_cast<quint32>(hr), 8, 16, QLatin1Char('0'));
 }
 
+// 单条脚本 / 单条消息的体积预算。WebView2 的 ExecuteScript 与 PostWebMessageAsJson
+// 都在 2MB 量级封顶，这里各留一半余量给 JSON 转义与 UTF-8 膨胀。
+constexpr qsizetype kScriptBudget = 512 * 1024;
+constexpr qsizetype kMessageBudget = 1536 * 1024;
+
+// 按「转义之后的 UTF-8 字节数」切分文本：中文每字符 3 字节、引号/反斜杠还会翻倍，
+// 所以不能按 QString 的 UTF-16 码元数切；同时不切断 UTF-16 代理对（emoji）。
+QStringList splitByPayloadBudget(const QString &text, qsizetype budget)
+{
+    QStringList chunks;
+    const qsizetype total = text.size();
+    qsizetype start = 0;
+    while (start < total) {
+        qsizetype end = qMin(total, start + budget);
+        if (end < total && text.at(end - 1).isHighSurrogate())
+            --end;
+        while (end > start + 1
+               && moteJsonLiteral(text.mid(start, end - start)).toUtf8().size() > budget) {
+            end = start + qMax<qsizetype>(1, (end - start) * 3 / 4);
+        }
+        chunks.append(text.mid(start, end - start));
+        start = end;
+    }
+    return chunks;
+}
+
 } // namespace
 
 WebView2Editor::WebView2Editor(QWidget *parent)
@@ -678,10 +705,26 @@ void WebView2Editor::ensureDropTarget()
             owner->handleNativeFileDrop(paths);
     };
 
-    m_dropTarget = moteDropRegister(m_hostHwnd, callbacks);
+    QString dropError;
+    m_dropTarget = moteDropRegister(m_hostHwnd, callbacks, &dropError);
+
     if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
-        std::fprintf(stderr, "WIN drop target %s\n",
-                     m_dropTarget ? "registered" : "unavailable (page fallback)");
+        if (m_dropTarget) {
+            std::fprintf(stderr, "WIN drop target registered\n");
+        } else {
+            std::fprintf(stderr, "WIN drop target unavailable (page fallback): %s\n",
+                         dropError.toUtf8().constData());
+        }
+    }
+
+    if (!m_dropTarget) {
+        // win32 构建没有控制台，stderr 看不见：用状态栏明说「系统级拖放没挂上、走页面内兜底」。
+        // 延后一轮，保证外壳已经连好 errorOccurred 再发。
+        const QString detail = dropError.isEmpty() ? tr("原因未知") : dropError;
+        QTimer::singleShot(0, this, [this, detail]() {
+            emit errorOccurred(tr("系统级拖放未启用（%1）。已退回页面内拖放："
+                                  "拖入图片可能拿不到真实文件路径。").arg(detail));
+        });
     }
 }
 
@@ -712,17 +755,93 @@ void WebView2Editor::evaluateJs(const QString &js)
 
 void WebView2Editor::injectMarkdown(const QString &text)
 {
-    // ExecuteScript 的脚本体有约 2MB 上限；大文档改走 PostWebMessageAsJson 通道，
-    // 由注入的桥接脚本转给 window.mote.setMarkdown。
-    if (m_webView && text.size() > 512 * 1024) {
-        const QString json = QStringLiteral("{\"__mote\":\"setMarkdown\",\"text\":%1}")
-                                 .arg(moteJsonLiteral(text));
-        static_cast<ICoreWebView2 *>(m_webView)
-            ->PostWebMessageAsJson(json.toStdWString().c_str());
+    auto *web = m_webView ? static_cast<ICoreWebView2 *>(m_webView) : nullptr;
+    if (!web)
+        return; // 页面还没起来：保持 pending，等 ready 后由共享层再走这里
+
+    // 体积一律按「JSON 转义之后的 UTF-8 字节数」判断：WebView2 限额是字节，
+    // 不是 QString 的 UTF-16 码元数；中文每字符 3 字节，引号/换行还要再翻倍。
+    const QString literal = moteJsonLiteral(text);
+    const QByteArray escaped = literal.toUtf8();
+    QString failure;
+
+    // 通道一：单条 ExecuteScript，脚本体积最省。这里直接调用而不是转给共享层，
+    // 因为 WebViewBase::injectMarkdown 不看返回值、失败也会清 pending（正文静默丢失）。
+    if (escaped.size() <= kScriptBudget) {
+        const QString js =
+            QStringLiteral("window.mote && window.mote.setMarkdown(%1);").arg(literal);
+        const HRESULT injected = web->ExecuteScript(js.toStdWString().c_str(), nullptr);
+        if (SUCCEEDED(injected)) {
+            m_hasPending = false;
+            return;
+        }
+        failure = tr("脚本注入失败 %1").arg(hrText(static_cast<long>(injected)));
+    }
+
+    // 通道二：大文档走 PostWebMessageAsJson，不占脚本额度。
+    // 桥接脚本（kBridgeScript）在文档创建时已接管 {"__mote":"setMarkdown", ...}
+    const QString json = QStringLiteral("{\"__mote\":\"setMarkdown\",\"text\":%1}")
+                             .arg(literal);
+    const QByteArray payload = json.toUtf8();
+    if (payload.size() <= kMessageBudget) {
+        const HRESULT posted = web->PostWebMessageAsJson(json.toStdWString().c_str());
+        if (SUCCEEDED(posted)) {
+            m_hasPending = false; // 只有投递成功才清 pending
+            return;
+        }
+        const QString postedFailure =
+            tr("消息投递失败 %1").arg(hrText(static_cast<long>(posted)));
+        failure = failure.isEmpty() ? postedFailure
+                                    : failure + QStringLiteral("；") + postedFailure;
+    } else {
+        const QString sizeFailure =
+            tr("消息体积 %1 字节超出上限").arg(static_cast<qlonglong>(payload.size()));
+        failure = failure.isEmpty() ? sizeFailure
+                                    : failure + QStringLiteral("；") + sizeFailure;
+    }
+
+    // 回落：分片 ExecuteScript 注入，每片单独受脚本体积预算约束
+    if (injectChunked(text)) {
         m_hasPending = false;
         return;
     }
-    WebViewBase::injectMarkdown(text);
+
+    // 两条通道都失败：保留 pending（下次 ready 还能重试），并把失败明确报出来，
+    // 不要只剩一个空白的正文区
+    const QString detail = tr("无法把 %1 字符的文档注入编辑器（%2）。")
+                               .arg(static_cast<qlonglong>(text.size()))
+                               .arg(failure);
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG"))
+        std::fprintf(stderr, "WIN inject failed: %s\n", detail.toUtf8().constData());
+    emit errorOccurred(detail);
+    showFailureOverlay(tr("文档载入失败"),
+                       tr("<p>%1</p><p>分片注入也没有成功。可以先另存为文件后重新打开，"
+                          "或把文档拆小一些再试。</p>").arg(detail.toHtmlEscaped()));
+}
+
+bool WebView2Editor::injectChunked(const QString &text)
+{
+    auto *web = static_cast<ICoreWebView2 *>(m_webView);
+    if (!web)
+        return false;
+
+    // 先清掉上次中途失败留下的半截内容
+    if (FAILED(web->ExecuteScript(L"window.__moteInject=[];", nullptr)))
+        return false;
+
+    const QString pushScript = QStringLiteral("window.__moteInject.push(%1);");
+    const QStringList chunks = splitByPayloadBudget(text, kScriptBudget);
+    for (const QString &chunk : chunks) {
+        const QString js = pushScript.arg(moteJsonLiteral(chunk));
+        if (FAILED(web->ExecuteScript(js.toStdWString().c_str(), nullptr)))
+            return false;
+    }
+
+    // 各片按顺序排队执行，最后一片之后拼接并交给页面
+    const QString applyScript = QStringLiteral(
+        "(function(){var t=(window.__moteInject||[]).join('');window.__moteInject=[];"
+        "if(window.mote)window.mote.setMarkdown(t);})();");
+    return SUCCEEDED(web->ExecuteScript(applyScript.toStdWString().c_str(), nullptr));
 }
 
 void WebView2Editor::loadPage(const QUrl &baseDir)
@@ -739,13 +858,17 @@ void WebView2Editor::navigateFor(const QUrl &baseDir)
 {
     if (!m_webView)
         return;
+    // 换页前先清掉上一次的失败提示，别让旧覆盖层盖住新页面
+    clearFailureOverlay();
     auto *web = static_cast<ICoreWebView2 *>(m_webView);
 
     const QString dir = baseDir.toLocalFile();
     QString page = motePageHtml();
     if (dir.isEmpty()) {
         // 未命名文档：没有可解析的相对资源，直接注入
-        web->NavigateToString(page.toStdWString().c_str());
+        const HRESULT hr = web->NavigateToString(page.toStdWString().c_str());
+        if (FAILED(hr))
+            reportNavigationFailure(tr("内置页面注入"), hr);
         return;
     }
 
@@ -768,7 +891,9 @@ void WebView2Editor::navigateFor(const QUrl &baseDir)
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         // 文档目录不可写时退回 NavigateToString：页面能渲染，但相对图片解析不到
-        web->NavigateToString(page.toStdWString().c_str());
+        const HRESULT hr = web->NavigateToString(page.toStdWString().c_str());
+        if (FAILED(hr))
+            reportNavigationFailure(tr("退回内置页面注入"), hr);
         return;
     }
     file.write(page.toUtf8());
@@ -787,7 +912,9 @@ void WebView2Editor::navigateFor(const QUrl &baseDir)
             if (SUCCEEDED(mapped)) {
                 const QString url = QStringLiteral("https://%1/%2")
                                         .arg(virtualHost(), QFileInfo(filePath).fileName());
-                web->Navigate(url.toStdWString().c_str());
+                const HRESULT hr = web->Navigate(url.toStdWString().c_str());
+                if (FAILED(hr))
+                    reportNavigationFailure(tr("虚拟主机导航"), hr);
                 return;
             }
         }
@@ -795,7 +922,9 @@ void WebView2Editor::navigateFor(const QUrl &baseDir)
     }
 
     const QString url = QUrl::fromLocalFile(filePath).toString();
-    web->Navigate(url.toStdWString().c_str());
+    const HRESULT hr = web->Navigate(url.toStdWString().c_str());
+    if (FAILED(hr))
+        reportNavigationFailure(tr("本地页面导航"), hr);
 }
 
 void WebView2Editor::onWebMessage(const QString &json)
@@ -888,19 +1017,49 @@ void WebView2Editor::showUnavailable(const QString &reason)
         std::fprintf(stderr, "WIN webview2 unavailable: %s\n", reason.toUtf8().constData());
     emit errorOccurred(reason);
 
-    auto *label = new QLabel(this);
-    label->setAlignment(Qt::AlignCenter);
-    label->setTextFormat(Qt::RichText);
-    label->setOpenExternalLinks(true);
-    label->setText(tr("<h3>需要 WebView2 运行时</h3>"
-                      "<p>%1</p>"
-                      "<p>请安装 Microsoft Edge WebView2 Runtime 后重新启动 Mote：<br>"
-                      "<a href=\"https://go.microsoft.com/fwlink/p/?LinkId=2124703\">"
-                      "https://go.microsoft.com/fwlink/p/?LinkId=2124703</a></p>")
-                       .arg(reason.toHtmlEscaped()));
-    label->setGeometry(rect());
-    label->show();
-    m_unavailable = label;
+    showFailureOverlay(tr("需要 WebView2 运行时"),
+                       tr("<p>%1</p>"
+                          "<p>请安装 Microsoft Edge WebView2 Runtime 后重新启动 Mote：<br>"
+                          "<a href=\"https://go.microsoft.com/fwlink/p/?LinkId=2124703\">"
+                          "https://go.microsoft.com/fwlink/p/?LinkId=2124703</a></p>")
+                           .arg(reason.toHtmlEscaped()));
+}
+
+void WebView2Editor::showFailureOverlay(const QString &title, const QString &body)
+{
+    if (!m_unavailable) {
+        auto *label = new QLabel(this);
+        label->setAlignment(Qt::AlignCenter);
+        label->setTextFormat(Qt::RichText);
+        label->setOpenExternalLinks(true);
+        // WebView2 是原生子窗口，普通 Qt 子控件画不过它，覆盖层必须也是原生窗口
+        label->setAttribute(Qt::WA_NativeWindow);
+        m_unavailable = label;
+    }
+    if (m_unavailable) {
+        m_unavailable->setText(tr("<h3>%1</h3>%2").arg(title.toHtmlEscaped(), body));
+        m_unavailable->setGeometry(rect());
+        m_unavailable->show();
+        m_unavailable->raise();
+    }
+}
+
+void WebView2Editor::clearFailureOverlay()
+{
+    if (m_unavailable)
+        m_unavailable->hide();
+}
+
+void WebView2Editor::reportNavigationFailure(const QString &step, long hr)
+{
+    const QString detail = tr("%1失败（%2）。").arg(step, hrText(hr));
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG"))
+        std::fprintf(stderr, "WIN navigate failed: %s\n", detail.toUtf8().constData());
+    emit errorOccurred(detail);
+    // 导航失败在 Windows 上就是一块纯白页，必须给可见出口
+    showFailureOverlay(tr("页面加载失败"),
+                       tr("<p>%1</p><p>文档目录不可写或页面文件被占用时会出现这个问题；"
+                          "可以改存到其他目录后重新打开。</p>").arg(detail.toHtmlEscaped()));
 }
 
 WebEditor *createWebEditor(QWidget *parent)

@@ -17,8 +17,11 @@ struct MoteDropCallbacks
     std::function<void(const QStringList &)> perform;
 };
 
-// 在 hwnd 上注册拖放目标，成功返回目标对象（交给 moteDropRevoke），失败返回 nullptr
-void *moteDropRegister(void *hwnd, const MoteDropCallbacks &callbacks);
+// 在 hwnd 上注册拖放目标，成功返回目标对象（交给 moteDropRevoke），失败返回 nullptr。
+// error 可为 nullptr；失败时写入可直接展示给用户的原因（公寓类型 / HRESULT），
+// 宿主据此在界面上提示「系统级拖放没挂上」，而不是只在 stderr 留痕。
+void *moteDropRegister(void *hwnd, const MoteDropCallbacks &callbacks,
+                       QString *error = nullptr);
 void moteDropRevoke(void *hwnd, void *target);
 
 // 不注册到窗口，只创建目标对象（接口级测试用）
