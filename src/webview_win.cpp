@@ -307,12 +307,8 @@ public:
         const QString uri = raw ? QString::fromWCharArray(raw) : QString();
         if (raw)
             CoTaskMemFree(raw);
-        if (m_owner && !m_owner->onNavigationStarting(uri)) {
+        if (m_owner && !m_owner->onNavigationStarting(uri))
             args->put_Cancel(TRUE);
-            if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
-                std::fprintf(stderr, "WIN nav blocked %s\n", uri.toUtf8().constData());
-            }
-        }
         return S_OK;
     }
 
@@ -371,6 +367,46 @@ public:
 
 private:
     QPointer<WebView2Editor> m_owner;
+};
+
+// 注入回执：把 ExecuteScript 的返回值（JSON）交回宿主，用于确认正文真的进了页面。
+// ExecuteScript 的 HRESULT 只反映「脚本是否被提交」，页面里抛异常照样是 S_OK。
+class ScriptResultHandler final
+    : public RefCounted
+    , public ICoreWebView2ExecuteScriptCompletedHandler
+{
+public:
+    ScriptResultHandler(WebView2Editor *owner, bool chunked)
+        : m_owner(owner)
+        , m_chunked(chunked) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **ppv) override
+    {
+        if (!ppv)
+            return E_POINTER;
+        if (riid == IID_IUnknown || riid == IID_ICoreWebView2ExecuteScriptCompletedHandler) {
+            *ppv = static_cast<ICoreWebView2ExecuteScriptCompletedHandler *>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return RefCounted::AddRef(); }
+    ULONG STDMETHODCALLTYPE Release() override { return RefCounted::Release(); }
+
+    HRESULT STDMETHODCALLTYPE Invoke(HRESULT errorCode, LPCWSTR resultObjectAsJson) override
+    {
+        const QString result =
+            resultObjectAsJson ? QString::fromWCharArray(resultObjectAsJson) : QString();
+        if (m_owner)
+            m_owner->onInjectResult(static_cast<long>(errorCode), result, m_chunked);
+        return S_OK;
+    }
+
+private:
+    QPointer<WebView2Editor> m_owner;
+    bool m_chunked = false;
 };
 
 Qt::Key keyFromVirtualKey(UINT vk)
@@ -618,6 +654,10 @@ void WebView2Editor::onControllerReady(long hr, void *controller)
     updateBounds();
     ctrl->put_IsVisible(TRUE);
 
+    // 诊断开关：MOTE_WEBVIEW_DEVTOOLS=1 时顺手打开 DevTools，现场可以直接看 Console
+    if (qEnvironmentVariableIsSet("MOTE_WEBVIEW_DEVTOOLS"))
+        web->OpenDevToolsWindow();
+
     if (m_hasDeferredLoad) {
         m_hasDeferredLoad = false;
         navigateFor(m_deferredDir);
@@ -632,15 +672,26 @@ void WebView2Editor::configureWebView()
     if (SUCCEEDED(web->get_Settings(&settings)) && settings) {
         // 关掉浏览器默认右键菜单 / 开发者工具 / 状态条 / 原生缩放，避免和外壳的
         // 中文菜单、CSS 缩放重复；页面自己实现了右键菜单与缩放。
+        // 诊断开关：MOTE_WEBVIEW_DEVTOOLS=1 时保留 DevTools，便于现场看 Console。
         settings->put_AreDefaultContextMenusEnabled(FALSE);
-        settings->put_AreDevToolsEnabled(FALSE);
+        settings->put_AreDevToolsEnabled(
+            qEnvironmentVariableIsSet("MOTE_WEBVIEW_DEVTOOLS") ? TRUE : FALSE);
         settings->put_IsStatusBarEnabled(FALSE);
         settings->put_IsZoomControlEnabled(FALSE);
         settings->Release();
     }
 
     // 文档创建前注入桥接脚本：editor.js 一加载就会 post ready，必须先生效
-    web->AddScriptToExecuteOnDocumentCreated(kBridgeScript, nullptr);
+    const HRESULT bridge = web->AddScriptToExecuteOnDocumentCreated(kBridgeScript, nullptr);
+    if (FAILED(bridge)) {
+        // 桥接没挂上时页面照样渲染，但 ready / 各类消息都回不来，界面会停在空白页。
+        // 这是「白屏且无报错」的一条真实通道，必须报到界面上。
+        const QString detail = tr("页面桥接脚本注入失败（%1）：编辑器可能停在空白页。")
+                                   .arg(hrText(static_cast<long>(bridge)));
+        if (qEnvironmentVariableIsSet("MOTE_KEYLOG"))
+            std::fprintf(stderr, "WIN bridge script failed: %s\n", detail.toUtf8().constData());
+        emit errorOccurred(detail);
+    }
 
     EventRegistrationToken token{};
     auto *messageHandler = new WebMessageHandler(this);
@@ -765,17 +816,19 @@ void WebView2Editor::injectMarkdown(const QString &text)
     const QByteArray escaped = literal.toUtf8();
     QString failure;
 
-    // 通道一：单条 ExecuteScript，脚本体积最省。这里直接调用而不是转给共享层，
-    // 因为 WebViewBase::injectMarkdown 不看返回值、失败也会清 pending（正文静默丢失）。
+    // 通道一：单条 ExecuteScript，脚本体积最省。脚本自己返回 'ok'，宿主据此确认
+    // 正文真的进了页面——ExecuteScript 的 S_OK 只代表脚本被提交，JS 抛异常照样 S_OK。
     if (escaped.size() <= kScriptBudget) {
-        const QString js =
-            QStringLiteral("window.mote && window.mote.setMarkdown(%1);").arg(literal);
-        const HRESULT injected = web->ExecuteScript(js.toStdWString().c_str(), nullptr);
-        if (SUCCEEDED(injected)) {
-            m_hasPending = false;
-            return;
-        }
-        failure = tr("脚本注入失败 %1").arg(hrText(static_cast<long>(injected)));
+        const QString js = QStringLiteral(
+            "(function(){if(!window.mote)return 'no-mote';"
+            "try{window.mote.setMarkdown(%1);return 'ok';}"
+            "catch(e){return 'ERR '+(e&&e.message?e.message:e);}})();").arg(literal);
+        auto *resultHandler = new ScriptResultHandler(this, false);
+        const HRESULT injected = web->ExecuteScript(js.toStdWString().c_str(), resultHandler);
+        resultHandler->Release();
+        if (SUCCEEDED(injected))
+            return; // 生效与否由 onInjectResult 判定，确认成功才清 pending
+        failure = tr("脚本提交失败 %1").arg(hrText(static_cast<long>(injected)));
     }
 
     // 通道二：大文档走 PostWebMessageAsJson，不占脚本额度。
@@ -800,11 +853,10 @@ void WebView2Editor::injectMarkdown(const QString &text)
                                     : failure + QStringLiteral("；") + sizeFailure;
     }
 
-    // 回落：分片 ExecuteScript 注入，每片单独受脚本体积预算约束
-    if (injectChunked(text)) {
-        m_hasPending = false;
+    // 回落：分片 ExecuteScript 注入，每片单独受脚本体积预算约束。
+    // 这里同样只看「是否提交成功」，真正生效与否由 onInjectResult(chunked=true) 判定。
+    if (injectChunked(text))
         return;
-    }
 
     // 两条通道都失败：保留 pending（下次 ready 还能重试），并把失败明确报出来，
     // 不要只剩一个空白的正文区
@@ -840,8 +892,39 @@ bool WebView2Editor::injectChunked(const QString &text)
     // 各片按顺序排队执行，最后一片之后拼接并交给页面
     const QString applyScript = QStringLiteral(
         "(function(){var t=(window.__moteInject||[]).join('');window.__moteInject=[];"
-        "if(window.mote)window.mote.setMarkdown(t);})();");
-    return SUCCEEDED(web->ExecuteScript(applyScript.toStdWString().c_str(), nullptr));
+        "if(!window.mote)return 'no-mote';"
+        "try{window.mote.setMarkdown(t);return 'ok';}"
+        "catch(e){return 'ERR '+(e&&e.message?e.message:e);}})();");
+    auto *resultHandler = new ScriptResultHandler(this, true);
+    const HRESULT applied = web->ExecuteScript(applyScript.toStdWString().c_str(), resultHandler);
+    resultHandler->Release();
+    return SUCCEEDED(applied);
+}
+
+void WebView2Editor::onInjectResult(long hr, const QString &resultJson, bool chunked)
+{
+    // 页面脚本显式 return 'ok' 才算真的注入成功；'no-mote' / 'ERR ...' 都是没生效
+    if (SUCCEEDED(static_cast<HRESULT>(hr)) && resultJson == QLatin1String("\"ok\"")) {
+        m_hasPending = false;
+        clearFailureOverlay();
+        return;
+    }
+
+    const QString reason = FAILED(static_cast<HRESULT>(hr))
+        ? tr("脚本提交失败 %1").arg(hrText(hr))
+        : (resultJson.isEmpty() ? tr("页面没有返回结果") : tr("页面返回 %1").arg(resultJson));
+    const QString channel = chunked ? tr("分片注入") : tr("单条注入");
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
+        std::fprintf(stderr, "WIN inject %s failed: %s\n",
+                     chunked ? "chunked" : "single", reason.toUtf8().constData());
+    }
+    // pending 保留：页面再次 ready 时会重试；同时把失败报到状态栏与覆盖层，
+    // 不要留给用户一块空白正文去猜
+    emit errorOccurred(tr("正文注入没有生效（%1，%2）。").arg(channel, reason));
+    showFailureOverlay(tr("正文载入失败"),
+                       tr("<p>%1：%2</p><p>正文没有进入编辑器。可以先把文档「另存为」到"
+                          "可写目录再重新打开，或重启 Mote 后重试。</p>")
+                           .arg(channel, reason.toHtmlEscaped()));
 }
 
 void WebView2Editor::loadPage(const QUrl &baseDir)
@@ -866,6 +949,7 @@ void WebView2Editor::navigateFor(const QUrl &baseDir)
     QString page = motePageHtml();
     if (dir.isEmpty()) {
         // 未命名文档：没有可解析的相对资源，直接注入
+        m_pageUrl.clear(); // NavigateToString 的 URL 是 about:blank，由白名单的 about: 规则放行
         const HRESULT hr = web->NavigateToString(page.toStdWString().c_str());
         if (FAILED(hr))
             reportNavigationFailure(tr("内置页面注入"), hr);
@@ -891,6 +975,7 @@ void WebView2Editor::navigateFor(const QUrl &baseDir)
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         // 文档目录不可写时退回 NavigateToString：页面能渲染，但相对图片解析不到
+        m_pageUrl.clear();
         const HRESULT hr = web->NavigateToString(page.toStdWString().c_str());
         if (FAILED(hr))
             reportNavigationFailure(tr("退回内置页面注入"), hr);
@@ -912,6 +997,7 @@ void WebView2Editor::navigateFor(const QUrl &baseDir)
             if (SUCCEEDED(mapped)) {
                 const QString url = QStringLiteral("https://%1/%2")
                                         .arg(virtualHost(), QFileInfo(filePath).fileName());
+                m_pageUrl = url;
                 const HRESULT hr = web->Navigate(url.toStdWString().c_str());
                 if (FAILED(hr))
                     reportNavigationFailure(tr("虚拟主机导航"), hr);
@@ -922,6 +1008,7 @@ void WebView2Editor::navigateFor(const QUrl &baseDir)
     }
 
     const QString url = QUrl::fromLocalFile(filePath).toString();
+    m_pageUrl = url;
     const HRESULT hr = web->Navigate(url.toStdWString().c_str());
     if (FAILED(hr))
         reportNavigationFailure(tr("本地页面导航"), hr);
@@ -981,23 +1068,40 @@ bool WebView2Editor::onAccelerator(int virtualKey)
 
 bool WebView2Editor::onNavigationStarting(const QString &uri)
 {
-    // 只放行编辑器自己的页面：
-    //  - NavigateToString 注入的页面与内部框架，URI 都是 about: 协议
-    //  - 写到文档目录的临时页面，file:// 与虚拟主机两种模式都靠同一个文件名识别
-    // 其余（外部站点、拖进来的 html 等）一律取消，避免编辑器页面被替换掉。
-    // 口径与 macOS 的 MoteNavigationDelegate 一致。
+    // 兜底开关：现场排查白屏时用来一次性排除「拦截误杀」（MOTE_WEBVIEW_ALLOW_ALL_NAV=1）
+    if (qEnvironmentVariableIsSet("MOTE_WEBVIEW_ALLOW_ALL_NAV"))
+        return true;
+
     const QUrl url(uri);
+
+    // 还没有自己的页面（第一次导航）：一律放行。与 macOS 的 `!current` 分支同口径，
+    // 避免导航发生在「记下页面 URL」之前时把自己挡掉。
+    if (m_pageUrl.isEmpty() && m_pageFile.isEmpty())
+        return true;
+
+    // NavigateToString 注入的页面与内部框架，URI 都是 about: 协议
     if (uri.isEmpty()
         || url.scheme().compare(QLatin1String("about"), Qt::CaseInsensitive) == 0) {
         return true;
     }
-    if (m_pageFile.isEmpty())
-        return false;
-    const QString pageName = QFileInfo(m_pageFile).fileName();
-    if (pageName.isEmpty())
-        return false;
-    // QUrl::fileName() 会解码百分号转义，中文/空格路径可以直接比较
-    return url.fileName() == pageName;
+
+    // 正在加载的那一页：按完整 URL 精确放行（file:// 与虚拟主机两种模式都覆盖）
+    if (!m_pageUrl.isEmpty() && (uri == m_pageUrl || url == QUrl(m_pageUrl)))
+        return true;
+
+    // WebView2 可能把 URL 规范化（大小写、百分号编码、盘符写法）后再报出来，
+    // 精确比较不中时退一步只比文件名。QUrl::fileName() 会解码百分号转义。
+    if (!m_pageFile.isEmpty()) {
+        const QString pageName = QFileInfo(m_pageFile).fileName();
+        if (!pageName.isEmpty() && url.fileName() == pageName)
+            return true;
+    }
+
+    // 取消导航的后果是一整块白屏，必须留下可见痕迹，不能让用户对着白页猜
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG"))
+        std::fprintf(stderr, "WIN nav blocked %s\n", uri.toUtf8().constData());
+    emit statusMessage(tr("已拦截页面内跳转：%1").arg(uri));
+    return false;
 }
 
 void WebView2Editor::onExternalUrl(const QString &url)

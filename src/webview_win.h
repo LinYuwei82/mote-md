@@ -53,6 +53,9 @@ private:
     void reportNavigationFailure(const QString &step, long hr);
     // 大文档注入的回落通道：分片 ExecuteScript，每片单独受脚本体积预算约束
     bool injectChunked(const QString &text);
+    // 注入回执：ExecuteScript 返回 S_OK 只代表脚本被提交，JS 抛异常或 window.mote
+    // 还没就位时它照样是 S_OK。只有脚本显式返回 'ok' 才清 pending。
+    void onInjectResult(long hr, const QString &resultJson, bool chunked);
 
     // 系统级拖放：宿主窗口注册自建 IDropTarget，并关掉 WebView2 自己的拖放，
     // 这样才能拿到拖入文件的真实路径（页面内 drop 事件只有兜底作用）。
@@ -76,6 +79,7 @@ private:
     QUrl m_deferredDir;
     bool m_hasDeferredLoad = false;
     QString m_pageFile;            // 文档目录下的临时页面文件，退出/换文档时删除
+    QString m_pageUrl;             // 上一次导航用的完整 URL（白名单按它精确放行）
     QLabel *m_unavailable = nullptr; // 覆盖层（WebView2 缺失 / 导航失败的可见提示）
 };
 
