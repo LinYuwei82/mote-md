@@ -2892,6 +2892,11 @@
     if (!el)
       return;
 
+    // 组合输入（中文等）期间按键属于输入法：方向键选候选、回车/Esc 上屏或取消，
+    // 一个都不能被下面的浮层或块级逻辑吃掉。判断必须放在最前面。
+    if (composing)
+      return;
+
     // 斜杠浮层打开时先吃掉导航键：上下选择、Enter/Tab 插入、Esc 删除已输入的 /
     if (slashState) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -2911,9 +2916,6 @@
         return;
       }
     }
-
-    if (composing)
-      return;
 
     // 语言徽标内：回车/制表符提交并把光标交回正文首行；其余按键交给原生编辑
     // （不进入下面的块级逻辑，避免退格把块并掉、回车插进代码正文）。同样只能
@@ -4712,6 +4714,9 @@
 
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Escape')
+      return;
+    // 组字期间 Esc 属于输入法（取消候选/整段上屏），浮层不能抢
+    if (composing)
       return;
     if (slashState) {
       event.preventDefault();
