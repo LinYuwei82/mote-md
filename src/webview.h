@@ -37,6 +37,8 @@ public:
     virtual void setTheme(const QString &mode) = 0;
     // 格式动作（粗体/标题/列表/代码块…）：前端与斜杠菜单、右键「转为」共用同一实现
     virtual void applyFormat(const QString &action) = 0;
+    // 导出自包含 HTML：前端渲染好整篇 HTML 后经 exportHtmlReady 回传，由外壳写盘
+    virtual void requestExportHtml(const QString &title) = 0;
 
 signals:
     void ready();
@@ -52,6 +54,10 @@ signals:
     // 原生层的提示（图片落盘成功/失败等），由外壳显示在状态栏
     void statusMessage(const QString &text);
     void errorOccurred(const QString &message);
+    // 渲染态 Cmd+Click 链接：href 原样交给外壳（相对 .md / 外部 URL / 锚点分别处理）
+    void openLinkRequested(const QString &href);
+    // 导出的自包含 HTML（图片仍是原文里的相对路径，由外壳读盘替换成 base64）
+    void exportHtmlReady(const QString &html);
 };
 
 // 平台工厂：macOS 返回 WKWebView 实现，其他平台返回 nullptr（由外壳显示占位提示）

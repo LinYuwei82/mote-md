@@ -197,8 +197,11 @@
       if (ch === '[' && depth < 6) {
         var link = /^\[([^\]]*)\]\(([^)\s]*)\)/.exec(text.slice(i));
         if (link) {
+          // 可见文字包在 <a> 里（只影响颜色/下划线，不改变字宽，零位移不受影响）；
+          // `[` 与 `](url)` 仍是零宽标记，textContent 与原文逐字相同。
           out += marker('[', 'link')
-            + inlineHtml(link[1], depth + 1)
+            + '<a class="md-link" href="' + escapeHtml(link[2]) + '" data-href="'
+            + escapeHtml(link[2]) + '">' + inlineHtml(link[1], depth + 1) + '</a>'
             + marker('](' + link[2] + ')', 'link');
           i += link[0].length;
           continue;
@@ -2373,7 +2376,19 @@
   });
 
   root.addEventListener('click', function (event) {
-    var box = event.target;
+    var target = event.target;
+    var anchor = target && target.closest ? target.closest('a.md-link') : null;
+    if (anchor) {
+      // 链接永远不让 WebView 自己导航：普通点击只落到「进入编辑」，
+      // Cmd+Click 交给外壳决定（浏览器 / 应用内打开 .md）。
+      event.preventDefault();
+      if (event.metaKey) {
+        post({ type: 'openLink', href: anchor.getAttribute('data-href')
+          || anchor.getAttribute('href') || '' });
+      }
+      return;
+    }
+    var box = target;
     if (!box || !box.classList || !box.classList.contains('task-check'))
       return;
     event.preventDefault();
@@ -3003,10 +3018,11 @@
     for (var i = 0; i < junk.length; i++) {
       if (junk[i].closest && junk[i].closest('table'))
         continue;
-      // 列表符号（- / 1.）与任务标记（[ ] / [x]）是 Markdown 原文的一部分：
-      // 复制出去必须仍是标准任务列表，只有行内标记按可见文本剔除。
+      // 列表符号（- / 1.）、任务标记（[ ] / [x]）与链接语法（[ / ](url)）都是
+      // Markdown 原文的一部分：复制出去必须仍能原样贴回，只有行内标记按可见文本剔除。
       if (junk[i].classList && (junk[i].classList.contains('mk-bullet')
-          || junk[i].classList.contains('mk-task')))
+          || junk[i].classList.contains('mk-task')
+          || junk[i].classList.contains('mk-link')))
         continue;
       junk[i].parentNode.removeChild(junk[i]);
     }
@@ -4559,6 +4575,88 @@
     }
   }, true);
 
+  /* ---------------- 导出自包含 HTML ---------------- */
+  // 页面里已有渲染好的 DOM 与全部样式规则，导出时直接复用：
+  // - CSS：把 document.styleSheets 的规则串接起来（其中 @font-face 是 data URI，无外链）
+  // - 正文：克隆当前 DOM，去掉零宽标记、把复选框换成静态符号（保留勾选状态）
+  // 图片的 base64 由外壳读取磁盘后替换，页面这一侧只保留原始相对路径。
+  function exportStylesheet() {
+    var css = '';
+    for (var i = 0; i < document.styleSheets.length; i++) {
+      var rules = null;
+      try {
+        rules = document.styleSheets[i].cssRules || null;
+      } catch (e) {
+        rules = null;
+      }
+      if (!rules)
+        continue;
+      for (var j = 0; j < rules.length; j++)
+        css += rules[j].cssText + '\n';
+    }
+    return css;
+  }
+
+  function exportBodyHtml() {
+    var body = root.cloneNode(true);
+    // 零宽标记（含链接的 [ / ](url)）只服务编辑与 raw 不变量，导出时全部去掉
+    var marks = body.querySelectorAll('.mk');
+    for (var i = marks.length - 1; i >= 0; i--) {
+      if (marks[i].parentNode)
+        marks[i].parentNode.removeChild(marks[i]);
+    }
+    // 行号栏与语言徽标是编辑器外壳，不属于文档内容
+    var chrome = body.querySelectorAll('.gutter, .code-lang');
+    for (var c = chrome.length - 1; c >= 0; c--) {
+      if (chrome[c].parentNode)
+        chrome[c].parentNode.removeChild(chrome[c]);
+    }
+    var boxes = body.querySelectorAll('input.task-check');
+    for (var b = 0; b < boxes.length; b++) {
+      var box = boxes[b];
+      var mark = document.createElement('span');
+      mark.className = box.checked ? 'task-check-static checked' : 'task-check-static';
+      mark.textContent = box.checked ? '✓' : '';
+      mark.setAttribute('contenteditable', 'false');
+      mark.setAttribute('aria-hidden', 'true');
+      box.parentNode.replaceChild(mark, box);
+    }
+    var editable = body.querySelectorAll('[contenteditable]');
+    for (var k = 0; k < editable.length; k++)
+      editable[k].removeAttribute('contenteditable');
+    var blocks = body.querySelectorAll('.block');
+    for (var m = 0; m < blocks.length; m++)
+      blocks[m].classList.remove('editing', 'selected', 'focus');
+    return body.innerHTML;
+  }
+
+  function buildExportHtml(title) {
+    var name = String(title || 'Mote 导出')
+      .replace(/[<>"&]/g, '')
+      .replace(/\s+$/, '');
+    // 追加在应用样式之后：把文档容器从应用布局里“解放”出来，并补齐静态复选框样式
+    var extra = [
+      'html,body{height:auto!important;overflow:auto!important;background:#fff}',
+      'body{margin:0;padding:56px 24px 72px;color:var(--text);',
+      'font:16px/1.75 -apple-system,"PingFang SC","Helvetica Neue",Arial,sans-serif;',
+      '-webkit-font-smoothing:antialiased}',
+      '#editor{display:block!important;max-width:760px;margin:0 auto;padding:0!important}',
+      '.mote-export .block{outline:none!important}',
+      '.task-check-static{display:inline-block;width:0.92em;height:0.92em;',
+      'margin-right:0.45em;border:1px solid var(--border-hover);border-radius:3px;',
+      'vertical-align:-0.08em;font-size:0.78em;line-height:0.95em;text-align:center;',
+      'color:#fff;background:transparent}',
+      '.task-check-static.checked{background:var(--accent);border-color:var(--accent)}',
+      '.mote-img-missing{color:var(--muted-2);font-size:0.9em}'
+    ].join('');
+    var css = exportStylesheet();
+    var head = '<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8">'
+      + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+      + '<title>' + name + '</title><style>' + css + extra + '</style>';
+    return head + '</head><body><article class="mote-export" id="editor">'
+      + exportBodyHtml() + '</article></body></html>';
+  }
+
   window.mote = {
     setTheme: setTheme,
     setMarkdown: function (text) {
@@ -4682,6 +4780,10 @@
       var first = root.querySelector('.block');
       if (first)
         first.focus();
+    },
+    // 原生「导出 HTML…」：拼好整篇自包含 HTML 后回传，由 Qt 侧写盘并内嵌图片
+    exportHtml: function (title) {
+      post({ type: 'export', html: buildExportHtml(title) });
     }
   };
 

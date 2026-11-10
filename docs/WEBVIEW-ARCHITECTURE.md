@@ -69,6 +69,9 @@ macOS 由 `src/macwebview.mm` 实现；Windows 预留 `src/webview_win.cpp`（�
   隐藏临时文件 `.mote-preview-<pid>.html`，再用
   `loadFileURL:allowingReadAccessToURL:` 载入；页面里注入 `<base href="file:///md目录/">`，
   `assets/x.png` 这类相对路径才能解析并被 WebKit 允许读取。
+  注入只替换**页面模板自己的第一处** `</head>`：早先用整串 `replace("</head>", …)`，
+  会连内嵌 JS 源码里的 `'</head>'` 字面量一起改掉，导出 HTML 因此凭空多出一个
+  `file://` 的 `<base>`（2026-11-10 修复）。
 - **为什么不用 `loadHTMLString:baseURL:`**：这样载入的页面是「无来源」文档，WebKit 拒绝
   读取任何 `file://` 子资源（实测 `img.naturalWidth=0`、`fetch` 报 `Load failed`），
   相对路径图片永远不会显示；`baseURL` 只是解析基准，不等于读权限。
@@ -91,6 +94,8 @@ JS → 原生（`window.webkit.messageHandlers.mote.postMessage(obj)`）：
 | `error` | `message` | 前端异常，Qt 侧显示状态栏/弹窗 |
 | `view` | `toc, source, zoom` | 视图状态变化（目录开关、源码模式、缩放倍率），Qt 同步菜单勾选与状态栏 |
 | `log` | `message` | 诊断日志；仅 `MOTE_KEYLOG=1` 时打印到 stderr |
+| `openLink` | `href` | `Cmd+Click` 链接：外部链接交系统浏览器，相对 `.md` 在应用内打开，`#锚点` 只提示 |
+| `export` | `html` | 「导出 HTML…」：整篇自包含 HTML 回传，Qt 侧内嵌本地图片后写盘 |
 
 原生 → JS（`evaluateJavaScript`）：
 
@@ -105,6 +110,7 @@ JS → 原生（`window.webkit.messageHandlers.mote.postMessage(obj)`）：
 | `window.mote.insertImage(rel)` | 原生把图片写进 `assets/` 后回调：在光标处插入 `![](rel)` |
 | `window.mote.newDocument()` | 新建空白文档：关查找、关目录、缩放回 100%、整篇清空并把光标放进空块 |
 | `window.mote.state()` | 只读状态（诊断用）：模式、目录、缩放、脏标记、源文本 |
+| `window.mote.exportHtml(title)` | 拼出自包含 HTML 并回传 `export` 消息（不读写文档模型） |
 
 - macOS 实现用 `WKScriptMessageHandler` 接收 `NSDictionary`，
   `NSJSONSerialization` 转 JSON 字符串后交给 Qt 的 `QJsonDocument` 解析。

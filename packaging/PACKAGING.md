@@ -327,7 +327,7 @@ NSMenu key equivalent 消费），右键用 **`cliclick` 真实鼠标事件**；
 | 旧键 ⌘N/⌘F/⌘E/⌘S/⌘Z/⇧⌘Z/⌘=/⌘-/⌘0 | 新建、查找、源码切换、保存写盘、撤销重做、缩放 | 通过；未被新菜单项抢占 |
 | 斜杠菜单 | `/` 触发、输入过滤、↑↓、Enter、Esc | 通过；浮层挂在 `BODY`、不在 `#editor` 内 |
 | 右键「转为」 | 正文↔标题、→代码块、代码块→正文、3 段多选→列表 | 通过；多选合成单块，一次撤销回 3 段 |
-| 菜单冲突 | 24 个带快捷键的菜单项全表（`MOTE_KEYLOG`） | 24 个组合唯一，无重复；⌘0 = 实际大小；新增 `⌘⇧D`（深色模式）与原有 23 个均不重叠 |
+| 菜单冲突 | 24 个带快捷键的菜单项全表（`MOTE_KEYLOG`） | 24 个组合唯一，无重复；⌘0 = 实际大小；新增 `⌘⇧D`（深色模式）与原有 23 个均不重叠（1.13 新增「导出 HTML…」`⌥⌘E` 后全表 25 项仍唯一） |
 
 本轮修掉的两处问题：
 
@@ -433,7 +433,7 @@ NSMenu key equivalent 消费），右键用 **`cliclick` 真实鼠标事件**；
 | 复制输出 | 通过 | 复制文本为 `- [ ] … / - [x] … / * [ ] … / + [x] … /   - [ ] …`，无复选框字符（`hasCheckboxText:false`）；验证走产品自身的 `copy` 处理器（`DataTransfer`） |
 | 编辑态键盘改 | 通过 | 点进正文进入编辑态后，任务标记是可见文本；真实鼠标拖选 `[ ] ` → 键盘输入 `[x] `，`dataset.raw` 变 `* [x] 星号任务`（`eq:true`）；离开编辑态后重新渲染为已勾选 |
 | 字数统计 | 通过 | `中文 5 字 · 英文 5 词`（样例含 5 个汉字、`hello world 123` 与代码块内 `code line`）；口径：CJK 字符逐个计数，英文按连续字母/数字分词，代码块正文计入、围栏与行号不计 |
-| `Cmd+Click` 链接 | 未实现（如实记录） | 链接以零宽标记 + 纯文本渲染，页面内**没有 `<a>` 元素**，也没有导航拦截或 `openURL` 逻辑；实测 `Cmd+Click` 只让块进入编辑态，页面 URL 仍为本地临时页、正文不变。未新增任何未验证功能 |
+| `Cmd+Click` 链接 | 未实现（如实记录，已在 1.13 实现） | 本批次时链接以零宽标记 + 纯文本渲染，页面内**没有 `<a>` 元素**，也没有导航拦截或 `openURL` 逻辑；实测 `Cmd+Click` 只让块进入编辑态，页面 URL 仍为本地临时页、正文不变 |
 
 **批次 B：深色模式**
 
@@ -459,6 +459,63 @@ NSMenu key equivalent 消费），右键用 **`cliclick` 真实鼠标事件**；
   弱化程度，不追求 3:1 的 UI 对比度。
 - 编辑态键盘改任务标记依赖「标记在编辑态是可见文本」这一实现；真实拖选/物理键盘已实测，
   但输入法组合输入路径未单独验证。
+
+### 1.13 链接交互 / 导出 HTML / 目录手型（2026-11-10，最终包）
+
+方式同前：鼠标用 `cliclick` 真实事件、`Cmd+Click` 经 System Events 的 ⌘ 修饰键 + 真实点击，
+页面侧每步前采样 `dataset.raw`、`textContent`、块几何、`getComputedStyle`，并用
+`elementFromPoint` 做命中测试。**最终包**解压到全新目录 `/tmp/clean-test3` 后复跑，
+下表数据均来自包内 `Mote.app`（`dist/Mote-macOS.zip`，30,919,297 字节）。
+带指针的截图用**整屏** `screencapture -x -C` 再按窗口矩形裁切（`-R` 区域模式实测不含指针）。
+
+**批次 A：链接交互**
+
+| 验证项 | 结果 | 数据 |
+| --- | --- | --- |
+| 渲染样式 | 通过 | 4 个链接的计算样式均为 `color:rgb(47,111,237)`、`text-decoration-line:underline`、`cursor:pointer`；文字可识别为链接，零宽标记 `[` `](url)` 仍不占位 |
+| 普通点击 | 通过 | 点链接文字后仅块 0 进入编辑态（`editing:[true,false,false,false]`），页面 URL 仍是 `.mote-preview-*.html`，`dataset.raw` 与 `textContent` 不变 |
+| 编辑态形态 | 通过 | 编辑态下 `a.md-link` 退化为普通文本（`cursor:text`），显示原始 `[示例站点](https://example.com)` |
+| 复制输出 | 通过 | 产品自身 `copy` 处理器输出 `链接：[示例站点](https://example.com)`，与 `dataset.raw` 逐字相等（`equalsRaw:true`）；验证走合成 `DataTransfer`（见 §5.6） |
+| `Cmd+Click` 外部链接 | 通过 | 前台应用变为 `Safari`；页面 URL 不变；导航被拦截（`MoteNavigationDelegate` 除首次加载外一律 Cancel，本次未产生导航，`nav blocked` 日志 0 条） |
+| `Cmd+Click` 相对 `.md` | 通过 | 应用内打开 `other.md`（2 块，`['# 另一篇','被链接打开的文件。']`），走「未保存确认 → 打开」；日志 `QT openLink href=other.md base=/tmp/verify-mote/cases/` |
+| 目标不存在 | 通过 | 弹原生提示框（窗口数 2）、Esc 关闭后进程存活（`alive:true`）、原文档 `dataset.raw` 不变；截图 `screenshots/link-missing-dialog.png` |
+| 锚点 `#标题` | 降级（如实记录） | 不导航、不报错，状态栏提示「锚点链接 #标题一 暂不支持（还没有标题锚点）」；文档块数仍为 4；截图 `screenshots/link-anchor-status.png` |
+| 图片链接 | 无链接（如实记录） | `![alt](url)` 渲染为 `<img>`，没有 `<a>` 包裹，`Cmd+Click` 不触发跳转；相对路径图片仍按文档目录正常显示 |
+| 悬停截图 | 已补 | `screenshots/link-hover.png`：指针停在「示例站点」上，系统标准手型（非自定义位图光标），链接蓝色下划线 |
+
+**TOC 手型（并入本批次）**
+
+| 验证项 | 结果 | 数据 |
+| --- | --- | --- |
+| 计算样式 | 通过 | `#toc`、`#toc .toc-title`、`.toc-item` 的 `cursor` 均为 `pointer`；无 `cursor:url(...)`，用的是系统标准手型 |
+| 条目缝隙命中 | 通过 | 在「第 1 周」与「第 2 周」之间（y=99.39）`elementFromPoint` → `toc-list`，其 `cursor:pointer`，手型不会闪回箭头 |
+| 栏内空白命中 | 通过 | 条目下方空白（y=221.14）`elementFromPoint` → `#toc`，`cursor:pointer` |
+| 折叠按钮/滚动条 | 未被覆盖 | 折叠按钮保持自身 `cursor:pointer` 语义，滚动条由系统绘制，不继承栏内样式 |
+| 跳转与零位移 | 通过 | 点击第 4 个条目后 `scrollY 0 → 2533`，4 个块的 `dataset.raw` 不变（`eq:true`），仅滚动位置变化 |
+| 截图 | 已补 | `screenshots/toc-cursor-item.png`（条目文字上）、`toc-cursor-gap.png`（一/二条目缝隙）、`toc-cursor-blank.png`（条目下方空白），三张均为整屏 `-C` 抓取的真实指针 |
+
+**批次 B：导出 HTML**
+
+菜单「文件 → 导出 HTML…」，快捷键 **`Option+Cmd+E`**。为什么不是 `Cmd+Shift+E`：
+`Cmd+E` 是源码模式，macOS 原生菜单把大写 `E` 的 Shift 视为同一 key equivalent，
+实测 `Cmd+Shift+E` 既不触发也不报冲突（`MOTE_KEYLOG` 只看到修饰键事件），因此改用带 Option 的组合；
+`MOTE_KEYLOG` 打印的 **25 个**带快捷键菜单项全表唯一，无重复。
+
+| 验证项 | 结果 | 数据 |
+| --- | --- | --- |
+| 产物 | 通过 | `/tmp/export-test/page.html`，**389,752 字节**（含 1 张 base64 内嵌图） |
+| 自包含 | 通过 | `grep -c` 结果：`file://` **0**、`/Users/` **0**、`<script` **0**、`src="http` **0**、`url(http` **0**、`@import` **0**；`data:image/png;base64` **1** 处（相对路径图片真的嵌进去了，`missing:0`） |
+| 样式与高亮 | 通过 | `<style>` 内联整张样式表（含 `@font-face` 的 base64 字体）；代码高亮 `class="tok-*"` 4 处保留；行号栏 `.gutter`/`.code-lang` 已剔除（0 处），导出的不是编辑器截屏而是干净正文 |
+| 任务复选框 | 通过 | 勾选 1 个、未勾选 1 个，导出为 `span.task-check-static`（已勾选填 `✓`、蓝底），状态与原文一致 |
+| 不修改原文档 | 通过 | 导出前后 `dataset.raw` 与 `textContent` 逐字相等（`raws:true, eq:true`），文件未被写入（窗口标题仍是原文件名，无 dirty 标记） |
+| 浏览器打开 | 通过 | Safari 打开渲染正常：标题、粗体、行内代码、链接、任务列表、表格、代码高亮与内嵌图片齐全；文件里没有任何 `<script>`，因此不存在脚本报错；截图 `screenshots/export-browser.png` |
+
+本轮修掉的一个真实缺陷：预览页为了让相对路径图片可用，会在页面模板的 `</head>` 前注入
+`<base href="file://…">`。原实现用整串 `replace("</head>", …)`，把**内嵌 JS 源码里的
+`'</head>'` 字面量**也一起替换了，导致导出的 HTML 凭空多出一个 `file://` 的 `<base>`。
+改为只替换第一处（模板自己的 `</head>`，`src/macwebview.mm`）后，`grep file://` 从 1 变 0。
+
+PDF 导出的可行性评估见 §5.5（结论：不提供，理由是实测数据不支持）。
 
 ---
 
@@ -610,3 +667,18 @@ del dist\Mote-Windows\d3dcompiler_47.dll
    首次打开可能被 Gatekeeper 拦截，需要右键「打开」或去掉 quarantine 属性。
 4. **拖拽打开**：功能已实现（`dragEnterEvent`/`dropEvent`），但当前环境无法用自动化
    模拟真实的 Finder 拖放；其余打开方式（文件对话框、命令行传入路径）已实际验证。
+5. **导出 PDF 未提供**（本批次实测结论，不是遗漏）：WebKit 在 macOS 上只给两条路，都不满足
+   「可靠」——
+   - `WKPDFConfiguration`（`createPDFWithConfiguration:`，macOS 11+）的配置对象只有 `rect` 与
+     `allowTransparentBackground`，**没有分页 API**。实测能生成 PDF（779×1168 pt 单页、
+     138 KB、文字可选中），但整篇文档永远是**一张长页**，页数随文档增长而非 A4 分页。
+   - 唯一的分页路径 `printOperationWithPrintInfo:`（macOS 11+）实测失控：三种参数组合
+     （`NSFitPagination`+离屏窗口 / `NSClipPagination`+可见窗口 / 全默认 `NSPrintInfo`+有标题栏窗口）
+     都在 `runOperation` 里持续写盘不返回，20 秒内产出 **408 MB / 407 MB / 982 MB** 后被强制杀掉，
+     没有一次正常结束。属于 WebKit 打印实现的问题，不是参数写错。
+   
+   结论：不做半成品。若以后要做，可行方向是拿导出好的自包含 HTML 交给系统打印面板由用户
+   「存储为 PDF」，而不是绕开用户在应用内静默生成。
+6. **链接的复制验证方式**：`Cmd+A`/`Cmd+C` 在 WKWebView + Qt 的外壳里不会产生选区（历史遗留），
+   因此链接的「复制出标准 Markdown」走产品自身的 `copy` 处理器 + 合成 `DataTransfer` 读取
+   `text/plain` 验证；真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。

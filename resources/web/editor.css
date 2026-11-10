@@ -142,6 +142,9 @@ body.source-mode #layout { grid-template-columns: 0 minmax(0, 1fr); }
   background: var(--bg-soft);
   opacity: 0;
   pointer-events: none;
+  /* 整栏手型：条目之间与内边距区域移动时不闪回箭头。滚动条由系统绘制，
+     不受该声明影响；条目本身的跳转行为不变（纯样式改动）。 */
+  cursor: pointer;
 }
 
 body.toc-open #toc {
@@ -273,6 +276,21 @@ em { font-style: italic; }
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+/* Markdown 链接：渲染态可识别（颜色 + 下划线），编辑态回到纯文本观感，
+   与 `[文字](url)` 原文一致。颜色/下划线不改变字宽，零位移不受影响。 */
+a.md-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.block.editing a.md-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: text;
+}
 
 code {
   font-family: var(--mono);

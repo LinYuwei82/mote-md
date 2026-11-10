@@ -37,3 +37,10 @@ ui_*.h
 !/screenshots/theme-dark-find.png
 !/screenshots/theme-dark-slash.png
 !/screenshots/theme-light-back.png
+!/screenshots/link-hover.png
+!/screenshots/link-anchor-status.png
+!/screenshots/link-missing-dialog.png
+!/screenshots/toc-cursor-item.png
+!/screenshots/toc-cursor-gap.png
+!/screenshots/toc-cursor-blank.png
+!/screenshots/export-browser.png

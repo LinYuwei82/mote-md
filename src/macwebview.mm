@@ -139,6 +139,44 @@ bool isImagePath(const QString &path)
 
 @end
 
+// 导航兜底：只放行本地临时页的首次加载，其余导航一律取消，
+// 保证 WebView 不会把编辑器页面替换成外部站点（Cmd+Click 由外壳另开浏览器）。
+@interface MoteNavigationDelegate : NSObject <WKNavigationDelegate>
+@end
+
+@implementation MoteNavigationDelegate
+
+- (void)webView:(WKWebView *)webView
+    decidePolicyForNavigationAction:(WKNavigationAction *)action
+                    decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler
+{
+    NSURL *url = action.request.URL;
+    NSURL *current = webView.URL;
+    if (!current) {            // 首次 loadFileURL
+        decisionHandler(WKNavigationActionPolicyAllow);
+        return;
+    }
+    if (url && [[url absoluteString] isEqualToString:[current absoluteString]]) {
+        decisionHandler(WKNavigationActionPolicyAllow);
+        return;
+    }
+    if (keyLogEnabled()) {
+        std::fprintf(stderr, "NATIVE nav blocked %s\n",
+                     url ? [[url absoluteString] UTF8String] : "(nil)");
+    }
+    decisionHandler(WKNavigationActionPolicyCancel);
+}
+
+- (WKWebView *)webView:(WKWebView *)webView
+    createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
+               forNavigationAction:(WKNavigationAction *)action
+                    windowFeatures:(WKWindowFeatures *)windowFeatures
+{
+    return nil;                // 不弹新窗口
+}
+
+@end
+
 // 消息处理器：把 WKScriptMessage.body（NSDictionary）序列化成 JSON 交给 C++。
 // 手动引用计数（工程未开启 ARC），owner 为弱引用，生命周期由 MacWebView 保证。
 @interface MoteMessageHandler : NSObject <WKScriptMessageHandler> {
@@ -309,6 +347,10 @@ MacWebView::~MacWebView()
         [(MoteMessageHandler *)m_handler release];
         m_handler = nullptr;
     }
+    if (m_navDelegate) {
+        [(MoteNavigationDelegate *)m_navDelegate release];
+        m_navDelegate = nullptr;
+    }
 }
 
 void MacWebView::ensureWebView()
@@ -325,10 +367,15 @@ void MacWebView::ensureWebView()
     WKWebView *view = [[MoteWKWebView alloc] initWithFrame:host.bounds configuration:config];
     [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     static_cast<MoteWKWebView *>(view)->moteOwner = this;
+    // 兜底：无论页面里的 preventDefault 是否生效，WebView 自身都不允许离开当前文档。
+    // 只放行本地文件加载（初始 loadFileURL），其余导航一律取消。
+    MoteNavigationDelegate *nav = [[MoteNavigationDelegate alloc] init];
+    [view setNavigationDelegate:nav];
     [host addSubview:view];
 
     m_webView = view;
     m_handler = handler;
+    m_navDelegate = nav;
 
     // Cmd+Z / Cmd+Shift+Z 走 AppKit 菜单的 key equivalent，先于页面 keydown；
     // 而 NSMenu 匹配字母快捷键时会忽略 Shift——实测 Cmd+Shift+Z 会命中“撤销”项。
@@ -432,8 +479,13 @@ void MacWebView::loadPage(const QUrl &baseDir)
     // 写到文档目录下的隐藏文件（.mote-preview-<pid>.html），退出/换文档时删除。
     QString page = pageHtml();
     const QString baseUrl = QUrl::fromLocalFile(dir + QLatin1Char('/')).toString();
-    page.replace(QStringLiteral("</head>"),
-                 QStringLiteral("<base href=\"%1\"></head>").arg(baseUrl.toHtmlEscaped()));
+    // 只替换页面模板自己的 </head>（第一处）。整串 replaceAll 会连内嵌 JS 源码里
+    // 的 '</head>' 字面量一起改掉——导出 HTML 就是这样凭空多出一个 file:// 的 <base>。
+    const int headEnd = page.indexOf(QStringLiteral("</head>"));
+    if (headEnd >= 0) {
+        page.replace(headEnd, 7,
+                     QStringLiteral("<base href=\"%1\"></head>").arg(baseUrl.toHtmlEscaped()));
+    }
 
     if (!m_pageFile.isEmpty() && m_pageFile != filePathOf(dir))
         QFile::remove(m_pageFile);
@@ -578,6 +630,14 @@ void MacWebView::applyFormat(const QString &action)
         std::fprintf(stderr, "NATIVE -> JS format %s\n", action.toUtf8().constData());
     evalScript(m_webView, QStringLiteral("window.mote && window.mote.format(%1);")
                               .arg(quotedJson(action)));
+}
+
+void MacWebView::requestExportHtml(const QString &title)
+{
+    // 前端把整篇渲染结果拼成自包含 HTML 后经消息回传（图片路径由外壳再做 base64）
+    const QString js = QStringLiteral("window.mote && window.mote.exportHtml(%1);")
+                           .arg(quotedJson(title));
+    evalScript(m_webView, js);
 }
 
 void MacWebView::insertImage(const QString &rel)
@@ -740,6 +800,14 @@ void MacWebView::handleMessage(const QString &json)
                        message.value(QStringLiteral("mime")).toString(),
                        message.value(QStringLiteral("name")).toString(),
                        source != QLatin1String("drop"));
+        return;
+    }
+    if (type == QLatin1String("openLink")) {
+        emit openLinkRequested(message.value(QStringLiteral("href")).toString());
+        return;
+    }
+    if (type == QLatin1String("export")) {
+        emit exportHtmlReady(message.value(QStringLiteral("html")).toString());
         return;
     }
     if (type == QLatin1String("status")) {

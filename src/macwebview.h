@@ -26,6 +26,7 @@ public:
     void resetZoom() override;
     void setTheme(const QString &mode) override;
     void applyFormat(const QString &action) override;
+    void requestExportHtml(const QString &title) override;
 
     // 由 Objective-C++ 的消息处理器调用
     void handleMessage(const QString &json);
@@ -52,6 +53,7 @@ private:
 
     void *m_webView = nullptr;   // WKWebView *
     void *m_handler = nullptr;   // MoteMessageHandler *
+    void *m_navDelegate = nullptr; // MoteNavigationDelegate *（挡住页面自行导航）
     void *m_keyMonitor = nullptr; // NSEvent 本地监视器（撤销/重做按键）
     QUrl m_baseDir;
     QString m_pendingText;

@@ -5,6 +5,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDesktopServices>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -18,6 +19,8 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QMimeDatabase>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QScreen>
 #include <QShortcutEvent>
@@ -37,6 +40,53 @@ bool looksLikeMarkdown(const QString &path)
     return suffix == QLatin1String("md") || suffix == QLatin1String("markdown")
         || suffix == QLatin1String("mdown") || suffix == QLatin1String("mkd")
         || suffix == QLatin1String("txt");
+}
+
+// 把导出 HTML 里的本地图片 src 替换成 base64 data URI，保证单文件自包含。
+// 已经是 data:/http(s) 的保持原样；读不到文件时换成一行提示文字（不留下本地路径）。
+QString inlineLocalImages(const QString &html, const QString &baseDir, int *missingCount)
+{
+    static const QRegularExpression imgRe(
+        QStringLiteral("<img\\b[^>]*?\\bsrc=\"([^\"]*)\"[^>]*?>"));
+
+    QString out;
+    int last = 0;
+    int missing = 0;
+    QRegularExpressionMatchIterator it = imgRe.globalMatch(html);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch match = it.next();
+        const QString src = match.captured(1);
+        out += html.mid(last, match.capturedStart() - last);
+
+        if (src.startsWith(QLatin1String("data:")) || src.startsWith(QLatin1String("http://"))
+            || src.startsWith(QLatin1String("https://"))) {
+            out += match.captured(0);
+        } else {
+            const QUrl url(src);
+            const QString filePath = url.isLocalFile()
+                ? url.toLocalFile()
+                : QDir(baseDir).filePath(QUrl::fromPercentEncoding(src.toUtf8()));
+            QFile file(filePath);
+            if (file.open(QIODevice::ReadOnly)) {
+                const QByteArray bytes = file.readAll();
+                const QString mime = QMimeDatabase().mimeTypeForFile(filePath).name();
+                const QString dataUri = QStringLiteral("data:%1;base64,%2")
+                                            .arg(mime, QString::fromLatin1(bytes.toBase64()));
+                QString tag = match.captured(0);
+                tag.replace(QStringLiteral("src=\"%1\"").arg(src),
+                            QStringLiteral("src=\"%1\"").arg(dataUri));
+                out += tag;
+            } else {
+                ++missing;
+                out += QStringLiteral("<span class=\"mote-img-missing\">[图片缺失]</span>");
+            }
+        }
+        last = match.capturedEnd();
+    }
+    out += html.mid(last);
+    if (missingCount)
+        *missingCount = missing;
+    return out;
 }
 
 } // namespace
@@ -90,6 +140,13 @@ void WebWindow::createActions()
     m_saveAsAction = new QAction(tr("另存为"), this);
     m_saveAsAction->setShortcut(QKeySequence::SaveAs);
     connect(m_saveAsAction, &QAction::triggered, this, &WebWindow::handleSaveAs);
+
+    // 导出 HTML：用 Option+Cmd+E。Cmd+E 是「源码模式」，而 macOS 原生菜单把
+    // 大写 E 的 Shift 视为同一个 key equivalent（Cmd+Shift+E 实测不触发、也不报冲突），
+    // 所以改用带 Option 的组合，与现有 24 项均无重叠。
+    m_exportAction = new QAction(tr("导出 HTML…"), this);
+    m_exportAction->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_E));
+    connect(m_exportAction, &QAction::triggered, this, &WebWindow::handleExportHtml);
 
     // 撤销/重做走原生菜单与快捷键：WKWebView 会自己处理 Cmd+Z（responder chain
     // 里的 undo:），页面里的 keydown 不一定收得到，所以由外壳显式驱动前端历史栈。
@@ -197,6 +254,7 @@ void WebWindow::createUi()
     fileMenu->addSeparator();
     fileMenu->addAction(m_saveAction);
     fileMenu->addAction(m_saveAsAction);
+    fileMenu->addAction(m_exportAction);
 
     QMenu *editMenu = menuBar()->addMenu(tr("编辑"));
     editMenu->addAction(m_undoAction);
@@ -246,6 +304,16 @@ void WebWindow::createUi()
     viewMenu->addAction(m_zoomOutAction);
     viewMenu->addAction(m_zoomResetAction);
 
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
+        const auto acts = findChildren<QAction *>();
+        for (QAction *a : acts) {
+            if (!a->shortcut().isEmpty())
+                std::fprintf(stderr, "QT shortcut %s = %s\n",
+                             a->text().toUtf8().constData(),
+                             a->shortcut().toString().toUtf8().constData());
+        }
+    }
+
     auto *toolBar = addToolBar(tr("工具栏"));
     toolBar->setMovable(false);
     toolBar->setToolButtonStyle(Qt::ToolButtonTextOnly);
@@ -277,6 +345,8 @@ void WebWindow::createUi()
                 return;
             openFile(path);
         });
+        connect(m_web, &WebEditor::openLinkRequested, this, &WebWindow::handleOpenLink);
+        connect(m_web, &WebEditor::exportHtmlReady, this, &WebWindow::handleExportReady);
         connect(m_web, &WebEditor::statusMessage, this, &WebWindow::showStatus);
         connect(m_web, &WebEditor::errorOccurred, this, [this](const QString &message) {
             showStatus(tr("前端错误：%1").arg(message));
@@ -529,6 +599,115 @@ void WebWindow::handleSaveAs()
         return;
     m_saveAsRequested = true;
     m_web->requestSnapshot();
+}
+
+void WebWindow::handleExportHtml()
+{
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG"))
+        std::fprintf(stderr, "QT action export\n");
+    if (!m_web)
+        return;
+    m_web->requestExportHtml(displayName());
+}
+
+void WebWindow::handleExportReady(const QString &html)
+{
+    if (!m_web || html.isEmpty()) {
+        showStatus(tr("导出失败：页面没有返回内容"));
+        return;
+    }
+
+    QString suggested = m_filePath;
+    if (suggested.isEmpty()) {
+        const QString dir = m_lastDir.isEmpty() ? QDir::homePath() : m_lastDir;
+        suggested = QDir(dir).filePath(tr("未命名.html"));
+    } else {
+        suggested = QDir(QFileInfo(suggested).path())
+                        .filePath(QFileInfo(suggested).completeBaseName() + QStringLiteral(".html"));
+    }
+
+    QString path = qEnvironmentVariable("MOTE_EXPORT_AS");   // 自动化验证用
+    if (path.isEmpty()) {
+        if (qEnvironmentVariableIsSet("MOTE_EXPORT_PROMPT")) {
+            std::fprintf(stderr, "QT export suggested=%s\n", suggested.toUtf8().constData());
+            return;
+        }
+        path = QFileDialog::getSaveFileName(this, tr("导出 HTML"), suggested,
+                                            tr("HTML 文件 (*.html);;所有文件 (*)"));
+    }
+    if (path.isEmpty())
+        return;
+    if (QFileInfo(path).suffix().isEmpty())
+        path += QLatin1String(".html");
+
+    int missing = 0;
+    const QByteArray bytes = inlineLocalImages(html, baseDirFor(m_filePath), &missing).toUtf8();
+
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+        QMessageBox::warning(this, tr("导出失败"),
+                             tr("无法写入文件：\n%1\n%2").arg(path, file.errorString()));
+        return;
+    }
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
+        std::fprintf(stderr, "QT export path=%s size=%lld missing=%d\n",
+                     path.toUtf8().constData(), static_cast<long long>(bytes.size()), missing);
+    }
+    showStatus(missing
+        ? tr("已导出 %1（%2 KB），%3 张图片读取失败").arg(QFileInfo(path).fileName())
+              .arg(bytes.size() / 1024).arg(missing)
+        : tr("已导出 %1（%2 KB）").arg(QFileInfo(path).fileName()).arg(bytes.size() / 1024));
+}
+
+void WebWindow::handleOpenLink(const QString &rawHref)
+{
+    const QString href = rawHref.trimmed();
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG"))
+        std::fprintf(stderr, "QT openLink href=%s base=%s\n", href.toUtf8().constData(),
+                     baseDirFor(m_filePath).toUtf8().constData());
+    if (href.isEmpty())
+        return;
+
+    if (href.startsWith(QLatin1Char('#'))) {
+        // 目录/正文目前没有生成标题锚点，这里如实提示而不是静默失败
+        showStatus(tr("锚点链接 %1 暂不支持（还没有标题锚点）").arg(href));
+        return;
+    }
+
+    const QUrl url(href);
+    const QString scheme = url.scheme().toLower();
+    if (scheme == QLatin1String("http") || scheme == QLatin1String("https")
+        || scheme == QLatin1String("mailto")) {
+        if (!QDesktopServices::openUrl(url))
+            showStatus(tr("无法打开链接：%1").arg(href));
+        return;
+    }
+
+    QString target;
+    if (scheme == QLatin1String("file"))
+        target = url.toLocalFile();
+    else if (scheme.isEmpty())
+        target = QDir(baseDirFor(m_filePath))
+                     .filePath(QUrl::fromPercentEncoding(href.toUtf8()));
+    else {
+        showStatus(tr("不支持打开的链接类型：%1").arg(href));
+        return;
+    }
+
+    if (target.isEmpty() || !QFileInfo::exists(target)) {
+        QMessageBox::warning(this, tr("链接目标不存在"),
+                             tr("找不到链接指向的文件：\n%1").arg(href));
+        showStatus(tr("链接目标不存在：%1").arg(href));
+        return;
+    }
+
+    if (!looksLikeMarkdown(target)) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(target));
+        return;
+    }
+    // 应用内打开：与拖放/菜单打开共用同一套未保存确认
+    if (prepareForReplace(AfterSave::OpenPath, target))
+        openFile(target);
 }
 
 void WebWindow::handleSaveRequested(const QString &text)

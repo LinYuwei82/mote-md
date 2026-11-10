@@ -57,6 +57,9 @@ private:
     void applyViewState(bool tocOn, bool sourceOn, qreal zoom);
     void handleSave();
     void handleSaveAs();
+    void handleExportHtml();
+    void handleExportReady(const QString &html);
+    void handleOpenLink(const QString &href);
     void handleSaveRequested(const QString &text);
     void handleDroppedText(const QString &name, const QString &text);
     bool writeText(const QString &filePath, const QString &text);
@@ -71,6 +74,7 @@ private:
     QAction *m_openAction = nullptr;
     QAction *m_saveAction = nullptr;
     QAction *m_saveAsAction = nullptr;
+    QAction *m_exportAction = nullptr;
     QAction *m_undoAction = nullptr;
     QAction *m_redoAction = nullptr;
     QAction *m_tocAction = nullptr;
