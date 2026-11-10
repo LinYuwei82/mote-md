@@ -15,6 +15,7 @@
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QUrl>
 #include <QWidget>
 
@@ -127,8 +128,12 @@ public:
     HRESULT STDMETHODCALLTYPE Invoke(HRESULT hr,
                                      ICoreWebView2Environment *environment) override
     {
-        if (m_owner)
+        if (m_owner) {
             m_owner->onEnvironmentReady(static_cast<long>(hr), environment);
+        } else if (environment) {
+            // 宿主已销毁：完成回调携带的所有权必须在这里归还，不能只是 return
+            environment->Release();
+        }
         return S_OK;
     }
 
@@ -162,8 +167,14 @@ public:
 
     HRESULT STDMETHODCALLTYPE Invoke(HRESULT hr, ICoreWebView2Controller *controller) override
     {
-        if (m_owner)
+        if (m_owner) {
             m_owner->onControllerReady(static_cast<long>(hr), controller);
+        } else if (controller) {
+            // 宿主已销毁（窗口比初始化先关掉）：控制器已经绑在即将销毁的 HWND 上，
+            // 必须 Close 后归还所有权，否则 WebView2 会一直挂着它
+            controller->Close();
+            controller->Release();
+        }
         return S_OK;
     }
 
@@ -249,10 +260,111 @@ public:
             return S_OK;
         }
         UINT virtualKey = 0;
-        if (SUCCEEDED(args->get_VirtualKey(&virtualKey)) && m_owner
-            && m_owner->onAccelerator(static_cast<int>(virtualKey))) {
-            args->put_Handled(TRUE);
+        if (FAILED(args->get_VirtualKey(&virtualKey)) || !m_owner)
+            return S_OK;
+        if (!m_owner->onAccelerator(static_cast<int>(virtualKey)))
+            return S_OK;
+        // 先声明按键已被处理；动作本身已由 onAccelerator 排队到下一轮事件循环
+        args->put_Handled(TRUE);
+        return S_OK;
+    }
+
+private:
+    QPointer<WebView2Editor> m_owner;
+};
+
+// 导航拦截：只放行编辑器自己的页面，其余取消（对标 macOS 的 MoteNavigationDelegate）
+class NavigationStartingHandler final
+    : public RefCounted
+    , public ICoreWebView2NavigationStartingEventHandler
+{
+public:
+    explicit NavigationStartingHandler(WebView2Editor *owner) : m_owner(owner) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **ppv) override
+    {
+        if (!ppv)
+            return E_POINTER;
+        if (riid == IID_IUnknown || riid == IID_ICoreWebView2NavigationStartingEventHandler) {
+            *ppv = static_cast<ICoreWebView2NavigationStartingEventHandler *>(this);
+            AddRef();
+            return S_OK;
         }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return RefCounted::AddRef(); }
+    ULONG STDMETHODCALLTYPE Release() override { return RefCounted::Release(); }
+
+    HRESULT STDMETHODCALLTYPE Invoke(ICoreWebView2 *sender,
+                                     ICoreWebView2NavigationStartingEventArgs *args) override
+    {
+        Q_UNUSED(sender)
+        LPWSTR raw = nullptr;
+        if (FAILED(args->get_Uri(&raw)))
+            return S_OK; // 拿不到 URI 就不拦，宁可放行也不要把编辑器自己的页面挡掉
+        const QString uri = raw ? QString::fromWCharArray(raw) : QString();
+        if (raw)
+            CoTaskMemFree(raw);
+        if (m_owner && !m_owner->onNavigationStarting(uri)) {
+            args->put_Cancel(TRUE);
+            if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
+                std::fprintf(stderr, "WIN nav blocked %s\n", uri.toUtf8().constData());
+            }
+        }
+        return S_OK;
+    }
+
+private:
+    QPointer<WebView2Editor> m_owner;
+};
+
+// 页面要求开新窗口（target=_blank / window.open）：取消默认的独立窗口，URL 交回外壳
+class NewWindowRequestedHandler final
+    : public RefCounted
+    , public ICoreWebView2NewWindowRequestedEventHandler
+{
+public:
+    explicit NewWindowRequestedHandler(WebView2Editor *owner) : m_owner(owner) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **ppv) override
+    {
+        if (!ppv)
+            return E_POINTER;
+        if (riid == IID_IUnknown || riid == IID_ICoreWebView2NewWindowRequestedEventHandler) {
+            *ppv = static_cast<ICoreWebView2NewWindowRequestedEventHandler *>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return RefCounted::AddRef(); }
+    ULONG STDMETHODCALLTYPE Release() override { return RefCounted::Release(); }
+
+    HRESULT STDMETHODCALLTYPE Invoke(ICoreWebView2 *sender,
+                                     ICoreWebView2NewWindowRequestedEventArgs *args) override
+    {
+        Q_UNUSED(sender)
+        // 一律取消 WebView2 的默认弹窗行为
+        args->put_Handled(TRUE);
+
+        LPWSTR raw = nullptr;
+        if (FAILED(args->get_Uri(&raw)))
+            return S_OK;
+        const QString url = raw ? QString::fromWCharArray(raw) : QString();
+        if (raw)
+            CoTaskMemFree(raw);
+        const QPointer<WebView2Editor> owner = m_owner;
+        if (url.isEmpty() || !owner)
+            return S_OK;
+
+        // 打开链接可能弹未保存确认对话框；延后到下一轮事件循环，避免在 WebView2
+        // 的事件回调里开嵌套事件循环（与拖放那边同一口径）
+        QTimer::singleShot(0, owner.data(), [owner, url]() {
+            if (owner)
+                owner->onExternalUrl(url);
+        });
         return S_OK;
     }
 
@@ -328,6 +440,10 @@ WebView2Editor::~WebView2Editor()
         auto *web = static_cast<ICoreWebView2 *>(m_webView);
         if (m_messageToken)
             web->remove_WebMessageReceived(tokenOf(m_messageToken));
+        if (m_navToken)
+            web->remove_NavigationStarting(tokenOf(m_navToken));
+        if (m_newWindowToken)
+            web->remove_NewWindowRequested(tokenOf(m_newWindowToken));
     }
     if (m_controller) {
         auto *controller = static_cast<ICoreWebView2Controller *>(m_controller);
@@ -423,11 +539,15 @@ void WebView2Editor::onEnvironmentReady(long hr, void *environment)
 {
     if (FAILED(static_cast<HRESULT>(hr)) || !environment) {
         showUnavailable(tr("WebView2 环境创建失败（%1）。").arg(hrText(hr)));
+        // 失败时也可能带着对象：所有权已转移过来，必须归还
+        if (environment)
+            static_cast<ICoreWebView2Environment *>(environment)->Release();
         return;
     }
+    // 完成回调把 environment 的所有权交给宿主：直接持有、不再 AddRef，
+    // 析构里 Release 一次即平衡（与 m_webView 那条链路一致）
     auto *env = static_cast<ICoreWebView2Environment *>(environment);
     m_environment = env;
-    env->AddRef();
 
     auto *handler = new ControllerHandler(this);
     const HRESULT result = env->CreateCoreWebView2Controller(
@@ -442,11 +562,16 @@ void WebView2Editor::onControllerReady(long hr, void *controller)
 {
     if (FAILED(static_cast<HRESULT>(hr)) || !controller) {
         showUnavailable(tr("WebView2 控制器创建失败（%1）。").arg(hrText(hr)));
+        // 同上：失败路径上的对象也要 Close + 归还所有权
+        if (controller) {
+            static_cast<ICoreWebView2Controller *>(controller)->Close();
+            static_cast<ICoreWebView2Controller *>(controller)->Release();
+        }
         return;
     }
+    // 同上：controller 的所有权随完成回调转移过来，析构里 Close + Release 各一次
     auto *ctrl = static_cast<ICoreWebView2Controller *>(controller);
     m_controller = ctrl;
-    ctrl->AddRef();
 
     ICoreWebView2 *web = nullptr;
     if (FAILED(ctrl->get_CoreWebView2(&web)) || !web) {
@@ -495,6 +620,16 @@ void WebView2Editor::configureWebView()
     web->add_WebMessageReceived(messageHandler, &token);
     messageHandler->Release();
     m_messageToken = token.value;
+
+    auto *navHandler = new NavigationStartingHandler(this);
+    web->add_NavigationStarting(navHandler, &token);
+    navHandler->Release();
+    m_navToken = token.value;
+
+    auto *newWindowHandler = new NewWindowRequestedHandler(this);
+    web->add_NewWindowRequested(newWindowHandler, &token);
+    newWindowHandler->Release();
+    m_newWindowToken = token.value;
 
     auto *accelHandler = new AcceleratorKeyHandler(this);
     static_cast<ICoreWebView2Controller *>(m_controller)
@@ -692,7 +827,14 @@ bool WebView2Editor::onAccelerator(int virtualKey)
                             std::fprintf(stderr, "WIN accelerator -> %s\n",
                                          action->text().toUtf8().constData());
                         }
-                        action->trigger();
+                        // 回调方返回后会立刻 put_Handled(TRUE)，但动作本身排队到下一轮
+                        // 事件循环：Ctrl+O/S/N 会弹模态对话框，在 WebView2 的加速键回调里
+                        // 同步执行会开嵌套事件循环并重入 WebView。与拖放同一口径。
+                        const QPointer<QAction> deferred(action);
+                        QTimer::singleShot(0, this, [deferred]() {
+                            if (deferred)
+                                deferred->trigger();
+                        });
                         return true;
                     }
                 }
@@ -706,6 +848,34 @@ bool WebView2Editor::onAccelerator(int virtualKey)
         return true;
     }
     return false;
+}
+
+bool WebView2Editor::onNavigationStarting(const QString &uri)
+{
+    // 只放行编辑器自己的页面：
+    //  - NavigateToString 注入的页面与内部框架，URI 都是 about: 协议
+    //  - 写到文档目录的临时页面，file:// 与虚拟主机两种模式都靠同一个文件名识别
+    // 其余（外部站点、拖进来的 html 等）一律取消，避免编辑器页面被替换掉。
+    // 口径与 macOS 的 MoteNavigationDelegate 一致。
+    const QUrl url(uri);
+    if (uri.isEmpty()
+        || url.scheme().compare(QLatin1String("about"), Qt::CaseInsensitive) == 0) {
+        return true;
+    }
+    if (m_pageFile.isEmpty())
+        return false;
+    const QString pageName = QFileInfo(m_pageFile).fileName();
+    if (pageName.isEmpty())
+        return false;
+    // QUrl::fileName() 会解码百分号转义，中文/空格路径可以直接比较
+    return url.fileName() == pageName;
+}
+
+void WebView2Editor::onExternalUrl(const QString &url)
+{
+    // 与页面里 Cmd+Click 走同一个出口，由外壳决定交给浏览器还是应用内打开；
+    // 这里不直接 QDesktopServices::openUrl，避免绕开外壳对 .md / 锚点的处理
+    emit openLinkRequested(url);
 }
 
 void WebView2Editor::showUnavailable(const QString &reason)

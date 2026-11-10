@@ -25,6 +25,10 @@ public:
     void onControllerReady(long hr, void *controller);
     void onWebMessage(const QString &json);
     bool onAccelerator(int virtualKey);
+    // 返回 false 表示这次导航不该发生（外部站点 / 非编辑器页面），调用方 put_Cancel
+    bool onNavigationStarting(const QString &uri);
+    // 页面要求开新窗口（target=_blank / window.open）：交回外壳的「打开链接」出口
+    void onExternalUrl(const QString &url);
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -55,6 +59,8 @@ private:
     void *m_dropTarget = nullptr;  // 自建 IDropTarget（见 webview_win_drop.cpp）
     qint64 m_messageToken = 0;     // WebMessageReceived 注册令牌
     qint64 m_accelToken = 0;       // AcceleratorKeyPressed 注册令牌
+    qint64 m_navToken = 0;         // NavigationStarting 注册令牌
+    qint64 m_newWindowToken = 0;   // NewWindowRequested 注册令牌
 
     bool m_initialized = false;
     bool m_controllerReady = false;
