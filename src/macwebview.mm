@@ -22,6 +22,8 @@ bool keyLogEnabled()
     return qEnvironmentVariableIsSet("MOTE_KEYLOG");
 }
 
+} // namespace
+
 // 诊断用子类：只在 MOTE_KEYLOG=1 时打印，不改变任何行为。
 // 用来确认 Cmd+Z 是被菜单/响应链吞掉，还是根本没到页面。
 // 同时承担原生拖放：网页里的 drop 事件拿不到文件真实路径，只有 NSView 这一层能拿到。
