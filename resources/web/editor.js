@@ -1411,6 +1411,13 @@
     return prefix.toString().length;
   }
 
+  // caretOffset 对代码块给的是 <code> 内偏移，placeBlockCaret 收的却是块原文
+  // 口径（dataset.raw，含围栏行）；要在两处之间存取光标（如查找栏开/关）必须
+  // 先补齐围栏长度，否则回来时会被 placeBlockCaret 再减一次，光标往左偏。
+  function rawCaretOffset(el) {
+    return caretOffset(el) + (isCodeBlock(el) ? codePrefixLength(el) : 0);
+  }
+
   function blockIndex(el) {
     return Array.prototype.indexOf.call(root.children, el);
   }
@@ -1928,6 +1935,10 @@
 
   // 整篇重建（撤销/重做、源码→预览）后按块类型恢复光标；偏移一律是块原文口径
   function placeBlockCaret(el, start, end) {
+    // 只给起点时按点光标处理：让 undefined 参与下面的减法会得到 NaN，范围与
+    // 光标都会被算成 0（代码块里就表现为光标跳到块首）
+    if (end === undefined || end === null)
+      end = start;
     if (el.classList.contains('hr')) {
       var src = ensureHrSource(el);
       var hrLen = src.textContent.length;
@@ -3703,7 +3714,8 @@
       findCaret = { source: true, start: sourceEl.selectionStart, end: sourceEl.selectionEnd };
     } else {
       var block = document.activeElement ? blockOf(document.activeElement) : null;
-      findCaret = block ? { block: block, offset: caretOffset(block) } : null;
+      // 关掉查找栏时走 placeBlockCaret（原文口径），这里也按原文口径取
+      findCaret = block ? { block: block, offset: rawCaretOffset(block) } : null;
     }
     findJumped = null;
 
