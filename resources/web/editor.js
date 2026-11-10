@@ -31,6 +31,9 @@
   var suppressEvents = false;   // 程序化重建 DOM 期间屏蔽 input/focus 等事件
   var commitBatch = 0;          // >0 时合并中间渲染，多块转换只记一个撤销步
   var COALESCE_MS = 600;        // 连续输入的合并窗口
+  // 历史步数上限：整篇快照虽然只共享未改动块的字符串，但步数不封顶时块数组
+  // 会随编辑时长无限堆积（4500 块 / 170KB 文档尤为明显），超出丢最旧的。
+  var MAX_HISTORY = 100;
 
   var tocVisible = false;
   var tocItems = [];
@@ -1407,8 +1410,9 @@
     return { start: base + sel.start, end: base + sel.end, has: true };
   }
 
-  // 快照：wysiwyg 同时保留块数组（保住末尾空块），source 只有纯文本。
-  // text 是两者的公共表示，历史比较只看它。
+  // 快照：wysiwyg 只保留块数组（保住末尾空块），source 只保留纯文本。
+  // 不再同时存两份：wysiwyg 的整篇文本由 blocks.join('\n\n') 按需拼出，
+  // 否则每步都要多留一份整篇副本。
   function snapshotState() {
     if (mode === 'source') {
       var text = sourceEl.value;
@@ -1422,14 +1426,29 @@
     var sel = editingSelection();
     var offsets = absoluteOffsets(blocks, sel);
     return {
-      text: blocks.join('\n\n') + (trailingNewline ? '\n' : ''),
+      text: null,
       blocks: blocks, trail: trailingNewline,
       start: offsets.start, end: offsets.end, hasSel: offsets.has
     };
   }
 
+  function stateText(snap) {
+    if (typeof snap.text === 'string')
+      return snap.text;
+    return snap.blocks.join('\n\n') + (snap.trail ? '\n' : '');
+  }
+
   function sameState(a, b) {
-    return a.text === b.text;
+    // 同一模式的 wysiwyg 快照逐块比较即可，不必先把整篇拼成字符串
+    if (a.blocks && b.blocks) {
+      if (a.blocks.length !== b.blocks.length || a.trail !== b.trail)
+        return false;
+      for (var i = 0; i < a.blocks.length; i++)
+        if (a.blocks[i] !== b.blocks[i])
+          return false;
+      return true;
+    }
+    return stateText(a) === stateText(b);
   }
 
   // 提交一个撤销步骤；文本未变化时只更新当前步的选区，避免进出编辑态
@@ -1453,6 +1472,8 @@
     }
     history = history.slice(0, historyIndex + 1);
     history.push(snap);
+    if (history.length > MAX_HISTORY)
+      history.splice(0, history.length - MAX_HISTORY);
     historyIndex = history.length - 1;
     scheduleDirty();
   }
@@ -1499,10 +1520,10 @@
     var scrollY = window.scrollY;
 
     if (mode === 'source') {
-      sourceEl.value = snap.text;
+      sourceEl.value = stateText(snap);
       trailingNewline = snap.trail;
     } else {
-      var blocks = snap.blocks ? snap.blocks.slice() : splitSource(snap.text);
+      var blocks = snap.blocks ? snap.blocks.slice() : splitSource(stateText(snap));
       trailingNewline = snap.trail;
       mountBlocks(blocks);
 
@@ -4801,6 +4822,7 @@
         mode: mode,
         toc: tocVisible,
         zoom: zoomLevel,
+        history: history.length,
         dirty: currentSource() !== savedText,
         source: currentSource()
       };
