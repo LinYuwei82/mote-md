@@ -175,18 +175,21 @@ void WebWindow::createActions()
     // （macOS 走 AppKit 响应链，Windows 走页面桥，见 MacWebView::clipboardCommand
     // 与 WebViewBase::clipboardCommand）。菜单、快捷键与右键菜单共用这一个入口。
     m_cutAction = new QAction(tr("剪切"), this);
+    m_cutAction->setShortcut(QKeySequence::Cut);
     connect(m_cutAction, &QAction::triggered, this, [this] {
         if (m_web)
             m_web->clipboardCommand(QStringLiteral("cut"));
     });
 
     m_copyAction = new QAction(tr("复制"), this);
+    m_copyAction->setShortcut(QKeySequence::Copy);
     connect(m_copyAction, &QAction::triggered, this, [this] {
         if (m_web)
             m_web->clipboardCommand(QStringLiteral("copy"));
     });
 
     m_pasteAction = new QAction(tr("粘贴"), this);
+    m_pasteAction->setShortcut(QKeySequence::Paste);
     connect(m_pasteAction, &QAction::triggered, this, [this] {
         if (m_web)
             m_web->clipboardCommand(QStringLiteral("paste"));

@@ -59,6 +59,7 @@ Windows 用 `packaging/package_windows.bat` 构建并产出绿色版 zip，安�
 | 文件 | `Cmd+N` / `Cmd+O` / `Cmd+S` / `Cmd+Shift+S` | 新建 / 打开 / 保存 / 另存为 |
 | 文件 | `Option+Cmd+E` | 导出 HTML（自包含单文件） |
 | 编辑 | `Cmd+Z` / `Cmd+Shift+Z` | 撤销 / 重做 |
+| 编辑 | `Cmd+C` / `Cmd+X` / `Cmd+V` | 复制 / 剪切 / 粘贴 |
 | 编辑 | `Cmd+F` | 查找替换条 |
 | 格式 | `Cmd+B` / `Cmd+I` / `Cmd+K` / `Cmd+Shift+K` | 粗体 / 斜体 / 链接 / 行内代码（再按一次取消） |
 | 格式 | `Cmd+1` / `Cmd+2` / `Cmd+3` | 标题 1/2/3（同级别再按回正文） |
