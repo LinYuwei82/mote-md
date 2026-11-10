@@ -31,6 +31,7 @@
   var suppressEvents = false;   // 程序化重建 DOM 期间屏蔽 input/focus 等事件
   var commitBatch = 0;          // >0 时合并中间渲染，多块转换只记一个撤销步
   var COALESCE_MS = 600;        // 连续输入的合并窗口
+  var LANG_RECOAT_MS = 120;     // 语言徽标逐字母输入时合并重着色的窗口
   // 历史步数上限：整篇快照虽然只共享未改动块的字符串，但步数不封顶时块数组
   // 会随编辑时长无限堆积（4500 块 / 170KB 文档尤为明显），超出丢最旧的。
   var MAX_HISTORY = 100;
@@ -564,20 +565,63 @@
     return html;
   }
 
-  // 返回按行拆好的 HTML 片段；跨行结构（块注释、三引号、模板串）用 carry 状态衔接
-  function highlightCode(raw, lang) {
+  // 返回按行拆好的 HTML 片段；跨行结构（块注释、三引号、模板串）用 carry 状态衔接。
+  // 行级缓存：只重扫从第一处改动开始的行；若扫到"最后一处改动"时跨行状态与上次
+  // 一致，尾部未改动的行直接复用（输出与整块重扫逐字相同）。el 传 null 表示不缓存。
+  function highlightCode(el, raw, lang) {
     var lines = String(raw).split('\n');
     var key = LANG_ALIAS[String(lang || '').trim().toLowerCase()] || '';
     var spec = key ? SPEC[key] : null;
-    if (!spec)
+    if (!spec) {
+      // 未识别的语言没有跨行状态，逐行转义即可，也不留缓存
+      if (el)
+        el._codeCache = null;
       return lines.map(escapeHtml);
-
-    var state = { end: null, kind: 'c' };
-    var out = [];
-    for (var i = 0; i < lines.length; i++) {
-      out.push(spec.html ? scanHtmlLine(lines[i], state) : scanLine(lines[i], spec, state));
     }
-    return out;
+
+    var cache = el ? el._codeCache : null;
+    var start = 0;
+    var lastDiff = lines.length - 1;
+    if (cache && cache.lang === key && cache.texts.length === lines.length) {
+      while (start < lines.length && cache.texts[start] === lines[start])
+        start++;
+      if (start === lines.length)
+        return cache.html;
+      for (var d = lastDiff; d >= start; d--) {
+        if (cache.texts[d] !== lines[d]) {
+          lastDiff = d;
+          break;
+        }
+      }
+    } else {
+      cache = { lang: key, texts: [], html: [], states: [] };
+    }
+
+    var state = start ? { end: cache.states[start].end, kind: cache.states[start].kind }
+      : { end: null, kind: 'c' };
+    var next = {
+      lang: key,
+      texts: cache.texts.slice(0, start),
+      html: cache.html.slice(0, start),
+      states: cache.states.slice(0, start)
+    };
+    for (var i = start; i < lines.length; i++) {
+      next.texts[i] = lines[i];
+      next.states[i] = { end: state.end, kind: state.kind };
+      next.html[i] = spec.html ? scanHtmlLine(lines[i], state) : scanLine(lines[i], spec, state);
+      var after = cache.states[i + 1];
+      if (i === lastDiff && after && after.end === state.end && after.kind === state.kind) {
+        for (var k = i + 1; k < lines.length; k++) {
+          next.texts[k] = cache.texts[k];
+          next.states[k] = cache.states[k];
+          next.html[k] = cache.html[k];
+        }
+        break;
+      }
+    }
+    if (el)
+      el._codeCache = next;
+    return next.html;
   }
 
   /* ---------------- Markdown 渲染 ---------------- */
@@ -640,19 +684,25 @@
     var gutter = el.querySelector('.gutter');
     if (!gutter)
       return;
-    var count = String(text === undefined ? codeText(el) : text).split('\n').length;
+    var value = String(text === undefined ? codeText(el) : text);
+    var count = 1;
+    for (var i = value.indexOf('\n'); i >= 0; i = value.indexOf('\n', i + 1))
+      count++;
+    // 行号只跟行数有关：行数不变就连 DOM 都不碰（读 innerHTML 本身要整段序列化）
+    if (gutter._count === count)
+      return;
     var html = '';
-    for (var i = 0; i < count; i++)
-      html += (i ? '<br>' : '') + (i + 1);
-    if (gutter.innerHTML !== html)
-      gutter.innerHTML = html;
+    for (var n = 0; n < count; n++)
+      html += (n ? '<br>' : '') + (n + 1);
+    gutter.innerHTML = html;
+    gutter._count = count;
   }
 
-  function renderCode(code, lang) {
+  function renderCode(el, code, lang) {
     // 结尾的 \n 属于正文（末行之后的空行），不能再剥掉，否则编辑-重排往返会
     // 悄悄少一行；围栏前那个 \n 已由 renderBlock 的匹配式吃掉。
     var lines = String(code).split('\n');
-    var colored = highlightCode(lines.join('\n'), lang);
+    var colored = highlightCode(el, lines.join('\n'), lang);
     var gutter = '';
     for (var i = 0; i < lines.length; i++)
       gutter += (i ? '<br>' : '') + (i + 1);
@@ -1011,7 +1061,7 @@
     if (fence) {
       kind = 'code';
       el.dataset.lang = fence[1];
-      html = renderCode(fence[2], fence[1]);
+      html = renderCode(el, fence[2], fence[1]);
     } else if (heading && lines.length === 1) {
       var level = heading[1].length;
       kind = 'h' + level;
@@ -1241,7 +1291,50 @@
     return badge;
   }
 
-  // 改语言：同步 dataset.lang → 原文首行围栏，并当次按新语言重着色。
+  // 整段替换 <code> 的 innerHTML 会把 .code-scroll 的横向滚动位置冲回 0，长行
+  // 已经滚到右边时视野会跳回行首。替换前后保存/恢复；没滚动过就不写回，省掉
+  // 一次强制布局。
+  function setCodeHtml(el, code, html) {
+    var scroller = el.querySelector('.code-scroll');
+    var left = scroller ? scroller.scrollLeft : 0;
+    var top = scroller ? scroller.scrollTop : 0;
+    code.innerHTML = html;
+    if (scroller && (left || top)) {
+      scroller.scrollLeft = left;
+      scroller.scrollTop = top;
+    }
+  }
+
+  // 重着色 + 按字符偏移复位光标。用 lang+正文当签名：已经画过的这版内容不再
+  // 整段替换（徽标合并重着色、连续 input 都会撞到）。
+  function drawCode(el) {
+    var code = codeEl(el);
+    if (!code)
+      return null;
+    var text = code.textContent;
+    var sig = (el.dataset.lang || '') + '\n' + text;
+    if (el._codeDrawn === sig)
+      return code;
+    var range = rangeIn(code);
+    setCodeHtml(el, code, highlightCode(el, text, el.dataset.lang).join('\n'));
+    el._codeDrawn = sig;
+    if (range)
+      setSelectionRange(code, range.start, range.end);
+    return code;
+  }
+
+  // 徽标里是逐字母输入：合并成一次重着色，别每个字母都按新语言整块重扫。
+  function scheduleCodeDraw(el) {
+    if (el._langTimer)
+      clearTimeout(el._langTimer);
+    el._langTimer = setTimeout(function () {
+      el._langTimer = null;
+      if (el.isConnected)
+        drawCode(el);
+    }, LANG_RECOAT_MS);
+  }
+
+  // 改语言：同步 dataset.lang → 原文首行围栏，并按新语言重着色（合并到停顿后）。
   // 重着色只重建 <code> 的行内 span（只变颜色，不变字号/行高/宽度），
   // 因此块几何不变；光标若在正文里按字符偏移恢复，若在徽标里则不动它。
   function applyCodeLang(el, value) {
@@ -1261,13 +1354,8 @@
     el.dataset.lang = lang;
     el.dataset.raw = codeRaw(el);
     el._codeStale = false;
-    var code = codeEl(el);
-    if (!code)
-      return;
-    var range = rangeIn(code);
-    code.innerHTML = highlightCode(code.textContent, lang).join('\n');
-    if (range)
-      setSelectionRange(code, range.start, range.end);
+    if (codeEl(el))
+      scheduleCodeDraw(el);
   }
 
   // 把代码正文重新着色：只重建 <code> 的行内 span（文本不变，字体/行高/宽度
@@ -1280,12 +1368,8 @@
     el.dataset.raw = codeRaw(el, text);
     updateGutter(el, text);
     el._codeStale = false;
-    if (!highlight)
-      return;
-    var range = rangeIn(code);
-    code.innerHTML = highlightCode(text, el.dataset.lang).join('\n');
-    if (range)
-      setSelectionRange(code, range.start, range.end);
+    if (highlight)
+      drawCode(el);
   }
 
   // 在代码正文的选区处插入纯文本（回车、粘贴共用）。返回值表示是否处理成功；
@@ -1302,7 +1386,8 @@
     el.dataset.raw = codeRaw(el, next);
     updateGutter(el, next);
     el._codeStale = false;
-    code.innerHTML = highlightCode(next, el.dataset.lang).join('\n');
+    setCodeHtml(el, code, highlightCode(el, next, el.dataset.lang).join('\n'));
+    el._codeDrawn = (el.dataset.lang || '') + '\n' + next;
     setSelectionRange(code, range.start + text.length);
     return true;
   }
