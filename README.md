@@ -1,6 +1,6 @@
 # Mote
 
-**C++20 + Qt 6 的 Markdown 查看 / 编辑器：窗口、菜单、文件读写由 Qt 负责，正文的渲染与编辑交给系统 WebView（macOS 用 WKWebView），不引入任何前端框架或运行时。Windows 侧计划接入 WebView2，宿主层尚未实现。**
+**C++20 + Qt 6 的 Markdown 查看 / 编辑器：窗口、菜单、文件读写由 Qt 负责，正文的渲染与编辑交给系统 WebView（macOS 用 WKWebView，Windows 用 WebView2），不引入任何前端框架或运行时；两端都支持系统级拖放，Windows 安装包会注册 `.md` 文件关联。**
 
 ## 功能
 

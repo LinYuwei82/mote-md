@@ -57,7 +57,7 @@ dist/Mote-macOS.zip                 # 30 MB（30,919,184 字节）
         ├── welcome.md
         └── sample-diagram.png
 
-dist/Mote-macOS-0.2.0.dmg          # 33 MB（34,252,460 字节，--dmg 才有）
+dist/Mote-macOS-0.3.0.dmg          # 33 MB（34,252,460 字节，--dmg 才有）
 └── Mote（挂载后的卷）
     ├── Mote.app                    # 与 zip 里同一个 app
     └── Applications -> /Applications          # 拖进去即安装
@@ -532,12 +532,12 @@ PDF 导出的可行性评估见 §5.5（结论：不提供，理由是实测数�
 ### 1.14 DMG 分发：拖拽安装（2026-11-10，最终包）
 
 ```bash
-bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-macOS-0.2.0.dmg
+bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-macOS-0.3.0.dmg
 ```
 
 > 文件名自 0.2.0 起带版本号：版本读自构建产物的 `Info.plist`（qmake 用 `Mote.pro` 的
 > `VERSION` 填入），脚本里不再另存版本号。下面 2026-11-10 的验证记录是在改名前跑的，
-> 命令输出里的 `Mote-macOS.dmg` 与现在的 `Mote-macOS-0.2.0.dmg` 是同一份内容。
+> 命令输出里的 `Mote-macOS.dmg` 与现在的 `Mote-macOS-0.3.0.dmg` 是同一份内容。
 
 卷信息与结构：
 
@@ -598,10 +598,10 @@ bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-ma
 
 1. 打开仓库页 `https://gitee.com/lin-yuwei168/mote-md`，在顶部/右侧找到 **「发行版」**（Release）；
 2. 点 **「新建发行版」**（或「创建 Release」），填标签（如 `v1.0.1`）、发行版标题与说明；
-3. 在 **「上传附件」** 区域选择 `dist/Mote-macOS-0.2.0.dmg`（可同时添加 `dist/Mote-macOS.zip`）；
+3. 在 **「上传附件」** 区域选择 `dist/Mote-macOS-0.3.0.dmg`（可同时添加 `dist/Mote-macOS.zip`）；
 4. 需要的话勾选「这是一个预览版本」，然后 **「发布」**；
 5. 发布后在发行版详情页能看到附件与大小，下载链接形如
-   `https://gitee.com/lin-yuwei168/mote-md/releases/download/<标签>/Mote-macOS-0.2.0.dmg`。
+   `https://gitee.com/lin-yuwei168/mote-md/releases/download/<标签>/Mote-macOS-0.3.0.dmg`。
 
 > 不确定项：Gitee 页面按钮文案与附件区名称可能随改版变化，以你打开时的界面为准；
 > 本机没有 Gitee 账号登录态，未实际走一遍上传。
