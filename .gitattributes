@@ -1,0 +1,14 @@
+# 默认按文本处理：入库统一 LF，检出时按平台转换（Windows 得到 CRLF）
+* text=auto
+
+# 脚本：shell 必须 LF（否则 Windows 上 checkout 出 CRLF 会破坏 shebang），
+# 批处理必须 CRLF（cmd.exe 对 LF 的 goto/标签支持不稳）。
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制：显式关闭文本转换，避免被 `text=auto` 误判后做行尾改写或合并
+*.png -text
+*.icns -text
+*.ico -text
+*.ttf -text
