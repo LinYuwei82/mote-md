@@ -43,6 +43,10 @@ public:
     // 由平台消息桥调用：参数是前端 postMessage 的 JSON 文本
     void handleMessage(const QString &json);
 
+    // 当前页面代次：每次 loadPage 递增。macOS 把它写进页面 URL 的 fragment，
+    // 消息桥据此丢弃上一个页面迟到的 ready（跨页竞态的防线）。
+    quint64 pageGeneration() const { return m_pageGeneration; }
+
     // 由原生拖放回调调用：paths 是拖放板里的真实文件路径。
     // .md 发 fileDropRequested 交给外壳打开；图片复制进 assets/ 并插入页面。
     // 返回 true 表示至少处理了一个文件。
@@ -65,6 +69,7 @@ protected:
     virtual void injectMarkdown(const QString &text);
 
     void applyTheme();
+    void applyBaseHref();
     void insertImage(const QString &rel);
     bool saveImageBytes(const QByteArray &bytes, const QString &mime,
                         const QString &hint, bool isPaste);
@@ -72,9 +77,11 @@ protected:
 
     QUrl m_baseDir;
     QString m_pendingText;
+    QString m_lastSavedText; // 最近一次保存的正文，换目录重载时用它恢复
     bool m_hasPending = false;
     bool m_pageLoaded = false;
     bool m_pageReady = false;
+    quint64 m_pageGeneration = 0; // 见 pageGeneration()
     QString m_theme = QStringLiteral("light"); // 页面就绪前先记住，ready 后补发
 };
 

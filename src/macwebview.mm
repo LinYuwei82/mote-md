@@ -103,16 +103,19 @@ bool keyLogEnabled()
 
 - (void)undo:(id)sender
 {
+    (void)sender;
     if (keyLogEnabled())
         std::fprintf(stderr, "NATIVE undo:\n");
-    [super undo:sender];
+    // Cmd+Z 已由本地事件监视器直接驱动前端历史栈。WKWebView 并未实现 undo:，
+    // 原先的 [super undo:] 会在运行时抛 unrecognized selector，这里只吞掉事件。
 }
 
 - (void)redo:(id)sender
 {
+    (void)sender;
     if (keyLogEnabled())
         std::fprintf(stderr, "NATIVE redo:\n");
-    [super redo:sender];
+    // 同上：不再调用不存在的 [super redo:]
 }
 
 @end
@@ -178,6 +181,21 @@ bool keyLogEnabled()
         return;
     if (![message.body isKindOfClass:[NSDictionary class]])
         return;
+
+    // 跨页竞态防线：页面 URL 的 fragment 记录加载时的代次（见 loadPage）。
+    // 上一个页面迟到的消息（典型是 ready）代次对不上就丢弃，否则它会把新文档的
+    // pending 注入到已卸载的旧页，并清掉 m_hasPending，导致新页空白。
+    NSString *token = message.frameInfo.request.URL.fragment;
+    if (token.length > 0) {
+        NSString *expected = [NSString stringWithFormat:@"g%llu",
+                              static_cast<unsigned long long>(_owner->pageGeneration())];
+        if (![token isEqualToString:expected]) {
+            if (keyLogEnabled())
+                std::fprintf(stderr, "NATIVE drop stale msg token=%s current=%s\n",
+                             token.UTF8String, expected.UTF8String);
+            return;
+        }
+    }
 
     NSData *data = [NSJSONSerialization dataWithJSONObject:message.body options:0 error:nil];
     if (!data)
@@ -250,6 +268,8 @@ void MacWebView::ensureWebView()
 
     NSView *host = reinterpret_cast<NSView *>(winId());
     WKWebView *view = [[MoteWKWebView alloc] initWithFrame:host.bounds configuration:config];
+    // WKWebView 自己持有配置的副本（configuration 属性是 copy），这里释放本地引用
+    [config release];
     [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     static_cast<MoteWKWebView *>(view)->moteOwner = this;
     // 兜底：无论页面里的 preventDefault 是否生效，WebView 自身都不允许离开当前文档。
@@ -356,6 +376,15 @@ void MacWebView::loadPage(const QUrl &baseDir)
     m_pageFile = filePath;
 
     NSURL *pageUrl = [NSURL fileURLWithPath:filePath.toNSString() isDirectory:NO];
+    // 把页面代次写进 URL fragment：消息桥据此丢弃上一个页面迟到的消息。
+    // loadFileURL 读的是文件本身，fragment 不参与路径解析。
+    NSURLComponents *components = [NSURLComponents componentsWithURL:pageUrl
+                                             resolvingAgainstBaseURL:NO];
+    if (components) {
+        components.fragment = [NSString stringWithFormat:@"g%llu",
+                               static_cast<unsigned long long>(pageGeneration())];
+        pageUrl = components.URL;
+    }
     NSURL *readAccess = [NSURL fileURLWithPath:dir.toNSString() isDirectory:YES];
     [static_cast<WKWebView *>(m_webView) loadFileURL:pageUrl allowingReadAccessToURL:readAccess];
 }

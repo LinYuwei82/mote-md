@@ -91,6 +91,8 @@ void WebViewBase::setMarkdown(const QString &text, const QUrl &baseDir)
         m_hasPending = true;
         m_pageLoaded = true;
         m_pageReady = false;
+        // 换页前推进代次：旧页面迟到的 ready 会带着旧 token，被消息桥丢弃
+        ++m_pageGeneration;
         loadPage(baseDir);
         return;
     }
@@ -103,8 +105,10 @@ void WebViewBase::setMarkdown(const QString &text, const QUrl &baseDir)
 
 void WebViewBase::newDocument()
 {
-    // 未命名文档没有磁盘位置：清掉 baseDir，图片粘贴会走「请先保存」提示
+    // 未命名文档没有磁盘位置：清掉 baseDir，图片粘贴会走「请先保存」提示。
+    // 这里不能走 setBaseDir()（那会重载页面并把上一份正文带回来），只把 <base> 去掉。
     m_baseDir = QUrl();
+    applyBaseHref();
     m_pendingText.clear();
     m_hasPending = false;
     evaluateJs(QStringLiteral("window.mote && window.mote.newDocument();"));
@@ -112,8 +116,43 @@ void WebViewBase::newDocument()
 
 void WebViewBase::setBaseDir(const QUrl &dir)
 {
-    // 另存为后只改图片落盘位置，不重载页面（保住编辑状态与光标）
+    if (dir == m_baseDir)
+        return;
     m_baseDir = dir;
+    if (!m_pageReady) {
+        // 页面正在换页：接下来那次 loadPage 已经会用新目录
+        return;
+    }
+    // 换目录必须重载页面：WKWebView 允许读取的目录在 load 时固定，
+    // 只改页内 <base> 时新目录下的图片会被拒绝读取（实测 naturalWidth=0）。
+    // 代价：滚动位置回到顶部、撤销栈与编辑态重置；正文用最近一次保存的内容恢复。
+    m_pendingText = m_lastSavedText;
+    m_hasPending = true;
+    m_pageReady = false;
+    ++m_pageGeneration;
+    loadPage(dir);
+}
+
+void WebViewBase::applyBaseHref()
+{
+    // 页面未就绪时先记在 m_baseDir 里，ready 分支会再推一次
+    if (!m_pageReady)
+        return;
+    QString local = m_baseDir.toLocalFile();
+    if (local.isEmpty()) {
+        evaluateJs(QStringLiteral(
+            "(function(){var b=document.querySelector('base');"
+            "if(b&&b.parentNode)b.parentNode.removeChild(b);})();"));
+        return;
+    }
+    while (local.endsWith(QLatin1Char('/')))
+        local.chop(1);
+    const QString href = QUrl::fromLocalFile(local + QLatin1Char('/')).toString();
+    evaluateJs(QStringLiteral(
+        "(function(){var h=document.head;if(!h)return;var b=h.querySelector('base');"
+        "if(!b){b=document.createElement('base');h.insertBefore(b,h.firstChild);}"
+        "b.href=%1;})();")
+        .arg(moteJsonLiteral(href)));
 }
 
 void WebViewBase::injectMarkdown(const QString &text)
@@ -130,6 +169,7 @@ void WebViewBase::requestSnapshot()
 
 void WebViewBase::notifySaved(const QString &text)
 {
+    m_lastSavedText = text;
     evaluateJs(QStringLiteral("window.mote && window.mote.markSaved(%1);")
                    .arg(moteJsonLiteral(text)));
 }
@@ -238,7 +278,10 @@ bool WebViewBase::saveImageBytes(const QByteArray &bytes, const QString &mime,
     const qint64 written = out.write(bytes);
     out.close();
     if (written != bytes.size()) {
-        emit statusMessage(tr("图片未插入：写入不完整（assets/%1）").arg(name));
+        // 短写会在用户目录里留下一个坏 png，还会让下次同名退化成 -2，
+        // 所以先删掉残缺文件再报错
+        QFile::remove(QDir(assetsPath).filePath(name));
+        emit statusMessage(tr("图片未插入：写入不完整（assets/%1），已删除残缺文件").arg(name));
         return false;
     }
 
@@ -296,10 +339,16 @@ void WebViewBase::handleMessage(const QString &json)
 
     if (type == QLatin1String("ready")) {
         m_pageReady = true;
-        applyTheme();
-        emit ready();
+        if (keyLogEnabled())
+            std::fprintf(stderr, "NATIVE ready gen=%llu\n",
+                         static_cast<unsigned long long>(m_pageGeneration));
+        // 先把 <base> 与待注入正文推到当前页，再对外发 ready：
+        // 顺序反了会让正文里的相对图片按旧目录解析。
+        applyBaseHref();
         if (m_hasPending)
             injectMarkdown(m_pendingText);
+        applyTheme();
+        emit ready();
         pageReady();
         return;
     }
