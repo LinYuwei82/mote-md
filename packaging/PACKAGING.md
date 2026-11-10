@@ -25,7 +25,8 @@
 ### 1.2 一键打包
 
 ```bash
-bash packaging/package_macos.sh
+bash packaging/package_macos.sh          # 只产出 zip（原有流程）
+bash packaging/package_macos.sh --dmg    # 额外产出一个拖拽安装式 DMG
 ```
 
 脚本依次完成：
@@ -37,15 +38,17 @@ bash packaging/package_macos.sh
 4. 删掉用不到的插件与被牵连的大依赖（`platforminputcontexts`、`iconengines`、
    `libqpdf` 及 QtVirtualKeyboard / QtPdf / QtSvg / QtQml / QtQuick）；
 5. 把漏改的绝对库路径（如 Homebrew 的 `libbrotlicommon`）统一改写为包内路径，
-   并删除主程序里指向 `/opt/homebrew/lib` 的开发机 rpath；
+   并删除包内所有 Mach-O 上指向 `/opt/homebrew`、`/usr/local` 的开发机 rpath；
 6. `strip` 调试符号、清理扩展属性、**Ad-hoc 签名**（`codesign --force --deep --sign -`）；
 7. 在临时目录组装 `Mote-macOS/`（含 `.app`、`samples/` 与字体授权 `licenses/`）
-   并 `ditto` 压缩成 zip。
+   并 `ditto` 压缩成 zip；
+8. 带 `--dmg` 时，再组装一个只含 `Mote.app` 与 `Applications` 替身的暂存目录，
+   用 `hdiutil create -format UDZO -fs HFS+` 打成 `Mote-macOS.dmg` 并自检（详见 1.14）。
 
 ### 1.3 产物
 
 ```
-dist/Mote-macOS.zip                 # 30 MB（30,909,313 字节）
+dist/Mote-macOS.zip                 # 30 MB（30,919,184 字节）
 └── Mote-macOS/
     ├── Mote.app/                   # 解压后 75 MB，内含 Qt 框架、插件与代码字体
     ├── licenses/
@@ -53,12 +56,21 @@ dist/Mote-macOS.zip                 # 30 MB（30,909,313 字节）
     └── samples/
         ├── welcome.md
         └── sample-diagram.png
+
+dist/Mote-macOS.dmg                 # 33 MB（34,252,460 字节，--dmg 才有）
+└── Mote（挂载后的卷）
+    ├── Mote.app                    # 与 zip 里同一个 app
+    └── Applications -> /Applications          # 拖进去即安装
 ```
 
-- SHA256：`386b6fdcfad8f345e63d1215c49fd83567449e344ef917daf1dc6be22ddee7e0`
+- SHA256（zip）：`3001d127b22131eecd87d784d36a65c5ad5eeaab1531ea779bb03791ba99e149`
+- SHA256（dmg）：`7ff5693b77ff1c8877a7c4e729367ab81c845963305ae60c5f26385c8f58a189`
 - 可执行文件架构：`arm64`（Apple Silicon 原生，Intel 机器不可直接运行）
 - Bundle ID：`com.mote.Mote`
 - 签名：Ad-hoc（`codesign --verify --deep --strict` 通过）
+
+> 两个哈希都对应**本次**构建。zip 重打包后哈希会变；DMG 里带卷 UUID 与时间戳，
+> 即使内容相同、每次重建的哈希也不同，不能用它做内容一致性校验，只用它核对分发文件完整性。
 
 ### 1.4 干净环境验证（已实际执行）
 
@@ -99,9 +111,9 @@ dist/Mote-macOS.zip                 # 30 MB（30,909,313 字节）
 
 ### 1.5 macOS 使用注意事项
 
-- **首次打开**：Ad-hoc 签名未做公证。若 zip 是通过网络（浏览器/AirDrop）传到别的机器，
+- **首次打开**：Ad-hoc 签名未做公证。若 zip / dmg 是通过网络（浏览器/AirDrop）传到别的机器，
   Gatekeeper 会提示「无法验证开发者」，此时右键 →「打开」即可；或执行：
-  `xattr -dr com.apple.quarantine /path/to/Mote.app`
+  `xattr -dr com.apple.quarantine /path/to/Mote.app`（DMG 分发见 1.14）
 - **文件与文件夹权限**：打开位于「文稿」「桌面」「下载」等受保护目录中的 md 时，
   macOS 可能弹一次「想访问…文件夹」的授权框，允许即可（系统行为，与程序无关）。
 - **架构**：仅 arm64。要支持 Intel Mac，需要在 Intel 机器或 `arch -x86_64` 环境下
@@ -517,6 +529,79 @@ NSMenu key equivalent 消费），右键用 **`cliclick` 真实鼠标事件**；
 
 PDF 导出的可行性评估见 §5.5（结论：不提供，理由是实测数据不支持）。
 
+### 1.14 DMG 分发：拖拽安装（2026-11-10，最终包）
+
+```bash
+bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-macOS.dmg
+```
+
+卷信息与结构：
+
+| 项 | 值 |
+| --- | --- |
+| 文件 | `dist/Mote-macOS.dmg`，**34,252,460 字节**（33 MB） |
+| SHA256 | `7ff5693b77ff1c8877a7c4e729367ab81c845963305ae60c5f26385c8f58a189` |
+| 卷标 | `Mote`（`hdiutil create -volname Mote`） |
+| 文件系统 / 格式 | HFS+ / UDZO（zlib 压缩的只读 UDIF；未压缩内容 95,699,968 字节） |
+| 卷内 | `Mote.app` 与 `Applications -> /Applications`（符号链接，13 字节），无 `.DS_Store` |
+
+**关于图标位置**：没有用 Finder AppleScript 摆图标。那套做法需要 GUI 会话 + 自动化授权，
+在没有登录会话或首次授权的机器上会静默失败，属于「不可复现的手工步骤」。这里只保证
+「拖拽安装」这个功能结构（app + Applications 替身），图标位置由 Finder 默认网格决定；
+想固定窗口尺寸/坐标就得在挂载后跑 AppleScript 再用 `hdiutil convert` 收尾，本脚本不这么做。
+
+验证（全部实际执行，2026-11-10）：
+
+| 验证项 | 结果 | 证据 |
+| --- | --- | --- |
+| 镜像完整性 | 通过 | `hdiutil verify` → `checksum of "dist/Mote-macOS.dmg" is VALID` |
+| 挂载 | 通过 | `hdiutil attach -nobrowse -readonly -mountpoint /tmp/dmg-mnt` → `/dev/disk4s1 Apple_HFS /private/tmp/dmg-mnt` |
+| 卷属性 | 通过 | `diskutil info` → `Volume Name: Mote`、`File System Personality: HFS+`、只读挂载 |
+| 卷内内容 | 通过 | `ls -la` 恰好两项：`Mote.app`（目录）、`Applications -> /Applications` |
+| 拷出后签名 | 通过 | `ditto` 到 `/tmp/dmg-test/Mote.app` 后 `codesign --verify --deep --strict` → `valid on disk`、`satisfies its Designated Requirement`；`codesign -dv` → `flags=0x2(adhoc)`、`Signature=adhoc`、`TeamIdentifier=not set` |
+| 无 Qt 环境启动 | 通过 | `env -i HOME=… PATH=/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=/tmp`（不带任何 `QT_*` / `DYLD_*`）直接运行包内可执行文件：进程存活，`MOTE_EVAL` 输出 `41 blocks, toc=true`，`MOTE_SNAPSHOT` 写出 636,402 字节 PNG，内容为欢迎页正常渲染 |
+| 外部依赖 | 通过 | 包内 292 条 Mach-O 依赖中 `/opt/homebrew`、`/usr/local` 绝对路径 **0** 条；23 条 `LC_RPATH` 中绝对路径 **0** 条 |
+| 卸载 | 通过 | `hdiutil detach /tmp/dmg-mnt` → `"disk4" ejected.`，`hdiutil info` 无残留挂载点 |
+
+本批次顺带修掉的一个真实缺陷：扫描发现 `libjpeg.8.dylib`、`libjasper.7.dylib`、
+`libdbus-1.3.dylib` 里各残留一条 `/opt/homebrew/Cellar/...` 的 `LC_RPATH`。它们的依赖虽然
+已经是 `@executable_path/../Frameworks/...`，但这条 rpath 会让**装了同版本 Homebrew 库的机器**
+优先加载系统副本而不是包内副本。脚本第 5 步现在会删掉包内所有 Mach-O 上 `/opt/*`、
+`/usr/local/*` 的 `LC_RPATH`，重建后绝对 rpath 归零。
+
+**Gatekeeper 现状**（这不是 DMG 能解决的问题）：
+
+- 包是 **Ad-hoc 签名**（`codesign --sign -`），**未用 Developer ID、未做公证（notarization）**。
+- 从 Gitee 下载的 DMG/zip 会被打上 `com.apple.quarantine`。挂载 DMG、把 app 拖进
+  `/Applications` 后首次打开，会提示「无法打开，因为 Apple 无法验证此 App 是否包含恶意软件」。
+- 用户侧两种绕过方式：
+  1. 在 Finder 里 **右键（或 Control+点击）→「打开」**，在弹框里再点一次「打开」。只需一次。
+  2. 终端：`xattr -dr com.apple.quarantine /Applications/Mote.app`
+     （针对**已拷贝到本地**的 app；对挂载卷上的只读 app 执行没有意义）。
+- 想彻底去掉提示只能做 Developer ID 签名 + `notarytool` 公证 + `stapler` 装订，那需要
+  付费开发者账号与证书；换容器格式、改压缩方式、加图标背景都不会改变这个行为。
+
+与 zip 的分工：DMG 卷内只有 app（`samples/`、`licenses/` 不在卷里；字体 OFL 文本本身已
+编进 app 的 qrc `:/fonts/OFL.txt`）；zip 仍保留 `samples/` 与 `licenses/`，适合需要示例文件的场合。
+
+**Gitee 发行版限制**（2026-11-10 查 Gitee 帮助中心）：单个附件不能超过 **100 MB**
+（GVP 项目 200 MB）；每个仓库附件总量不超过 **1 GB**（推荐项目 5 GB、GVP 项目 20 GB），
+统计范围包含仓库附件与发行版附件。本 DMG 34,252,460 字节约 **32.7 MiB**，约为单附件上限的
+三分之一，在限制内；zip 约 29.5 MiB，两个都传合计约 62 MiB，也远低于 1 GB 总量。
+若以后包体接近 100 MB（例如引入 QtWebEngine 或去掉压缩），需要拆包或改用其他分发方式。
+
+上传步骤：
+
+1. 打开仓库页 `https://gitee.com/lin-yuwei168/mote-md`，在顶部/右侧找到 **「发行版」**（Release）；
+2. 点 **「新建发行版」**（或「创建 Release」），填标签（如 `v1.0.1`）、发行版标题与说明；
+3. 在 **「上传附件」** 区域选择 `dist/Mote-macOS.dmg`（可同时添加 `dist/Mote-macOS.zip`）；
+4. 需要的话勾选「这是一个预览版本」，然后 **「发布」**；
+5. 发布后在发行版详情页能看到附件与大小，下载链接形如
+   `https://gitee.com/lin-yuwei168/mote-md/releases/download/<标签>/Mote-macOS.dmg`。
+
+> 不确定项：Gitee 页面按钮文案与附件区名称可能随改版变化，以你打开时的界面为准；
+> 本机没有 Gitee 账号登录态，未实际走一遍上传。
+
 ---
 
 
@@ -663,8 +748,8 @@ del dist\Mote-Windows\d3dcompiler_47.dll
 1. **Windows 包未生成**：本机是 macOS，没有 MSVC/MinGW 与 `windeployqt`，
    无法交叉编译出可用的 exe。已提供脚本与完整步骤，需在 Windows 机器执行。
 2. **仅 arm64 架构**：macOS 包只包含 arm64 切片，Intel Mac 需要重新构建。
-3. **未做 Apple 公证（notarization）**：只有 Ad-hoc 签名，从网络下载的 zip
-   首次打开可能被 Gatekeeper 拦截，需要右键「打开」或去掉 quarantine 属性。
+3. **未做 Apple 公证（notarization）**：只有 Ad-hoc 签名，从网络下载的 zip / dmg
+   首次打开可能被 Gatekeeper 拦截，需要右键「打开」或去掉 quarantine 属性（见 1.14）。
 4. **拖拽打开**：功能已实现（`dragEnterEvent`/`dropEvent`），但当前环境无法用自动化
    模拟真实的 Finder 拖放；其余打开方式（文件对话框、命令行传入路径）已实际验证。
 5. **导出 PDF 未提供**（本批次实测结论，不是遗漏）：WebKit 在 macOS 上只给两条路，都不满足
