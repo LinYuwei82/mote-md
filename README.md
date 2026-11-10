@@ -120,6 +120,7 @@ backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建
 - [docs/WEBVIEW-ARCHITECTURE.md](docs/WEBVIEW-ARCHITECTURE.md)：分层、消息协议、按键链路与前端块模型
 - [packaging/WINDOWS-FROM-MACOS.md](packaging/WINDOWS-FROM-MACOS.md)：在 Windows 上构建的步骤与注意事项
 - [docs/COLLAB.md](docs/COLLAB.md)：macOS + Windows 双机协作（clone、分工、冲突、Windows 环境）
+- [tools/preflight.sh](tools/preflight.sh) / [tools/preflight.bat](tools/preflight.bat)：本机自检（仓库状态 → 独立目录构建 → macOS 启动冒烟）
 - [docs/DECISIONS.md](docs/DECISIONS.md)：架构与交互的决策记录（接手前先读）
 
 ## 第三方与许可
