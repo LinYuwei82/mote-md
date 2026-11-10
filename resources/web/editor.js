@@ -4815,9 +4815,18 @@
   function openTurnMenu(x, y) {
     closeSlash(false);
     closeTurnMenu();
+    var selection = window.getSelection();
+    // 剪切/复制要有非空选区才可用；粘贴是否可用取决于系统剪贴板，页面没有读取
+    // 权限，只能保持可用（剪贴板为空时原生侧本来就什么都不做）。
+    var hasRange = !!(selection && selection.rangeCount && !selection.isCollapsed);
     turnMenu = document.createElement('div');
     turnMenu.id = 'turn-menu';
-    var html = '<div class="turn-title">转为</div>';
+    var html = '';
+    html += '<div class="turn-item' + (hasRange ? '' : ' is-disabled') + '" data-edit="cut">剪切</div>';
+    html += '<div class="turn-item' + (hasRange ? '' : ' is-disabled') + '" data-edit="copy">复制</div>';
+    html += '<div class="turn-item" data-edit="paste">粘贴</div>';
+    html += '<div class="turn-sep"></div>';
+    html += '<div class="turn-title">转为</div>';
     TURN_ITEMS.forEach(function (item) {
       html += '<div class="turn-item" data-key="' + item.key + '">' + escapeHtml(item.label) + '</div>';
     });
@@ -4826,10 +4835,17 @@
       var hit = event.target.closest ? event.target.closest('.turn-item') : null;
       if (!hit)
         return;
+      // preventDefault 保住选区：菜单项在页面里，按下时不能挪掉光标/选区
       event.preventDefault();
-      var key = hit.getAttribute('data-key');
+      if (hit.classList.contains('is-disabled'))
+        return;
+      var command = hit.getAttribute('data-edit');
       closeTurnMenu();
-      formatAction(key);
+      // 剪贴板三项交回宿主执行，与编辑菜单、快捷键完全同一条路径
+      if (command)
+        post({ type: 'editCommand', command: command });
+      else
+        formatAction(hit.getAttribute('data-key'));
     });
     placeMenu(turnMenu, { left: x, top: y, bottom: y, right: x });
   }

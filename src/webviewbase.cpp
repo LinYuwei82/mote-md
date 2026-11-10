@@ -441,6 +441,11 @@ void WebViewBase::handleMessage(const QString &json)
                        source != QLatin1String("drop"));
         return;
     }
+    if (type == QLatin1String("editCommand")) {
+        // 页面（右键菜单）把编辑命令交回宿主，与编辑菜单、快捷键同一条路径
+        clipboardCommand(message.value(QStringLiteral("command")).toString());
+        return;
+    }
     if (type == QLatin1String("clipboardWrite")) {
         // 页面算好的纯文本落到系统剪贴板（复制/剪切共用这一条回路）
         QGuiApplication::clipboard()->setText(message.value(QStringLiteral("text")).toString());
