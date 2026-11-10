@@ -2255,6 +2255,7 @@
       return;
     zoomLevel = next;
     applyZoom();
+    scheduleFindPaint();
     postView();
   }
 
@@ -3257,6 +3258,7 @@
   var findBar = null, findInput = null, findReplace = null;
   var findCount = null, findNote = null, findLayer = null;
   var findMatches = [], findActive = -1, findTimer = 0, findNoteTimer = 0;
+  var findPaintFrame = 0;       // 合并同一帧内的多次重画请求
   var findCaret = null;         // 打开查找前的原光标
   var findJumped = null;        // 最近一次跳转到的命中
   var findInSource = false;     // 本轮命中是 sourceEl.value 上的区间
@@ -3374,6 +3376,18 @@
         layer.appendChild(box);
       }
     }
+  }
+
+  // 排版一变（缩放、图片解码完成、字体替换）命中矩形就过期，但这三种情况下都
+  // 不会触发 window resize：统一合并到下一帧重画，避免一次操作里重复计算。
+  function scheduleFindPaint() {
+    if (!findLayer || !findMatches.length || findPaintFrame)
+      return;
+    findPaintFrame = requestAnimationFrame(function () {
+      findPaintFrame = 0;
+      if (findLayer && findMatches.length)
+        paintFind();
+    });
   }
 
   function updateFindCount() {
@@ -3885,6 +3899,21 @@
     if (findLayer && findMatches.length)
       paintFind();
   });
+
+  // 命中的块里图片晚一步解码完、字体替换完成时块高会变，但都不触发 resize。
+  // load 不冒泡，必须用捕获阶段才能收到 <img> 的加载完成。
+  document.addEventListener('load', function (event) {
+    var target = event.target;
+    if (target && target.nodeName === 'IMG')
+      scheduleFindPaint();
+  }, true);
+
+  if (document.fonts) {
+    if (document.fonts.ready && document.fonts.ready.then)
+      document.fonts.ready.then(scheduleFindPaint);
+    if (document.fonts.addEventListener)
+      document.fonts.addEventListener('loadingdone', scheduleFindPaint);
+  }
 
   window.addEventListener('scroll', function () {
     if (!tocVisible || mode !== 'wysiwyg' || spyScheduled)
