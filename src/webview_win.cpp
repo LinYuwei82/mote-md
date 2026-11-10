@@ -168,10 +168,9 @@ public:
     {
         if (m_owner) {
             m_owner->onEnvironmentReady(static_cast<long>(hr), environment);
-        } else if (environment) {
-            // 宿主已销毁：完成回调携带的所有权必须在这里归还，不能只是 return
-            environment->Release();
         }
+        // 回调传入的是借用引用：Invoke 返回后由 WebView2 释放，
+        // 宿主需要长期持有就在 onEnvironmentReady 里自行 AddRef。
         return S_OK;
     }
 
@@ -208,10 +207,9 @@ public:
         if (m_owner) {
             m_owner->onControllerReady(static_cast<long>(hr), controller);
         } else if (controller) {
-            // 宿主已销毁（窗口比初始化先关掉）：控制器已经绑在即将销毁的 HWND 上，
-            // 必须 Close 后归还所有权，否则 WebView2 会一直挂着它
+            // 宿主已销毁：控制器还绑在即将销毁的 HWND 上，先 Close；
+            // 回调引用归 WebView2 所有，这里不能 Release。
             controller->Close();
-            controller->Release();
         }
         return S_OK;
     }
@@ -682,14 +680,13 @@ void WebView2Editor::onEnvironmentReady(long hr, void *environment)
 {
     if (FAILED(static_cast<HRESULT>(hr)) || !environment) {
         showUnavailable(tr("WebView2 环境创建失败（%1）。").arg(hrText(hr)));
-        // 失败时也可能带着对象：所有权已转移过来，必须归还
-        if (environment)
-            static_cast<ICoreWebView2Environment *>(environment)->Release();
+        // 失败时对象仍归 WebView2 所有，宿主不持有，直接返回即可
         return;
     }
-    // 完成回调把 environment 的所有权交给宿主：直接持有、不再 AddRef，
-    // 析构里 Release 一次即平衡（与 m_webView 那条链路一致）
+    // 完成回调传入的是借用引用（Invoke 返回后由 WebView2 释放），
+    // 宿主析构里要 Release 一次，这里必须自己 AddRef 平衡。
     auto *env = static_cast<ICoreWebView2Environment *>(environment);
+    env->AddRef();
     m_environment = env;
 
     auto *handler = new ControllerHandler(this);
@@ -705,15 +702,12 @@ void WebView2Editor::onControllerReady(long hr, void *controller)
 {
     if (FAILED(static_cast<HRESULT>(hr)) || !controller) {
         showUnavailable(tr("WebView2 控制器创建失败（%1）。").arg(hrText(hr)));
-        // 同上：失败路径上的对象也要 Close + 归还所有权
-        if (controller) {
-            static_cast<ICoreWebView2Controller *>(controller)->Close();
-            static_cast<ICoreWebView2Controller *>(controller)->Release();
-        }
+        // 同上：失败时对象仍归 WebView2 所有，宿主不持有
         return;
     }
-    // 同上：controller 的所有权随完成回调转移过来，析构里 Close + Release 各一次
+    // 同上：借用引用，宿主长期持有必须 AddRef；析构里 Close + Release 各一次
     auto *ctrl = static_cast<ICoreWebView2Controller *>(controller);
+    ctrl->AddRef();
     m_controller = ctrl;
 
     ICoreWebView2 *web = nullptr;

@@ -60,11 +60,12 @@ win32 {
     LIBS += -lole32 -luuid -lshell32
 
     # 绿色版/开发运行都需要 exe 同级的 WebView2Loader.dll。
-    # 工程是 release 单配置（CONFIG -= debug_and_release），Windows 下的可执行文件
-    # 落在 $$OUT_PWD/release/，所以不能拷到 $$OUT_PWD 根目录。
+    # 工程是 release 单配置，但产物目录随生成器不同（MinGW 在 $$OUT_PWD，
+    # MSVC 在 $$OUT_PWD/release）；用 Makefile 里的 DESTDIR 让拷贝跟着实际
+    # 产物目录走，不写死 release。
     WEBVIEW2_LOADER = $$WEBVIEW2_SDK/build/native/x64/WebView2Loader.dll
     exists($$WEBVIEW2_LOADER) {
-        QMAKE_POST_LINK += $$QMAKE_COPY /Y \"$$shell_path($$WEBVIEW2_LOADER)\" \"$$shell_path($$OUT_PWD/release)\"
+        QMAKE_POST_LINK += $$QMAKE_COPY /Y \"$$shell_path($$WEBVIEW2_LOADER)\" \"$$shell_path($$OUT_PWD)/$(DESTDIR)\"
     }
 }
 
