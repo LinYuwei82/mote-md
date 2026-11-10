@@ -682,10 +682,35 @@
     }
   }
 
+  // 未转义 | 的下标。逐字符扫描而不是用正则后行断言：后者在 WebKit 16.4 之前
+  // 是解析期语法错误，整份脚本都会加载失败。
+  function pipeIndexes(line) {
+    var out = [];
+    for (var i = 0; i < line.length; i++) {
+      // 前面是反斜杠的 \| 是单元格内容（Markdown 转义），不是列分隔符
+      if (line.charAt(i) === '|' && line.charAt(i - 1) !== '\\')
+        out.push(i);
+    }
+    return out;
+  }
+
+  // 按未转义的 | 切分，转义的 \| 原样留在片段里。
+  function splitPipes(text) {
+    var pipes = pipeIndexes(text);
+    var out = [];
+    var from = 0;
+    for (var p = 0; p < pipes.length; p++) {
+      out.push(text.slice(from, pipes[p]));
+      from = pipes[p] + 1;
+    }
+    out.push(text.slice(from));
+    return out;
+  }
+
   function tableCells(line) {
     var trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
-    // 先把转义的 \| 换成占位符再切分，单元格内容里的 \| 不会被当成分隔符。
-    return trimmed.split(/(?<!\\)\|/).map(function (cell) {
+    // 转义的 \| 不是分隔符；切分后再把单元格里的 \| 还原成 |
+    return splitPipes(trimmed).map(function (cell) {
       return cell.trim().replace(/\\\|/g, '|');
     });
   }
@@ -699,12 +724,7 @@
   // lead + Σ(text + sep) + tail === line。单元格被就地编辑后仍能拼回逐字原文，
   // 不依赖 textContent 已丢失的 | 与对齐行。
   function splitTableLine(line) {
-    var pipes = [];
-    for (var i = 0; i < line.length; i++) {
-      // 前面是反斜杠的 \| 是单元格内容（Markdown 转义），不是列分隔符
-      if (line.charAt(i) === '|' && line.charAt(i - 1) !== '\\')
-        pipes.push(i);
-    }
+    var pipes = pipeIndexes(line);
     if (!pipes.length)
       return { lead: '', cells: [{ text: line, sep: '' }], tail: '' };
 
@@ -870,10 +890,19 @@
       // 时不带换行标记（它成为新末行）；其余情况新行后面还有行，必须带。
       var last = row.lastElementChild;
       var isLast = !(last && last.querySelector(':scope > .mk-nl'));
-      row.insertAdjacentHTML('afterend', tableRowHtml(line, align, 'td', !isLast));
-      if (isLast)
-        last.insertAdjacentHTML('beforeend', newlineMarker());
-      newRow = row.nextElementSibling;
+      if (row.parentNode.tagName === 'THEAD') {
+        // 表头行下方同样不可插（新行会夹在表头与对齐行之间，原文第 2 行不再是
+        // 对齐行），改为落到对齐行之后、表体首行。
+        var tbody = el.querySelector('tbody');
+        var hasBody = tbody.children.length > 0;
+        tbody.insertAdjacentHTML('afterbegin', tableRowHtml(line, align, 'td', hasBody));
+        newRow = tbody.firstElementChild;
+      } else {
+        row.insertAdjacentHTML('afterend', tableRowHtml(line, align, 'td', !isLast));
+        if (isLast)
+          last.insertAdjacentHTML('beforeend', newlineMarker());
+        newRow = row.nextElementSibling;
+      }
     } else {
       // 新行插到当前行上方，自身必须带换行标记（它后面还有当前行/对齐行）。
       // 当前行若原本是末行（没有换行标记），插入后不再是末行，必须补上，
@@ -2380,9 +2409,9 @@
     var anchor = target && target.closest ? target.closest('a.md-link') : null;
     if (anchor) {
       // 链接永远不让 WebView 自己导航：普通点击只落到「进入编辑」，
-      // Cmd+Click 交给外壳决定（浏览器 / 应用内打开 .md）。
+      // Cmd/Ctrl+Click 交给外壳决定（浏览器 / 应用内打开 .md）。
       event.preventDefault();
-      if (event.metaKey) {
+      if (event.metaKey || event.ctrlKey) {
         post({ type: 'openLink', href: anchor.getAttribute('data-href')
           || anchor.getAttribute('href') || '' });
       }
@@ -2797,10 +2826,10 @@
     }
 
     if (inTable && event.key === 'Enter') {
-      // Cmd+Enter 在当前行下方加一行、Cmd+Shift+Enter 在上方加一行（光标落新行
+      // Cmd/Ctrl+Enter 在当前行下方加一行、加 Shift 在上方加一行（光标落新行
       // 同列首格）；裸回车既不新增行也不插入换行，避免一次误触改掉表格结构。
       event.preventDefault();
-      if (event.metaKey && !event.ctrlKey && !event.altKey)
+      if ((event.metaKey || event.ctrlKey) && !event.altKey)
         insertTableRow(el, !event.shiftKey);
       return;
     }
