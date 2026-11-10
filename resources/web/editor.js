@@ -3272,11 +3272,14 @@
     for (var i = 0; i < junk.length; i++) {
       if (junk[i].closest && junk[i].closest('table'))
         continue;
-      // 列表符号（- / 1.）、任务标记（[ ] / [x]）与链接语法（[ / ](url)）都是
-      // Markdown 原文的一部分：复制出去必须仍能原样贴回，只有行内标记按可见文本剔除。
+      // 列表符号（- / 1.）、任务标记（[ ] / [x]）、链接语法（[ / ](url)）与图片
+      // 语法（![](src)）都是 Markdown 原文的一部分：复制出去必须仍能原样贴回，
+      // 只有行内标记按可见文本剔除。图片标记不保留的话，剪贴板里只剩 <img>，
+      // 原文和地址一起消失。
       if (junk[i].classList && (junk[i].classList.contains('mk-bullet')
           || junk[i].classList.contains('mk-task')
-          || junk[i].classList.contains('mk-link')))
+          || junk[i].classList.contains('mk-link')
+          || junk[i].classList.contains('mk-img')))
         continue;
       junk[i].parentNode.removeChild(junk[i]);
     }
