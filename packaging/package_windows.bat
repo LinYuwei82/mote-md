@@ -113,8 +113,8 @@ copy /y "%ROOT%\resources\samples\sample-diagram.png" "%OUT%\samples\" >nul
 REM 内置字体是嵌入二进制 OFL 授权文件（SIL Open Font License 要求随附）
 mkdir "%OUT%\licenses"
 copy /y "%ROOT%\resources\fonts\OFL.txt" "%OUT%\licenses\JetBrainsMono-OFL.txt" >nul
-REM 项目自身的 GPL-3.0 全文随包分发（绿色版与安装包共用这份目录）
-copy /y "%ROOT%\LICENSE" "%OUT%\licenses\LICENSE-GPL-3.0.txt" >nul
+REM 项目自身的 AGPL-3.0 全文随包分发（绿色版与安装包共用这份目录）
+copy /y "%ROOT%\LICENSE" "%OUT%\licenses\LICENSE-AGPL-3.0.txt" >nul
 
 echo [6/6] 压缩为 zip
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^

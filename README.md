@@ -132,4 +132,6 @@ backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建
 
 ## 许可证
 
-Mote 以 **GNU General Public License v3.0（GPL-3.0）** 发布，完整条文见仓库根目录的 [LICENSE](LICENSE)。
+Mote 以 **GNU Affero General Public License v3.0（AGPL-3.0）** 发布，完整条文见仓库根目录的 [LICENSE](LICENSE)。
+
+自 v0.3.0 起采用 AGPL-3.0；更早的版本为 GPL-3.0，已发布版本的授权不受影响。

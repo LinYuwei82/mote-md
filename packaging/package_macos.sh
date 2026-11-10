@@ -161,8 +161,8 @@ cp "$ROOT/resources/samples/sample-diagram.png" "$PKG_DIR/samples/"
 # 随包附带内嵌代码字体的 OFL 授权文件（SIL Open Font License 要求随分发提供）
 mkdir -p "$PKG_DIR/licenses"
 cp "$ROOT/resources/fonts/OFL.txt" "$PKG_DIR/licenses/JetBrainsMono-OFL.txt"
-# 项目自身的 GPL-3.0 全文本同样随包分发
-cp "$ROOT/LICENSE" "$PKG_DIR/licenses/LICENSE-GPL-3.0.txt"
+# 项目自身的 AGPL-3.0 全文本同样随包分发
+cp "$ROOT/LICENSE" "$PKG_DIR/licenses/LICENSE-AGPL-3.0.txt"
 mkdir -p "$DIST_DIR"
 
 ditto -c -k --sequesterRsrc --keepParent "$PKG_DIR" "$STAGE/${PKG_NAME}.zip"
