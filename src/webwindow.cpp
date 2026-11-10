@@ -354,7 +354,7 @@ void WebWindow::createUi()
         connect(m_web, &WebEditor::viewStateChanged, this, &WebWindow::applyViewState);
         setCentralWidget(m_web);
     } else {
-        m_placeholder = new QLabel(tr("WebView2 后端尚未实现（本机为 macOS 之外平台）。"), this);
+        m_placeholder = new QLabel(tr("当前平台没有可用的 WebView 后端（仅支持 macOS 与 Windows）。"), this);
         m_placeholder->setAlignment(Qt::AlignCenter);
         setCentralWidget(m_placeholder);
     }

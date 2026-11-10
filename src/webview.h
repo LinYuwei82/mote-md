@@ -5,7 +5,7 @@
 #include <QWidget>
 
 // 与平台无关的 WebView 编辑器接口。macOS 由 WKWebView 实现，
-// Windows 预留 WebView2 实现（本机未实现、未验证）。
+// Windows 由 WebView2 实现（src/webview_win.*），其余平台由 webview_stub.cpp 占位。
 // Qt 外壳只依赖该接口，负责文件读写、未保存提示与窗口标题。
 class WebEditor : public QWidget
 {
@@ -60,7 +60,8 @@ signals:
     void exportHtmlReady(const QString &html);
 };
 
-// 平台工厂：macOS 返回 WKWebView 实现，其他平台返回 nullptr（由外壳显示占位提示）
+// 平台工厂：macOS 返回 WKWebView 实现，Windows 返回 WebView2 实现；
+// 既非 macOS 也非 Windows 的平台返回 nullptr（由外壳显示占位提示）
 WebEditor *createWebEditor(QWidget *parent);
 
 #endif // WEBVIEW_H
