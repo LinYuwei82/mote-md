@@ -2139,9 +2139,30 @@
     scheduleTocRefresh();
   }
 
+  // 结构类型：只有类型相同的相邻块才允许合并。段落原文接进表格、标题、列表或
+  // 引用的原文里会把结构写坏（表格会把段落文字并进最后一行末格）。
+  function blockType(el) {
+    if (isCodeBlock(el))
+      return 'code';
+    for (var level = 1; level <= 6; level++) {
+      if (el.classList.contains('h' + level))
+        return 'h' + level;
+    }
+    var kinds = ['table', 'ul', 'ol', 'quote', 'hr'];
+    for (var i = 0; i < kinds.length; i++) {
+      if (el.classList.contains(kinds[i]))
+        return kinds[i];
+    }
+    return 'p';
+  }
+
   function mergeBack(el) {
     var previous = el.previousElementSibling;
     if (!previous || !previous.classList.contains('block'))
+      return;
+
+    // 相邻块结构类型不同时不合并：两段原文直接拼接会得到坏 Markdown
+    if (blockType(el) !== blockType(previous))
       return;
 
     // 代码块首行行首退格 → 与上一块合并。相邻也是代码块时合并正文（保留上一块
