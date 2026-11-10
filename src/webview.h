@@ -1,0 +1,56 @@
+#ifndef WEBVIEW_H
+#define WEBVIEW_H
+
+#include <QUrl>
+#include <QWidget>
+
+// 与平台无关的 WebView 编辑器接口。macOS 由 WKWebView 实现，
+// Windows 预留 WebView2 实现（本机未实现、未验证）。
+// Qt 外壳只依赖该接口，负责文件读写、未保存提示与窗口标题。
+class WebEditor : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit WebEditor(QWidget *parent = nullptr) : QWidget(parent) {}
+    ~WebEditor() override = default;
+
+    // 注入整篇 Markdown；baseDir 用于解析图片等相对路径
+    virtual void setMarkdown(const QString &text, const QUrl &baseDir) = 0;
+    // 新建空白文档：清空块与查找、目录、缩放状态，光标落进空块可直接输入
+    virtual void newDocument() = 0;
+    // 另存为后同步图片落盘目录（不重载页面）
+    virtual void setBaseDir(const QUrl &dir) = 0;
+    // 请求前端把当前源文本通过 saveRequested 回传
+    virtual void requestSnapshot() = 0;
+    // 写盘成功后回填「已保存」基准，供前端判断未保存标记（撤销回保存点时圆点消失）
+    virtual void notifySaved(const QString &text) = 0;
+    // 供原生菜单直接驱动前端的自建历史栈（不依赖页面是否收到 keydown）
+    virtual void undo() = 0;
+    virtual void redo() = 0;
+    // 视图控制：目录侧栏、源码模式、缩放（前端实现，Qt 只负责下发与同步状态）
+    virtual void toggleToc() = 0;
+    virtual void toggleSource() = 0;
+    virtual void zoomBy(int steps) = 0;
+    virtual void resetZoom() = 0;
+    // 格式动作（粗体/标题/列表/代码块…）：前端与斜杠菜单、右键「转为」共用同一实现
+    virtual void applyFormat(const QString &action) = 0;
+
+signals:
+    void ready();
+    void viewStateChanged(bool tocOn, bool sourceOn, qreal zoom);
+    void dirtyChanged(bool dirty);
+    void saveRequested(const QString &text);
+    void openRequested();
+    void dropReceived(const QString &name, const QString &text);
+    // 原生拖放接住了带真实路径的文件：.md 交给外壳打开，图片由原生落盘后回调页面
+    void fileDropRequested(const QString &path);
+    // 原生层的提示（图片落盘成功/失败等），由外壳显示在状态栏
+    void statusMessage(const QString &text);
+    void errorOccurred(const QString &message);
+};
+
+// 平台工厂：macOS 返回 WKWebView 实现，其他平台返回 nullptr（由外壳显示占位提示）
+WebEditor *createWebEditor(QWidget *parent);
+
+#endif // WEBVIEW_H

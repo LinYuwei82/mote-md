@@ -1,0 +1,636 @@
+:root {
+  --text: #1d2129;
+  --muted: #8a94a0;
+  --code-bg: #f4f6f8;
+  --border: #d0d7de;
+  --accent: #2f6fed;
+  --tok-keyword: #cf222e;
+  --tok-type: #953800;
+  --tok-function: #8250df;
+  --tok-string: #0a3069;
+  --tok-comment: #6e7781;
+  --tok-number: #0550ae;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+/* 基准 16.5px ≈ 旧版 16.5pt；缩放由 JS 改写这里（0.6–2.6 倍） */
+html { font-size: 16.5px; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: #ffffff;
+}
+
+body {
+  color: var(--text);
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  font-size: 1rem;
+  font-weight: 300;
+  line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 目录侧栏占一列；关闭时列宽为 0，正文仍居中 */
+#layout {
+  display: grid;
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+body.toc-open #layout { grid-template-columns: 15.5rem minmax(0, 1fr); }
+
+/* 源码模式占满整行，侧栏暂时收起（降级点：源码态不提供目录高亮） */
+body.source-mode #layout { grid-template-columns: 0 minmax(0, 1fr); }
+
+/* #toc 在源码模式下 display:none 会退出网格流，若不显式指定列，
+   #main 会掉进第 1 列（宽 0）导致源码编辑区被压成一条 */
+#main {
+  grid-column: 2;
+  min-width: 0;
+}
+
+#toc {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 2.4rem 0.7rem 2rem 1.1rem;
+  border-right: 1px solid #eceff3;
+  background: #fbfcfd;
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.toc-open #toc {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.source-mode #toc { display: none; }
+
+#toc-title {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: #9aa3ad;
+  margin: 0 0 0.7rem 0.5rem;
+}
+
+.toc-item {
+  display: block;
+  padding: 0.22rem 0.5rem;
+  border-radius: 4px;
+  color: #57606a;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-item:hover { background: #eef2f7; color: #1d2129; }
+.toc-item.active { background: #e8f0fe; color: #1a56c4; }
+
+.toc-empty {
+  padding: 0.4rem 0.6rem;
+  color: #9aa3ad;
+  font-size: 0.8rem;
+}
+
+#editor {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2.7rem 3.4rem 8.5rem;
+  outline: none;
+  caret-color: #1d2129;
+}
+
+/* 源码模式：整篇纯 Markdown，占据整窗，内部滚动 */
+#source { display: none; }
+
+body.source-mode #source {
+  display: block;
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 2.5rem 3.4rem 6rem;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: #ffffff;
+  color: var(--text);
+  font-family: var(--mono);
+  font-weight: 300;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+
+body.source-mode #editor { display: none; }
+
+.block {
+  margin: 0 0 0.85em;
+  padding: 2px 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  outline: none;
+  border-radius: 4px;
+}
+
+.block:focus {
+  background: #fafbfc;
+  box-shadow: 0 0 0 1px #eef1f4;
+}
+
+.block.editing {
+  font-family: -apple-system, "PingFang SC", sans-serif;
+  color: #1d2129;
+}
+
+/* 回退模式（MOTE_INLINE_PROTO=0）下，代码块仍整块替换成原始 Markdown：
+   保留等宽与底色，不显示行号/高亮。行内折叠开启时这条不能生效，否则进入
+   代码块会多出内边距、white-space 也变掉，正是“跳动”的来源。 */
+body:not(.inline-proto) .block.editing.code {
+  font-family: var(--mono);
+  font-weight: 300;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  background: var(--code-bg);
+  padding: 0.72rem 1rem;
+  white-space: pre-wrap;
+}
+
+.block h1, .block h2, .block h3, .block h4, .block h5, .block h6 {
+  margin: 1.1em 0 0.5em;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #0f172a;
+}
+
+.block h1 { font-size: 1.9em; }
+.block h2 { font-size: 1.5em; }
+.block h3 { font-size: 1.26em; }
+.block h4 { font-size: 1.12em; }
+.block h5 { font-size: 1.04em; }
+.block h6 { font-size: 1em; color: var(--muted); }
+
+.block.h1.editing { font-size: 1.9em; font-weight: 600; line-height: 1.35; }
+.block.h2.editing { font-size: 1.5em; font-weight: 600; line-height: 1.35; }
+.block.h3.editing { font-size: 1.26em; font-weight: 600; line-height: 1.35; }
+.block.h4.editing { font-size: 1.12em; font-weight: 600; line-height: 1.35; }
+.block.h5.editing { font-size: 1.04em; font-weight: 600; line-height: 1.35; }
+.block.h6.editing { font-size: 1em; font-weight: 600; color: var(--muted); }
+
+p { margin: 0 0 0.85em; }
+
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code {
+  font-family: var(--mono);
+  font-weight: 300;
+  font-size: 0.85em;
+  background: #eef1f5;
+  border-radius: 3px;
+  padding: 0.15em 0.35em;
+}
+
+pre.code-block {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  margin: 0.9em 0 1.1em;
+  padding: 0;
+  background: var(--code-bg);
+  border-radius: 4px;
+}
+
+/* 语言徽标：绝对定位到代码框右侧留白（left:100% 起向右生长），因此无论语言名
+   多长都不会压住任何代码字形；绝对定位不占排版，块几何不受显隐影响。
+   渲染态就常驻可见（半透明）并且可点——单击即可编辑语言，不必先进入编辑态；
+   渲染态 user-select:none，连选/三击整段复制都不会把语言名带进剪贴板。 */
+.code-lang {
+  position: absolute;
+  top: 0.42rem;
+  left: 100%;
+  margin-left: 0.4rem;
+  z-index: 2;
+  padding: 0.04rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #8a94a0;
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 0.66rem;
+  line-height: 1.5;
+  white-space: pre;
+  outline: none;
+  opacity: 0.5;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.code-lang:hover {
+  opacity: 1;
+  border-color: #e1e6ec;
+  background: #ffffff;
+}
+
+.code-lang:empty::before {
+  content: 'lang';
+  color: #c3ccd6;
+}
+
+/* 编辑态：完全显形、可选中（光标要能落进来才能改），位置不变 */
+body.inline-proto .block.code.editing .code-lang {
+  opacity: 1;
+  border-color: #e1e6ec;
+  background: #ffffff;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 代码滚动区：只有这里横向滚动，行号栏在滚动区之外，因而永远停在左侧。
+   不再用 position:sticky——sticky 与横向滚动条共存时，WebKit 在整篇重建后
+   会把块高少算一个滚动条高度（实测 15px）。 */
+.code-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 行号栏：独立一栏、弱化颜色、不参与选中/复制；
+   右侧描边即行号与代码之间的竖向分隔线，随内容高度贯通整块 */
+.gutter {
+  flex: 0 0 2.8rem;
+  padding: 0.72rem 0.85rem 0.72rem 0;
+  border-right: 1px solid #dfe4ea;
+  background: var(--code-bg);
+  text-align: right;
+  color: #9aa3ad;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.2325rem;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+pre.code-block code {
+  display: block;
+  background: none;
+  padding: 0.72rem 1.1rem 0.72rem 0.95rem;
+  font-size: 0.85rem;
+  line-height: 1.2325rem;   /* 0.85rem × 145% */
+  white-space: pre;
+  outline: none;            /* 就地编辑时 <code> 自己可编辑，不能出现焦点框 */
+}
+
+.tok-k { color: var(--tok-keyword); }
+.tok-t { color: var(--tok-type); }
+.tok-f { color: var(--tok-function); }
+.tok-s { color: var(--tok-string); }
+.tok-c { color: var(--tok-comment); }
+.tok-n { color: var(--tok-number); }
+
+blockquote {
+  margin: 0.6em 0 1em;
+  padding: 0.1em 0 0.1em 1em;
+  border-left: 3px solid #dfe4ea;
+  color: #57606a;
+}
+
+ul, ol { margin: 0.4em 0 0.9em; padding-left: 1.6em; }
+li { margin: 0.15em 0; }
+
+hr {
+  border: none;
+  border-top: 1px solid #e6e9ee;
+  margin: 1.6em 0;
+}
+
+/* 分隔线进入编辑：<hr> 本身不动，原文 `---` 以淡色等宽行绝对定位叠在线上。
+   绝对定位不占高度，因此横线位置与块高（以及下方内容）都不会变化。 */
+.block.hr { position: relative; }
+
+.hr-src {
+  position: absolute;
+  left: 0;
+  top: calc(2px + 1.6rem);   /* .block 的 padding-top + hr 的 margin-top */
+  transform: translateY(-50%);
+  padding: 0 0.3em;
+  background: #ffffff;
+  color: #a9b4c1;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 300;
+  line-height: 1.2;
+  white-space: pre;
+  outline: none;
+}
+
+table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.95em;
+  width: auto;
+  max-width: 100%;
+}
+
+th, td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  text-align: left;
+  vertical-align: top;
+  /* 表格原文里的空格（| 两侧、单元格首尾）以文本节点保留，表格内按普通空白
+     折叠；不能让 .block 的 pre-wrap 漏进来，否则会画出多余的空隙。 */
+  white-space: normal;
+}
+
+th { background: #f6f8fa; font-weight: 600; }
+
+/* 对齐行（|---|:--:|）只是原文的容器：不参与排版，但按 DOM 顺序夹在表头与
+   表体之间，textContent 才能逐字拼回原始 Markdown。 */
+tr.tbl-align { display: none; }
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 3px;
+}
+
+/* ---------------- 行内标记（默认开启，MOTE_INLINE_PROTO=0 回退） ----------------
+   标记始终留在 DOM 里，但 font-size:0 使其零前进宽度；淡色提示由绝对定位的
+   <i> 画出，同样不参与排版。因此进入/离开某行只改变 class 与不透明度，
+   不会改变任何行的宽度、高度或后续行位置。 */
+.mk {
+  position: relative;
+  display: inline;
+  font-size: 0;
+  letter-spacing: 0;
+}
+
+.mk > i {
+  position: absolute;
+  left: 0;
+  bottom: 1.5em;              /* 抬到正文大写高度之上，避免压住字形 */
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: pre;
+  color: #a9b4c1;
+  opacity: 0;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 相邻标记的淡色标签会互相压字（如 **粗** 与紧邻的 *斜*）。标签是绝对定位的
+   零宽元素、不参与排版，因此只让离光标最近的一个显示：无论标记多密集都不会
+   重叠，也不改变行高或宽度。 */
+body.inline-proto .block.editing .mk > i { opacity: 0; }
+body.inline-proto .block.editing .mk.mk-live > i { opacity: 1; }
+
+/* 零宽换行：只用来让 textContent 逐字还原原文；视觉换行由 <br> / <li> 提供，
+   所以这里把 \n 当普通可折叠空白吃掉，不产生任何宽度或行高。 */
+.mk-nl {
+  white-space: normal;
+  letter-spacing: 0;
+}
+
+/* 标题标记挂在标题文字左侧（进入父级左侧留白），零宽、不推文字。
+   只靠 right:0 让右边缘贴住零宽锚点，元素整体向左展开，不能再叠加 translate。 */
+.mk.mk-head > i {
+  left: auto;
+  right: 0;
+  bottom: -0.16em;
+  color: #b3bdc9;
+}
+
+body.inline-proto .block.h1 .mk.mk-head > i { font-size: 1.05rem; }
+body.inline-proto .block.h2 .mk.mk-head > i { font-size: 0.88rem; }
+body.inline-proto .block.h3 .mk.mk-head > i { font-size: 0.74rem; }
+body.inline-proto .block.h4 .mk.mk-head > i { font-size: 0.66rem; }
+body.inline-proto .block.h5 .mk.mk-head > i { font-size: 0.62rem; }
+body.inline-proto .block.h6 .mk.mk-head > i { font-size: 0.6rem; }
+
+/* 原型里内容保持渲染态，块级“编辑态字号”不能再套一层（否则标题会变成 1.9×1.9） */
+body.inline-proto .block.editing {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* 原型不画整块底色/描边：活动行的唯一视觉变化是淡色标记与光标，
+   这样进入/离开某行时页面差异只剩标记本身，不产生“重排感”。 */
+body.inline-proto .block:focus {
+  background: transparent;
+  box-shadow: none;
+}
+
+body.inline-proto .block.h1.editing,
+body.inline-proto .block.h2.editing,
+body.inline-proto .block.h3.editing,
+body.inline-proto .block.h4.editing,
+body.inline-proto .block.h5.editing,
+body.inline-proto .block.h6.editing {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+/* ---------------- 查找（Cmd+F） ----------------
+   查找条 fixed 悬浮在右上角，不参与文档排版；覆盖层挂在 body、pointer-events:none，
+   因此都不会改变正文几何。关闭时两者都被移除（不是隐藏），不会留下残留元素。 */
+#find-bar {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 9px;
+  border: 1px solid #dde3ea;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 6px 20px rgba(24, 34, 48, 0.14);
+  font-family: -apple-system, "PingFang SC", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: #4a5563;
+}
+
+#find-input,
+#find-replace {
+  width: 168px;
+  margin: 0;
+  padding: 3px 6px;
+  border: 1px solid #dfe4ea;
+  border-radius: 5px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  color: #24303d;
+  outline: none;
+}
+
+#find-replace {
+  width: 140px;
+}
+
+#find-input:focus,
+#find-replace:focus {
+  border-color: #7aa7e0;
+  box-shadow: 0 0 0 2px rgba(122, 167, 224, 0.18);
+}
+
+#find-count {
+  min-width: 42px;
+  text-align: center;
+  color: #8a94a0;
+  font-variant-numeric: tabular-nums;
+}
+
+#find-note {
+  max-width: 260px;
+  color: #b26a00;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#find-bar button {
+  height: 22px;
+  min-width: 22px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #64707d;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#find-bar button:hover {
+  border-color: #dfe4ea;
+  background: #f3f6f9;
+  color: #24303d;
+}
+
+#find-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.find-hit {
+  position: absolute;
+  border-radius: 2px;
+  background: rgba(255, 214, 64, 0.38);
+}
+
+.find-hit.active {
+  background: rgba(255, 166, 0, 0.5);
+  box-shadow: 0 0 0 1px rgba(196, 118, 0, 0.55);
+}
+
+
+/* 空白文档占位提示：::before 不属于 textContent，绝不进入 dataset.raw。
+   只在整篇只有一个空块（#editor.bare）时出现。 */
+#editor.bare > .block:first-child {
+  position: relative;
+}
+
+#editor.bare > .block:first-child::before {
+  content: "开始输入，或按 / 插入内容";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #b3bbc5;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 斜杠命令浮层（挂在 body 上，不在 #editor 内） */
+#slash-menu,
+#turn-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 190px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid #dde3ea;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(24, 34, 48, 0.18);
+  font-family: -apple-system, "PingFang SC", sans-serif;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: #303a45;
+}
+
+.slash-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: default;
+}
+
+.slash-item.active {
+  background: #eaf1fb;
+}
+
+.slash-hint {
+  color: #98a2ae;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+}
+
+.slash-empty {
+  padding: 6px 8px;
+  color: #98a2ae;
+}
+
+#turn-menu {
+  min-width: 150px;
+}
+
+.turn-title {
+  padding: 3px 8px 4px;
+  color: #98a2ae;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.turn-item {
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: default;
+}
+
+.turn-item:hover {
+  background: #eaf1fb;
+}

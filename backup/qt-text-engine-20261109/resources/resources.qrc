@@ -1,0 +1,14 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="icons/app.png">icons/app.png</file>
+        <file alias="icons/app_256.png">icons/app_256.png</file>
+        <file alias="icons/app.ico">icons/app.ico</file>
+        <file alias="styles/app.qss">styles/app.qss</file>
+        <file alias="fonts/JetBrainsMono-Regular.ttf">fonts/JetBrainsMono-Regular.ttf</file>
+        <file alias="fonts/JetBrainsMono-Light.ttf">fonts/JetBrainsMono-Light.ttf</file>
+        <file alias="fonts/JetBrainsMono-Bold.ttf">fonts/JetBrainsMono-Bold.ttf</file>
+        <file alias="fonts/OFL.txt">fonts/OFL.txt</file>
+        <file alias="samples/welcome.md">samples/welcome.md</file>
+        <file alias="samples/sample-diagram.png">samples/sample-diagram.png</file>
+    </qresource>
+</RCC>

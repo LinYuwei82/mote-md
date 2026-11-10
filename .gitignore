@@ -1,0 +1,34 @@
+# ---- 构建 / 打包产物 ----
+/dist/
+/build/
+/build-*/
+/*_build/
+Makefile
+*.o
+*.obj
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+.qmake.stash
+*.pro.user
+*.dSYM/
+*.app/
+
+# ---- 发布包 ----
+*.zip
+
+# ---- 运行时临时文件 ----
+# 编辑器靠近真实文件生成预览页时留下的隐藏文件（如 resources/samples/.mote-preview-43941.html）
+.mote-preview-*
+**/.mote-preview-*
+
+# ---- macOS ----
+.DS_Store
+
+# ---- 截图：仅保留文档引用的三张，其余为调试截图 ----
+/screenshots/*
+!/screenshots/imgB-package.png
+!/screenshots/new-confirm.png
+!/screenshots/shortcut-menu-format.png
