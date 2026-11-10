@@ -48,12 +48,12 @@ Mote 是一个用 **C++20 + Qt 6** 写的 Markdown 编辑/查看工具，编辑�
 ## 校验
 
 ```
-SHA256  D2C5CFC06D0DBFB2FDD8C00CB66E6B1B161556EDCB34F0DB7AF2DFE960F1F23D
-大小    12,514,334 字节
+SHA256  5417CC3C211BFAB8D61DB0BBA881E9DDF6CAA69A8D14D99C8F799F542BF0984B
+大小    12,513,235 字节
 文件    Mote-Setup-0.3.0.exe
 
-SHA256  C21D84D73E20D119AF09F7CF221FAE29416842C99CDDA60599E0531B8EA23181
-大小    14,974,922 字节
+SHA256  33494739317221905A34F5B55F58B29A25359C05C3EE9FD729F14309A8E5D6A9
+大小    14,974,703 字节
 文件    Mote-Windows.zip
 
 SHA256  （待 0.3.0 打包后回填）
@@ -67,6 +67,10 @@ Windows 上校验：
 Get-FileHash .\Mote-Setup-0.3.0.exe -Algorithm SHA256
 Get-FileHash .\Mote-Windows.zip -Algorithm SHA256
 ```
+
+## 许可证
+
+本版以 **GNU Affero General Public License v3.0（AGPL-3.0）** 发布，完整条文见仓库根目录的 `LICENSE`；随包附带的 `licenses/LICENSE-AGPL-3.0.txt` 为同一份全文。更早的版本为 GPL-3.0，已发布版本的授权不受影响。
 
 ## 问题反馈
 
