@@ -3097,6 +3097,15 @@
     }
     var text = clipboard.getData('text/plain');
     var el = blockOf(event.target);
+    if (el && isCodeBlock(el) && selectionInsideLang(el)) {
+      // 徽标里粘贴：只按纯文本改语言名（和手输一样剔除空白/反引号），
+      // 否则会落到下面代码块分支，被 insertCodeText 的兜底追加到正文末尾。
+      event.preventDefault();
+      commitHistory();
+      document.execCommand('insertText', false, String(text).replace(/[\s`]/g, ''));
+      setTimeout(commitHistory, 0);
+      return;
+    }
     if (el && el.classList.contains('table')) {
       // 单元格是单行结构：整张 Markdown 表格直接替换当前表格；其余多行文本
       // 压成一行插入（换行会被 WebKit 变成 <div>/<br>，把表格结构写坏）。
