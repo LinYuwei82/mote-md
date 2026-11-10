@@ -24,6 +24,7 @@ public:
     void toggleSource() override;
     void zoomBy(int steps) override;
     void resetZoom() override;
+    void setTheme(const QString &mode) override;
     void applyFormat(const QString &action) override;
 
     // 由 Objective-C++ 的消息处理器调用
@@ -47,6 +48,7 @@ private:
                         const QString &hint, bool isPaste);
     bool saveImageFile(const QString &path);
     void insertImage(const QString &rel);
+    void applyTheme();
 
     void *m_webView = nullptr;   // WKWebView *
     void *m_handler = nullptr;   // MoteMessageHandler *
@@ -58,6 +60,7 @@ private:
     bool m_pageReady = false;
     bool m_dropProbeDone = false; // 诊断用 MOTE_DROP 只执行一次
     QString m_pageFile;           // 文档目录下的临时页面文件，退出时删除
+    QString m_theme = QStringLiteral("light"); // 页面就绪前先记住，ready 后补发
 };
 
 #endif // MACWEBVIEW_H

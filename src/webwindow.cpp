@@ -11,6 +11,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenu>
@@ -21,6 +22,7 @@
 #include <QScreen>
 #include <QShortcutEvent>
 #include <QStatusBar>
+#include <QStyleHints>
 #include <QTimer>
 #include <QToolBar>
 #include <QUrl>
@@ -142,6 +144,32 @@ void WebWindow::createActions()
     m_zoomResetAction = new QAction(tr("实际大小"), this);
     m_zoomResetAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
     connect(m_zoomResetAction, &QAction::triggered, this, &WebWindow::zoomReset);
+
+    // 深色模式：Cmd+Shift+D 与现有 23 项无重叠。手动切换会退出「跟随系统」，
+    // 由下面的「跟随系统外观」重新交回系统。
+    m_darkAction = new QAction(tr("深色模式"), this);
+    m_darkAction->setCheckable(true);
+    m_darkAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D));
+    connect(m_darkAction, &QAction::triggered, this, [this](bool on) {
+        m_followSystem = false;
+        m_followSystemAction->setChecked(false);
+        m_dark = on;
+        applyTheme();
+    });
+
+    m_followSystemAction = new QAction(tr("跟随系统外观"), this);
+    m_followSystemAction->setCheckable(true);
+    m_followSystemAction->setChecked(true);
+    connect(m_followSystemAction, &QAction::triggered, this, [this](bool on) {
+        if (!on) {
+            // 单独的「不跟随」没有意义：要么保持跟随，要么用「深色模式」手动指定
+            m_followSystemAction->setChecked(true);
+            return;
+        }
+        m_followSystem = true;
+        m_dark = systemIsDark();
+        applyTheme();
+    });
 }
 
 // 格式项必须挂在原生菜单上：macOS 的 key equivalent 会在 WKWebView 之前消费
@@ -211,6 +239,9 @@ void WebWindow::createUi()
     viewMenu->addAction(m_tocAction);
     viewMenu->addAction(m_sourceAction);
     viewMenu->addSeparator();
+    viewMenu->addAction(m_darkAction);
+    viewMenu->addAction(m_followSystemAction);
+    viewMenu->addSeparator();
     viewMenu->addAction(m_zoomInAction);
     viewMenu->addAction(m_zoomOutAction);
     viewMenu->addAction(m_zoomResetAction);
@@ -229,6 +260,14 @@ void WebWindow::createUi()
     m_web = createWebEditor(this);
     if (m_web) {
         connect(m_web, &WebEditor::dirtyChanged, this, &WebWindow::markModified);
+        connect(m_web, &WebEditor::statsChanged, this, [this](int cjkChars, int words) {
+            if (m_statsLabel)
+                m_statsLabel->setText(tr("中文 %1 字 · 英文 %2 词").arg(cjkChars).arg(words));
+            if (qEnvironmentVariableIsSet("MOTE_KEYLOG"))
+                std::fprintf(stderr, "QT stats cjk=%d words=%d label=%s\n",
+                             cjkChars, words,
+                             m_statsLabel ? m_statsLabel->text().toUtf8().constData() : "");
+        });
         connect(m_web, &WebEditor::saveRequested, this, &WebWindow::handleSaveRequested);
         connect(m_web, &WebEditor::openRequested, this, &WebWindow::openFileDialog);
         connect(m_web, &WebEditor::dropReceived, this, &WebWindow::handleDroppedText);
@@ -250,8 +289,20 @@ void WebWindow::createUi()
         setCentralWidget(m_placeholder);
     }
 
+    // 字数统计常驻右侧；左侧 showMessage 的临时提示不会覆盖它
+    m_statsLabel = new QLabel(tr("中文 0 字 · 英文 0 词"), this);
+    statusBar()->addPermanentWidget(m_statsLabel);
     statusBar()->showMessage(tr("就绪 · 可以把 .md 文件拖进窗口打开"));
     updateWindowTitle();
+
+    // 跟随系统：系统外观变化时重新下发（Qt 6 的 QStyleHints 会给出 Dark/Light）
+    connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this,
+            [this](Qt::ColorScheme) {
+                if (m_followSystem)
+                    applyTheme();
+            });
+    m_dark = systemIsDark();
+    applyTheme();
 
     // 诊断：把最终生效的菜单快捷键打出来，用于核对是否与系统/其它项冲突
     if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
@@ -411,6 +462,32 @@ void WebWindow::zoomReset()
 {
     if (m_web)
         m_web->resetZoom();
+}
+
+bool WebWindow::systemIsDark()
+{
+    return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+}
+
+void WebWindow::applyTheme()
+{
+    if (m_followSystem)
+        m_dark = systemIsDark();
+    else if (m_darkAction)
+        m_dark = m_darkAction->isChecked();
+    if (m_darkAction)
+        m_darkAction->setChecked(m_dark);
+    if (m_web)
+        m_web->setTheme(m_dark ? QStringLiteral("dark") : QStringLiteral("light"));
+    // 状态栏是原生 Qt 控件，不随网页 CSS 变化：深色时单独上色，避免底部留一条白带。
+    // 工具栏/菜单栏仍交给系统外观，不在这里改（见 README 的降级说明）。
+    if (QStatusBar *bar = statusBar()) {
+        bar->setStyleSheet(m_dark
+            ? QStringLiteral("QStatusBar{background:#1b2027;color:#c3cdd7;}"
+                             "QStatusBar::item{border:0;}"
+                             "QStatusBar QLabel{color:#c3cdd7;background:transparent;}")
+            : QString());
+    }
 }
 
 // 前端是视图状态的唯一来源：菜单勾选与状态栏都按前端回报同步，

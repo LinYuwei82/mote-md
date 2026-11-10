@@ -27,8 +27,13 @@ ui_*.h
 # ---- macOS ----
 .DS_Store
 
-# ---- 截图：仅保留文档引用的三张，其余为调试截图 ----
+# ---- 截图：仅保留文档引用的几张，其余为调试截图 ----
 /screenshots/*
 !/screenshots/imgB-package.png
 !/screenshots/new-confirm.png
 !/screenshots/shortcut-menu-format.png
+!/screenshots/theme-light.png
+!/screenshots/theme-dark.png
+!/screenshots/theme-dark-find.png
+!/screenshots/theme-dark-slash.png
+!/screenshots/theme-light-back.png

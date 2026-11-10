@@ -52,6 +52,8 @@ private:
     void zoomIn();
     void zoomOut();
     void zoomReset();
+    static bool systemIsDark();
+    void applyTheme();
     void applyViewState(bool tocOn, bool sourceOn, qreal zoom);
     void handleSave();
     void handleSaveAs();
@@ -76,12 +78,17 @@ private:
     QAction *m_zoomInAction = nullptr;
     QAction *m_zoomOutAction = nullptr;
     QAction *m_zoomResetAction = nullptr;
+    QAction *m_darkAction = nullptr;
+    QAction *m_followSystemAction = nullptr;
+    QLabel *m_statsLabel = nullptr;
 
     QString m_filePath;
     QString m_lastDir;      // 会话内记住上次另存为的目录
     QString m_lastText;
     bool m_dirty = false;
     bool m_saveAsRequested = false;
+    bool m_followSystem = true;
+    bool m_dark = false;
     qreal m_lastZoom = 1.0;
     AfterSave m_afterSave = AfterSave::None;
     QString m_afterSavePath;

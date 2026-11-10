@@ -554,6 +554,23 @@ void MacWebView::resetZoom()
     evalScript(m_webView, QStringLiteral("window.mote && window.mote.resetZoom();"));
 }
 
+void MacWebView::setTheme(const QString &mode)
+{
+    m_theme = (mode == QLatin1String("dark")) ? QStringLiteral("dark") : QStringLiteral("light");
+    applyTheme();
+}
+
+void MacWebView::applyTheme()
+{
+    // 只切 CSS 变量，不重排正文；页面未就绪时先记住，ready 后由 applyTheme 补发
+    if (!m_pageReady)
+        return;
+    if (keyLogEnabled())
+        std::fprintf(stderr, "NATIVE -> JS theme %s\n", m_theme.toUtf8().constData());
+    evalScript(m_webView, QStringLiteral("window.mote && window.mote.setTheme(%1);")
+                              .arg(quotedJson(m_theme)));
+}
+
 void MacWebView::applyFormat(const QString &action)
 {
     // 格式动作名由 JS 的 formatAction 统一解释，三个入口（菜单快捷键、斜杠、右键）共用
@@ -650,6 +667,7 @@ void MacWebView::handleMessage(const QString &json)
 
     if (type == QLatin1String("ready")) {
         m_pageReady = true;
+        applyTheme();
         emit ready();
         if (m_hasPending)
             injectMarkdown(m_pendingText);
@@ -690,6 +708,11 @@ void MacWebView::handleMessage(const QString &json)
     }
     if (type == QLatin1String("dirty")) {
         emit dirtyChanged(message.value(QStringLiteral("value")).toBool());
+        return;
+    }
+    if (type == QLatin1String("stats")) {
+        emit statsChanged(message.value(QStringLiteral("cjk")).toInt(),
+                          message.value(QStringLiteral("words")).toInt());
         return;
     }
     if (type == QLatin1String("save")) {

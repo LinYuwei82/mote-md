@@ -33,6 +33,8 @@ public:
     virtual void toggleSource() = 0;
     virtual void zoomBy(int steps) = 0;
     virtual void resetZoom() = 0;
+    // 主题：'light' / 'dark'（由外壳决定；跟随系统时由外壳监听系统配色后下发）
+    virtual void setTheme(const QString &mode) = 0;
     // 格式动作（粗体/标题/列表/代码块…）：前端与斜杠菜单、右键「转为」共用同一实现
     virtual void applyFormat(const QString &action) = 0;
 
@@ -40,6 +42,8 @@ signals:
     void ready();
     void viewStateChanged(bool tocOn, bool sourceOn, qreal zoom);
     void dirtyChanged(bool dirty);
+    // 字数统计：CJK 字符数 + 英文单词数（口径见前端 countText，README/PACKAGING 同步说明）
+    void statsChanged(int cjkChars, int words);
     void saveRequested(const QString &text);
     void openRequested();
     void dropReceived(const QString &name, const QString &text);

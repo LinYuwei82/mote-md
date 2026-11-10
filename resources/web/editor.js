@@ -921,6 +921,49 @@
     caretInCellEnd(cells[next]);
   }
 
+  // 任务列表项：复选框只是控件，"[ ] " / "[x] " 仍以零宽标记留在 DOM 里，
+  // 保证 textContent 与 dataset.raw 逐字相等；控件本身无文本，复制不会带出额外字符。
+  function renderListItem(line, lead, index) {
+    var rest = line.slice(lead.length);
+    var task = /^\[([ xX])\]\s+/.exec(rest);
+    var indent = /^\s*/.exec(lead)[0].length;
+    // 缩进子项在扁平列表里用左边距表达层级（原文的前导空格仍由标记承载）
+    var style = indent ? ' style="margin-left:' + (indent * 0.6) + 'em"' : '';
+    var head = (index && INLINE_PROTO ? newlineMarker() : '')
+      + (INLINE_PROTO ? marker(lead, 'bullet') : '');
+    if (!task)
+      return '<li' + style + '>' + head + renderInline(rest) + '</li>';
+    return '<li class="task"' + style + '>' + head
+      // 任务标记不做成原子对象：编辑态它显示为可见文本，光标可以进入并用键盘
+      // 把 [ ] 改成 [x]；渲染态 font-size:0 隐藏，由复选框代替。
+      + (INLINE_PROTO ? '<span class="mk mk-task">' + escapeHtml(task[0]) + '</span>' : '')
+      + '<input type="checkbox" class="task-check" contenteditable="false" tabindex="-1"'
+      + (task[1] === ' ' ? '' : ' checked') + '>'
+      + renderInline(rest.slice(task[0].length)) + '</li>';
+  }
+
+  // 点击复选框：只改写该行的 [ ] / [x]，重新渲染并落一个撤销步。
+  // 控件本身不承载文本，dataset.raw 与 textContent 仍由 .mk 标记保持一致。
+  function toggleTaskCheckbox(box) {
+    var li = box.closest ? box.closest('li') : null;
+    var el = li ? blockOf(li) : null;
+    if (!li || !el || !el.classList.contains('block'))
+      return;
+    var lines = rawOf(el).split('\n');
+    var index = Array.prototype.indexOf.call(el.querySelectorAll('li'), li);
+    if (index < 0 || index >= lines.length)
+      return;
+    var next = lines[index].replace(/^(\s*[-*+]\s+)\[([ xX])\]/, function (all, lead, mark) {
+      return lead + (mark === ' ' ? '[x]' : '[ ]');
+    });
+    if (next === lines[index])
+      return;
+    lines[index] = next;
+    commitHistory();
+    applyRawToBlock(el, lines.join('\n'), undefined, undefined, false);
+    setTimeout(commitHistory, 0);
+  }
+
   function renderBlock(el, raw) {
     raw = String(raw === undefined || raw === null ? '' : raw);
     var kind = 'p';
@@ -949,10 +992,7 @@
       html = '<ul>';
       lines.forEach(function (line, index) {
         var lead = /^\s*[-*+]\s+/.exec(line)[0];
-        // 列表符号留在 DOM 里零宽折叠：编辑态 textContent 才能与原文一致
-        html += '<li>' + (index && INLINE_PROTO ? newlineMarker() : '')
-          + (INLINE_PROTO ? marker(lead, 'bullet') : '')
-          + renderInline(line.slice(lead.length)) + '</li>';
+        html += renderListItem(line, lead, index);
       });
       html += '</ul>';
     } else if (lines.length && lines.every(function (line) { return /^\s*\d+[.)]\s+/.test(line); })) {
@@ -960,9 +1000,7 @@
       html = '<ol>';
       lines.forEach(function (line, index) {
         var lead = /^\s*\d+[.)]\s+/.exec(line)[0];
-        html += '<li>' + (index && INLINE_PROTO ? newlineMarker() : '')
-          + (INLINE_PROTO ? marker(lead, 'bullet') : '')
-          + renderInline(line.slice(lead.length)) + '</li>';
+        html += renderListItem(line, lead, index);
       });
       html += '</ol>';
     } else if (lines.length && lines.every(function (line) { return /^\s*>/.test(line); })) {
@@ -1022,7 +1060,52 @@
     dirtyTimer = setTimeout(function () {
       dirtyTimer = null;
       post({ type: 'dirty', value: currentSource() !== savedText });
+      postWordCount();
     }, 220);
+  }
+
+  // 字数口径（README 与 PACKAGING 同步说明）：
+  // - 中文：CJK 统一表意文字（含扩展 A 与兼容区）逐字计数；
+  // - 英文：连续的字母/数字（允许词内 ' 与 -）算 1 个单词；
+  // - 标点、空白、Markdown 标记符号（# > - * ` [ ](url) 等）不计；
+  // - 代码块正文与表格单元格计入，围栏、行号、语言徽标不计。
+  function plainTextOfRaw(raw) {
+    var text = String(raw === undefined || raw === null ? '' : raw);
+    if (/^```[^\n]*\n[\s\S]*\n?```\s*$/.test(text))
+      return text.replace(/^```[^\n]*\n?/, '').replace(/\n?```\s*$/, '');
+    return text.split('\n').map(function (line) {
+      if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(line))
+        return '';
+      if (line.indexOf('|') >= 0 && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(line))
+        return '';
+      return line
+        .replace(/^\s*#{1,6}\s+/, '')
+        .replace(/^\s*>\s?/, '')
+        .replace(/^\s*[-*+]\s+/, '')
+        .replace(/^\s*\d+[.)]\s+/, '')
+        .replace(/^\[[ xX]\]\s+/, '')
+        .replace(/^\s*\|/, '')
+        .replace(/\|\s*$/, '')
+        .replace(/\s*\|\s*/g, ' ');
+    }).join('\n');
+  }
+
+  function countText(text) {
+    var plain = text
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/`{1,3}([^`]*)`{1,3}/g, '$1')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/~~([^~]+)~~/g, '$1');
+    var cjk = (plain.match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g) || []).length;
+    var words = (plain.match(/[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*/g) || []).length;
+    return { cjk: cjk, words: words };
+  }
+
+  function postWordCount() {
+    var stats = countText(collectBlocks().map(plainTextOfRaw).join('\n'));
+    post({ type: 'stats', cjk: stats.cjk, words: stats.words });
   }
 
   function blockOf(node) {
@@ -1364,6 +1447,7 @@
     }
     // 全部挂载完成、文档结构稳定后再归一化，避免逐个元素强制布局
     normalizeCodeScrolls();
+    postWordCount();
   }
 
   // 绝对偏移 → 所在块下标与块内偏移（undo/redo 恢复选区用）
@@ -1963,6 +2047,16 @@
     document.documentElement.style.fontSize = (16.5 * zoomLevel).toFixed(2) + 'px';
   }
 
+  // 主题只切换 CSS 变量（data-theme），不触碰 DOM 内容与尺寸：
+  // 正文、代码高亮、目录、查找、浮层、状态栏颜色都走同一套变量。
+  function setTheme(mode) {
+    var el = document.documentElement;
+    if (mode === 'dark' || mode === 'light')
+      el.setAttribute('data-theme', mode);
+    else
+      el.removeAttribute('data-theme');
+  }
+
   function clampZoom(value) {
     return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value * 100) / 100));
   }
@@ -2271,6 +2365,21 @@
     leaveEdit(el);
   });
 
+  // 任务复选框：按下时阻止聚焦与选区折叠，点击只切换该行的勾选标记。
+  root.addEventListener('mousedown', function (event) {
+    var box = event.target;
+    if (box && box.classList && box.classList.contains('task-check'))
+      event.preventDefault();
+  });
+
+  root.addEventListener('click', function (event) {
+    var box = event.target;
+    if (!box || !box.classList || !box.classList.contains('task-check'))
+      return;
+    event.preventDefault();
+    toggleTaskCheckbox(box);
+  });
+
   root.addEventListener('input', function (event) {
     if (suppressEvents)
       return;
@@ -2456,6 +2565,12 @@
     selection.addRange(range);
   }
 
+  // 任务标记（[ ] / [x]）在编辑态是可见文本，用户可以像普通文字一样用键盘
+  // 改写它；其余标记仍是不可编辑的原子对象，方向键/退格不进入。
+  function editableMarker(mk) {
+    return !!(mk && mk.classList && mk.classList.contains('mk-task'));
+  }
+
   function markerAdjacent(el, direction) {
     var selection = window.getSelection();
     if (!selection.rangeCount)
@@ -2466,6 +2581,8 @@
     var markers = el.querySelectorAll('.mk');
     for (var i = 0; i < markers.length; i++) {
       var mk = markers[i];
+      if (editableMarker(mk))
+        continue;
       // compareBoundaryPoints 的参数方向容易搞反，这里用两个折叠 Range +
       // comparePoint 明确表达“光标在标记起点/终点的哪一侧”。
       var edge = document.createRange();
@@ -2512,7 +2629,8 @@
     if (!range.collapsed || range.startContainer.nodeType !== 3)
       return null;
     var node = range.startContainer;
-    return node.parentNode && node.parentNode.closest ? node.parentNode.closest('.mk') : null;
+    var mk = node.parentNode && node.parentNode.closest ? node.parentNode.closest('.mk') : null;
+    return editableMarker(mk) ? null : mk;
   }
 
   // 标记（contenteditable=false 的原子对象）紧贴光标时，WebKit 的原生退格/删除
@@ -2884,6 +3002,11 @@
       return;
     for (var i = 0; i < junk.length; i++) {
       if (junk[i].closest && junk[i].closest('table'))
+        continue;
+      // 列表符号（- / 1.）与任务标记（[ ] / [x]）是 Markdown 原文的一部分：
+      // 复制出去必须仍是标准任务列表，只有行内标记按可见文本剔除。
+      if (junk[i].classList && (junk[i].classList.contains('mk-bullet')
+          || junk[i].classList.contains('mk-task')))
         continue;
       junk[i].parentNode.removeChild(junk[i]);
     }
@@ -4437,6 +4560,7 @@
   }, true);
 
   window.mote = {
+    setTheme: setTheme,
     setMarkdown: function (text) {
       closeSlash(false);
       closeTurnMenu();

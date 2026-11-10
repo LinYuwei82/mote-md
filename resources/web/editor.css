@@ -1,9 +1,42 @@
 :root {
+  color-scheme: light;
   --text: #1d2129;
+  --text-strong: #24303d;
+  --text-soft: #4a5563;
+  --heading: #0f172a;
   --muted: #8a94a0;
-  --code-bg: #f4f6f8;
+  --muted-2: #9aa3ad;
+  --muted-3: #98a2ae;
+  --muted-4: #57606a;
+  --faint: #a9b4c1;
+  --faint-2: #b3bdc9;
+  --faint-3: #c3ccd6;
+  --bg: #ffffff;
+  --bg-soft: #fbfcfd;
+  --bg-code: #f4f6f8;
+  --bg-inline-code: #eef1f5;
+  --bg-th: #f6f8fa;
+  --bg-hover: #f3f6f9;
+  --bg-active: #eaf1fb;
+  --bg-toc-active: #e8f0fe;
   --border: #d0d7de;
+  --border-soft: #dfe4ea;
+  --border-hair: #e6e9ee;
+  --border-toc: #eceff3;
+  --border-hover: #e1e6ec;
+  --border-ring: #eef1f4;
+  --border-focus: #7aa7e0;
   --accent: #2f6fed;
+  --accent-strong: #1a56c4;
+  --note: #b26a00;
+  --check-bg: #ffffff;
+  --check-mark: #ffffff;
+  --shadow-bar: 0 6px 20px rgba(24, 34, 48, 0.14);
+  --shadow-menu: 0 10px 28px rgba(24, 34, 48, 0.18);
+  --find-hit: rgba(255, 214, 64, 0.38);
+  --find-hit-active: rgba(255, 166, 0, 0.5);
+  --find-hit-ring: rgba(196, 118, 0, 0.55);
+  --focus-ring: rgba(122, 167, 224, 0.18);
   --tok-keyword: #cf222e;
   --tok-type: #953800;
   --tok-function: #8250df;
@@ -11,6 +44,54 @@
   --tok-comment: #6e7781;
   --tok-number: #0550ae;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* 深色配色：只覆盖变量，不改变任何尺寸、间距或字体，因此切换主题不会移动块。 */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --text: #d5dde5;
+  --text-strong: #e6edf3;
+  --text-soft: #aeb9c4;
+  --heading: #f0f6fc;
+  --muted: #8b98a5;
+  --muted-2: #7e8b98;
+  --muted-3: #8b98a5;
+  --muted-4: #a3b0bd;
+  --faint: #5b6773;
+  --faint-2: #66727e;
+  --faint-3: #4e5a66;
+  --bg: #15191e;
+  --bg-soft: #191e24;
+  --bg-code: #1c2228;
+  --bg-inline-code: #242c34;
+  --bg-th: #1e252c;
+  --bg-hover: #232b33;
+  --bg-active: #22303f;
+  --bg-toc-active: #1f2c3c;
+  --border: #39424d;
+  --border-soft: #2f3841;
+  --border-hair: #29313a;
+  --border-toc: #232a32;
+  --border-hover: #3d4753;
+  --border-ring: #262e36;
+  --border-focus: #6ea8ff;
+  --accent: #6ea8ff;
+  --accent-strong: #9cc4ff;
+  --note: #e3b341;
+  --check-bg: #15191e;
+  --check-mark: #0f1419;
+  --shadow-bar: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --shadow-menu: 0 10px 28px rgba(0, 0, 0, 0.55);
+  --find-hit: rgba(255, 214, 64, 0.22);
+  --find-hit-active: rgba(255, 166, 0, 0.32);
+  --find-hit-ring: rgba(255, 196, 80, 0.6);
+  --focus-ring: rgba(110, 168, 255, 0.25);
+  --tok-keyword: #ff7b8a;
+  --tok-type: #ffb86b;
+  --tok-function: #d2a8ff;
+  --tok-string: #9edc9e;
+  --tok-comment: #8b98a5;
+  --tok-number: #8ec7ff;
 }
 
 * { box-sizing: border-box; }
@@ -21,7 +102,7 @@ html { font-size: 16.5px; }
 html, body {
   margin: 0;
   min-height: 100%;
-  background: #ffffff;
+  background: var(--bg);
 }
 
 body {
@@ -57,8 +138,8 @@ body.source-mode #layout { grid-template-columns: 0 minmax(0, 1fr); }
   height: 100vh;
   overflow-y: auto;
   padding: 2.4rem 0.7rem 2rem 1.1rem;
-  border-right: 1px solid #eceff3;
-  background: #fbfcfd;
+  border-right: 1px solid var(--border-toc);
+  background: var(--bg-soft);
   opacity: 0;
   pointer-events: none;
 }
@@ -73,7 +154,7 @@ body.source-mode #toc { display: none; }
 #toc-title {
   font-size: 0.72rem;
   letter-spacing: 0.08em;
-  color: #9aa3ad;
+  color: var(--muted-2);
   margin: 0 0 0.7rem 0.5rem;
 }
 
@@ -81,7 +162,7 @@ body.source-mode #toc { display: none; }
   display: block;
   padding: 0.22rem 0.5rem;
   border-radius: 4px;
-  color: #57606a;
+  color: var(--muted-4);
   font-size: 0.82rem;
   line-height: 1.5;
   text-decoration: none;
@@ -90,12 +171,12 @@ body.source-mode #toc { display: none; }
   white-space: nowrap;
 }
 
-.toc-item:hover { background: #eef2f7; color: #1d2129; }
-.toc-item.active { background: #e8f0fe; color: #1a56c4; }
+.toc-item:hover { background: var(--bg-hover); color: var(--text); }
+.toc-item.active { background: var(--bg-toc-active); color: var(--accent-strong); }
 
 .toc-empty {
   padding: 0.4rem 0.6rem;
-  color: #9aa3ad;
+  color: var(--muted-2);
   font-size: 0.8rem;
 }
 
@@ -104,7 +185,7 @@ body.source-mode #toc { display: none; }
   margin: 0 auto;
   padding: 2.7rem 3.4rem 8.5rem;
   outline: none;
-  caret-color: #1d2129;
+  caret-color: var(--text);
 }
 
 /* 源码模式：整篇纯 Markdown，占据整窗，内部滚动 */
@@ -119,7 +200,7 @@ body.source-mode #source {
   border: 0;
   outline: none;
   resize: none;
-  background: #ffffff;
+  background: var(--bg);
   color: var(--text);
   font-family: var(--mono);
   font-weight: 300;
@@ -142,13 +223,13 @@ body.source-mode #editor { display: none; }
 }
 
 .block:focus {
-  background: #fafbfc;
-  box-shadow: 0 0 0 1px #eef1f4;
+  background: var(--bg-soft);
+  box-shadow: 0 0 0 1px var(--border-ring);
 }
 
 .block.editing {
   font-family: -apple-system, "PingFang SC", sans-serif;
-  color: #1d2129;
+  color: var(--text);
 }
 
 /* 回退模式（MOTE_INLINE_PROTO=0）下，代码块仍整块替换成原始 Markdown：
@@ -159,7 +240,7 @@ body:not(.inline-proto) .block.editing.code {
   font-weight: 300;
   font-size: 0.85rem;
   line-height: 1.45;
-  background: var(--code-bg);
+  background: var(--bg-code);
   padding: 0.72rem 1rem;
   white-space: pre-wrap;
 }
@@ -168,7 +249,7 @@ body:not(.inline-proto) .block.editing.code {
   margin: 1.1em 0 0.5em;
   font-weight: 600;
   line-height: 1.35;
-  color: #0f172a;
+  color: var(--heading);
 }
 
 .block h1 { font-size: 1.9em; }
@@ -197,7 +278,7 @@ code {
   font-family: var(--mono);
   font-weight: 300;
   font-size: 0.85em;
-  background: #eef1f5;
+  background: var(--bg-inline-code);
   border-radius: 3px;
   padding: 0.15em 0.35em;
 }
@@ -208,7 +289,7 @@ pre.code-block {
   align-items: stretch;
   margin: 0.9em 0 1.1em;
   padding: 0;
-  background: var(--code-bg);
+  background: var(--bg-code);
   border-radius: 4px;
 }
 
@@ -226,7 +307,7 @@ pre.code-block {
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #8a94a0;
+  color: var(--muted);
   font-family: var(--mono);
   font-weight: 400;
   font-size: 0.66rem;
@@ -240,20 +321,20 @@ pre.code-block {
 
 .code-lang:hover {
   opacity: 1;
-  border-color: #e1e6ec;
-  background: #ffffff;
+  border-color: var(--border-hover);
+  background: var(--bg);
 }
 
 .code-lang:empty::before {
   content: 'lang';
-  color: #c3ccd6;
+  color: var(--faint-3);
 }
 
 /* 编辑态：完全显形、可选中（光标要能落进来才能改），位置不变 */
 body.inline-proto .block.code.editing .code-lang {
   opacity: 1;
-  border-color: #e1e6ec;
-  background: #ffffff;
+  border-color: var(--border-hover);
+  background: var(--bg);
   -webkit-user-select: text;
   user-select: text;
 }
@@ -273,10 +354,10 @@ body.inline-proto .block.code.editing .code-lang {
 .gutter {
   flex: 0 0 2.8rem;
   padding: 0.72rem 0.85rem 0.72rem 0;
-  border-right: 1px solid #dfe4ea;
-  background: var(--code-bg);
+  border-right: 1px solid var(--border-soft);
+  background: var(--bg-code);
   text-align: right;
-  color: #9aa3ad;
+  color: var(--muted-2);
   font-family: var(--mono);
   font-size: 0.72rem;
   line-height: 1.2325rem;
@@ -304,8 +385,8 @@ pre.code-block code {
 blockquote {
   margin: 0.6em 0 1em;
   padding: 0.1em 0 0.1em 1em;
-  border-left: 3px solid #dfe4ea;
-  color: #57606a;
+  border-left: 3px solid var(--border-soft);
+  color: var(--muted-4);
 }
 
 ul, ol { margin: 0.4em 0 0.9em; padding-left: 1.6em; }
@@ -313,7 +394,7 @@ li { margin: 0.15em 0; }
 
 hr {
   border: none;
-  border-top: 1px solid #e6e9ee;
+  border-top: 1px solid var(--border-hair);
   margin: 1.6em 0;
 }
 
@@ -327,8 +408,8 @@ hr {
   top: calc(2px + 1.6rem);   /* .block 的 padding-top + hr 的 margin-top */
   transform: translateY(-50%);
   padding: 0 0.3em;
-  background: #ffffff;
-  color: #a9b4c1;
+  background: var(--bg);
+  color: var(--faint);
   font-family: var(--mono);
   font-size: 0.8rem;
   font-weight: 300;
@@ -355,7 +436,7 @@ th, td {
   white-space: normal;
 }
 
-th { background: #f6f8fa; font-weight: 600; }
+th { background: var(--bg-th); font-weight: 600; }
 
 /* 对齐行（|---|:--:|）只是原文的容器：不参与排版，但按 DOM 顺序夹在表头与
    表体之间，textContent 才能逐字拼回原始 Markdown。 */
@@ -389,7 +470,7 @@ img {
   line-height: 1;
   letter-spacing: 0;
   white-space: pre;
-  color: #a9b4c1;
+  color: var(--faint);
   opacity: 0;
   pointer-events: none;
   -webkit-user-select: none;
@@ -409,13 +490,65 @@ body.inline-proto .block.editing .mk.mk-live > i { opacity: 1; }
   letter-spacing: 0;
 }
 
+/* ---------------- 任务列表 ----------------
+   复选框只是控件：不进入 textContent，也不参与复制。尺寸与行高对齐，
+   点击由 JS 改写 dataset.raw 里的 [ ] / [x]，因此渲染态与原文始终一致。 */
+.block li > input.task-check {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.92em;
+  height: 0.92em;
+  margin: 0 0.45em 0 0.05em;
+  vertical-align: -0.08em;
+  border: 1.5px solid var(--border);
+  border-radius: 0.22em;
+  background: var(--check-bg);
+  cursor: pointer;
+  position: relative;
+}
+
+.block li > input.task-check:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.block li > input.task-check:checked::after {
+  content: '';
+  position: absolute;
+  left: 0.28em;
+  top: 0.08em;
+  width: 0.2em;
+  height: 0.42em;
+  border: solid var(--check-mark);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* 编辑态：隐藏控件，把零宽标记还原成可见文本，键盘可直接把 [ ] 改成 [x] */
+.block.editing li > input.task-check { display: none; }
+
+.block.editing .mk.mk-task { font-size: inherit; }
+
+.block.editing .mk.mk-task > i {
+  position: static;
+  opacity: 1;
+  font-size: inherit;
+  font-family: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  bottom: auto;
+  left: auto;
+  right: auto;
+}
+
 /* 标题标记挂在标题文字左侧（进入父级左侧留白），零宽、不推文字。
    只靠 right:0 让右边缘贴住零宽锚点，元素整体向左展开，不能再叠加 translate。 */
 .mk.mk-head > i {
   left: auto;
   right: 0;
   bottom: -0.16em;
-  color: #b3bdc9;
+  color: var(--faint-2);
 }
 
 body.inline-proto .block.h1 .mk.mk-head > i { font-size: 1.05rem; }
@@ -462,15 +595,15 @@ body.inline-proto .block.h6.editing {
   align-items: center;
   gap: 6px;
   padding: 5px 6px 5px 9px;
-  border: 1px solid #dde3ea;
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 6px 20px rgba(24, 34, 48, 0.14);
+  background: var(--bg);
+  box-shadow: var(--shadow-bar);
   font-family: -apple-system, "PingFang SC", sans-serif;
   font-size: 12px;
   font-weight: 400;
   line-height: 1.4;
-  color: #4a5563;
+  color: var(--text-soft);
 }
 
 #find-input,
@@ -478,12 +611,12 @@ body.inline-proto .block.h6.editing {
   width: 168px;
   margin: 0;
   padding: 3px 6px;
-  border: 1px solid #dfe4ea;
+  border: 1px solid var(--border-soft);
   border-radius: 5px;
-  background: #ffffff;
+  background: var(--bg);
   font: inherit;
   font-size: 12px;
-  color: #24303d;
+  color: var(--text-strong);
   outline: none;
 }
 
@@ -493,20 +626,20 @@ body.inline-proto .block.h6.editing {
 
 #find-input:focus,
 #find-replace:focus {
-  border-color: #7aa7e0;
-  box-shadow: 0 0 0 2px rgba(122, 167, 224, 0.18);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 #find-count {
   min-width: 42px;
   text-align: center;
-  color: #8a94a0;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
 #find-note {
   max-width: 260px;
-  color: #b26a00;
+  color: var(--note);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -519,7 +652,7 @@ body.inline-proto .block.h6.editing {
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
-  color: #64707d;
+  color: var(--muted-4);
   font: inherit;
   font-size: 12px;
   line-height: 1;
@@ -527,9 +660,9 @@ body.inline-proto .block.h6.editing {
 }
 
 #find-bar button:hover {
-  border-color: #dfe4ea;
-  background: #f3f6f9;
-  color: #24303d;
+  border-color: var(--border-soft);
+  background: var(--bg-hover);
+  color: var(--text-strong);
 }
 
 #find-layer {
@@ -545,12 +678,12 @@ body.inline-proto .block.h6.editing {
 .find-hit {
   position: absolute;
   border-radius: 2px;
-  background: rgba(255, 214, 64, 0.38);
+  background: var(--find-hit);
 }
 
 .find-hit.active {
-  background: rgba(255, 166, 0, 0.5);
-  box-shadow: 0 0 0 1px rgba(196, 118, 0, 0.55);
+  background: var(--find-hit-active);
+  box-shadow: 0 0 0 1px var(--find-hit-ring);
 }
 
 
@@ -565,7 +698,7 @@ body.inline-proto .block.h6.editing {
   position: absolute;
   left: 0;
   top: 0;
-  color: #b3bbc5;
+  color: var(--faint-2);
   pointer-events: none;
   user-select: none;
 }
@@ -579,14 +712,14 @@ body.inline-proto .block.h6.editing {
   max-height: 320px;
   overflow-y: auto;
   padding: 4px;
-  border: 1px solid #dde3ea;
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 10px 28px rgba(24, 34, 48, 0.18);
+  background: var(--bg);
+  box-shadow: var(--shadow-menu);
   font-family: -apple-system, "PingFang SC", sans-serif;
   font-size: 12.5px;
   line-height: 1.35;
-  color: #303a45;
+  color: var(--text);
 }
 
 .slash-item {
@@ -600,18 +733,18 @@ body.inline-proto .block.h6.editing {
 }
 
 .slash-item.active {
-  background: #eaf1fb;
+  background: var(--bg-active);
 }
 
 .slash-hint {
-  color: #98a2ae;
+  color: var(--muted-3);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11.5px;
 }
 
 .slash-empty {
   padding: 6px 8px;
-  color: #98a2ae;
+  color: var(--muted-3);
 }
 
 #turn-menu {
@@ -620,7 +753,7 @@ body.inline-proto .block.h6.editing {
 
 .turn-title {
   padding: 3px 8px 4px;
-  color: #98a2ae;
+  color: var(--muted-3);
   font-size: 11px;
   letter-spacing: 0.04em;
 }
@@ -632,5 +765,5 @@ body.inline-proto .block.h6.editing {
 }
 
 .turn-item:hover {
-  background: #eaf1fb;
+  background: var(--bg-active);
 }
