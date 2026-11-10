@@ -3,17 +3,21 @@
 # 用法：
 #   bash packaging/package_macos.sh           # 只出 dist/Mote-macOS.zip（原有流程）
 #   bash packaging/package_macos.sh --dmg     # 额外出 dist/Mote-macOS-<版本>.dmg（拖拽安装）
+#   bash packaging/package_macos.sh --clean-dist   # 先清空 dist/（默认保留其它旧产物）
 set -euo pipefail
 
 WITH_DMG=0
+CLEAN_DIST=0
 for arg in "$@"; do
     case "$arg" in
         --dmg) WITH_DMG=1 ;;
+        --clean-dist) CLEAN_DIST=1 ;;
         -h|--help)
-            echo "用法: bash packaging/package_macos.sh [--dmg]"
-            echo "  --dmg  在 zip 之外再产出一个拖拽安装式 DMG（卷标 Mote，UDZO 压缩）"
+            echo "用法: bash packaging/package_macos.sh [--dmg] [--clean-dist]"
+            echo "  --dmg         在 zip 之外再产出一个拖拽安装式 DMG（卷标 Mote，UDZO 压缩）"
+            echo "  --clean-dist  先清空 dist/（默认只覆盖同名产物，保留 dist 里的其它文件）"
             exit 0 ;;
-        *) echo "未知参数：${arg}（可用：--dmg）"; exit 2 ;;
+        *) echo "未知参数：${arg}（可用：--dmg, --clean-dist）"; exit 2 ;;
     esac
 done
 
@@ -35,8 +39,15 @@ MACDEPLOYQT="$QT_BIN/macdeployqt"
 [ -x "$MACDEPLOYQT" ] || { echo "错误：找不到 macdeployqt（$MACDEPLOYQT）"; exit 1; }
 
 echo "==> 1/${TOTAL} 清理并创建影子构建目录"
-rm -rf "$BUILD_DIR" "$DIST_DIR"
-mkdir -p "$BUILD_DIR" "$DIST_DIR"
+rm -rf "$BUILD_DIR"
+mkdir -p "$BUILD_DIR"
+# dist/ 里可能有上一次的产物（甚至手工保留的 DMG）。默认只覆盖本次产出的同名文件，
+# 要全清得显式加 --clean-dist——否则只打一次 zip 就会把 DMG 一起删掉。
+if [ "$CLEAN_DIST" -eq 1 ]; then
+    echo "    清理 ${DIST_DIR}（--clean-dist）"
+    rm -rf "$DIST_DIR"
+fi
+mkdir -p "$DIST_DIR"
 
 echo "==> 2/${TOTAL} qmake + make (Release)"
 cd "$BUILD_DIR"

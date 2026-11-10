@@ -51,6 +51,9 @@ UsePreviousAppDir=yes
 ; 安装前检测正在运行的 Mote（Restart Manager）并提示关闭
 CloseApplications=yes
 RestartApplications=no
+; 改动注册表关联后通知资源管理器刷新 .md 的图标与右键菜单
+; （安装阶段的刷新由本指令负责，卸载阶段的改动由 [Code] 里的 SHChangeNotify 补上）
+ChangesAssociations=yes
 
 [Languages]
 ; 本机 Inno Setup 未附带中文语言文件，向导界面使用内置英文；
@@ -100,6 +103,14 @@ const
   UserChoiceLatestKey = FileExtsKey + '\UserChoiceLatest';
   UserChoiceLatestProgIdKey = UserChoiceLatestKey + '\ProgId';
   UserChoiceKey = FileExtsKey + '\UserChoice';
+  // SHChangeNotify 的事件/标志：关联变化 + 传 PIDL
+  SHCNE_ASSOCCHANGED = $08000000;
+  SHCNF_IDLIST = $0000;
+
+// 卸载时我们自己改的是注册表，ChangesAssociations 只覆盖安装阶段，
+// 这里显式通知一次，让 .md 图标与右键菜单立刻恢复。
+procedure SHChangeNotify(wEventId: Integer; uFlags: Cardinal; dwItem1, dwItem2: Cardinal);
+  external 'SHChangeNotify@shell32.dll stdcall';
 
 var
   BackupDone: Boolean;
@@ -202,6 +213,9 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if (CurStep = ssInstall) and WizardIsTaskSelected('associatemd') then
     BackupMdAssociation();
+  // 关联写完后通知资源管理器，让 .md 图标与右键菜单立即生效
+  if (CurStep = ssPostInstall) and WizardIsTaskSelected('associatemd') then
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, 0, 0);
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -229,13 +243,24 @@ begin
     end;
 
     // ---- FileExts\.md\UserChoice ----
-    // 安装时删掉的键在这里按备份原样重建（ProgID + Hash）
-    if RegQueryDWordValue(HKCU, BackupKey, 'HadUserChoice', Had) and (Had <> 0)
-       and RegQueryStringValue(HKCU, BackupKey, 'UserChoiceProgId', Previous) then
+    // 与上面一致：只有当前值仍指向本程序时才处理；用户后来换过默认程序就不碰。
+    // 写回 ProgID 失败时不写 Hash，避免留下 ProgID 与 Hash 不匹配的坏键。
+    if RegQueryStringValue(HKCU, UserChoiceKey, 'ProgId', Current) and (Current = '{#MyAppProgId}') then
     begin
-      RegWriteStringValue(HKCU, UserChoiceKey, 'ProgId', Previous);
-      if RegQueryBinaryValue(HKCU, BackupKey, 'UserChoiceHash', Hash) then
-        RegWriteBinaryValue(HKCU, UserChoiceKey, 'Hash', Hash);
+      if RegQueryDWordValue(HKCU, BackupKey, 'HadUserChoice', Had) and (Had <> 0)
+         and RegQueryStringValue(HKCU, BackupKey, 'UserChoiceProgId', Previous) then
+      begin
+        if RegWriteStringValue(HKCU, UserChoiceKey, 'ProgId', Previous) then
+        begin
+          if RegQueryBinaryValue(HKCU, BackupKey, 'UserChoiceHash', Hash) then
+            RegWriteBinaryValue(HKCU, UserChoiceKey, 'Hash', Hash);
+        end;
+      end
+      else
+      begin
+        RegDeleteValue(HKCU, UserChoiceKey, 'ProgId');
+        RegDeleteKeyIfEmpty(HKCU, UserChoiceKey);
+      end;
     end;
 
     // ---- Software\Classes\.md 默认值 ----
@@ -251,6 +276,8 @@ begin
 
     RegDeleteKeyIncludingSubkeys(HKCU, BackupKey);
     RegDeleteKeyIfEmpty(HKCU, 'Software\Mote');
+    // 关联已还原，通知资源管理器刷新图标与右键菜单
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, 0, 0);
   end;
 end;
 
@@ -265,6 +292,8 @@ begin
               'Mote 的编辑界面依赖该系统组件，缺少时只能显示提示页。' + #13#10 +
               '是否现在打开 Evergreen 下载页面？安装完成后重新运行本安装程序即可。',
               mbConfirmation, MB_YESNO) = IDYES then
-      ShellExec('open', '{#MyAppUrl}', '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+      if not ShellExec('open', '{#MyAppUrl}', '', '', SW_SHOWNORMAL, ewNoWait, ResultCode) then
+        MsgBox('无法自动打开浏览器。请手动访问：' + #13#10 + '{#MyAppUrl}',
+               mbInformation, MB_OK);
   end;
 end;

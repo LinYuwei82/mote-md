@@ -59,10 +59,12 @@ win32 {
     # COM 基础库：CoTaskMemFree / IID_IUnknown；shell32 提供 CF_HDROP 解析
     LIBS += -lole32 -luuid -lshell32
 
-    # 绿色版/开发运行都需要 exe 同级的 WebView2Loader.dll
+    # 绿色版/开发运行都需要 exe 同级的 WebView2Loader.dll。
+    # 工程是 release 单配置（CONFIG -= debug_and_release），Windows 下的可执行文件
+    # 落在 $$OUT_PWD/release/，所以不能拷到 $$OUT_PWD 根目录。
     WEBVIEW2_LOADER = $$WEBVIEW2_SDK/build/native/x64/WebView2Loader.dll
     exists($$WEBVIEW2_LOADER) {
-        QMAKE_POST_LINK += $$QMAKE_COPY /Y \"$$shell_path($$WEBVIEW2_LOADER)\" \"$$shell_path($$OUT_PWD)\"
+        QMAKE_POST_LINK += $$QMAKE_COPY /Y \"$$shell_path($$WEBVIEW2_LOADER)\" \"$$shell_path($$OUT_PWD/release)\"
     }
 }
 

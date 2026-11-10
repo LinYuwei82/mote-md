@@ -17,8 +17,26 @@ if ($pro -notmatch '(?m)^\s*VERSION\s*=\s*([0-9]+(?:\.[0-9]+)+)') {
 $version = $Matches[1]
 
 $greenDir = Join-Path $root "dist\Mote-Windows"
-if (-not (Test-Path (Join-Path $greenDir "Mote.exe"))) {
+if (-not (Test-Path $greenDir)) {
     throw "缺少绿色版目录 dist\Mote-Windows，请先运行 packaging\package_windows.bat"
+}
+
+# 「装得上、跑不起来」是这里代价最高的错误：Qt 运行时或 WebView2Loader 缺任何一个，
+# 安装包照样能生成、能安装，但双击后只会闪退或弹系统缺 DLL 对话框。
+# 所以把运行必需的文件逐个断言，缺一项就在这里失败。
+$requiredFiles = @(
+    "Mote.exe",
+    "WebView2Loader.dll",
+    "Qt6Core.dll",
+    "Qt6Gui.dll",
+    "Qt6Widgets.dll",
+    "platforms\qwindows.dll"
+)
+foreach ($rel in $requiredFiles) {
+    $full = Join-Path $greenDir $rel
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) {
+        throw "绿色版缺少运行必需文件：$rel（$full）。请重新运行 packaging\package_windows.bat"
+    }
 }
 
 $candidates = @(
