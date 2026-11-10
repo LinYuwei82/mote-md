@@ -1721,14 +1721,32 @@
     return cell && el.contains(cell) && !cell.closest('.tbl-align') ? cell : null;
   }
 
-  // 光标在单元格可见文本里的位置（标记不计入）。返回 null 表示不在文本节点上。
+  // 光标在单元格可见文本里的位置（标记不计入）。offset 为 -1 表示判断不了
+  // （例如光标落进了不可编辑标记内部），调用方按“不是边界”处理。
   function cellCaretInfo(cell, range) {
     var nodes = editableTextNodes(cell);
     var total = 0;
-    for (var i = 0; i < nodes.length; i++) {
-      if (nodes[i] === range.startContainer)
-        return { offset: total + range.startOffset, total: total + nodes[i].nodeValue.length };
+    var i;
+    for (i = 0; i < nodes.length; i++)
       total += nodes[i].nodeValue.length;
+    // 容器是元素节点时（空格子里 WebKit 常把光标放在子节点之间，比如尾部 |
+    // 标记旁），按边界比较数出光标左侧的可见字符数，同样能判断格首/格尾。
+    if (range.startContainer.nodeType === 1) {
+      var offset = 0;
+      for (i = 0; i < nodes.length; i++) {
+        var probe = document.createRange();
+        probe.selectNodeContents(nodes[i]);
+        if (probe.compareBoundaryPoints(Range.END_TO_END, range) > 0)
+          break;
+        offset += nodes[i].nodeValue.length;
+      }
+      return { offset: offset, total: total };
+    }
+    var acc = 0;
+    for (i = 0; i < nodes.length; i++) {
+      if (nodes[i] === range.startContainer)
+        return { offset: acc + range.startOffset, total: total };
+      acc += nodes[i].nodeValue.length;
     }
     return { offset: -1, total: total };
   }
@@ -3002,12 +3020,14 @@
         collapseAt(neighbour, backward);
         return;
       }
-      // 标记在光标前方挡住原生删除时，自己删掉光标另一侧的可见字符
+      // 标记在光标前方挡住原生删除时，自己删掉光标另一侧的可见字符。
+      // 删不动也必须 preventDefault：原生删除会紧贴着 contenteditable=false
+      // 的原子对象执行，可能把它或相邻结构一起带走。
       var blocking = markerAdjacent(el, backward ? 1 : -1);
       if (blocking) {
+        event.preventDefault();
         var range = window.getSelection().getRangeAt(0);
-        if (deleteVisibleChar(el, range, backward, blocking))
-          event.preventDefault();
+        deleteVisibleChar(el, range, backward, blocking);
         return;
       }
     }
