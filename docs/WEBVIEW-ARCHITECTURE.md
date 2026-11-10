@@ -196,7 +196,7 @@ base64 后 `post({type:'image', source:'paste', …})`；原生解码写盘并�
      或在 JS 里做 `postMessage` 适配（`window.webkit ? ... : window.chrome.webview...`）；
   3. 把 `WebMessageReceived` 映射到同样的 `dirty/save/open/error` 信号。
 - 前端不依赖 WebKit 专有 API（除消息发送适配），Windows 侧无需改编辑器逻辑。
-- 本机无 Windows 环境，WebView2 未实现、未编译、未验证。
+- Windows 侧已按上述方式实现（`src/webview_win.cpp`、`src/webview_win_drop.cpp`），并在 Windows 实机验证。
 
 ## 3. 前端编辑器模型
 
@@ -309,7 +309,8 @@ base64 后 `post({type:'image', source:'paste', …})`；原生解码写盘并�
 3. 撤销/重做覆盖文字输入、删除、回车分块、退格合并、粘贴、输入法上屏，并跨模式连续；
    尚未覆盖表格单元格内的结构化编辑（表格仍以源码文本编辑）。
 4. 空行数量归并、上下方向键不跨块。
-5. Windows WebView2 未实现、未验证；`MOTE_EVAL`/`MOTE_KEYLOG` 诊断钩子只在本机验证过。
+5. Windows WebView2 已实现并在实机验证；`MOTE_EVAL`/`MOTE_SNAPSHOT`/`MOTE_DROP` 仍是
+   macOS 侧工具，Windows 侧用 `MOTE_KEYLOG`（日志以 `WIN ` 前缀区分）。
 6. 大文档性能未测：前端为全量重排，未做虚拟滚动。
 7. 真实物理键盘的最终行为仍需人工确认的项：`Cmd+C` 实际写入系统剪贴板的内容（脚本无法
    伪造用户手势，已验证的是 `copy` 事件的文本构造结果）。

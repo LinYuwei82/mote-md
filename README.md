@@ -4,7 +4,7 @@
 
 ## 功能
 
-按当前实际已实现的能力（macOS）：
+按当前实际已实现的能力（macOS 与 Windows 提供同一套；Windows 上快捷键把 `Cmd` 换成 `Ctrl`）：
 
 - **所见即所得块编辑**：正文按空行切块，点击某块即就地显示该块的 Markdown 原文，其余块保持排版效果；离开该块后按原文重新渲染。
 - **代码块**：围栏代码块带语法高亮（内置轻量高亮，无第三方解析/高亮库）、左侧行号与语言徽标；点击徽标可改语言。
@@ -49,8 +49,8 @@ bash packaging/package_macos.sh
 # 产物：dist/Mote-macOS.zip（含 Mote.app、samples/、licenses/）
 ```
 
-Windows 打包脚本已提供（`packaging/package_windows.bat`），但宿主层未实现，详见
-[packaging/WINDOWS-FROM-MACOS.md](packaging/WINDOWS-FROM-MACOS.md)。
+Windows 用 `packaging/package_windows.bat` 构建并产出绿色版 zip，安装包另由
+`packaging/build_installer.ps1` 生成，详见 [packaging/WINDOWS-FROM-MACOS.md](packaging/WINDOWS-FROM-MACOS.md)。
 
 ## 快捷键
 
@@ -74,7 +74,6 @@ Windows 打包脚本已提供（`packaging/package_windows.bat`），但宿主�
 
 ## 已知限制
 
-- **Windows 宿主层未实现**：非 macOS 下 `createWebEditor()` 返回 `nullptr`，外壳能启动并给出提示，但正文不渲染。
 - **仅 arm64**：macOS 包只含 arm64 切片，Intel Mac 需自行重新构建。
 - **Ad-hoc 签名、未公证**：从网络下载的 zip 首次打开可能被 Gatekeeper 拦截，需右键「打开」。
 - **包体积主要来自 Qt ICU**：`libicudata` 约 32 MB，压缩后整个 zip 约 30 MB。
@@ -97,7 +96,8 @@ src/                     Qt 外壳与 WebView 桥接
   webwindow.*            新架构主窗口：菜单、文件对话框、保存、拖拽
   webview.h              WebView 抽象接口
   macwebview.mm          macOS WKWebView 实现
-  webview_stub.cpp       Windows / Linux 占位（当前返回 nullptr）
+  webview_win.*          Windows WebView2 实现（webview_win_drop.* 负责系统拖放）
+  webview_stub.cpp       仅非 macOS / 非 Windows 平台的占位（返回 nullptr）
   mainwindow.*           旧 Qt 文本引擎主窗口（仅回退用）
   previewview.*          旧 Qt 文本引擎的预览视图（仅回退用）
   codehighlighter.*      旧 Qt 文本引擎的代码着色（仅回退用）

@@ -52,7 +52,8 @@ dist/Mote-macOS.zip                 # 30 MB（30,919,184 字节）
 └── Mote-macOS/
     ├── Mote.app/                   # 解压后 75 MB，内含 Qt 框架、插件与代码字体
     ├── licenses/
-    │   └── JetBrainsMono-OFL.txt             # 内置代码字体的 SIL OFL 授权
+    │   ├── JetBrainsMono-OFL.txt             # 内置代码字体的 SIL OFL 授权
+    │   └── LICENSE-AGPL-3.0.txt              # 项目自身的 AGPL-3.0 全文
     └── samples/
         ├── welcome.md
         └── sample-diagram.png
@@ -612,7 +613,7 @@ bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-ma
 ## 2. Windows：脚本已提供，**需在 Windows 机器上执行**
 
 > 本节所有内容均为操作说明。当前 macOS 机器无法编译 Windows 程序，
-> 因此 `Mote.exe` 与 Windows zip **尚未生成**。
+> `Mote.exe` 与 `Mote-Windows.zip` 需在 Windows 机器上构建产出。
 >
 > 从 macOS 搬迁到 Windows 的分步操作（拷贝清单、传输方式、Qt 组件勾选、环境变量、
 > 路径规范、报错处理、换机验证）见 **[WINDOWS-FROM-MACOS.md](WINDOWS-FROM-MACOS.md)**。
