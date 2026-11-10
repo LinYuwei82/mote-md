@@ -79,13 +79,25 @@ rm -rf "$FRAMEWORKS"/QtQml*.framework "$FRAMEWORKS"/QtQuick*.framework
 echo "==> 5/${TOTAL} 修正体外的绝对库路径、去掉开发机 rpath、strip、清理扩展属性"
 EXE="$APP_PATH/Contents/MacOS/${APP_NAME}"
 
-# macdeployqt 偶尔漏改某些传递依赖（如 Homebrew 的 libbrotlicommon），这里统一改写为包内路径
+# macdeployqt 偶尔漏改某些传递依赖（如 Homebrew 的 libbrotlicommon），这里统一改写为包内路径。
+# 依赖有两种形态：独立 dylib（取 basename）与 framework 内的二进制
+# （/opt/.../X.framework/Versions/A/X，要保留 X.framework/Versions/A/X 这段相对路径）。
 rewrite_external_deps() {
-    local target="$1" dep base deps
+    local target="$1" dep rel base deps
     deps="$(otool -L "$target" 2>/dev/null | tail -n +2 | awk '{print $1}' \
-            | grep -E "^/(opt|usr/local)/" || true)"
+            | grep -E "^/(opt|usr/local|Users)/" || true)"
     [ -n "$deps" ] || return 0
     while IFS= read -r dep; do
+        case "$dep" in
+            *.framework/Versions/*)
+                rel="$(printf '%s' "$dep" | sed -n 's|.*/\([^/]*\.framework/Versions/.*\)$|\1|p')"
+                if [ -n "$rel" ] && [ -e "$FRAMEWORKS/$rel" ]; then
+                    install_name_tool -change "$dep" "@executable_path/../Frameworks/$rel" "$target" 2>/dev/null || true
+                    echo "  重写 $(basename "$target"): $dep -> @executable_path/../Frameworks/$rel"
+                    continue
+                fi
+                ;;
+        esac
         base="$(basename "$dep")"
         if [ -e "$FRAMEWORKS/$base" ]; then
             install_name_tool -change "$dep" "@executable_path/../Frameworks/$base" "$target" 2>/dev/null || true
@@ -102,16 +114,20 @@ find "$APP_PATH/Contents" -type f \( -name "*.dylib" -o -perm -111 \) -print0 \
         fi
     done
 
-# 个别库以开发机绝对路径作为自身 install name，统一改成 @rpath
-find "$FRAMEWORKS" -maxdepth 1 -name "*.dylib" -print0 \
+# 包内所有 framework 二进制与独立 dylib 的自有 install name 也必须是包内路径。
+# 逐个按真实文件判断（framework 的二进制名不一定等于目录名，如 QtDBus.framework/Versions/A/QtDBus），
+# 不用目录名猜；改完 install id 后续统一 ad-hoc 重签。
+find "$FRAMEWORKS" -type f -print0 \
     | while IFS= read -r -d '' f; do
-        current_id="$(otool -D "$f" | tail -n +2)"
+        file "$f" | grep -q "Mach-O" || continue
+        current_id="$(otool -D "$f" 2>/dev/null | tail -n +2 | head -n 1)"
         case "$current_id" in
-            /opt/*|/usr/local/*)
-                install_name_tool -id "@rpath/$(basename "$f")" "$f" 2>/dev/null || true
-                echo "  修正 install id: $(basename "$f")"
-                ;;
+            /opt/*|/usr/local/*|/Users/*) ;;
+            *) continue ;;
         esac
+        rel="${f#"$FRAMEWORKS"/}"
+        install_name_tool -id "@executable_path/../Frameworks/$rel" "$f" 2>/dev/null || true
+        echo "  修正 install id: ${rel}：${current_id} -> @executable_path/../Frameworks/${rel}"
     done
 
 while install_name_tool -delete_rpath "$QT_LIB" "$EXE" 2>/dev/null; do :; done
@@ -142,9 +158,55 @@ xattr -cr "$APP_PATH"
 xattr -d com.apple.FinderInfo "$APP_PATH" 2>/dev/null || true
 xattr -d "com.apple.fileprovider.fpfs#P" "$APP_PATH" 2>/dev/null || true
 
+# 出包前自检：包内每个 Mach-O 的依赖（otool -L）与 install id（otool -D）都不允许指向
+# 开发机绝对路径。mode=fail 发现问题立即以非零码退出；mode=report 只打印统计。
+scan_external_paths() {
+    local mode="$1"
+    local macho=0 bad=0
+    local l_hb=0 l_ul=0 l_user=0 d_hb=0 d_ul=0 d_user=0
+    local f deps ids hit
+    while IFS= read -r -d '' f; do
+        file "$f" | grep -q "Mach-O" || continue
+        macho=$((macho + 1))
+        deps="$(otool -L "$f" 2>/dev/null || true)"
+        ids="$(otool -D "$f" 2>/dev/null || true)"
+        l_hb=$((l_hb + $(printf '%s\n' "$deps" | grep -c '/opt/homebrew' || true)))
+        l_ul=$((l_ul + $(printf '%s\n' "$deps" | grep -c '/usr/local' || true)))
+        l_user=$((l_user + $(printf '%s\n' "$deps" | grep -c '/Users/' || true)))
+        d_hb=$((d_hb + $(printf '%s\n' "$ids" | grep -c '/opt/homebrew' || true)))
+        d_ul=$((d_ul + $(printf '%s\n' "$ids" | grep -c '/usr/local' || true)))
+        d_user=$((d_user + $(printf '%s\n' "$ids" | grep -c '/Users/' || true)))
+        while IFS= read -r hit; do
+            echo "  [外部路径·依赖] ${f#"$APP_PATH"/}: $hit" >&2
+            bad=1
+        done < <(printf '%s\n' "$deps" | grep -E '/opt/homebrew|/usr/local|/Users/' || true)
+        while IFS= read -r hit; do
+            echo "  [外部路径·install id] ${f#"$APP_PATH"/}: $hit" >&2
+            bad=1
+        done < <(printf '%s\n' "$ids" | grep -E '/opt/homebrew|/usr/local|/Users/' || true)
+    done < <(find "$APP_PATH/Contents" -type f -print0)
+    if [ "$mode" = "fail" ] && [ "$bad" -ne 0 ]; then
+        echo "错误：包内仍有指向开发机绝对路径的 Mach-O，停止出包" >&2
+        exit 1
+    fi
+    if [ "$mode" = "report" ]; then
+        echo "依赖 / install id 自检（包内全部 Mach-O，各项应为 0）："
+        echo "  Mach-O 文件数：$macho"
+        echo "  otool -L：/opt/homebrew $l_hb 行，/usr/local $l_ul 行，/Users/ $l_user 行"
+        echo "  otool -D：/opt/homebrew $d_hb 行，/usr/local $d_ul 行，/Users/ $d_user 行"
+        if [ "$bad" -eq 0 ]; then
+            echo "  结果：通过"
+        else
+            echo "  结果：仍有外部路径"
+        fi
+    fi
+}
+
 echo "==> 6/${TOTAL} Ad-hoc 签名"
 codesign --force --deep --sign - "$APP_PATH"
 codesign --verify --deep --strict "$APP_PATH"
+# install_name_tool 会破坏签名，这里重签后立刻全包扫描；有残留就停，不出包
+scan_external_paths fail
 
 echo "==> 7/${TOTAL} 组装发布目录并压缩"
 # 暂存目录同样放在非同步目录，避免 FinderInfo 被写进 zip 导致解压后签名校验失败
@@ -201,5 +263,4 @@ if [ "$WITH_DMG" -eq 1 ]; then
     echo "（DMG 内含卷 UUID 与时间戳，每次重建哈希都会变，这是正常的）"
 fi
 echo
-echo "依赖检查（主程序，应只出现 @rpath / 系统框架）："
-otool -L "$EXE" | sed 's/^/  /'
+scan_external_paths report
