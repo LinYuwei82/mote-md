@@ -2,6 +2,7 @@ QT += core gui widgets
 
 TEMPLATE = app
 TARGET = Mote
+VERSION = 1.0.0
 
 CONFIG += c++20 warn_on
 CONFIG -= debug_and_release
@@ -13,6 +14,8 @@ SOURCES += \
     src/previewview.cpp \
     src/codehighlighter.cpp \
     src/webwindow.cpp \
+    src/webpage.cpp \
+    src/webviewbase.cpp \
     src/webview_stub.cpp
 
 HEADERS += \
@@ -20,7 +23,9 @@ HEADERS += \
     src/previewview.h \
     src/codehighlighter.h \
     src/webwindow.h \
-    src/webview.h
+    src/webview.h \
+    src/webpage.h \
+    src/webviewbase.h
 
 RESOURCES += resources/resources.qrc
 
@@ -31,6 +36,27 @@ win32 {
     RC_FILE = resources/win/app.rc
     # 关闭控制台窗口（Windows 下双击不弹黑框）
     CONFIG -= console
+
+    # 系统 WebView2（Evergreen Runtime）：不引入 QtWebEngine，也不分发浏览器内核。
+    # SDK 为 NuGet 包 Microsoft.Web.WebView2 1.0.2903.40（仅头文件 + Loader），
+    # 放在仓库外；可用 WEBVIEW2_SDK 环境变量覆盖默认位置。
+    WEBVIEW2_SDK = $$(WEBVIEW2_SDK)
+    isEmpty(WEBVIEW2_SDK): WEBVIEW2_SDK = C:/dev/webview2sdk/pkg
+    !exists($$WEBVIEW2_SDK/build/native/include/WebView2.h) {
+        error("未找到 WebView2 SDK：请设置 WEBVIEW2_SDK 或放到 C:/dev/webview2sdk/pkg")
+    }
+
+    INCLUDEPATH += $$WEBVIEW2_SDK/build/native/include
+    SOURCES += src/webview_win.cpp
+    HEADERS += src/webview_win.h
+    # COM 基础库：CoTaskMemFree / IID_IUnknown
+    LIBS += -lole32 -luuid
+
+    # 绿色版/开发运行都需要 exe 同级的 WebView2Loader.dll
+    WEBVIEW2_LOADER = $$WEBVIEW2_SDK/build/native/x64/WebView2Loader.dll
+    exists($$WEBVIEW2_LOADER) {
+        QMAKE_POST_LINK += $$QMAKE_COPY /Y \"$$shell_path($$WEBVIEW2_LOADER)\" \"$$shell_path($$OUT_PWD)\"
+    }
 }
 
 macx {

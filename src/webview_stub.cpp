@@ -1,8 +1,8 @@
 #include "webview.h"
 
-#ifndef Q_OS_MACOS
+#if !defined(Q_OS_MACOS) && !defined(Q_OS_WIN)
 
-// Windows / Linux 占位：WebView2 实现尚未开始（本机无 Windows 环境，未验证）。
+// Linux 等其它平台占位：尚未实现原生 WebView 宿主。
 // 外壳检测到 nullptr 时会显示提示，不会崩溃。
 WebEditor *createWebEditor(QWidget *parent)
 {
@@ -10,4 +10,4 @@ WebEditor *createWebEditor(QWidget *parent)
     return nullptr;
 }
 
-#endif // !Q_OS_MACOS
+#endif // !Q_OS_MACOS && !Q_OS_WIN

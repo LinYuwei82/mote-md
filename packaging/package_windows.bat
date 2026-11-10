@@ -1,26 +1,28 @@
 @echo off
-chcp 65001 >nul
+chcp 936 >nul
 setlocal EnableDelayedExpansion
 
 REM ============================================================
-REM  Windows æ‰“åŒ…è„šæœ¬ï¼ˆéœ€åœ¨ Windows æœºå™¨ä¸Šæ‰§è¡Œï¼Œæœ¬æœº macOS æœªç”Ÿæˆ Windows åŒ…ï¼‰
+REM  Windows ´ò°ü½Å±¾£¨ÔÚ Windows »úÆ÷ÉÏÖ´ÐÐ£©
 REM
-REM  å‰ç½®æ¡ä»¶ï¼š
-REM    1) å®‰è£… Qt 6ï¼ˆMSVC 2022 x64 æˆ– MinGW 64-bit å¥—ä»¶ï¼‰
-REM    2) è‹¥ç”¨ MSVCï¼šå®‰è£… Visual Studio ç”Ÿæˆå·¥å…·ï¼Œå¹¶ä»Žã€Œx64 Native Tools å‘½ä»¤æç¤ºç¬¦ã€
-REM       è¿è¡Œæœ¬è„šæœ¬ï¼ˆä¿è¯ nmake / cl.exe åœ¨ PATH ä¸­ï¼‰
-REM    3) è‹¥ç”¨ MinGWï¼š%QTDIR%\bin ä¸Ž MinGW çš„ bin ç›®å½•éœ€åœ¨ PATH ä¸­
+REM  Ç°ÖÃÌõ¼þ£º
+REM    1) °²×° Qt 6£¨MSVC 2022 x64 »ò MinGW 64-bit Ì×¼þ£©
+REM    2) ÈôÓÃ MSVC£º°²×° Visual Studio Éú³É¹¤¾ß£¬²¢´Ó¡¸x64 Native Tools ÃüÁîÌáÊ¾·û¡¹
+REM       ÔËÐÐ±¾½Å±¾£¨±£Ö¤ nmake / cl.exe ÔÚ PATH ÖÐ£©
+REM    3) ÈôÓÃ MinGW£º%QTDIR%\bin Óë MinGW µÄ bin Ä¿Â¼ÐèÔÚ PATH ÖÐ
+REM    4) WebView2 SDK£¨NuGet °ü Microsoft.Web.WebView2£©½âÑ¹ÔÚ²Ö¿âÍâ£¬
+REM       Ä¬ÈÏ C:\dev\webview2sdk\pkg£¬¿ÉÓÃ WEBVIEW2_SDK ¸²¸Ç
 REM
-REM  ç”¨æ³•ï¼ˆåœ¨é¡¹ç›®æ ¹ç›®å½•çš„å‘½ä»¤è¡Œä¸­ï¼‰ï¼š
+REM  ÓÃ·¨£¨ÔÚÏîÄ¿¸ùÄ¿Â¼µÄÃüÁîÐÐÖÐ£©£º
 REM    set QTDIR=C:\Qt\6.8.0\msvc2022_64
 REM    packaging\package_windows.bat
 REM
-REM    ä½¿ç”¨ MinGW å¥—ä»¶æ—¶ï¼š
+REM    Ê¹ÓÃ MinGW Ì×¼þÊ±£º
 REM    set QTDIR=C:\Qt\6.8.0\mingw_64
 REM    set USE_MINGW=1
 REM    packaging\package_windows.bat
 REM
-REM  äº§ç‰©ï¼šdist\Mote-Windows\ ä¸Ž dist\Mote-Windows.zip
+REM  ²úÎï£ºdist\Mote-Windows\ Óë dist\Mote-Windows.zip
 REM ============================================================
 
 set "ROOT=%~dp0.."
@@ -28,33 +30,39 @@ set "BUILD=%ROOT%\build"
 set "DIST=%ROOT%\dist"
 set "OUTNAME=Mote-Windows"
 set "OUT=%DIST%\%OUTNAME%"
+if "%WEBVIEW2_SDK%"=="" set "WEBVIEW2_SDK=C:\dev\webview2sdk\pkg"
 
 if "%QTDIR%"=="" (
-    echo [é”™è¯¯] è¯·å…ˆè®¾ç½® QTDIR æŒ‡å‘ Qt6 å®‰è£…ç›®å½•ï¼Œä¾‹å¦‚ï¼š
+    echo [´íÎó] ÇëÏÈÉèÖÃ QTDIR Ö¸Ïò Qt6 °²×°Ä¿Â¼£¬ÀýÈç£º
     echo        set QTDIR=C:\Qt\6.8.0\msvc2022_64
     exit /b 1
 )
 if not exist "%QTDIR%\bin\qmake.exe" (
-    echo [é”™è¯¯] æ‰¾ä¸åˆ° %QTDIR%\bin\qmake.exe
+    echo [´íÎó] ÕÒ²»µ½ %QTDIR%\bin\qmake.exe
     exit /b 1
 )
 if not exist "%QTDIR%\bin\windeployqt.exe" (
-    echo [é”™è¯¯] æ‰¾ä¸åˆ° %QTDIR%\bin\windeployqt.exe
+    echo [´íÎó] ÕÒ²»µ½ %QTDIR%\bin\windeployqt.exe
+    exit /b 1
+)
+if not exist "%WEBVIEW2_SDK%\build\native\x64\WebView2Loader.dll" (
+    echo [´íÎó] ÕÒ²»µ½ %WEBVIEW2_SDK%\build\native\x64\WebView2Loader.dll
+    echo        ÇëÉèÖÃ WEBVIEW2_SDK Ö¸Ïò NuGet °ü Microsoft.Web.WebView2 µÄ½âÑ¹Ä¿Â¼
     exit /b 1
 )
 
-echo [1/6] æ¸…ç†æ—§çš„æž„å»ºä¸Žäº§ç‰©ç›®å½•
+echo [1/6] ÇåÀí¾ÉµÄ¹¹½¨Óë²úÎïÄ¿Â¼
 if exist "%BUILD%" rmdir /s /q "%BUILD%"
 if exist "%DIST%" rmdir /s /q "%DIST%"
 mkdir "%BUILD%"
 mkdir "%DIST%"
 
-echo [2/6] qmake ç”Ÿæˆå·¥ç¨‹
+echo [2/6] qmake Éú³É¹¤³Ì
 pushd "%BUILD%"
 "%QTDIR%\bin\qmake.exe" "%ROOT%\Mote.pro"
 if errorlevel 1 goto :fail
 
-echo [3/6] ç¼–è¯‘ Release
+echo [3/6] ±àÒë Release
 if defined USE_MINGW (
     mingw32-make -j%NUMBER_OF_PROCESSORS%
 ) else (
@@ -65,23 +73,30 @@ if errorlevel 1 goto :fail
 set "EXE=%BUILD%\Mote.exe"
 if not exist "%EXE%" set "EXE=%BUILD%\release\Mote.exe"
 if not exist "%EXE%" (
-    echo [é”™è¯¯] æœªæ‰¾åˆ°ç¼–è¯‘äº§ç‰© Mote.exe
+    echo [´íÎó] Î´ÕÒµ½±àÒë²úÎï Mote.exe
     goto :fail
 )
 popd
 
-echo [4/6] å¤åˆ¶å¯æ‰§è¡Œæ–‡ä»¶å¹¶éƒ¨ç½² Qt ä¾èµ–ï¼ˆwindeployqtï¼‰
+echo [4/6] ¸´ÖÆ¿ÉÖ´ÐÐÎÄ¼þ²¢²¿Êð Qt ÒÀÀµ£¨windeployqt£©
 mkdir "%OUT%"
 copy /y "%EXE%" "%OUT%\" >nul
 if errorlevel 1 goto :fail
 
-"%QTDIR%\bin\windeployqt.exe" --release --no-translations --no-system-d3d-compiler --no-opengl-sw "%OUT%\Mote.exe"
+REM --compiler-runtime£ºMinGW Ì×¼þÒ»²¢¸´ÖÆ libgcc/libstdc++/libwinpthread£¬
+REM ½âÑ¹¼´ÓÃ£¬²»ÒÀÀµÄ¿±ê»úÆ÷°²×° Qt »ò±àÒëÆ÷ÔËÐÐ¿â¡£
+"%QTDIR%\bin\windeployqt.exe" --release --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw "%OUT%\Mote.exe"
 if errorlevel 1 goto :fail
 
-echo [5/6] æ¸…ç†æ— ç”¨æ–‡ä»¶ï¼ŒæŽ§åˆ¶åŒ…ä½“
+REM WebView2 Ô­Éú¼ÓÔØÆ÷£º±ØÐëÓë exe Í¬¼¶£»ä¯ÀÀÆ÷ÄÚºËÓÉÏµÍ³ Evergreen Runtime Ìá¹©
+copy /y "%WEBVIEW2_SDK%\build\native\x64\WebView2Loader.dll" "%OUT%\" >nul
+if errorlevel 1 goto :fail
+
+echo [5/6] ÇåÀíÎÞÓÃÎÄ¼þ£¬¿ØÖÆ°üÌå
 if exist "%OUT%\opengl32sw.dll" del /q "%OUT%\opengl32sw.dll"
 if exist "%OUT%\d3dcompiler_47.dll" del /q "%OUT%\d3dcompiler_47.dll"
 if exist "%OUT%\Qt6Pdf.dll" del /q "%OUT%\Qt6Pdf.dll"
+if exist "%OUT%\imageformats\qpdf.dll" del /q "%OUT%\imageformats\qpdf.dll"
 if exist "%OUT%\Qt6Qml.dll" del /q "%OUT%\Qt6Qml.dll"
 if exist "%OUT%\Qt6Quick.dll" del /q "%OUT%\Qt6Quick.dll"
 if exist "%OUT%\translations" rmdir /s /q "%OUT%\translations"
@@ -90,27 +105,31 @@ del /q "%OUT%\*.pdb" 2>nul
 del /q "%OUT%\*.exp" 2>nul
 del /q "%OUT%\*.lib" 2>nul
 
-REM ç¤ºä¾‹æ–‡æ¡£ï¼ˆä¸Ž macOS åŒ…ä¿æŒä¸€è‡´ï¼‰
+REM Ê¾ÀýÎÄµµ£¨Óë macOS °ü±£³ÖÒ»ÖÂ£©
 mkdir "%OUT%\samples"
 copy /y "%ROOT%\resources\samples\welcome.md" "%OUT%\samples\" >nul
 copy /y "%ROOT%\resources\samples\sample-diagram.png" "%OUT%\samples\" >nul
 
-echo [6/6] åŽ‹ç¼©ä¸º zip
+REM ÄÚÖÃ×ÖÌåÊÇÇ¶Èë¶þ½øÖÆ OFL ÊÚÈ¨ÎÄ¼þ£¨SIL Open Font License ÒªÇóËæ¸½£©
+mkdir "%OUT%\licenses"
+copy /y "%ROOT%\resources\fonts\OFL.txt" "%OUT%\licenses\JetBrainsMono-OFL.txt" >nul
+
+echo [6/6] Ñ¹ËõÎª zip
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "Compress-Archive -Path '%OUT%' -DestinationPath '%DIST%\%OUTNAME%.zip' -Force"
 if errorlevel 1 goto :fail
 
 echo.
-echo æ‰“åŒ…å®Œæˆï¼š
+echo ´ò°üÍê³É£º
 echo   %DIST%\%OUTNAME%.zip
 echo.
-echo æç¤ºï¼š
-echo   - MSVC æž„å»ºéœ€è¦åœ¨ç›®æ ‡æœºå™¨å®‰è£… VC++ 2015-2022 x64 è¿è¡Œåº“ï¼›
-echo     è‹¥å¸Œæœ›â€œåŒå‡»å³ç”¨â€ï¼Œå»ºè®®æ”¹ç”¨ MinGW å¥—ä»¶æž„å»ºï¼ˆä¼šä¸€å¹¶å¤åˆ¶è¿è¡Œåº“ DLLï¼‰ã€‚
-echo   - å‘å¸ƒå‰å»ºè®®åœ¨æœªå®‰è£… Qt çš„ Windows æœºå™¨ä¸Šè§£åŽ‹ zipï¼ŒåŒå‡» exe éªŒè¯ã€‚
+echo ÌáÊ¾£º
+echo   - ÕýÎÄäÖÈ¾ÒÀÀµÏµÍ³µÄ Microsoft Edge WebView2 Runtime£¨Win10/11 Ò»°ãÒÑÔ¤×°£©£»
+echo     Ä¿±ê»úÆ÷È±Ê§Ê±£¬Mote »áÌáÊ¾ÏÂÔØ£ºhttps://go.microsoft.com/fwlink/p/?LinkId=2124703
+echo   - ·¢²¼Ç°½¨ÒéÔÚÎ´°²×° Qt µÄ Windows »úÆ÷ÉÏ½âÑ¹ zip£¬Ë«»÷ exe ÑéÖ¤¡£
 exit /b 0
 
 :fail
 echo.
-echo [å¤±è´¥] æ‰“åŒ…ä¸­æ–­ï¼Œè¯·æŸ¥çœ‹ä¸Šé¢çš„é”™è¯¯ä¿¡æ¯ã€‚
+echo [Ê§°Ü] ´ò°üÖÐ¶Ï£¬Çë²é¿´ÉÏÃæµÄ´íÎóÐÅÏ¢¡£
 exit /b 1

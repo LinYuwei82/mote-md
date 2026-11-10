@@ -1,17 +1,12 @@
 #include "macwebview.h"
 
+#include "webpage.h"
+
 #include <QCoreApplication>
-#include <QDateTime>
 #include <QDir>
 #include <QFile>
-#include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QShowEvent>
-#include <QStringList>
 #include <QTimer>
 #include <QUrl>
 
@@ -26,26 +21,6 @@ bool keyLogEnabled()
 {
     return qEnvironmentVariableIsSet("MOTE_KEYLOG");
 }
-
-bool isMarkdownPath(const QString &path)
-{
-    const QString suffix = QFileInfo(path).suffix().toLower();
-    return suffix == QLatin1String("md") || suffix == QLatin1String("markdown")
-        || suffix == QLatin1String("mdown") || suffix == QLatin1String("mkd")
-        || suffix == QLatin1String("txt");
-}
-
-bool isImagePath(const QString &path)
-{
-    static const QStringList extensions = {
-        QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"),
-        QStringLiteral("gif"), QStringLiteral("webp"), QStringLiteral("heic"),
-        QStringLiteral("tif"), QStringLiteral("tiff"), QStringLiteral("bmp")
-    };
-    return extensions.contains(QFileInfo(path).suffix().toLower());
-}
-
-} // namespace
 
 // 诊断用子类：只在 MOTE_KEYLOG=1 时打印，不改变任何行为。
 // 用来确认 Cmd+Z 是被菜单/响应链吞掉，还是根本没到页面。
@@ -212,60 +187,11 @@ bool isImagePath(const QString &path)
 
 namespace {
 
-QString quotedJson(const QString &text)
-{
-    // 把字符串编码成 JSON 字面量（含引号），安全地嵌进 evaluateJavaScript
-    const QByteArray json = QJsonDocument(QJsonArray{text}).toJson(QJsonDocument::Compact);
-    return QString::fromUtf8(json.mid(1, json.size() - 2));
-}
-
 void evalScript(void *webView, const QString &js)
 {
     if (!webView)
         return;
     [static_cast<WKWebView *>(webView) evaluateJavaScript:js.toNSString() completionHandler:nil];
-}
-
-// ---- 图片落盘命名 ----
-// 扩展名优先取原文件名，其次按 MIME；都没命中就按 PNG。
-QString imageExtension(const QString &mime, const QString &name)
-{
-    QString suffix = QFileInfo(name).suffix().toLower();
-    if (suffix == QLatin1String("jpeg"))
-        suffix = QStringLiteral("jpg");
-    if (!suffix.isEmpty())
-        return suffix;
-    if (mime.contains(QLatin1String("jpeg")))
-        return QStringLiteral("jpg");
-    if (mime.contains(QLatin1String("gif")))
-        return QStringLiteral("gif");
-    if (mime.contains(QLatin1String("webp")))
-        return QStringLiteral("webp");
-    if (mime.contains(QLatin1String("tiff")))
-        return QStringLiteral("tiff");
-    return QStringLiteral("png");
-}
-
-// 只保留安全字符；为空时退回 image
-QString sanitizedBase(const QString &name)
-{
-    QString base = QFileInfo(name).completeBaseName();
-    base.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9._-]+")), QStringLiteral("-"));
-    base.remove(QRegularExpression(QStringLiteral("^[-.]+")));
-    if (base.isEmpty())
-        base = QStringLiteral("image");
-    return base;
-}
-
-// 重名不覆盖：已存在就依次试 -2、-3……
-QString uniqueAssetName(const QString &dir, const QString &base, const QString &extension)
-{
-    QDir assets(dir);
-    QString candidate = base + QLatin1Char('.') + extension;
-    int serial = 2;
-    while (assets.exists(candidate))
-        candidate = base + QLatin1Char('-') + QString::number(serial++) + QLatin1Char('.') + extension;
-    return candidate;
 }
 
 // 临时页面文件名：必须与文档同目录（loadFileURL 要求主文档在授权目录内）
@@ -275,54 +201,10 @@ QString filePathOf(const QString &dir)
         QStringLiteral(".mote-preview-%1.html").arg(QCoreApplication::applicationPid()));
 }
 
-// 代码字体随包分发：把 qrc 里的 JetBrains Mono Light 以 base64 @font-face 注入页面。
-// 页面由 loadHTMLString: 载入，baseURL 指向文档目录，因此不能用 :/fonts/ 这样的
-// 资源路径，只能内联成 data URI。
-QString fontCss()
-{
-    static const QString css = [] {
-        QFile font(QStringLiteral(":/fonts/JetBrainsMono-Light.ttf"));
-        if (!font.open(QIODevice::ReadOnly))
-            return QString();
-        const QByteArray base64 = font.readAll().toBase64();
-        return QStringLiteral("@font-face{font-family:'JetBrains Mono';"
-                              "src:url(data:font/ttf;base64,%1) format('truetype');"
-                              "font-weight:300;font-style:normal;font-display:block;}")
-            .arg(QString::fromLatin1(base64));
-    }();
-    return css;
-}
-
-QString pageHtml()
-{
-    static const QString html = [] {
-        QFile tmpl(QStringLiteral(":/web/editor.html"));
-        QFile css(QStringLiteral(":/web/editor.css"));
-        QFile js(QStringLiteral(":/web/editor.js"));
-        if (!tmpl.open(QIODevice::ReadOnly) || !css.open(QIODevice::ReadOnly)
-            || !js.open(QIODevice::ReadOnly)) {
-            return QStringLiteral("<html><body>缺少前端资源</body></html>");
-        }
-        QString page = QString::fromUtf8(tmpl.readAll());
-        page.replace(QStringLiteral("__MOTE_CSS__"), fontCss() + QString::fromUtf8(css.readAll()));
-        // 行内标记（阶段一）默认开启：标记常驻 DOM、零宽折叠。保留开关仅作应急
-        // 回退——MOTE_INLINE_PROTO=0 / false / off / no 时回到「整块替换」旧行为。
-        const QString raw = qEnvironmentVariable("MOTE_INLINE_PROTO").trimmed().toLower();
-        const bool protoOff = raw == QStringLiteral("0") || raw == QStringLiteral("false")
-            || raw == QStringLiteral("off") || raw == QStringLiteral("no");
-        const QString flag = protoOff
-            ? QStringLiteral("window.MOTE_INLINE_PROTO=false;")
-            : QStringLiteral("window.MOTE_INLINE_PROTO=true;");
-        page.replace(QStringLiteral("__MOTE_JS__"), flag + QString::fromUtf8(js.readAll()));
-        return page;
-    }();
-    return html;
-}
-
 } // namespace
 
 MacWebView::MacWebView(QWidget *parent)
-    : WebEditor(parent)
+    : WebViewBase(parent)
 {
     setAttribute(Qt::WA_NativeWindow);
     setFocusPolicy(Qt::StrongFocus);
@@ -413,6 +295,11 @@ void MacWebView::ensureWebView()
     }
 }
 
+void MacWebView::ensureHost()
+{
+    ensureWebView();
+}
+
 void MacWebView::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
@@ -428,47 +315,12 @@ void MacWebView::resizeEvent(QResizeEvent *event)
     [static_cast<WKWebView *>(m_webView) setFrame:host.bounds];
 }
 
-void MacWebView::setMarkdown(const QString &text, const QUrl &baseDir)
-{
-    ensureWebView();
-
-    if (!m_pageLoaded || baseDir != m_baseDir) {
-        m_baseDir = baseDir;
-        m_pendingText = text;
-        m_hasPending = true;
-        loadPage(baseDir);
-        return;
-    }
-
-    m_pendingText = text;
-    m_hasPending = true;
-    if (m_pageReady)
-        injectMarkdown(text);
-}
-
-void MacWebView::newDocument()
-{
-    // 未命名文档没有磁盘位置：清掉 baseDir，图片粘贴会走「请先保存」提示
-    m_baseDir = QUrl();
-    m_pendingText.clear();
-    m_hasPending = false;
-    evalScript(m_webView, QStringLiteral("window.mote && window.mote.newDocument();"));
-}
-
-void MacWebView::setBaseDir(const QUrl &dir)
-{
-    // 另存为后只改图片落盘位置，不重载页面（保住编辑状态与光标）
-    m_baseDir = dir;
-}
-
 void MacWebView::loadPage(const QUrl &baseDir)
 {
-    m_pageLoaded = true;
-    m_pageReady = false;
     const QString dir = baseDir.toLocalFile();
     if (dir.isEmpty()) {
         NSURL *base = [NSURL fileURLWithPath:dir.toNSString() isDirectory:YES];
-        [static_cast<WKWebView *>(m_webView) loadHTMLString:pageHtml().toNSString() baseURL:base];
+        [static_cast<WKWebView *>(m_webView) loadHTMLString:motePageHtml().toNSString() baseURL:base];
         return;
     }
 
@@ -477,7 +329,7 @@ void MacWebView::loadPage(const QUrl &baseDir)
     // Load failed），图片因此永远显示不出来。改用 loadFileURL:allowingReadAccessToURL:
     // 才是官方支持的本地资源方案；主文档必须落在读权限目录内，因此临时 HTML
     // 写到文档目录下的隐藏文件（.mote-preview-<pid>.html），退出/换文档时删除。
-    QString page = pageHtml();
+    QString page = motePageHtml();
     const QString baseUrl = QUrl::fromLocalFile(dir + QLatin1Char('/')).toString();
     // 只替换页面模板自己的 </head>（第一处）。整串 replaceAll 会连内嵌 JS 源码里
     // 的 '</head>' 字面量一起改掉——导出 HTML 就是这样凭空多出一个 file:// 的 <base>。
@@ -505,13 +357,9 @@ void MacWebView::loadPage(const QUrl &baseDir)
     [static_cast<WKWebView *>(m_webView) loadFileURL:pageUrl allowingReadAccessToURL:readAccess];
 }
 
-void MacWebView::injectMarkdown(const QString &text)
+void MacWebView::evaluateJs(const QString &js)
 {
-    if (!m_webView)
-        return;
-    const QString js = QStringLiteral("window.mote && window.mote.setMarkdown(%1);").arg(quotedJson(text));
-    [static_cast<WKWebView *>(m_webView) evaluateJavaScript:js.toNSString() completionHandler:nil];
-    m_hasPending = false;
+    evalScript(m_webView, js);
 }
 
 // 诊断用（MOTE_SNAPSHOT=/path.png）：页面就绪后延迟 2 秒把 WKWebView 的画面
@@ -550,279 +398,34 @@ void MacWebView::runEvalProbe()
     });
 }
 
-void MacWebView::requestSnapshot()
+void MacWebView::pageReady()
 {
-    if (!m_webView)
-        return;
-    [static_cast<WKWebView *>(m_webView) evaluateJavaScript:@"window.mote && window.mote.requestSnapshot();"
-                                        completionHandler:nil];
-}
-
-void MacWebView::notifySaved(const QString &text)
-{
-    if (!m_webView)
-        return;
-    const QString js = QStringLiteral("window.mote && window.mote.markSaved(%1);").arg(quotedJson(text));
-    [static_cast<WKWebView *>(m_webView) evaluateJavaScript:js.toNSString() completionHandler:nil];
-}
-
-void MacWebView::undo()
-{
-    if (!m_webView)
-        return;
-    if (keyLogEnabled())
-        std::fprintf(stderr, "NATIVE -> JS undo\n");
-    [static_cast<WKWebView *>(m_webView) evaluateJavaScript:@"window.mote && window.mote.undo();"
-                                        completionHandler:nil];
-}
-
-void MacWebView::redo()
-{
-    if (!m_webView)
-        return;
-    if (keyLogEnabled())
-        std::fprintf(stderr, "NATIVE -> JS redo\n");
-    [static_cast<WKWebView *>(m_webView) evaluateJavaScript:@"window.mote && window.mote.redo();"
-                                        completionHandler:nil];
-}
-
-void MacWebView::toggleToc()
-{
-    evalScript(m_webView, QStringLiteral("window.mote && window.mote.toggleToc();"));
-}
-
-void MacWebView::toggleSource()
-{
-    evalScript(m_webView, QStringLiteral("window.mote && window.mote.toggleSource();"));
-}
-
-void MacWebView::zoomBy(int steps)
-{
-    evalScript(m_webView, QStringLiteral("window.mote && window.mote.zoomBy(%1);").arg(steps));
-}
-
-void MacWebView::resetZoom()
-{
-    evalScript(m_webView, QStringLiteral("window.mote && window.mote.resetZoom();"));
-}
-
-void MacWebView::setTheme(const QString &mode)
-{
-    m_theme = (mode == QLatin1String("dark")) ? QStringLiteral("dark") : QStringLiteral("light");
-    applyTheme();
-}
-
-void MacWebView::applyTheme()
-{
-    // 只切 CSS 变量，不重排正文；页面未就绪时先记住，ready 后由 applyTheme 补发
-    if (!m_pageReady)
-        return;
-    if (keyLogEnabled())
-        std::fprintf(stderr, "NATIVE -> JS theme %s\n", m_theme.toUtf8().constData());
-    evalScript(m_webView, QStringLiteral("window.mote && window.mote.setTheme(%1);")
-                              .arg(quotedJson(m_theme)));
-}
-
-void MacWebView::applyFormat(const QString &action)
-{
-    // 格式动作名由 JS 的 formatAction 统一解释，三个入口（菜单快捷键、斜杠、右键）共用
-    if (keyLogEnabled())
-        std::fprintf(stderr, "NATIVE -> JS format %s\n", action.toUtf8().constData());
-    evalScript(m_webView, QStringLiteral("window.mote && window.mote.format(%1);")
-                              .arg(quotedJson(action)));
-}
-
-void MacWebView::requestExportHtml(const QString &title)
-{
-    // 前端把整篇渲染结果拼成自包含 HTML 后经消息回传（图片路径由外壳再做 base64）
-    const QString js = QStringLiteral("window.mote && window.mote.exportHtml(%1);")
-                           .arg(quotedJson(title));
-    evalScript(m_webView, js);
-}
-
-void MacWebView::insertImage(const QString &rel)
-{
-    const QString js = QStringLiteral("window.mote && window.mote.insertImage(%1);")
-                           .arg(quotedJson(rel));
-    evalScript(m_webView, js);
-}
-
-// 把图片字节写进「md 同目录/assets/」并让页面插入 ![](assets/xxx)。
-// 文档还没保存（没有目录）时明确提示，不写入任何位置。
-bool MacWebView::saveImageBytes(const QByteArray &bytes, const QString &mime,
-                                const QString &hint, bool isPaste)
-{
-    const QString dir = m_baseDir.toLocalFile();
-    if (dir.isEmpty() || !QFileInfo(dir).isDir()) {
-        emit statusMessage(tr("图片未插入：当前文档还没有保存位置，请先保存 .md 文件"));
-        return false;
-    }
-
-    const QString assetsPath = QDir(dir).filePath(QStringLiteral("assets"));
-    if (!QDir().mkpath(assetsPath)) {
-        emit statusMessage(tr("图片未插入：无法创建 assets 目录（%1）").arg(assetsPath));
-        return false;
-    }
-
-    const QString extension = imageExtension(mime, hint);
-    const QString base = isPaste || hint.isEmpty()
-        ? QStringLiteral("paste-") + QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"))
-        : sanitizedBase(hint);
-    const QString name = uniqueAssetName(assetsPath, base, extension);
-
-    QFile out(QDir(assetsPath).filePath(name));
-    if (!out.open(QIODevice::WriteOnly)) {
-        emit statusMessage(tr("图片未插入：无法写入 assets/%1").arg(name));
-        return false;
-    }
-    const qint64 written = out.write(bytes);
-    out.close();
-    if (written != bytes.size()) {
-        emit statusMessage(tr("图片未插入：写入不完整（assets/%1）").arg(name));
-        return false;
-    }
-
-    const QString rel = QStringLiteral("assets/") + name;
-    insertImage(rel);
-    emit statusMessage(tr("已保存图片：%1").arg(rel));
-    return true;
-}
-
-bool MacWebView::saveImageFile(const QString &path)
-{
-    QFile in(path);
-    if (!in.open(QIODevice::ReadOnly)) {
-        emit statusMessage(tr("图片未插入：无法读取 %1").arg(QFileInfo(path).fileName()));
-        return false;
-    }
-    return saveImageBytes(in.readAll(), QString(), QFileInfo(path).fileName(), false);
-}
-
-bool MacWebView::handleNativeFileDrop(const QStringList &paths)
-{
-    bool recognized = false;
-    for (const QString &path : paths) {
-        if (isMarkdownPath(path)) {
-            recognized = true;
-            emit fileDropRequested(QFileInfo(path).absoluteFilePath());
-            return true;
+    runEvalProbe();
+    // 诊断用（MOTE_DROP=路径[:路径]）：把同样的原生拖放处理函数按时调用一次，
+    // 便于在无法模拟 Finder 拖放的自动化环境里验证「打开 md / 图片落盘」。
+    if (!m_dropProbeDone) {
+        const QString probe = qEnvironmentVariable("MOTE_DROP");
+        if (!probe.isEmpty()) {
+            m_dropProbeDone = true;
+            const QStringList paths = probe.split(QLatin1Char(':'), Qt::SkipEmptyParts);
+            QTimer::singleShot(900, this, [this, paths] { handleNativeFileDrop(paths); });
         }
     }
-    for (const QString &path : paths) {
-        if (isImagePath(path)) {
-            recognized = true;
-            saveImageFile(path);
-        }
-    }
-    return recognized;
-}
-
-void MacWebView::handleMessage(const QString &json)
-{
-    const QJsonDocument document = QJsonDocument::fromJson(json.toUtf8());
-    if (!document.isObject())
-        return;
-    const QJsonObject message = document.object();
-    const QString type = message.value(QStringLiteral("type")).toString();
-
-    if (type == QLatin1String("ready")) {
-        m_pageReady = true;
-        applyTheme();
-        emit ready();
-        if (m_hasPending)
-            injectMarkdown(m_pendingText);
-        runEvalProbe();
-        // 诊断用（MOTE_DROP=路径[:路径]）：把同样的原生拖放处理函数按时调用一次，
-        // 便于在无法模拟 Finder 拖放的自动化环境里验证「打开 md / 图片落盘」。
-        if (!m_dropProbeDone) {
-            const QString probe = qEnvironmentVariable("MOTE_DROP");
-            if (!probe.isEmpty()) {
-                m_dropProbeDone = true;
-                const QStringList paths = probe.split(QLatin1Char(':'), Qt::SkipEmptyParts);
-                QTimer::singleShot(900, this, [this, paths] { handleNativeFileDrop(paths); });
-            }
-        }
-        const QString snapPath = qEnvironmentVariable("MOTE_SNAPSHOT");
-        if (!snapPath.isEmpty() && m_webView) {
-            WKWebView *snapView = static_cast<WKWebView *>(m_webView);
-            NSString *snapFile = [snapPath.toNSString() copy];
-            const double snapDelay =
-                qEnvironmentVariable("MOTE_SNAPSHOT_DELAY", QStringLiteral("2000")).toDouble() / 1000.0;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, static_cast<int64_t>(snapDelay * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-                WKSnapshotConfiguration *config = [[WKSnapshotConfiguration alloc] init];
-                [config setSnapshotWidth:@(snapView.bounds.size.width * 2)];
-                std::fprintf(stderr, "SNAPSHOT scheduled %s\n", snapFile.UTF8String);
-                snapshotWebView(snapView, config, snapFile);
-                [config release];
-                [snapFile release];
-            });
-        }
-        return;
-    }
-    if (type == QLatin1String("view")) {
-        emit viewStateChanged(message.value(QStringLiteral("toc")).toBool(),
-                              message.value(QStringLiteral("source")).toBool(),
-                              message.value(QStringLiteral("zoom")).toDouble(1.0));
-        return;
-    }
-    if (type == QLatin1String("dirty")) {
-        emit dirtyChanged(message.value(QStringLiteral("value")).toBool());
-        return;
-    }
-    if (type == QLatin1String("stats")) {
-        emit statsChanged(message.value(QStringLiteral("cjk")).toInt(),
-                          message.value(QStringLiteral("words")).toInt());
-        return;
-    }
-    if (type == QLatin1String("save")) {
-        emit saveRequested(message.value(QStringLiteral("text")).toString());
-        return;
-    }
-    if (type == QLatin1String("open")) {
-        emit openRequested();
-        return;
-    }
-    if (type == QLatin1String("drop")) {
-        emit dropReceived(message.value(QStringLiteral("name")).toString(),
-                          message.value(QStringLiteral("text")).toString());
-        return;
-    }
-    if (type == QLatin1String("image")) {
-        const QByteArray data = QByteArray::fromBase64(
-            message.value(QStringLiteral("data")).toString().toLatin1());
-        if (data.isEmpty()) {
-            emit statusMessage(tr("图片未插入：剪贴板内容为空"));
-            return;
-        }
-        const QString source = message.value(QStringLiteral("source")).toString();
-        saveImageBytes(data,
-                       message.value(QStringLiteral("mime")).toString(),
-                       message.value(QStringLiteral("name")).toString(),
-                       source != QLatin1String("drop"));
-        return;
-    }
-    if (type == QLatin1String("openLink")) {
-        emit openLinkRequested(message.value(QStringLiteral("href")).toString());
-        return;
-    }
-    if (type == QLatin1String("export")) {
-        emit exportHtmlReady(message.value(QStringLiteral("html")).toString());
-        return;
-    }
-    if (type == QLatin1String("status")) {
-        emit statusMessage(message.value(QStringLiteral("message")).toString());
-        return;
-    }
-    if (type == QLatin1String("error")) {
-        emit errorOccurred(message.value(QStringLiteral("message")).toString());
-        return;
-    }
-    if (type == QLatin1String("log")) {
-        if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
-            const QByteArray line = message.value(QStringLiteral("message")).toString().toUtf8();
-            std::fprintf(stderr, "JSLOG %s\n", line.constData());
-        }
+    const QString snapPath = qEnvironmentVariable("MOTE_SNAPSHOT");
+    if (!snapPath.isEmpty() && m_webView) {
+        WKWebView *snapView = static_cast<WKWebView *>(m_webView);
+        NSString *snapFile = [snapPath.toNSString() copy];
+        const double snapDelay =
+            qEnvironmentVariable("MOTE_SNAPSHOT_DELAY", QStringLiteral("2000")).toDouble() / 1000.0;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, static_cast<int64_t>(snapDelay * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            WKSnapshotConfiguration *config = [[WKSnapshotConfiguration alloc] init];
+            [config setSnapshotWidth:@(snapView.bounds.size.width * 2)];
+            std::fprintf(stderr, "SNAPSHOT scheduled %s\n", snapFile.UTF8String);
+            snapshotWebView(snapView, config, snapFile);
+            [config release];
+            [snapFile release];
+        });
     }
 }
 
