@@ -212,8 +212,10 @@ void WebViewBase::clipboardCommand(const QString &command)
         return;
 
     const QMimeData *data = QGuiApplication::clipboard()->mimeData();
-    if (!data)
+    if (!data) {
+        emit statusMessage(tr("剪贴板里没有可粘贴的文本"));
         return;
+    }
     // 图片优先：与页面原生粘贴分支同口径，落盘与插入仍走 saveImageBytes
     if (data->hasImage()) {
         const QImage image = qvariant_cast<QImage>(data->imageData());
@@ -229,8 +231,10 @@ void WebViewBase::clipboardCommand(const QString &command)
         }
     }
     const QString text = data->text();
-    if (text.isEmpty())
+    if (text.isEmpty()) {
+        emit statusMessage(tr("剪贴板里没有可粘贴的文本"));
         return;
+    }
     evaluateJs(QStringLiteral("window.mote && window.mote.clipboardPaste(%1);")
                    .arg(moteJsonLiteral(text)));
 }
@@ -447,8 +451,20 @@ void WebViewBase::handleMessage(const QString &json)
         return;
     }
     if (type == QLatin1String("clipboardWrite")) {
-        // 页面算好的纯文本落到系统剪贴板（复制/剪切共用这一条回路）
-        QGuiApplication::clipboard()->setText(message.value(QStringLiteral("text")).toString());
+        // 页面算好的内容落到系统剪贴板（复制/剪切共用这一条回路）。
+        // html 是后加的可选字段：旧页面不带它就保持纯文本，新页面带上则同时写
+        // text/html，Windows 由 Qt 落成 CF_HTML（HTML Format），macOS 落成
+        // public.html，粘到 Word / 邮件里仍有格式。
+        const QString text = message.value(QStringLiteral("text")).toString();
+        const QString html = message.value(QStringLiteral("html")).toString();
+        if (html.isEmpty()) {
+            QGuiApplication::clipboard()->setText(text);
+        } else {
+            auto *data = new QMimeData;
+            data->setText(text);
+            data->setHtml(html);
+            QGuiApplication::clipboard()->setMimeData(data);
+        }
         return;
     }
     if (type == QLatin1String("openLink")) {

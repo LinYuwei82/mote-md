@@ -3228,6 +3228,26 @@
     setTimeout(commitHistory, 0);
   }
 
+  // 光标停在块外（#editor 直接子节点之间）时，在光标处补一个空段落块并交还
+  // 焦点。块外没有可归属的原文，直接 insertText 会把文本写到 root 层，
+  // collectBlocks 序列化时看不到它，等于粘贴后一保存就丢。
+  function caretParagraphBlock() {
+    var selection = window.getSelection();
+    if (!selection || !selection.rangeCount)
+      return null;
+    var range = selection.getRangeAt(0);
+    if (range.startContainer !== root && !root.contains(range.startContainer))
+      return null;
+    var neo = document.createElement('div');
+    neo.className = 'block';
+    neo.setAttribute('contenteditable', 'true');
+    range.insertNode(neo);
+    renderBlock(neo, '');
+    neo.focus();
+    setCaret(neo, 0);
+    return neo;
+  }
+
   // 粘贴统一转为纯文本，避免把富文本结构带进 Markdown；粘贴整体作为一个撤销步骤
   root.addEventListener('paste', function (event) {
     var clipboard = event.clipboardData || window.clipboardData;
@@ -3305,7 +3325,65 @@
     return parts.join('\n');
   }
 
+  // 选区 → HTML。与纯文本同口径（按块裁剪、跨块逐个取），但保留块级标签与
+  // 行内着色用的 class，粘到 Word / 邮件里仍有标题、列表、代码块的样子。
+  // 复制走 HTML 是给“粘到外部应用”用的；粘回 Mote 仍只读 text/plain。
+  function selectionHtml() {
+    var selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount)
+      return '';
+    var range = selection.getRangeAt(0);
+    var blocks = selectedBlocks();
+    var holder = document.createElement('div');
+    for (var i = 0; i < blocks.length; i++) {
+      var el = blocks[i];
+      var sub = document.createRange();
+      sub.selectNodeContents(el);
+      if (el.contains(range.startContainer))
+        sub.setStart(range.startContainer, range.startOffset);
+      if (el.contains(range.endContainer))
+        sub.setEnd(range.endContainer, range.endOffset);
+      // cloneNode(false) 保留块自身的标签（h1/p/ul/pre/table…）与 class，
+      // 只把裁剪后的子节点装进去，避免整块的编辑态属性带出去。
+      var shell = el.cloneNode(false);
+      shell.appendChild(sub.cloneContents());
+      holder.appendChild(shell);
+    }
+    sanitizeCopyHtml(holder);
+    return holder.innerHTML;
+  }
+
+  // 编辑器专用节点与属性对粘贴目标没有意义，甚至会把 contenteditable 一起带过去。
+  function sanitizeCopyHtml(holder) {
+    // 零宽标记（#、-、反引号等）在编辑器里靠 font-size:0 藏起来，粘到 Word /
+    // 邮件时没有这份 CSS 就会原样露出来，必须连同 gutter 一起剥掉。
+    var junk = holder.querySelectorAll('.mk, .gutter, .line-numbers');
+    for (var i = junk.length - 1; i >= 0; i--) {
+      if (junk[i].parentNode)
+        junk[i].parentNode.removeChild(junk[i]);
+    }
+    var all = holder.querySelectorAll('*');
+    for (var j = 0; j < all.length; j++) {
+      var e = all[j];
+      e.removeAttribute('contenteditable');
+      e.removeAttribute('spellcheck');
+      e.removeAttribute('id');
+      var attrs = e.attributes;
+      for (var k = attrs.length - 1; k >= 0; k--) {
+        if (attrs[k].name.indexOf('data-') === 0)
+          e.removeAttribute(attrs[k].name);
+      }
+      if (e.classList) {
+        e.classList.remove('editing', 'focused', 'placeholder', 'empty');
+        if (!e.classList.length)
+          e.removeAttribute('class');
+      }
+    }
+  }
+
   // 原生 copy 事件：只在编辑区接管，源码模式交给 textarea 自己。
+  // text/plain 给粘回 Mote 与纯文本编辑器；text/html 给 Word / 邮件这类目标，
+  // macOS 由 WebKit 落到 NSPasteboard 的 public.html，Windows 由宿主写 CF_HTML。
   document.addEventListener('copy', function (event) {
     if (!event.clipboardData || mode === 'source')
       return;
@@ -3313,6 +3391,9 @@
     if (!text)
       return;
     event.clipboardData.setData('text/plain', text);
+    var html = selectionHtml();
+    if (html)
+      event.clipboardData.setData('text/html', html);
     event.preventDefault();
   });
 
@@ -5081,9 +5162,18 @@
       if (mode === 'source')
         return false;
       var text = selectionPlainText();
-      if (!text)
+      if (!text) {
+        // 宿主（WebView2 加速键）先把按键标成已处理，页面这里再静默返回 false
+        // 就成了“按了没反应”。空选区给一条状态栏提示，算出的结果仍是失败。
+        post({
+          type: 'status',
+          message: cut ? '没有可剪切的内容：先选中文字' : '没有可复制的内容：先选中文字'
+        });
         return false;
-      post({ type: 'clipboardWrite', text: text });
+      }
+      // html 是新增的可选字段：旧宿主忽略它仍按纯文本写入，新宿主同时写
+      // text/html，粘到 Word / 邮件里保留标题、列表、代码块的样子。
+      post({ type: 'clipboardWrite', text: text, html: selectionHtml() });
       if (cut) {
         commitHistory();
         document.execCommand('delete');
@@ -5094,12 +5184,28 @@
       return true;
     },
     clipboardPaste: function (text) {
+      if (mode === 'source')
+        return false;
+      text = String(text === undefined || text === null ? '' : text);
+      if (!text) {
+        post({ type: 'status', message: '剪贴板里没有可粘贴的文本' });
+        return false;
+      }
       var selection = window.getSelection();
       var node = selection && selection.rangeCount ? selection.anchorNode : null;
       var el = node ? blockOf(node) : null;
-      if (mode === 'source' || !el)
+      if (el) {
+        insertPastedText(text, el);
+        return true;
+      }
+      // 光标落在块外空白区：原生粘贴本来可以插入，这里不能直接报失败。
+      // 先在光标处补一个段落块，再走与块内相同的插入路径。
+      var neo = caretParagraphBlock();
+      if (!neo) {
+        post({ type: 'status', message: '粘贴失败：先把光标放到正文里' });
         return false;
-      insertPastedText(text, el);
+      }
+      insertPastedText(text, neo);
       return true;
     },
     // 右键「转为」/ 工具栏下拉：不做 toggle，已是目标类型保持不动
