@@ -6,10 +6,10 @@
 | 平台 | 状态 | 产物 |
 | --- | --- | --- |
 | macOS（本机，已执行） | 已完成并验证 | `dist/Mote-macOS.zip`（内含 `.app`） |
-| Windows（本机无工具链） | **未生成**，仅提供脚本与步骤 | 需在 Windows 机器执行 `packaging/package_windows.bat` |
+| Windows（由 Windows 机器执行） | 已构建并校验，本机未复现 | `Mote-Setup-0.3.0.exe`、`Mote-Windows.zip` |
 
-> 本机为 macOS，**没有生成也没有声称生成 Windows 的 exe/zip**。
-> Windows 包必须在一台装有 Qt 6 的 Windows 机器上执行第 2 节的脚本后自行产出。
+> 本机为 macOS，Windows 的两个产物由 Windows 机器按第 2 节脚本构建并校验，
+> 校验值见 `docs/release-notes-0.3.0.md`；本机未重复执行该流程。
 
 ---
 
@@ -651,20 +651,23 @@ packaging\package_windows.bat
 2. `qmake ..\Mote.pro`；
 3. `nmake`（或 `mingw32-make -j`）编译 Release；
 4. 复制 `Mote.exe` 到 `dist\Mote-Windows\`；
-5. `windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw`
-   部署 Qt DLL 与 `plugins\`（`platforms\qwindows.dll`、`imageformats\`、`styles\` 等）；
-6. 删除 `opengl32sw.dll`、`d3dcompiler_47.dll`、`translations\`、`qml\`、`*.pdb` 等无用文件；
-7. 复制 `samples\`（示例 md 与图片）；
-8. 用 PowerShell `Compress-Archive` 压成 `dist\Mote-Windows.zip`。
+5. `windeployqt --release --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw`
+   部署 Qt DLL、MSVC 运行库与 `plugins\`（`platforms\qwindows.dll`、`imageformats\`、`styles\` 等）；
+6. 从 WebView2 SDK 复制 `build\native\x64\WebView2Loader.dll` 到 `dist\Mote-Windows\`；
+7. 删除 `opengl32sw.dll`、`d3dcompiler_47.dll`、`translations\`、`qml\`、`*.pdb` 等无用文件；
+8. 复制 `samples\`（示例 md 与图片）与 `licenses\`（`JetBrainsMono-OFL.txt`、`LICENSE-AGPL-3.0.txt`）；
+9. 用 PowerShell `Compress-Archive` 压成 `dist\Mote-Windows.zip`。
 
 产物结构：
 
 ```
 dist\Mote-Windows\
 ├── Mote.exe
+├── WebView2Loader.dll
 ├── Qt6Core.dll / Qt6Gui.dll / Qt6Widgets.dll / ...
 ├── platforms\qwindows.dll
 ├── imageformats\ ... , styles\ ...
+├── licenses\JetBrainsMono-OFL.txt, LICENSE-AGPL-3.0.txt
 └── samples\welcome.md, sample-diagram.png
 ```
 
@@ -672,6 +675,7 @@ dist\Mote-Windows\
 
 ```bat
 set QTDIR=C:\Qt\6.8.0\msvc2022_64
+set WEBVIEW2_SDK=C:\path\to\Microsoft.Web.WebView2
 mkdir build && cd build
 %QTDIR%\bin\qmake.exe ..\Mote.pro
 nmake
@@ -679,9 +683,16 @@ cd ..
 
 mkdir dist\Mote-Windows
 copy build\Mote.exe dist\Mote-Windows\
-%QTDIR%\bin\windeployqt.exe --release --no-translations --no-system-d3d-compiler --no-opengl-sw dist\Mote-Windows\Mote.exe
+%QTDIR%\bin\windeployqt.exe --release --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw dist\Mote-Windows\Mote.exe
+copy "%WEBVIEW2_SDK%\build\native\x64\WebView2Loader.dll" dist\Mote-Windows\
 del dist\Mote-Windows\opengl32sw.dll
 del dist\Mote-Windows\d3dcompiler_47.dll
+mkdir dist\Mote-Windows\samples
+copy resources\samples\welcome.md dist\Mote-Windows\samples\
+copy resources\samples\sample-diagram.png dist\Mote-Windows\samples\
+mkdir dist\Mote-Windows\licenses
+copy resources\fonts\OFL.txt dist\Mote-Windows\licenses\JetBrainsMono-OFL.txt
+copy LICENSE dist\Mote-Windows\licenses\LICENSE-AGPL-3.0.txt
 ```
 
 然后在**没装过 Qt 的 Windows 机器**上解压 zip，双击 `Mote.exe`，
@@ -750,8 +761,8 @@ del dist\Mote-Windows\d3dcompiler_47.dll
 
 ## 5. 未能完成 / 受限的部分
 
-1. **Windows 包未生成**：本机是 macOS，没有 MSVC/MinGW 与 `windeployqt`，
-   无法交叉编译出可用的 exe。已提供脚本与完整步骤，需在 Windows 机器执行。
+1. **Windows 包未在本机复现**：本机是 macOS，没有 MSVC/MinGW 与 `windeployqt`，
+   无法交叉编译。产物已由 Windows 机器按第 2 节脚本构建并校验，本机未重复构建。
 2. **仅 arm64 架构**：macOS 包只包含 arm64 切片，Intel Mac 需要重新构建。
 3. **未做 Apple 公证（notarization）**：只有 Ad-hoc 签名，从网络下载的 zip / dmg
    首次打开可能被 Gatekeeper 拦截，需要右键「打开」或去掉 quarantine 属性（见 1.14）。

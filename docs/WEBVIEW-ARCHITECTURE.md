@@ -55,8 +55,8 @@ signals:
 WebEditor *createWebEditor(QWidget *parent);
 ```
 
-macOS 由 `src/macwebview.mm` 实现；Windows 预留 `src/webview_win.cpp`（暂为占位实现，
-不声称可用）。外壳只依赖该接口，替换平台实现不影响窗口逻辑。
+macOS 由 `src/macwebview.mm` 实现，Windows 由 `src/webview_win.cpp`（WebView2）实现，
+其余平台由 `webview_stub.cpp` 占位。外壳只依赖该接口，替换平台实现不影响窗口逻辑。
 
 ### 2.2 macOS：WKWebView 挂进 Qt 窗口
 

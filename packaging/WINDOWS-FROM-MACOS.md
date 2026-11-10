@@ -54,8 +54,8 @@ packaging\package_windows.bat
 | `tools/make_icon.py` | 8 KB | 可选 | 只在重新生成图标时用，且依赖 macOS 的 `iconutil`；Windows 上不需要 |
 | `build/` | 当前不存在 | **不要** | Windows 脚本每次 `rmdir /s /q` 重建；带过去只会被删 |
 | `dist/` | 29.4 MB | **不要** | 里面是 macOS 的 zip（arm64 `.app`），Windows 用不了；脚本第一步也会整目录删除 |
-| `screenshots/` | 3.3 MB | 不要 | 只是文档截图，与构建无关 |
-| `.git/` | 不存在 | — | **当前项目目录不是 Git 仓库**（`git status` 会报 not a git repository），所以也没有历史要搬 |
+| `screenshots/` | 18 MB | 不要 | 只是文档截图，与构建无关 |
+| `.git/` | — | **不要** | 仓库由 `git clone` 获取，不要直接拷贝工作目录；`.git/` 交给 git 管理 |
 | `.DS_Store` | 4 个（根目录、`packaging/`、`resources/`、`screenshots/`） | **不要** | macOS 的目录元数据，Windows 上无用，压缩时排除 |
 
 结论：**最小可构建集合 = `src/` + `resources/` + `packaging/package_windows.bat` +
@@ -105,22 +105,14 @@ zip -r -X ~/Desktop/Mote-src.zip \
 
 ### 方式 C：走 Git
 
-当前目录**没有 `.git`**，需要你自己初始化后再推：
+仓库已经是 git 仓库，并带有 `.gitignore`（`build/`、`dist/`、`screenshots/` 约 18 MB 等
+都已排除），不要重新 `git init` 或覆盖 `.gitignore`。直接在 Windows 上 clone：
 
 ```bash
-cd /Users/lin/Projects/mote
-git init
-printf 'build/\ndist/\nscreenshots/\n.DS_Store\n*.o\n*.user\n' > .gitignore
-git add .
-git commit -m "Mote source"
-git remote add origin <你的仓库地址>
-git push -u origin main
+git clone <你的仓库地址> C:\dev\Mote
 ```
 
-Windows 侧：`git clone <你的仓库地址> C:\dev\Mote`。
-
-> 注意：仓库里目前**没有 `.gitignore`**。如果直接 `git add .`，会把 29 MB 的
-> `dist/` 和 3.3 MB 的 `screenshots/` 一起提交。按上面的顺序先写 `.gitignore` 再 add。
+macOS 侧如有未推送的提交，先 `git push` 再 clone；双机协作流程见 `docs/COLLAB.md`。
 
 ### 不推荐的方式
 
