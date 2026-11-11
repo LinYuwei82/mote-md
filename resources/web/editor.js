@@ -5294,6 +5294,94 @@
       + exportBodyHtml() + '</article></body></html>';
   }
 
+  // PDF 导出分段用的“安全切点”（文档坐标，CSS px）：按文字行、表格行、
+  // 列表项与图片的纵向区间取切点。宿主按这些点分段抓取与切页，避免把一行字
+  // 或一张图劈开。切点取两段内容之间的空隙中点；行盒紧挨着（同一段内的换行）
+  // 时向下让 2px，因为中文字形（尤其标点）的墨迹会略微溢出 line box，
+  // 贴着盒底切会漏出半截。
+  function pdfSafeCuts(ed) {
+    if (!ed)
+      return { cuts: [0, 1], bottom: 1 };
+    // createPDF 的坐标从文档左上角算起，滚动位置只影响 getBoundingClientRect
+    var base = window.pageYOffset || 0;
+    var spans = [];
+    function addRect(r) {
+      if (!r || r.height <= 0 || r.width <= 0)
+        return;
+      spans.push({ top: r.top + base, bottom: r.bottom + base });
+    }
+    function inChrome(node) {
+      for (var el = node.parentNode; el && el !== ed; el = el.parentNode) {
+        if (el.classList && (el.classList.contains('gutter') ||
+            el.classList.contains('code-tools') || el.classList.contains('code-lang')))
+          return true;
+      }
+      return false;
+    }
+    for (var i = 0; i < ed.children.length; i++) {
+      var block = ed.children[i];
+      if (!block.classList || !block.classList.contains('block'))
+        continue;
+      // 文字行盒：逐个文本节点取 Range 的行矩形；同一行被行内元素切开的片段
+      // 纵向互相重叠，后面按重叠合并，相邻两行（首尾相接）保持独立以便切页。
+      var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null, false);
+      var hasText = false;
+      var node;
+      while ((node = walker.nextNode())) {
+        if (!node.nodeValue || !/\S/.test(node.nodeValue) || inChrome(node))
+          continue;
+        var range = document.createRange();
+        range.selectNodeContents(node);
+        var rects = range.getClientRects();
+        for (var k = 0; k < rects.length; k++) {
+          if (rects[k].height <= 0 || rects[k].width <= 0)
+            continue;
+          hasText = true;
+          spans.push({ top: rects[k].top + base, bottom: rects[k].bottom + base });
+        }
+      }
+      // 表格行、列表项、图片自身不能切，取它们的整体矩形
+      var inner = block.querySelectorAll('li, tr, img');
+      for (var j = 0; j < inner.length; j++)
+        addRect(inner[j].getBoundingClientRect());
+      // 没有文字也没有上述元素的块（空段、分割线）按整块处理
+      if (!hasText && !inner.length)
+        addRect(block.getBoundingClientRect());
+    }
+    spans.sort(function (a, b) { return a.top - b.top; });
+    var merged = [];
+    for (var n = 0; n < spans.length; n++) {
+      var span = spans[n];
+      var last = merged.length ? merged[merged.length - 1] : null;
+      // 只合并纵向真正重叠的区间（同一行的多个片段、表格单元格与行）；
+      // 首尾相接的相邻行不合并，这样才能在行与行之间切页。
+      if (last && span.top < last.bottom - 0.5) {
+        if (span.bottom > last.bottom)
+          last.bottom = span.bottom;
+        continue;
+      }
+      merged.push({ top: span.top, bottom: span.bottom });
+    }
+    var cuts = [0];
+    for (var p = 0; p + 1 < merged.length; p++) {
+      var gap = merged[p + 1].top - merged[p].bottom;
+      // 空隙里切：离上一行墨迹 4px（盖住标点溢出），余量留给页首
+      cuts.push(gap >= 4 ? merged[p].bottom + Math.min(gap / 2, 4)
+                         : merged[p].bottom + 2);
+    }
+    var bottom = merged.length ? merged[merged.length - 1].bottom + 1 : 1;
+    cuts.push(Math.ceil(bottom));
+    cuts.sort(function (a, b) { return a - b; });
+    var out = [];
+    for (var q = 0; q < cuts.length; q++) {
+      if (!out.length || cuts[q] - out[out.length - 1] > 0.75)
+        out.push(cuts[q]);
+    }
+    return { cuts: out, bottom: Math.ceil(bottom) };
+  }
+
+  var pdfSavedScrollY = 0;
+
   window.mote = {
     setTheme: setTheme,
     setMarkdown: function (text) {
@@ -5485,16 +5573,20 @@
     // 所以由宿主在导出前加 body.pdf-export（样式里清外壳），导出完成立刻移除。
     // 只动 body 的 class，不碰正文节点，因此不改文档、不进撤销栈、不置脏标记。
     pdfBegin: function () {
+      pdfSavedScrollY = window.pageYOffset || 0;
       document.body.classList.add('pdf-export');
       var ed = document.getElementById('editor');
       var rect = ed ? ed.getBoundingClientRect() : { width: 0 };
+      var geo = pdfSafeCuts(ed);
       return JSON.stringify({
         w: Math.ceil(rect.width || 0),
-        h: Math.ceil(document.documentElement.scrollHeight || 0)
+        h: geo.bottom,
+        cuts: geo.cuts
       });
     },
     pdfEnd: function () {
       document.body.classList.remove('pdf-export');
+      window.scrollTo(0, pdfSavedScrollY);
     }
   };
 
