@@ -304,6 +304,7 @@ code {
 pre.code-block {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   margin: 0.9em 0 1.1em;
   padding: 0;
@@ -311,16 +312,26 @@ pre.code-block {
   border-radius: 4px;
 }
 
-/* 语言徽标：绝对定位到代码框右侧留白（left:100% 起向右生长），因此无论语言名
-   多长都不会压住任何代码字形；绝对定位不占排版，块几何不受显隐影响。
-   渲染态就常驻可见（半透明）并且可点——单击即可编辑语言，不必先进入编辑态；
-   渲染态 user-select:none，连选/三击整段复制都不会把语言名带进剪贴板。 */
+/* 代码块顶部头栏：语言徽标靠左，复制按钮绝对定位在代码块内部右上角
+   （top/right 各留 0.35–0.45rem 内缩），整条都在边框内，不再挂到框外。
+   头栏只占很窄的一条，代码正文从下一行开始；横向滚动只发生在 .code-scroll 内，
+   按钮位置始终稳定。渲染态即可用，user-select:none，连选/三击整段复制都不会
+   把语言名或按钮带进剪贴板。头栏与代码之间不再画分隔线；min-height 在
+   border-box 下包含原来那 1px，去掉边框后条高与代码首行位置都保持不变。 */
+.code-tools {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  box-sizing: border-box;
+  min-height: 1.85rem;
+  /* 右侧给绝对定位的复制按钮留位，长语言名截断后也碰不到按钮 */
+  padding: 0 1.95rem 0 0.6rem;
+}
+
 .code-lang {
-  position: absolute;
-  top: 0.42rem;
-  left: 100%;
-  margin-left: 0.4rem;
-  z-index: 2;
+  flex: 0 1 auto;
+  min-width: 0;
   padding: 0.04rem 0.35rem;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -333,9 +344,72 @@ pre.code-block {
   white-space: pre;
   outline: none;
   opacity: 0.5;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  /* 语言名过长时省略，保证复制按钮始终留在代码块内、与徽标不重叠；
+     hover 有 title 可看全名，点开选择器可搜索切换。 */
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 徽标后的展开指示：用两条边画出的 V 形，空 span 没有文本，不会进入
+   textContent 或剪贴板；打开下拉（徽标 aria-expanded=true）时旋转 180°。 */
+.code-lang-caret {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid var(--faint-3);
+  border-bottom: 1px solid var(--faint-3);
+  transform: translateY(-1.5px) rotate(45deg);
+  transform-origin: center;
+  transition: transform 120ms ease;
+  pointer-events: none;
   -webkit-user-select: none;
   user-select: none;
 }
+
+.code-lang[aria-expanded="true"] + .code-lang-caret {
+  transform: translateY(1px) rotate(225deg);
+}
+
+/* 复制按钮：绝对定位在代码块内部右上角，平时半透明、hover 才显形；
+   成功后短暂换成对勾。top/right 的 0.35/0.45rem 内缩让按钮四边都落在
+   代码块边框以内，也不会碰到头栏左侧的语言徽标。 */
+.code-copy {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.45rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: pointer;
+  outline: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.code-copy:hover,
+.code-copy:focus-visible {
+  opacity: 1;
+  border-color: var(--border-hover);
+  background: var(--bg);
+}
+
+.code-copy .i-done { display: none; }
+.code-copy.copied { opacity: 1; color: var(--accent); }
+.code-copy.copied .i-copy { display: none; }
+.code-copy.copied .i-done { display: inline; }
 
 .code-lang:hover {
   opacity: 1;
@@ -361,7 +435,9 @@ body.inline-proto .block.code.editing .code-lang {
    不再用 position:sticky——sticky 与横向滚动条共存时，WebKit 在整篇重建后
    会把块高少算一个滚动条高度（实测 15px）。 */
 .code-scroll {
-  flex: 1 1 auto;
+  /* flex-basis 必须是 0：头栏占满第一行后，若按内容宽度参与折行判断，
+     超长行会把滚动区挤到第三行（头栏/行号/代码各占一行）。 */
+  flex: 1 1 0;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -803,3 +879,197 @@ body.inline-proto .block.h6.editing {
   margin: 4px 2px;
   background: var(--border-hair);
 }
+
+/* 代码块语言选择器：挂在 body 上，position:fixed，天然躲开代码块的 overflow，
+   也不参与正文排版。宽度固定，位置由 JS 按徽标矩形钳进窗口内。 */
+#lang-menu {
+  position: fixed;
+  z-index: 50;
+  width: 216px;
+  padding: 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--shadow-menu);
+  font-family: -apple-system, "PingFang SC", sans-serif;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+#lang-search {
+  width: 100%;
+  margin: 0 0 5px;
+  padding: 4px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: var(--bg);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text-strong);
+  outline: none;
+}
+
+#lang-search:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.lang-list {
+  max-height: 264px;
+  overflow-y: auto;
+}
+
+.lang-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: default;
+}
+
+.lang-item.active {
+  background: var(--bg-active);
+}
+
+.lang-item.is-current {
+  color: var(--accent);
+}
+
+.lang-check {
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.lang-empty {
+  padding: 6px 8px;
+  color: var(--muted-3);
+}
+
+/* ---------------- 打印 / 导出 PDF ----------------
+   宿主按 A4、无页眉页脚打印当前页面；这里只用 @media print 清掉界面外壳，
+   不改 DOM、不动撤销栈，导出前后文档与脏标记都不变。
+   正文、表格、图片与代码高亮全部保留原有内联样式；深色主题在纸上统一转浅色，
+   避免导出黑底 PDF。 */
+@media print {
+  :root,
+  :root[data-theme="dark"] {
+    color-scheme: light;
+    --bg: #ffffff;
+    --bg-soft: #f6f8fa;
+    --bg-hover: #f6f8fa;
+    --text: #1d2129;
+    --text-strong: #24303d;
+    --text-soft: #4a5563;
+    --heading: #0f172a;
+    --muted: #6b7480;
+    --border-soft: #d8dee4;
+    --border-toc: #e5e8ec;
+    --border-hair: #e5e8ec;
+  }
+
+  body { background: #fff; }
+
+  /* min-height:100% 在分页时会被解析成“每页满高”，WKWebView 打印会一直追加
+     空页直到磁盘写满；打印上下文里必须把根节点高度交还给内容自身。 */
+  html,
+  body {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* 侧栏、查找条、斜杠菜单、块的操作标记、行号栏与右上角浮层都不进纸面 */
+  #toc,
+  #find-bar,
+  #slash-menu,
+  #turn-menu,
+  #lang-menu,
+  .mk,
+  .code-tools,
+  .gutter { display: none !important; }
+
+  #layout { display: block !important; }
+
+  #main { overflow: visible !important; }
+
+  #editor {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .block {
+    outline: none !important;
+    background: transparent !important;
+  }
+
+  /* 代码块与表格尽量不跨页；标题不要孤零零留在页底 */
+  pre,
+  table,
+  img,
+  .block.code { break-inside: avoid; }
+
+  .block h1,
+  .block h2,
+  .block h3 { break-after: avoid; }
+
+  .code-scroll { overflow: visible !important; }
+}
+
+/* createPDF / PrintToPdf 实际按屏幕媒体渲染，@media print 不生效；导出期间宿主给
+   body 加 .pdf-export（完成后立即移除），这里用同一套规则清外壳。只动 class，
+   不改正文节点，文档内容、撤销栈与脏标记都不受影响。 */
+body.pdf-export {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-soft: #f6f8fa;
+  --bg-hover: #f6f8fa;
+  --text: #1d2129;
+  --text-strong: #24303d;
+  --text-soft: #4a5563;
+  --heading: #0f172a;
+  --muted: #6b7480;
+  --border-soft: #d8dee4;
+  --border-toc: #e5e8ec;
+  --border-hair: #e5e8ec;
+  background: #fff;
+}
+
+body.pdf-export #toc,
+body.pdf-export #find-bar,
+body.pdf-export #slash-menu,
+body.pdf-export #turn-menu,
+body.pdf-export #lang-menu,
+body.pdf-export .mk,
+body.pdf-export .code-tools,
+body.pdf-export .gutter { display: none !important; }
+
+body.pdf-export #layout { display: block !important; }
+
+body.pdf-export #main { overflow: visible !important; }
+
+body.pdf-export #editor {
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+body.pdf-export .block {
+  outline: none !important;
+  background: transparent !important;
+}
+
+body.pdf-export pre,
+body.pdf-export table,
+body.pdf-export img,
+body.pdf-export .block.code { break-inside: avoid; }
+
+body.pdf-export .block h1,
+body.pdf-export .block h2,
+body.pdf-export .block h3 { break-after: avoid; }
+
+body.pdf-export .code-scroll { overflow: visible !important; }

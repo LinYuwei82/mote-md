@@ -5,15 +5,22 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QPointer>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QTimer>
 #include <QUrl>
+#include <QVector>
 
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 
+#include <algorithm>
 #include <cstdio>
+#include <QFileInfo>
 
 namespace {
 
@@ -339,6 +346,334 @@ void MacWebView::clipboardCommand(const QString &command)
     // 早先菜单里没有这三项，AppKit 就没有对应的 key equivalent，WKWebView 收不到
     // 命令，Cmd+C/X/V 因此完全无反应。
     [NSApp sendAction:action to:nil from:nil];
+}
+
+// 导出 PDF：WKWebView 的打印操作在本项目的页面结构上会无限分页（根节点
+// min-height:100% 在分页上下文里被当成“每页满高”，实测会把磁盘写满），因此改为：
+// 1) 用 createPDFWithConfiguration 抓正文（同一套 WebKit 渲染，中文、图片、
+//    代码高亮与等宽字体全保留）；
+// 2) 再按 A4 内容区把抓到的内容切成多页矢量 PDF（CoreGraphics 绘制，文字仍是文字）。
+// createPDF 的单页高度上限是 14400pt（200in），整篇一次抓超过上限会被裁掉后半段，
+// 所以先按安全切点排好 A4 页，再把连续的页打成一包（每包 < 13800 CSS px）分别抓取，
+// 最后顺序绘制拼成一份文件。分包与分页都落在安全切点上：接缝不重复、不缺行，也不会
+// 把一行文字或一张图片横向劈开。页面侧只加 body.pdf-export 清外壳，导出期间不改
+// 文档、撤销栈、脏标记与滚动位置。
+namespace {
+
+const CGFloat kPdfPageW = 595.28;
+const CGFloat kPdfPageH = 841.89;
+const CGFloat kPdfMarginLeft = 51.0;
+const CGFloat kPdfMarginRight = 51.0;
+const CGFloat kPdfMarginTop = 56.7;
+const CGFloat kPdfMarginBottom = 56.7;
+const CGFloat kPdfContentW = kPdfPageW - kPdfMarginLeft - kPdfMarginRight;
+const CGFloat kPdfContentH = kPdfPageH - kPdfMarginTop - kPdfMarginBottom;
+const double kPdfChunkPx = 13800.0;   // 每段抓取高度，留出余量低于 createPDF 的 14400pt 上限
+const int kPdfMaxPages = 200;         // 真实文档不会超过 200 页，超出按尺寸异常处理
+
+struct PdfPage {
+    double top = 0;     // 文档坐标（CSS px）
+    double bottom = 0;
+    double scale = 0;   // 该页的缩放（只有超高原子块的兜底页会小于常规值）
+};
+
+struct PdfExportJob {
+    QPointer<MacWebView> owner;
+    QString path;
+    QVector<PdfPage> pages;
+    QVector<QPair<double, double>> chunks;
+    double width = 0;
+    double height = 0;
+    int chunkIndex = 0;
+    int pageCount = 0;
+    bool aborted = false;
+    CGContextRef ctx = nullptr;
+    CFMutableDataRef buffer = nullptr;
+};
+
+void pdfCleanup(PdfExportJob *job)
+{
+    if (job->ctx) {
+        CGPDFContextClose(job->ctx);
+        CGContextRelease(job->ctx);
+        job->ctx = nullptr;
+    }
+    if (job->buffer) {
+        CFRelease(job->buffer);
+        job->buffer = nullptr;
+    }
+}
+
+void pdfAbort(PdfExportJob *job, WKWebView *web, const QString &message)
+{
+    if (job->aborted)
+        return;
+    job->aborted = true;
+    [web evaluateJavaScript:@"window.mote && window.mote.pdfEnd()" completionHandler:nil];
+    pdfCleanup(job);
+    QFile::remove(job->path);
+    if (MacWebView *owner = job->owner.data())
+        emit owner->pdfExportFailed(message);
+    delete job;
+}
+
+// 先在整篇范围内按安全切点排页，再把连续的页打成一包（每包高度 < createPDF 上限）。
+// 先排页再分包，分包边界天然落在页边界上，不会因为包尾塞不下一页而多出空白页。
+QVector<PdfPage> pdfPlanPages(const QVector<double> &cuts, double height, double width)
+{
+    QVector<PdfPage> pages;
+    if (width <= 0 || height <= 0 || cuts.size() < 2)
+        return pages;
+    const double scale = kPdfContentW / width;
+    const double sliceSrc = kPdfContentH / scale; // 每页最多覆盖多少源高度
+    double y = 0;
+    while (y < height - 0.5 && pages.size() < kPdfMaxPages) {
+        const double limit = y + sliceSrc;
+        double bottom = -1;
+        for (int i = 0; i < cuts.size(); i++) {
+            const double c = cuts.at(i);
+            if (c > y + 0.5 && c <= limit + 0.01)
+                bottom = c;
+        }
+        double pageScale = scale;
+        if (bottom < 0) {
+            // 页内没有安全切点：单个超高原子块，整段缩放放进一页，宁可缩小也不劈开
+            for (int i = 0; i < cuts.size(); i++) {
+                const double c = cuts.at(i);
+                if (c > y + 0.5) {
+                    bottom = c;
+                    break;
+                }
+            }
+            if (bottom < 0)
+                bottom = height;
+            pageScale = std::min(scale, kPdfContentH / (bottom - y));
+        }
+        if (bottom <= y + 0.5)
+            break;
+        PdfPage page;
+        page.top = y;
+        page.bottom = bottom;
+        page.scale = pageScale;
+        pages.append(page);
+        y = bottom;
+    }
+    return pages;
+}
+
+QVector<QPair<double, double>> pdfChunks(const QVector<PdfPage> &pages)
+{
+    QVector<QPair<double, double>> chunks;
+    int i = 0;
+    while (i < pages.size()) {
+        const double top = pages.at(i).top;
+        int j = i;
+        while (j < pages.size() && pages.at(j).bottom - top <= kPdfChunkPx + 0.01)
+            j++;
+        if (j == i)
+            j = i + 1; // 单页超过上限时独占一段（只会出现在超高原子块的兜底页）
+        chunks.append(qMakePair(top, pages.at(j - 1).bottom));
+        i = j;
+    }
+    return chunks;
+}
+
+// 把一段 createPDF 结果按事先排好的页绘制成 A4 矢量页。
+bool pdfDrawChunk(PdfExportJob *job, NSData *data,
+                  double chunkTop, double chunkBottom)
+{
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)data);
+    CGPDFDocumentRef doc = CGPDFDocumentCreateWithProvider(provider);
+    CGDataProviderRelease(provider);
+    if (!doc || CGPDFDocumentGetNumberOfPages(doc) < 1) {
+        if (doc)
+            CGPDFDocumentRelease(doc);
+        return false;
+    }
+    CGPDFPageRef sourcePage = CGPDFDocumentGetPage(doc, 1);
+    const CGRect box = CGPDFPageGetBoxRect(sourcePage, kCGPDFMediaBox);
+    if (box.size.width <= 0 || box.size.height <= 0) {
+        CGPDFDocumentRelease(doc);
+        return false;
+    }
+
+    for (int i = 0; i < job->pages.size(); i++) {
+        const PdfPage &page = job->pages.at(i);
+        if (page.top < chunkTop - 0.5 || page.bottom > chunkBottom + 0.5)
+            continue;
+        if (++job->pageCount > kPdfMaxPages) {
+            CGPDFDocumentRelease(doc);
+            return false;
+        }
+        const double bandTop = page.top - chunkTop;
+        const double bandBottom = page.bottom - chunkTop;
+        const CGFloat outH = (bandBottom - bandTop) * page.scale;
+        CGPDFContextBeginPage(job->ctx, NULL);
+        CGContextSaveGState(job->ctx);
+        // 内容贴内容区顶部（每一页一致），最后不足一页时底部留白
+        CGContextTranslateCTM(job->ctx, kPdfMarginLeft,
+                              kPdfMarginBottom + kPdfContentH - outH);
+        CGContextScaleCTM(job->ctx, page.scale, page.scale);
+        CGContextTranslateCTM(job->ctx, 0, -(box.size.height - bandBottom));
+        CGContextClipToRect(job->ctx, CGRectMake(0, box.size.height - bandBottom,
+                                                 box.size.width, bandBottom - bandTop));
+        CGContextDrawPDFPage(job->ctx, sourcePage);
+        CGContextRestoreGState(job->ctx);
+        CGPDFContextEndPage(job->ctx);
+    }
+    CGPDFDocumentRelease(doc);
+    return true;
+}
+
+void pdfRunChunk(PdfExportJob *job, WKWebView *web);
+
+void pdfFinish(PdfExportJob *job, WKWebView *web)
+{
+    [web evaluateJavaScript:@"window.mote && window.mote.pdfEnd()" completionHandler:nil];
+    if (job->pageCount <= 0) {
+        pdfAbort(job, web, MacWebView::tr("导出失败：没有可导出的正文"));
+        return;
+    }
+    CGPDFContextClose(job->ctx);
+    CGContextRelease(job->ctx);
+    job->ctx = nullptr;
+    NSData *data = (NSData *)job->buffer;
+    const BOOL written = data && [data writeToFile:job->path.toNSString() atomically:YES];
+    if (job->buffer) {
+        CFRelease(job->buffer);
+        job->buffer = nullptr;
+    }
+    const QFileInfo pdf(job->path);
+    if (!written || !pdf.exists() || pdf.size() <= 0) {
+        QFile::remove(job->path);
+        if (MacWebView *owner = job->owner.data())
+            emit owner->pdfExportFailed(
+                MacWebView::tr("导出失败：无法写入 %1")
+                    .arg(QDir::toNativeSeparators(job->path)));
+        delete job;
+        return;
+    }
+    const QString finished = job->path;
+    if (MacWebView *owner = job->owner.data())
+        emit owner->pdfExportFinished(finished);
+    delete job;
+}
+
+void pdfRunChunk(PdfExportJob *job, WKWebView *web)
+{
+    if (job->aborted)
+        return;
+    if (job->chunkIndex >= job->chunks.size()) {
+        pdfFinish(job, web);
+        return;
+    }
+    const QPair<double, double> band = job->chunks.at(job->chunkIndex);
+    const double bandTop = band.first;
+    const double bandBottom = band.second;
+    WKPDFConfiguration *configuration = [[WKPDFConfiguration alloc] init];
+    configuration.rect = CGRectMake(0, bandTop, job->width, bandBottom - bandTop);
+    [web createPDFWithConfiguration:configuration
+                  completionHandler:^(NSData *data, NSError *error) {
+                    [configuration release];
+                    if (job->aborted)
+                        return;
+                    if (!data || error) {
+                        pdfAbort(job, web, MacWebView::tr("导出失败：无法渲染页面"));
+                        return;
+                    }
+                    if (!pdfDrawChunk(job, data, bandTop, bandBottom)) {
+                        pdfAbort(job, web, MacWebView::tr("导出失败：文档过长，无法分页导出"));
+                        return;
+                    }
+                    job->chunkIndex++;
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        pdfRunChunk(job, web);
+                    });
+                  }];
+}
+
+} // namespace
+
+void MacWebView::exportPdfNative(const QString &filePath)
+{
+    WKWebView *web = static_cast<WKWebView *>(m_webView);
+    if (!web) {
+        emit pdfExportFailed(tr("导出失败：页面还没准备好"));
+        return;
+    }
+
+    const QString path = filePath;
+    // 同名旧文件不能算本次成功：先删掉，成功与否由产物是否存在、是否非空判定
+    QFile::remove(path);
+
+    PdfExportJob *job = new PdfExportJob();
+    job->owner = this;
+    job->path = path;
+
+    // 先进入导出态（隐藏外壳）并量整篇正文尺寸与安全切点（CSS px）；pdfBegin 只加
+    // body 的 class，导出结束（含失败）立刻 pdfEnd 还原，不改正文节点。
+    NSString *measure = @"window.mote && window.mote.pdfBegin()";
+    QPointer<MacWebView> guard(this);
+    [web evaluateJavaScript:measure
+          completionHandler:^(id result, NSError *error) {
+            MacWebView *owner = guard.data();
+            if (!owner) {
+                delete job;
+                return;
+            }
+            Q_UNUSED(error)
+            const QString json = result ? QString::fromNSString([result description]) : QString();
+            const QJsonObject dims = QJsonDocument::fromJson(json.toUtf8()).object();
+            const double width = dims.value(QStringLiteral("w")).toDouble();
+            const double height = dims.value(QStringLiteral("h")).toDouble();
+
+            QVector<double> cuts;
+            const QJsonArray rawCuts = dims.value(QStringLiteral("cuts")).toArray();
+            for (int i = 0; i < rawCuts.size(); i++) {
+                const double cut = rawCuts.at(i).toDouble();
+                if (cut >= 0 && cut <= height)
+                    cuts.append(cut);
+            }
+            if (width < 10 || height < 10 || cuts.size() < 2) {
+                [web evaluateJavaScript:@"window.mote && window.mote.pdfEnd()"
+                      completionHandler:nil];
+                emit owner->pdfExportFailed(tr("导出失败：没有可导出的正文"));
+                delete job;
+                return;
+            }
+            std::sort(cuts.begin(), cuts.end());
+            job->width = width;
+            job->height = height;
+            job->pages = pdfPlanPages(cuts, height, width);
+            if (job->pages.isEmpty() || job->pages.last().bottom < height - 0.5) {
+                // 超过页数上限时宁可报错，也不能把后半篇悄悄丢掉
+                pdfAbort(job, web, tr("导出失败：文档过长，无法完整导出"));
+                return;
+            }
+            for (int i = 0; i < job->pages.size(); i++) {
+                const PdfPage &page = job->pages.at(i);
+                if (page.bottom - page.top > kPdfChunkPx + 0.01) {
+                    // 单个不可切元素高过 createPDF 的单页上限，抓取必然被裁，直接报错
+                    pdfAbort(job, web, tr("导出失败：文档中有超高元素，无法完整导出"));
+                    return;
+                }
+            }
+            job->chunks = pdfChunks(job->pages);
+
+            CGRect mediaBox = CGRectMake(0, 0, kPdfPageW, kPdfPageH);
+            job->buffer = CFDataCreateMutable(kCFAllocatorDefault, 0);
+            CGDataConsumerRef consumer = job->buffer
+                ? CGDataConsumerCreateWithCFData(job->buffer) : nullptr;
+            if (consumer) {
+                job->ctx = CGPDFContextCreate(consumer, &mediaBox, NULL);
+                CGDataConsumerRelease(consumer);
+            }
+            if (!job->ctx) {
+                pdfAbort(job, web, tr("导出失败：无法生成 PDF"));
+                return;
+            }
+            pdfRunChunk(job, web);
+          }];
 }
 
 void MacWebView::ensureHost()

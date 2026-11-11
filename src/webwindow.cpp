@@ -148,6 +148,12 @@ void WebWindow::createActions()
     m_exportAction->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_E));
     connect(m_exportAction, &QAction::triggered, this, &WebWindow::handleExportHtml);
 
+    // 导出 PDF：渲染态整篇正文、A4、无页眉页脚。源码模式下由 applyViewState 禁用。
+    m_exportPdfAction = new QAction(tr("导出 PDF…"), this);
+    m_exportPdfAction->setShortcut(QKeySequence::Print);
+    m_exportPdfAction->setStatusTip(tr("导出渲染后的整篇正文（A4、无页眉页脚）；源码模式下不可用"));
+    connect(m_exportPdfAction, &QAction::triggered, this, &WebWindow::handleExportPdf);
+
     // 撤销/重做走原生菜单与快捷键：WKWebView 会自己处理 Cmd+Z（responder chain
     // 里的 undo:），页面里的 keydown 不一定收得到，所以由外壳显式驱动前端历史栈。
     m_undoAction = new QAction(tr("撤销"), this);
@@ -279,6 +285,7 @@ void WebWindow::createUi()
     fileMenu->addAction(m_saveAction);
     fileMenu->addAction(m_saveAsAction);
     fileMenu->addAction(m_exportAction);
+    fileMenu->addAction(m_exportPdfAction);
 
     QMenu *editMenu = menuBar()->addMenu(tr("编辑"));
     editMenu->addAction(m_undoAction);
@@ -375,6 +382,8 @@ void WebWindow::createUi()
         });
         connect(m_web, &WebEditor::openLinkRequested, this, &WebWindow::handleOpenLink);
         connect(m_web, &WebEditor::exportHtmlReady, this, &WebWindow::handleExportReady);
+        connect(m_web, &WebEditor::pdfExportFinished, this, &WebWindow::handlePdfFinished);
+        connect(m_web, &WebEditor::pdfExportFailed, this, &WebWindow::handlePdfFailed);
         connect(m_web, &WebEditor::statusMessage, this, &WebWindow::showStatus);
         connect(m_web, &WebEditor::errorOccurred, this, [this](const QString &message) {
             showStatus(tr("前端错误：%1").arg(message));
@@ -594,6 +603,10 @@ void WebWindow::applyViewState(bool tocOn, bool sourceOn, qreal zoom)
 {
     m_tocAction->setChecked(tocOn);
     m_sourceAction->setChecked(sourceOn);
+    m_sourceOn = sourceOn;
+    // 源码态不是渲染结果，打印出来只会是空白或原始文本，直接禁用导出 PDF，
+    // 与 m_exportPdfAction 的禁用口径一致（快捷键不会再触发）。
+    m_exportPdfAction->setEnabled(!sourceOn);
     // 源码模式是 textarea 自己的原生剪贴板：macOS 把剪切/复制/粘贴直接转发给
     // WebKit 响应链，两种模式都成立；Windows 的页面桥只覆盖渲染态，源码模式要
     // 交回 WebView2 自带的加速键，所以只在 Windows 上禁用这三项。
@@ -644,6 +657,78 @@ void WebWindow::handleExportHtml()
     if (!m_web)
         return;
     m_web->requestExportHtml(displayName());
+}
+
+void WebWindow::handleExportPdf()
+{
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG"))
+        std::fprintf(stderr, "QT action exportPdf\n");
+    if (!m_web)
+        return;
+    if (m_sourceOn) {
+        showStatus(tr("源码模式下不能导出 PDF，先退出源码模式"));
+        return;
+    }
+
+    // 未保存文档先落盘：PDF 里图片的相对路径按 .md 所在目录解析，没有路径就没有
+    // 基准；用户取消保存对话框时在这里中止，不会进入导出，也不留半成品文件。
+    if (m_filePath.isEmpty()) {
+        m_saveAsRequested = true;
+        m_afterSave = AfterSave::ExportPdf;
+        m_web->requestSnapshot();
+        return;
+    }
+    if (m_dirty && !prepareForReplace(AfterSave::ExportPdf))
+        return;
+
+    promptExportPdf();
+}
+
+void WebWindow::promptExportPdf()
+{
+    if (!m_web)
+        return;
+
+    const QString suggested =
+        QDir(QFileInfo(m_filePath).path())
+            .filePath(QFileInfo(m_filePath).completeBaseName() + QStringLiteral(".pdf"));
+
+    QString path = qEnvironmentVariable("MOTE_PDF_AS");   // 自动化验证用
+    if (path.isEmpty()) {
+        // 诊断：只记录建议路径并当作“用户取消”
+        if (qEnvironmentVariableIsSet("MOTE_PDF_PROMPT")) {
+            std::fprintf(stderr, "QT pdf suggested=%s\n", suggested.toUtf8().constData());
+            return;
+        }
+        path = QFileDialog::getSaveFileName(this, tr("导出 PDF"), suggested,
+                                            tr("PDF 文件 (*.pdf);;所有文件 (*)"));
+    }
+    if (path.isEmpty())
+        return;
+    if (QFileInfo(path).suffix().isEmpty())
+        path += QLatin1String(".pdf");
+
+    showStatus(tr("正在导出 PDF…"));
+    m_web->requestExportPdf(QFileInfo(path).absoluteFilePath());
+}
+
+void WebWindow::handlePdfFinished(const QString &filePath)
+{
+    const QFileInfo pdf(filePath);
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG")) {
+        std::fprintf(stderr, "QT pdf path=%s size=%lld\n",
+                     filePath.toUtf8().constData(),
+                     static_cast<long long>(pdf.size()));
+    }
+    showStatus(tr("已导出到 %1").arg(QDir::toNativeSeparators(filePath)));
+}
+
+void WebWindow::handlePdfFailed(const QString &message)
+{
+    if (qEnvironmentVariableIsSet("MOTE_KEYLOG"))
+        std::fprintf(stderr, "QT pdf failed: %s\n", message.toUtf8().constData());
+    showStatus(message);
+    QMessageBox::warning(this, tr("导出失败"), message);
 }
 
 void WebWindow::handleExportReady(const QString &html)
@@ -878,6 +963,9 @@ void WebWindow::runAfterSave()
         break;
     case AfterSave::Close:
         close();
+        break;
+    case AfterSave::ExportPdf:
+        QTimer::singleShot(0, this, &WebWindow::promptExportPdf);
         break;
     case AfterSave::None:
         break;

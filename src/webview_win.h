@@ -33,6 +33,10 @@ public:
     // 还没就位时它照样是 S_OK。只有脚本显式返回 'ok' 才清 pending。
     // 由 ScriptResultHandler（COM 完成回调）调用，需与其它回调入口同属 public。
     void onInjectResult(long hr, const QString &resultJson, bool chunked);
+    // PDF 导出完成（PrintToPdfAsync 的 COM 回调），在 UI 线程调用
+    void onPdfExported(bool success);
+    // pdfBegin 脚本执行完：此时页面已进入导出态，再启动 PrintToPdfAsync
+    void onPdfBeginDone();
     // 导航完成后重绑拖放目标：WebView2 的子窗口可能在导航/重建后被替换，
     // 句柄悬空会导致拖放静默失效。
     void refreshDropTarget();
@@ -45,6 +49,7 @@ protected:
     void evaluateJs(const QString &js) override;
     void loadPage(const QUrl &baseDir) override;
     void injectMarkdown(const QString &text) override;
+    void exportPdfNative(const QString &filePath) override;
 
 private:
     void startEnvironment();
@@ -87,6 +92,9 @@ private:
     bool m_hasDeferredLoad = false;
     QString m_pageFile;            // 文档目录下的临时页面文件，退出/换文档时删除
     QString m_pageUrl;             // 上一次导航用的完整 URL（白名单按它精确放行）
+    QString m_pdfPath;             // 进行中的 PDF 导出目标（完成回调据此回报）
+    void *m_pdfWeb7 = nullptr;     // ICoreWebView2_7 *（导出期间暂存）
+    void *m_pdfSettings = nullptr; // ICoreWebView2PrintSettings *（导出期间暂存）
     QLabel *m_unavailable = nullptr; // 覆盖层（WebView2 缺失 / 导航失败的可见提示）
 };
 

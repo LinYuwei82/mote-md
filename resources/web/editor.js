@@ -31,7 +31,6 @@
   var suppressEvents = false;   // 程序化重建 DOM 期间屏蔽 input/focus 等事件
   var commitBatch = 0;          // >0 时合并中间渲染，多块转换只记一个撤销步
   var COALESCE_MS = 600;        // 连续输入的合并窗口
-  var LANG_RECOAT_MS = 120;     // 语言徽标逐字母输入时合并重着色的窗口
   // 历史步数上限：整篇快照虽然只共享未改动块的字符串，但步数不封顶时块数组
   // 会随编辑时长无限堆积（4500 块 / 170KB 文档尤为明显），超出丢最旧的。
   var MAX_HISTORY = 100;
@@ -282,6 +281,37 @@
     html: 'html', htm: 'html', xml: 'html', xhtml: 'html', svg: 'html',
     vue: 'html', plist: 'html', xaml: 'html'
   };
+
+  // 语言选择器的候选：每一项都用 LANG_ALIAS 校验，只列出真正有高亮规则的语言，
+  // 避免维护一份与高亮器对不上的清单。同一个高亮器下的别名（js/ts/jsx/tsx 等）
+  // 仍按各自的显示名列出，选中后写入的也是该别名本身。words 供搜索匹配，
+  // 含中文词，例如「脚本」「数据库」「终端」。
+  var LANG_PICKS = [
+    { name: 'Plain Text', value: '', words: 'plain text plaintext txt 纯文本 无语言 文本' },
+    { name: 'JavaScript', value: 'js', words: 'javascript js node 脚本' },
+    { name: 'TypeScript', value: 'ts', words: 'typescript ts js' },
+    { name: 'JSX', value: 'jsx', words: 'jsx react js' },
+    { name: 'TSX', value: 'tsx', words: 'tsx react js' },
+    { name: 'Python', value: 'python', words: 'python py python3 脚本' },
+    { name: 'Java', value: 'java', words: 'java' },
+    { name: 'C', value: 'c', words: 'c' },
+    { name: 'C++', value: 'cpp', words: 'c++ cpp cplusplus' },
+    { name: 'C#', value: 'cs', words: 'c# csharp cs' },
+    { name: 'Go', value: 'go', words: 'go golang' },
+    { name: 'Rust', value: 'rust', words: 'rust rs' },
+    { name: 'Swift', value: 'swift', words: 'swift' },
+    { name: 'Kotlin', value: 'kotlin', words: 'kotlin kt' },
+    { name: 'Objective-C', value: 'objc', words: 'objective-c objc' },
+    { name: 'JSON', value: 'json', words: 'json' },
+    { name: 'Shell', value: 'sh', words: 'shell sh zsh 终端 命令行 脚本' },
+    { name: 'Bash', value: 'bash', words: 'bash sh 终端 命令行 脚本' },
+    { name: 'SQL', value: 'sql', words: 'sql mysql postgres 数据库' },
+    { name: 'HTML', value: 'html', words: 'html 网页' },
+    { name: 'XML', value: 'xml', words: 'xml 标记' },
+    { name: 'Vue', value: 'vue', words: 'vue 网页' }
+  ].filter(function (item) {
+    return !item.value || LANG_ALIAS[item.value];
+  });
 
   function wordSet(words) {
     var set = Object.create(null);
@@ -736,6 +766,17 @@
     return offset;
   }
 
+  // 代码块右上角浮层的两个图标：与页面同用线性描边 + currentColor，
+  // 复制按钮平时半透明，hover 才显形；成功后短暂换成对勾。
+  var COPY_ICON = '<svg class="i-copy" viewBox="0 0 16 16" width="12" height="12"'
+    + ' fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">'
+    + '<rect x="5.4" y="5.4" width="7.8" height="7.8" rx="1.6"></rect>'
+    + '<path d="M10.6 5.4V4.2A1.8 1.8 0 0 0 8.8 2.4H4.2A1.8 1.8 0 0 0 2.4 4.2v4.6'
+    + 'a1.8 1.8 0 0 0 1.8 1.8h1.2"></path></svg>';
+  var DONE_ICON = '<svg class="i-done" viewBox="0 0 16 16" width="12" height="12"'
+    + ' fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">'
+    + '<path d="M3.2 8.6l3 3 6.6-6.8"></path></svg>';
+
   function renderCode(el, code, lang) {
     // 结尾的 \n 属于正文（末行之后的空行），不能再剥掉，否则编辑-重排往返会
     // 悄悄少一行；围栏前那个 \n 已由 renderBlock 的匹配式吃掉。
@@ -748,14 +789,42 @@
     // 之外：横向滚动只作用于代码，行号与分隔线始终留在左侧。不用 position:sticky
     // ——sticky 与横向滚动条共存时，WebKit 在整篇重建后会把块高少算一个滚动条。
     //
-    // 语言徽标：绝对定位在代码框右侧留白（left:100%），不参与 flex 排版、不占
-    // 高度，也不覆盖任何代码字形；它在渲染态就可点，单击即进入语言编辑。
+    // 代码块顶部头栏（.code-tools）在代码块内部：语言徽标靠左，复制按钮绝对定位
+    // 在代码块内部右上角。头栏是独立一行，横向滚动只发生在下方 .code-scroll 里，
+    // 按钮不会跟着滚走；语言名过长时徽标自身截断（max-width），按钮固定在右上角。
+    // 徽标可点开语言选择器，紧跟的空 span 是纯 CSS 画的展开箭头（无文本，
+    // 不进 textContent/剪贴板），打开时由 aria-expanded 触发旋转。
+    // 按钮在渲染态即可点，不必先进入编辑。
     // 文本不进 <code>、也不进 dataset.raw 的正文部分——原文首行围栏由 dataset.lang 拼回。
     return '<pre class="code-block">'
-      + '<span class="code-lang" contenteditable="true" spellcheck="false"'
+      + '<div class="code-tools" contenteditable="false">'
+      + '<span class="code-lang" contenteditable="false" spellcheck="false"'
+      + ' role="button" aria-haspopup="listbox" aria-expanded="false"'
+      + (lang ? ' title="' + escapeHtml(lang) + '"' : '')
       + ' aria-label="代码语言">' + escapeHtml(lang || '') + '</span>'
+      + '<span class="code-lang-caret" aria-hidden="true"></span>'
+      + '<button type="button" class="code-copy" tabindex="-1"'
+      + ' aria-label="复制代码" title="复制代码">' + COPY_ICON + DONE_ICON + '</button>'
+      + '</div>'
       + '<div class="gutter" contenteditable="false" aria-hidden="true">' + gutter + '</div>'
       + '<div class="code-scroll"><code>' + colored.join('\n') + '</code></div></pre>';
+  }
+
+  // 代码块复制按钮：只写 <code> 里的正文（行号栏、语言徽标都不在 <code> 内），
+  // 多行与制表符原样保留。走与复制/剪切同一条 clipboardWrite 回路，不另造剪贴板
+  // 逻辑；成功只在按钮上做短暂反馈，不弹对话框，也不进入编辑态、不动撤销栈。
+  function copyCodeBlock(btn) {
+    var block = btn && btn.closest ? btn.closest('.block.code') : null;
+    if (!block)
+      return;
+    post({ type: 'clipboardWrite', text: codeText(block) });
+    btn.classList.add('copied');
+    if (btn._copiedTimer)
+      clearTimeout(btn._copiedTimer);
+    btn._copiedTimer = setTimeout(function () {
+      btn.classList.remove('copied');
+      btn._copiedTimer = null;
+    }, 1200);
   }
 
   // WebKit 在整篇重建（撤销/重做、预览↔源码）后，不会把横向滚动条的高度算进
@@ -1299,20 +1368,8 @@
     return { start: start, end: Math.max(start, end) };
   }
 
-  // 光标是否落在语言徽标里。徽标位于 contenteditable 块内部，不是独立的编辑
-  // 主机：input / keydown 的 event.target 仍然是块本身，只能靠选区判断。
-  function selectionInsideLang(el) {
-    var selection = window.getSelection();
-    if (!selection || !selection.rangeCount)
-      return false;
-    var node = selection.getRangeAt(0).startContainer;
-    var host = node && node.nodeType === 1 ? node : (node && node.parentNode);
-    var badge = host && host.closest ? host.closest('.code-lang') : null;
-    return !!(badge && el && el.contains(badge));
-  }
-
-  // 徽标可能被原生编辑整块删掉（在徽标里全选后退格/删除时，WebKit 会把空的可
-  // 编辑 span 一起移除）。此时补回一个徽标，否则语言就再也改不回来。
+  // 徽标可能被原生编辑整块删掉（整块选中后退格/删除时，WebKit 会把不可编辑的
+  // span 一起移除）。此时补回一个徽标，否则语言就再也改不回来。
   function ensureLangBadge(el) {
     var badge = el.querySelector('.code-lang');
     if (badge)
@@ -1322,11 +1379,19 @@
       return null;
     badge = document.createElement('span');
     badge.className = 'code-lang';
-    badge.setAttribute('contenteditable', 'true');
+    badge.setAttribute('contenteditable', 'false');
     badge.setAttribute('spellcheck', 'false');
+    badge.setAttribute('role', 'button');
+    badge.setAttribute('aria-haspopup', 'listbox');
+    badge.setAttribute('aria-expanded', 'false');
     badge.setAttribute('aria-label', '代码语言');
     badge.textContent = el.dataset.lang || '';
-    pre.insertBefore(badge, pre.firstChild);
+    badge.title = el.dataset.lang || '';
+    var tools = pre.querySelector('.code-tools');
+    if (tools)
+      tools.insertBefore(badge, tools.firstChild);
+    else
+      pre.insertBefore(badge, pre.firstChild);
     return badge;
   }
 
@@ -1362,39 +1427,24 @@
     return code;
   }
 
-  // 徽标里是逐字母输入：合并成一次重着色，别每个字母都按新语言整块重扫。
-  function scheduleCodeDraw(el) {
-    if (el._langTimer)
-      clearTimeout(el._langTimer);
-    el._langTimer = setTimeout(function () {
-      el._langTimer = null;
-      if (el.isConnected)
-        drawCode(el);
-    }, LANG_RECOAT_MS);
-  }
-
-  // 改语言：同步 dataset.lang → 原文首行围栏，并按新语言重着色（合并到停顿后）。
+  // 改语言：同步 dataset.lang → 原文首行围栏，并立即按新语言重着色。
   // 重着色只重建 <code> 的行内 span（只变颜色，不变字号/行高/宽度），
-  // 因此块几何不变；光标若在正文里按字符偏移恢复，若在徽标里则不动它。
+  // 因此块几何不变；光标在正文里时按字符偏移恢复。
   function applyCodeLang(el, value) {
-    // 语言标识不允许空白与反引号（会破坏首行围栏），输入时直接剔除；
-    // 剔除后若与徽标显示不一致（例如中间打了空格），把徽标也改写为同一串，
+    // 语言标识不允许空白与反引号（会破坏首行围栏），直接剔除；
     // 保证「徽标显示 === dataset.lang === 围栏内容」三者一致。
     var lang = String(value === undefined || value === null ? '' : value)
       .replace(/[\s`]/g, '');
     var badge = el.querySelector('.code-lang');
-    var badgeFocused = badge && window.getSelection() && window.getSelection().rangeCount
-      && badge.contains(window.getSelection().getRangeAt(0).startContainer);
     if (badge && badge.textContent !== lang) {
       badge.textContent = lang;
-      if (badgeFocused)
-        setSelectionRange(badge, lang.length);
+      badge.title = lang;
     }
     el.dataset.lang = lang;
     el.dataset.raw = codeRaw(el);
     el._codeStale = false;
     if (codeEl(el))
-      scheduleCodeDraw(el);
+      drawCode(el);
   }
 
   // 把代码正文重新着色：只重建 <code> 的行内 span（文本不变，字体/行高/宽度
@@ -1621,6 +1671,7 @@
   }
 
   function mountBlocks(blocks) {
+    closeLangMenu();
     root.innerHTML = '';
     for (var i = 0; i < blocks.length; i++) {
       var el = document.createElement('div');
@@ -2343,6 +2394,7 @@
     // 查找/替换绑定当前模式的命中（DOM 区间或 textarea 区间），切模式前先关掉
     if (findBar)
       closeFind();
+    closeLangMenu();
     if (commitTimer) {
       clearTimeout(commitTimer);
       commitTimer = null;
@@ -2478,18 +2530,14 @@
       return;
     }
 
-    // 语言徽标：单击即可编辑语言，不必先点代码块进入编辑态。这里在捕获阶段
-    // 就把事件接过来自己处理：阻止原生把光标放到别处，也不让随后的 focusin /
-    // enterEdit 把光标送回 <code> 末尾。徽标在代码框右侧留白里，不覆盖代码。
+    // 语言徽标：单击打开语言选择器，不进入代码编辑态。捕获阶段 preventDefault
+    // 后原生不会把焦点/光标挪进徽标；下拉挂在 body 上，不受代码块 overflow 影响。
     var badgeHit = isCodeBlock(el) && event.target.closest
       ? event.target.closest('.code-lang') : null;
     if (badgeHit) {
       event.preventDefault();
       pendingOffset = null;
-      if (!el.classList.contains('editing'))
-        el.classList.add('editing');
-      el.focus();                      // focusin 会走 enterEdit，选区由下面覆盖
-      setSelectionRange(badgeHit, badgeHit.textContent.length);
+      openLangMenu(el, badgeHit);
       return;
     }
 
@@ -2589,12 +2637,6 @@
     var el = blockOf(event.target);
     if (!el)
       return;
-    // 聚焦语言徽标只切到编辑态，不把光标抢进 <code> 正文
-    if (event.target.closest && event.target.closest('.code-lang')) {
-      if (!el.classList.contains('editing'))
-        el.classList.add('editing');
-      return;
-    }
     enterEdit(el);
   });
 
@@ -2612,12 +2654,24 @@
   // 任务复选框：按下时阻止聚焦与选区折叠，点击只切换该行的勾选标记。
   root.addEventListener('mousedown', function (event) {
     var box = event.target;
+    // 复制按钮不抢焦点：preventDefault 后选区/光标都留在原处，既不会把代码块
+    // 切进编辑态，也不会触发 focusin 里的编辑流程。
+    if (box && box.closest && box.closest('.code-copy')) {
+      event.preventDefault();
+      return;
+    }
     if (box && box.classList && box.classList.contains('task-check'))
       event.preventDefault();
   });
 
   root.addEventListener('click', function (event) {
     var target = event.target;
+    var copyBtn = target && target.closest ? target.closest('.code-copy') : null;
+    if (copyBtn) {
+      event.preventDefault();
+      copyCodeBlock(copyBtn);
+      return;
+    }
     var anchor = target && target.closest ? target.closest('a.md-link') : null;
     if (anchor) {
       // 链接永远不让 WebView 自己导航：普通点击只落到「进入编辑」，
@@ -2645,27 +2699,15 @@
     if (findBar)
       scheduleFind();
     if (isCodeBlock(el)) {
-      // 徽标被原生删除（在徽标里全选后删除）：语义等于清空语言，补回空徽标
-      // 并把光标放进去，用户可以继续输入新的语言名。
+      // 徽标被原生删除（整块选中后删除）：语义等于清空语言，补回空徽标，
+      // 用户可再点开选择器重选；徽标不可编辑，光标放回正文首行。
       if (!el.querySelector('.code-lang')) {
         el.dataset.lang = '';
         el.dataset.raw = codeRaw(el);
         var revived = ensureLangBadge(el);
-        if (revived)
-          setSelectionRange(revived, 0);
-        scheduleDirty();
-        scheduleCommit();
-        return;
-      }
-      // 语言徽标：改它不动正文，只把 dataset.lang 与首行围栏同步、按新语言
-      // 重着色。徽标文本本身不写进 <code>。注意 event.target 是块本身（徽标
-      // 不构成独立编辑主机），只能按选区判断光标是否在徽标里。
-      if (selectionInsideLang(el)) {
-        if (composing)
-          return;
-        var badge = el.querySelector('.code-lang');
-        if (badge)
-          applyCodeLang(el, badge.textContent);
+        var codeStart = codeEl(el);
+        if (revived && codeStart)
+          setSelectionRange(codeStart, 0);
         scheduleDirty();
         scheduleCommit();
         return;
@@ -3012,25 +3054,6 @@
       }
     }
 
-    // 语言徽标内：回车/制表符提交并把光标交回正文首行；其余按键交给原生编辑
-    // （不进入下面的块级逻辑，避免退格把块并掉、回车插进代码正文）。同样只能
-    // 按选区判断——键盘事件的 target 是块，不是徽标。
-    var langBadge = isCodeBlock(el) && selectionInsideLang(el)
-      ? el.querySelector('.code-lang') : null;
-    if (langBadge) {
-      if (event.key === 'Enter' || event.key === 'Tab') {
-        event.preventDefault();
-        applyCodeLang(el, langBadge.textContent);
-        langBadge.textContent = el.dataset.lang;
-        var codeAfter = codeEl(el);
-        if (codeAfter)
-          setSelectionRange(codeAfter, 0);
-        scheduleDirty();
-        scheduleCommit();
-      }
-      return;
-    }
-
     var inTable = el.classList.contains('table');
 
     if (inTable && event.key === 'Tab') {
@@ -3188,13 +3211,6 @@
     // 会把「只多一个空块」的中间态写进历史，一次 Cmd+Z 就停在空块上。
     if (!baselineDone)
       commitHistory();
-    if (el && isCodeBlock(el) && selectionInsideLang(el)) {
-      // 徽标里粘贴：只按纯文本改语言名（和手输一样剔除空白/反引号），
-      // 否则会落到下面代码块分支，被 insertCodeText 的兜底追加到正文末尾。
-      document.execCommand('insertText', false, text.replace(/[\s`]/g, ''));
-      setTimeout(commitHistory, 0);
-      return;
-    }
     if (el && el.classList.contains('table')) {
       // 单元格是单行结构：整张 Markdown 表格直接替换当前表格；其余多行文本
       // 压成一行插入（换行会被 WebKit 变成 <div>/<br>，把表格结构写坏）。
@@ -3357,7 +3373,7 @@
     }
     // 行号栏、零宽标记与语言徽标都不属于正文：复制时要剔除。表格例外——表格里
     // 的 |、对齐行与换行就是原文，复制出去必须能原样贴回 Markdown。
-    var junk = fragment.querySelectorAll ? fragment.querySelectorAll('.gutter, .mk, .code-lang') : [];
+    var junk = fragment.querySelectorAll ? fragment.querySelectorAll('.gutter, .mk, .code-tools, .code-lang') : [];
     for (var i = 0; i < junk.length; i++) {
       if (junk[i].closest && junk[i].closest('table'))
         continue;
@@ -3495,7 +3511,7 @@
   function sanitizeCopyHtml(holder) {
     // 零宽标记（#、-、反引号等）在编辑器里靠 font-size:0 藏起来，粘到 Word /
     // 邮件时没有这份 CSS 就会原样露出来，必须连同 gutter 一起剥掉。
-    var junk = holder.querySelectorAll('.mk, .gutter, .line-numbers, .code-lang');
+    var junk = holder.querySelectorAll('.mk, .gutter, .line-numbers, .code-tools, .code-lang');
     for (var i = junk.length - 1; i >= 0; i--) {
       if (junk[i].parentNode)
         junk[i].parentNode.removeChild(junk[i]);
@@ -4877,9 +4893,253 @@
       x = Math.max(8, window.innerWidth - width - 8);
     if (y + height > window.innerHeight - 8)
       y = Math.max(8, (rect ? rect.top : 80) - height - 6);
+    // 锚点本身可能在窗口外（页面滚动/极端窗口尺寸），仍把面板钳进可视区
+    x = Math.max(8, x);
+    y = Math.max(8, y);
     node.style.left = x + 'px';
     node.style.top = y + 'px';
   }
+
+  /* ---------------- 代码块语言选择器 ----------------
+     下拉挂在 body 上（position:fixed），因此不会被 .code-scroll / pre 的
+     overflow 裁掉，也不参与代码块排版。点徽标开、再点同一个徽标或点外部关闭，
+    支持搜索过滤、方向键/Enter/Esc 与自定义语言。 */
+
+  var langMenu = null;       // 挂在 body 上的下拉面板
+  var langMenuState = null;  // { el, badge, items, active }
+  var langComposing = false; // 搜索框自己的输入法组字状态
+
+  function langItems(query) {
+    var raw = String(query || '').trim();
+    var q = raw.toLowerCase();
+    var items = LANG_PICKS.filter(function (item) {
+      if (!q)
+        return true;
+      return (item.name + ' ' + item.value + ' ' + item.words).toLowerCase().indexOf(q) >= 0;
+    });
+    if (raw) {
+      // 输入不在清单里的名字时，末尾补一条「自定义语言」，Enter 可直接写入。
+      // 若已能匹配到某个语言（名称/别名/关键词以输入开头），就不再加这条，
+      // 避免输入 py 时同时出现 Python 和「自定义 py」；中文关键词（如「脚本」）
+      // 是在搜索已有语言，也不作为自定义语言名。
+      var covered = items.some(function (item) {
+        if (item.name.toLowerCase().indexOf(q) === 0 || item.value.toLowerCase().indexOf(q) === 0)
+          return true;
+        return item.words.toLowerCase().split(/\s+/).some(function (word) {
+          return word.indexOf(q) === 0;
+        });
+      }) || /[^\x00-\x7F]/.test(raw);
+      if (!covered) {
+        items = items.slice();
+        items.push({
+          name: items.length
+            ? '使用自定义语言 “' + raw + '”'
+            : '没有匹配的语言，按 Enter 使用 “' + raw + '”',
+          value: raw,
+          custom: true
+        });
+      }
+    }
+    return items;
+  }
+
+  // 当前语言在候选里的下标：先按名称/别名精确匹配；自定义写法（如 py）若只
+  // 对应到唯一一个高亮器（python），也把那一项视为当前语言。js 这一组有
+  // JavaScript/TypeScript/JSX/TSX 四项，无法判断具体是哪一个，就不标。
+  function langCurrentIndex(items, current) {
+    current = String(current || '').toLowerCase();
+    var groupHit = -1;
+    var group = LANG_ALIAS[current] || '';
+    var count = 0;
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (item.custom)
+        continue;
+      var value = String(item.value).toLowerCase();
+      if (!current) {
+        if (!value)
+          return i;
+        continue;
+      }
+      if (value === current || item.name.toLowerCase() === current)
+        return i;
+      if (groupHit < 0 && group && LANG_ALIAS[value] === group) {
+        groupHit = i;
+        count++;
+      }
+    }
+    return count === 1 ? groupHit : -1;
+  }
+
+  function renderLangItems() {
+    if (!langMenu || !langMenuState)
+      return;
+    var list = langMenu.querySelector('.lang-list');
+    var items = langMenuState.items || [];
+    if (langMenuState.active >= items.length)
+      langMenuState.active = Math.max(0, items.length - 1);
+    var currentIndex = langCurrentIndex(items, langMenuState.el.dataset.lang);
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var isCurrent = i === currentIndex;
+      var cls = 'lang-item' + (i === langMenuState.active ? ' active' : '')
+        + (isCurrent ? ' is-current' : '');
+      html += '<div class="' + cls + '" role="option" data-index="' + i + '"'
+        + ' aria-selected="' + (i === langMenuState.active ? 'true' : 'false') + '">'
+        + '<span class="lang-name">' + escapeHtml(item.name) + '</span>'
+        + (isCurrent ? '<span class="lang-check">✓</span>' : '')
+        + '</div>';
+    }
+    if (!items.length)
+      html = '<div class="lang-empty">没有匹配的语言</div>';
+    list.innerHTML = html;
+    // 只滚列表自身，不用 scrollIntoView：后者可能把整页滚一下，
+    // 既会改变徽标位置，也会触发 scroll 监听把下拉关掉。
+    var active = list.querySelector('.lang-item.active');
+    if (active) {
+      var top = active.offsetTop;
+      var bottom = top + active.offsetHeight;
+      if (top < list.scrollTop)
+        list.scrollTop = top;
+      else if (bottom > list.scrollTop + list.clientHeight)
+        list.scrollTop = bottom - list.clientHeight;
+    }
+  }
+
+  function moveLangItem(delta) {
+    if (!langMenuState || !langMenuState.items.length)
+      return;
+    var count = langMenuState.items.length;
+    langMenuState.active = (langMenuState.active + delta + count) % count;
+    renderLangItems();
+  }
+
+  function chooseLangItem(index) {
+    var state = langMenuState;
+    if (!state || index < 0 || index >= state.items.length)
+      return;
+    var item = state.items[index];
+    var el = state.el;
+    closeLangMenu();
+    if (!el || !el.isConnected)
+      return;
+    if ((el.dataset.lang || '') === item.value)
+      return;
+    // 与原来的改语言一致：更新 dataset.lang/围栏并重着色，再走同一条
+    // 置脏与合并入撤销栈的路径。
+    applyCodeLang(el, item.value);
+    scheduleDirty();
+    scheduleCommit();
+  }
+
+  function closeLangMenu() {
+    var state = langMenuState;
+    langMenuState = null;
+    langComposing = false;
+    removeMenu(langMenu);
+    langMenu = null;
+    if (state && state.badge)
+      state.badge.setAttribute('aria-expanded', 'false');
+  }
+
+  function openLangMenu(el, badge) {
+    // 再点同一个徽标：关闭
+    if (langMenuState && langMenuState.el === el) {
+      closeLangMenu();
+      return;
+    }
+    closeSlash(false);
+    closeTurnMenu();
+    closeLangMenu();
+    var items = langItems('');
+    langMenuState = { el: el, badge: badge, items: items, active: 0 };
+    var currentIndex = langCurrentIndex(items, el.dataset.lang);
+    if (currentIndex >= 0)
+      langMenuState.active = currentIndex;
+    langMenu = document.createElement('div');
+    langMenu.id = 'lang-menu';
+    langMenu.innerHTML = '<input id="lang-search" type="text" placeholder="搜索语言…"'
+      + ' autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="搜索语言">'
+      + '<div class="lang-list" role="listbox"></div>';
+    var input = langMenu.querySelector('#lang-search');
+    input.addEventListener('input', function () {
+      if (!langMenuState)
+        return;
+      langMenuState.items = langItems(input.value);
+      langMenuState.active = 0;
+      renderLangItems();
+    });
+    // 输入法组字期间 Enter/Esc/方向键属于输入法，不能抢。
+    input.addEventListener('compositionstart', function () {
+      langComposing = true;
+    });
+    input.addEventListener('compositionend', function () {
+      langComposing = false;
+      if (!langMenuState)
+        return;
+      langMenuState.items = langItems(input.value);
+      langMenuState.active = 0;
+      renderLangItems();
+    });
+    input.addEventListener('keydown', function (event) {
+      if (langComposing || composing)
+        return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        event.stopPropagation();
+        moveLangItem(event.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (langMenuState)
+          chooseLangItem(langMenuState.active);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeLangMenu();
+      }
+    });
+    langMenu.addEventListener('mousedown', function (event) {
+      var hit = event.target.closest ? event.target.closest('.lang-item') : null;
+      if (!hit)
+        return;
+      // preventDefault 保住搜索框焦点，选完再统一关闭
+      event.preventDefault();
+      chooseLangItem(Number(hit.getAttribute('data-index')));
+    });
+    renderLangItems();
+    placeMenu(langMenu, badge.getBoundingClientRect());
+    badge.setAttribute('aria-expanded', 'true');
+    // 真实点击的 mouseup/click 可能把焦点交回页面；同步聚焦后再补一次，
+    // 确保搜索框在整次点击结束后仍然拿到焦点。不用 focusout 关下拉：
+    // 点击外部由 document 的 mousedown 负责，避免这里和焦点回落互相打架。
+    var focusSearch = function () {
+      if (!langMenu || !input.isConnected)
+        return;
+      try {
+        input.focus({ preventScroll: true });
+      } catch (error) {
+        input.focus();
+      }
+    };
+    focusSearch();
+    setTimeout(focusSearch, 0);
+  }
+
+  // 页面滚动/窗口尺寸变化后徽标位置会变，直接关闭比追着重新定位更稳，
+  // 也确保下拉不会停在离徽标很远的地方。
+  window.addEventListener('resize', closeLangMenu);
+  document.addEventListener('scroll', function (event) {
+    // 候选列表自己的滚动不能把下拉关掉（方向键移动高亮时会滚列表）
+    if (langMenu && event.target && langMenu.contains(event.target))
+      return;
+    closeLangMenu();
+  }, true);
 
   function filteredSlashItems() {
     if (!slashState)
@@ -5144,13 +5404,17 @@
       closeTurnMenu();
     if (slashMenu && !slashMenu.contains(event.target) && !blockOf(event.target))
       closeSlash(true);
+    // 徽标自己的 mousedown 会先打开/切换下拉，这里不能把它当成「点外部」关掉
+    if (langMenu && !langMenu.contains(event.target)
+        && !(event.target.closest && event.target.closest('.code-lang')))
+      closeLangMenu();
   }, true);
 
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Escape')
       return;
     // 组字期间 Esc 属于输入法（取消候选/整段上屏），浮层不能抢
-    if (composing)
+    if (composing || langComposing)
       return;
     if (slashState) {
       event.preventDefault();
@@ -5158,6 +5422,9 @@
     } else if (turnMenu) {
       event.preventDefault();
       closeTurnMenu();
+    } else if (langMenu) {
+      event.preventDefault();
+      closeLangMenu();
     }
   }, true);
 
@@ -5192,7 +5459,7 @@
         marks[i].parentNode.removeChild(marks[i]);
     }
     // 行号栏与语言徽标是编辑器外壳，不属于文档内容
-    var chrome = body.querySelectorAll('.gutter, .code-lang');
+    var chrome = body.querySelectorAll('.gutter, .code-tools, .code-lang');
     for (var c = chrome.length - 1; c >= 0; c--) {
       if (chrome[c].parentNode)
         chrome[c].parentNode.removeChild(chrome[c]);
@@ -5243,11 +5510,100 @@
       + exportBodyHtml() + '</article></body></html>';
   }
 
+  // PDF 导出分段用的“安全切点”（文档坐标，CSS px）：按文字行、表格行、
+  // 列表项与图片的纵向区间取切点。宿主按这些点分段抓取与切页，避免把一行字
+  // 或一张图劈开。切点取两段内容之间的空隙中点；行盒紧挨着（同一段内的换行）
+  // 时向下让 2px，因为中文字形（尤其标点）的墨迹会略微溢出 line box，
+  // 贴着盒底切会漏出半截。
+  function pdfSafeCuts(ed) {
+    if (!ed)
+      return { cuts: [0, 1], bottom: 1 };
+    // createPDF 的坐标从文档左上角算起，滚动位置只影响 getBoundingClientRect
+    var base = window.pageYOffset || 0;
+    var spans = [];
+    function addRect(r) {
+      if (!r || r.height <= 0 || r.width <= 0)
+        return;
+      spans.push({ top: r.top + base, bottom: r.bottom + base });
+    }
+    function inChrome(node) {
+      for (var el = node.parentNode; el && el !== ed; el = el.parentNode) {
+        if (el.classList && (el.classList.contains('gutter') ||
+            el.classList.contains('code-tools') || el.classList.contains('code-lang')))
+          return true;
+      }
+      return false;
+    }
+    for (var i = 0; i < ed.children.length; i++) {
+      var block = ed.children[i];
+      if (!block.classList || !block.classList.contains('block'))
+        continue;
+      // 文字行盒：逐个文本节点取 Range 的行矩形；同一行被行内元素切开的片段
+      // 纵向互相重叠，后面按重叠合并，相邻两行（首尾相接）保持独立以便切页。
+      var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null, false);
+      var hasText = false;
+      var node;
+      while ((node = walker.nextNode())) {
+        if (!node.nodeValue || !/\S/.test(node.nodeValue) || inChrome(node))
+          continue;
+        var range = document.createRange();
+        range.selectNodeContents(node);
+        var rects = range.getClientRects();
+        for (var k = 0; k < rects.length; k++) {
+          if (rects[k].height <= 0 || rects[k].width <= 0)
+            continue;
+          hasText = true;
+          spans.push({ top: rects[k].top + base, bottom: rects[k].bottom + base });
+        }
+      }
+      // 表格行、列表项、图片自身不能切，取它们的整体矩形
+      var inner = block.querySelectorAll('li, tr, img');
+      for (var j = 0; j < inner.length; j++)
+        addRect(inner[j].getBoundingClientRect());
+      // 没有文字也没有上述元素的块（空段、分割线）按整块处理
+      if (!hasText && !inner.length)
+        addRect(block.getBoundingClientRect());
+    }
+    spans.sort(function (a, b) { return a.top - b.top; });
+    var merged = [];
+    for (var n = 0; n < spans.length; n++) {
+      var span = spans[n];
+      var last = merged.length ? merged[merged.length - 1] : null;
+      // 只合并纵向真正重叠的区间（同一行的多个片段、表格单元格与行）；
+      // 首尾相接的相邻行不合并，这样才能在行与行之间切页。
+      if (last && span.top < last.bottom - 0.5) {
+        if (span.bottom > last.bottom)
+          last.bottom = span.bottom;
+        continue;
+      }
+      merged.push({ top: span.top, bottom: span.bottom });
+    }
+    var cuts = [0];
+    for (var p = 0; p + 1 < merged.length; p++) {
+      var gap = merged[p + 1].top - merged[p].bottom;
+      // 空隙里切：离上一行墨迹 4px（盖住标点溢出），余量留给页首
+      cuts.push(gap >= 4 ? merged[p].bottom + Math.min(gap / 2, 4)
+                         : merged[p].bottom + 2);
+    }
+    var bottom = merged.length ? merged[merged.length - 1].bottom + 1 : 1;
+    cuts.push(Math.ceil(bottom));
+    cuts.sort(function (a, b) { return a - b; });
+    var out = [];
+    for (var q = 0; q < cuts.length; q++) {
+      if (!out.length || cuts[q] - out[out.length - 1] > 0.75)
+        out.push(cuts[q]);
+    }
+    return { cuts: out, bottom: Math.ceil(bottom) };
+  }
+
+  var pdfSavedScrollY = 0;
+
   window.mote = {
     setTheme: setTheme,
     setMarkdown: function (text) {
       closeSlash(false);
       closeTurnMenu();
+      closeLangMenu();
       var normalized = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n');
       trailingNewline = /\n$/.test(normalized);
 
@@ -5301,6 +5657,7 @@
         toggleToc();
       closeSlash(false);
       closeTurnMenu();
+      closeLangMenu();
       setZoom(1);
       window.mote.setMarkdown('');
       // 目录已关闭时 refreshToc 会早退，旧标题节点仍留在 DOM 里；新建必须清掉
@@ -5429,6 +5786,26 @@
     // 原生「导出 HTML…」：拼好整篇自包含 HTML 后回传，由 Qt 侧写盘并内嵌图片
     exportHtml: function (title) {
       post({ type: 'export', html: buildExportHtml(title) });
+    },
+    // PDF 导出：createPDF / PrintToPdf 走屏幕媒体，@media print 不生效，
+    // 所以由宿主在导出前加 body.pdf-export（样式里清外壳），导出完成立刻移除。
+    // 只动 body 的 class，不碰正文节点，因此不改文档、不进撤销栈、不置脏标记。
+    pdfBegin: function () {
+      closeLangMenu();
+      pdfSavedScrollY = window.pageYOffset || 0;
+      document.body.classList.add('pdf-export');
+      var ed = document.getElementById('editor');
+      var rect = ed ? ed.getBoundingClientRect() : { width: 0 };
+      var geo = pdfSafeCuts(ed);
+      return JSON.stringify({
+        w: Math.ceil(rect.width || 0),
+        h: geo.bottom,
+        cuts: geo.cuts
+      });
+    },
+    pdfEnd: function () {
+      document.body.classList.remove('pdf-export');
+      window.scrollTo(0, pdfSavedScrollY);
     }
   };
 
