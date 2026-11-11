@@ -3223,8 +3223,45 @@
       setTimeout(commitHistory, 0);
       return;
     }
+    if (text.indexOf('\n') >= 0) {
+      insertMultilinePaste(el, text);
+      return;
+    }
     commitHistory();
     document.execCommand('insertText', false, text);
+    setTimeout(commitHistory, 0);
+  }
+
+  // 多行粘贴：单个换行是块内软换行（与 renderBlock 的 <br> + mk-nl 表示一致），
+  // 空行是块分隔。整段交给 execCommand('insertText') 的话，WKWebView 会把换行
+  // 变成 <div>，块内 textContent 只剩一段文字，落盘时行与行就粘在一起了。
+  function multilinePasteHtml(text) {
+    return text.split('\n').map(escapeHtml).join('<br>' + newlineMarker());
+  }
+
+  function insertMultilinePaste(el, text) {
+    var chunks = String(text).replace(/\r\n?/g, '\n').replace(/\n+$/, '').split(/\n[ \t]*\n+/);
+    if (!chunks.length)
+      chunks = [''];
+    commitHistory();
+    document.execCommand('insertHTML', false, multilinePasteHtml(chunks[0]));
+    var last = el;
+    for (var i = 1; i < chunks.length; i++) {
+      var neo = document.createElement('div');
+      neo.className = 'block';
+      neo.setAttribute('contenteditable', 'true');
+      root.insertBefore(neo, last.nextSibling);
+      renderBlock(neo, '');
+      neo.innerHTML = multilinePasteHtml(chunks[i]);
+      neo.classList.add('editing');
+      last = neo;
+    }
+    if (last !== el) {
+      last.focus();
+      setCaret(last, last.textContent.length);
+    }
+    scheduleDirty();
+    scheduleCommit();
     setTimeout(commitHistory, 0);
   }
 
