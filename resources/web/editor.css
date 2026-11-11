@@ -353,16 +353,6 @@ pre.code-block {
   text-overflow: ellipsis;
 }
 
-/* 语言徽标后面的装饰性下拉箭头（纯视觉，不进入 textContent/剪贴板） */
-.code-lang-caret {
-  flex: none;
-  color: var(--faint-3);
-  font-size: 0.62rem;
-  line-height: 1;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
 .code-lang:focus {
   max-width: 12rem;
 }
