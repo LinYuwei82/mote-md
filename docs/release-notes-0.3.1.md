@@ -4,7 +4,7 @@ Mote 是一个用 **C++20 + Qt 6** 写的 Markdown 编辑/查看工具，编辑�
 
 0.3.1 集中修整剪贴板：复制到外部应用时保留标题层级、列表与代码块配色，空选区不再静默失败，剪切/复制/粘贴在菜单、快捷键与右键菜单三条入口上行为一致。功能范围与 0.3.0 相同，仅含剪贴板相关修复。
 
-> Windows 与 macOS 使用同一版本号 v0.3.1。本文件只覆盖 Windows 产物；macOS 包待打包。
+> Windows 与 macOS 使用同一版本号 v0.3.1。macOS 包已打出，校验值见文末「校验」。
 
 ## 0.3.1 变更
 
@@ -68,7 +68,13 @@ SHA256  8bc5d7d6d0b030c45a8e53e6e4c8d8741afe1780217d1717765f5e004c36e18b
 大小    14,982,904 字节
 文件    Mote-Windows.zip
 
-macOS（Mote-macOS-0.3.1.dmg / Mote-macOS.zip）：待打包，暂无校验值
+SHA256  BFD2DD7D6F7A51C57179717319A5BA71EBA373CC3B2AEAB1333C8551DA2287BD
+大小    34,267,066 字节
+文件    Mote-macOS-0.3.1.dmg
+
+SHA256  7EE3F849E9BDD979746FE3430BD76340AAB49E230732CF151B871D0C441D6011
+大小    30,943,221 字节
+文件    Mote-macOS.zip
 ```
 
 Windows 上校验：
