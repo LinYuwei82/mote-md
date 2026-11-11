@@ -3248,19 +3248,50 @@
     return neo;
   }
 
-  // 粘贴统一转为纯文本，避免把富文本结构带进 Markdown；粘贴整体作为一个撤销步骤
-  root.addEventListener('paste', function (event) {
+  // 点击最后一块下方的空白区时，选区与事件目标都落在 #editor 外（body），
+  // 没有可归属的块。这里在文档末尾补一个段落块并聚焦，粘贴内容才有落点。
+  function appendParagraphBlock() {
+    var neo = document.createElement('div');
+    neo.className = 'block';
+    neo.setAttribute('contenteditable', 'true');
+    root.appendChild(neo);
+    renderBlock(neo, '');
+    neo.classList.add('editing');
+    neo.focus();
+    setCaret(neo, 0);
+    if (neo.scrollIntoView)
+      neo.scrollIntoView({ block: 'nearest' });
+    return neo;
+  }
+
+  // 粘贴统一转为纯文本，避免把富文本结构带进 Markdown；粘贴整体作为一个撤销步骤。
+  // 监听挂在 document 上：块外空白区的 paste 事件目标是 body，挂在 root 上收不到。
+  document.addEventListener('paste', function (event) {
+    if (mode === 'source')
+      return;
+    var target = event.target;
+    // 页面内的表单控件（查找框、重命名输入等）保留原生粘贴
+    if (target && (target.nodeName === 'INPUT' || target.nodeName === 'TEXTAREA'))
+      return;
     var clipboard = event.clipboardData || window.clipboardData;
     if (!clipboard)
       return;
+    var inRoot = target === root || (root.contains && root.contains(target));
     var picture = clipboardImageFile(clipboard);
     if (picture) {
       event.preventDefault();
+      if (!inRoot)
+        appendParagraphBlock();
       postImageFile(picture, 'paste');
       return;
     }
     event.preventDefault();
-    insertPastedText(clipboard.getData('text/plain'), blockOf(event.target));
+    var el = blockOf(target);
+    if (!el && inRoot)
+      el = caretParagraphBlock();
+    if (!el)
+      el = appendParagraphBlock();
+    insertPastedText(clipboard.getData('text/plain'), el);
   });
 
   // 复制时剔除行号栏。CSS 的 user-select:none 只约束真实拖选，
