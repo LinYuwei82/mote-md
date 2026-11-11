@@ -3384,6 +3384,31 @@
     }
   }
 
+  // 代码高亮全靠 class，外部应用没有本页样式表，复制出去会退化成单色。
+  // 克隆内容与原文按文档顺序一一对应，因此可以直接把每个 token 的计算颜色
+  // 内联到克隆节点；与父级同色的 token（本来就没有专用颜色）保持继承，不硬造。
+  function inlineCodeTokenColors(source, sub, shell) {
+    if (!source || !source.querySelectorAll || !shell || !shell.querySelectorAll
+        || !window.getComputedStyle || !sub)
+      return;
+    var candidates = source.querySelectorAll('[class*="tok-"]');
+    var originals = [];
+    for (var i = 0; i < candidates.length; i++) {
+      if (sub.intersectsNode(candidates[i]))
+        originals.push(candidates[i]);
+    }
+    var clones = shell.querySelectorAll('[class*="tok-"]');
+    if (!originals.length || originals.length !== clones.length)
+      return;
+    for (var j = 0; j < originals.length; j++) {
+      var own = window.getComputedStyle(originals[j]).color;
+      var parentEl = originals[j].parentElement;
+      var inherited = parentEl ? window.getComputedStyle(parentEl).color : '';
+      if (own && own !== inherited)
+        clones[j].style.color = own;
+    }
+  }
+
   // 选区 → HTML。与纯文本同口径（按块裁剪、跨块逐个取），但保留块级语义，
   // 粘到 Word / 邮件 / TextEdit 里仍有标题层级、列表符号与代码块的样子。
   // 复制走 HTML 是给“粘到外部应用”用的；粘回 Mote 仍只读 text/plain。
@@ -3416,6 +3441,7 @@
         shell.appendChild(fragment);
       }
       applyCopyStyle(inner || el, shell);
+      inlineCodeTokenColors(el, sub, shell);
       holder.appendChild(shell);
     }
     sanitizeCopyHtml(holder);
@@ -3426,7 +3452,7 @@
   function sanitizeCopyHtml(holder) {
     // 零宽标记（#、-、反引号等）在编辑器里靠 font-size:0 藏起来，粘到 Word /
     // 邮件时没有这份 CSS 就会原样露出来，必须连同 gutter 一起剥掉。
-    var junk = holder.querySelectorAll('.mk, .gutter, .line-numbers');
+    var junk = holder.querySelectorAll('.mk, .gutter, .line-numbers, .code-lang');
     for (var i = junk.length - 1; i >= 0; i--) {
       if (junk[i].parentNode)
         junk[i].parentNode.removeChild(junk[i]);
