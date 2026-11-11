@@ -759,18 +759,20 @@
     // 之外：横向滚动只作用于代码，行号与分隔线始终留在左侧。不用 position:sticky
     // ——sticky 与横向滚动条共存时，WebKit 在整篇重建后会把块高少算一个滚动条。
     //
-    // 语言徽标与复制按钮同处右上角浮层（.code-tools）：整块绝对定位在代码框
-    // 右侧留白，两者用 flex 排开，语言名再长也只把按钮往右推，既不会互相压住，
-    // 也不覆盖任何代码字形。按钮在渲染态即可点，不必先进入编辑。
+    // 代码块顶部头栏（.code-tools）在代码块内部：语言徽标靠左，复制按钮绝对定位
+    // 在代码块内部右上角。头栏是独立一行，横向滚动只发生在下方 .code-scroll 里，
+    // 按钮不会跟着滚走；语言名过长时徽标自身截断（max-width），按钮固定在右上角。
+    // 徽标后的箭头只是装饰。按钮在渲染态即可点，不必先进入编辑。
     // 文本不进 <code>、也不进 dataset.raw 的正文部分——原文首行围栏由 dataset.lang 拼回。
     return '<pre class="code-block">'
-      + '<span class="code-tools" contenteditable="false">'
+      + '<div class="code-tools" contenteditable="false">'
       + '<span class="code-lang" contenteditable="true" spellcheck="false"'
       + (lang ? ' title="' + escapeHtml(lang) + '"' : '')
       + ' aria-label="代码语言">' + escapeHtml(lang || '') + '</span>'
+      + '<span class="code-lang-caret" aria-hidden="true">⌄</span>'
       + '<button type="button" class="code-copy" tabindex="-1"'
       + ' aria-label="复制代码" title="复制代码">' + COPY_ICON + DONE_ICON + '</button>'
-      + '</span>'
+      + '</div>'
       + '<div class="gutter" contenteditable="false" aria-hidden="true">' + gutter + '</div>'
       + '<div class="code-scroll"><code>' + colored.join('\n') + '</code></div></pre>';
   }

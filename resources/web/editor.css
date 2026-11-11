@@ -304,6 +304,7 @@ code {
 pre.code-block {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   margin: 0.9em 0 1.1em;
   padding: 0;
@@ -311,22 +312,26 @@ pre.code-block {
   border-radius: 4px;
 }
 
-/* 右上角浮层：语言徽标 + 复制按钮同处一排。整块绝对定位到代码框右侧留白
-   （left:100% 起向右生长），因此无论语言名多长都不会压住任何代码字形；
-   绝对定位不占排版，块几何不受显隐影响。渲染态即可用，不必先进入编辑态；
-   渲染态 user-select:none，连选/三击整段复制都不会把语言名或按钮带进剪贴板。 */
+/* 代码块顶部头栏：语言徽标靠左，复制按钮绝对定位在代码块内部右上角
+   （top/right 各留 0.35–0.45rem 内缩），整条都在边框内，不再挂到框外。
+   头栏只占很窄的一条，代码正文从下一行开始；横向滚动只发生在 .code-scroll 内，
+   按钮位置始终稳定。渲染态即可用，user-select:none，连选/三击整段复制都不会
+   把语言名或按钮带进剪贴板。 */
 .code-tools {
-  position: absolute;
-  top: 0.42rem;
-  left: 100%;
-  margin-left: 0.4rem;
-  z-index: 2;
+  flex: 0 0 100%;
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  box-sizing: border-box;
+  min-height: 1.85rem;
+  /* 右侧给绝对定位的复制按钮留位，长语言名截断后也碰不到按钮 */
+  padding: 0 1.95rem 0 0.6rem;
+  border-bottom: 1px solid var(--border-hair);
 }
 
 .code-lang {
+  flex: 0 1 auto;
+  min-width: 0;
   padding: 0.04rem 0.35rem;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -341,19 +346,35 @@ pre.code-block {
   opacity: 0.5;
   -webkit-user-select: none;
   user-select: none;
-  /* 语言名过长时省略，保证复制按钮始终留在窗口内、与徽标不重叠；
+  /* 语言名过长时省略，保证复制按钮始终留在代码块内、与徽标不重叠；
      进入语言编辑（点击徽标）时放宽上限，hover 有 title 可看全名。 */
   max-width: 7rem;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* 语言徽标后面的装饰性下拉箭头（纯视觉，不进入 textContent/剪贴板） */
+.code-lang-caret {
+  flex: none;
+  color: var(--faint-3);
+  font-size: 0.62rem;
+  line-height: 1;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .code-lang:focus {
   max-width: 12rem;
 }
 
-/* 复制按钮：与徽标同样平时半透明、hover 才显形；成功后短暂换成对勾 */
+/* 复制按钮：绝对定位在代码块内部右上角，平时半透明、hover 才显形；
+   成功后短暂换成对勾。top/right 的 0.35/0.45rem 内缩让按钮四边都落在
+   代码块边框以内，也不会碰到头栏左侧的语言徽标。 */
 .code-copy {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.45rem;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -407,7 +428,9 @@ body.inline-proto .block.code.editing .code-lang {
    不再用 position:sticky——sticky 与横向滚动条共存时，WebKit 在整篇重建后
    会把块高少算一个滚动条高度（实测 15px）。 */
 .code-scroll {
-  flex: 1 1 auto;
+  /* flex-basis 必须是 0：头栏占满第一行后，若按内容宽度参与折行判断，
+     超长行会把滚动区挤到第三行（头栏/行号/代码各占一行）。 */
+  flex: 1 1 0;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
