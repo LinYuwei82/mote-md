@@ -5360,10 +5360,11 @@
         insertPastedText(text, el);
         return true;
       }
-      // 光标落在块外空白区：原生粘贴本来可以插入，这里不能直接报失败。
-      // 先落撤销基线再补块，空块才算进这次粘贴，撤销后不会残留。
+      // 块外空白区：WebView2 下选区在 body（不在 #editor 内），caretParagraphBlock
+      // 取不到块，退回文末补一个段落块；两条建块路径共用同一个撤销基线。
+      // 基线必须先于建块，否则空块会被算进“粘贴前”的快照，撤销后残留。
       commitHistory();
-      var neo = caretParagraphBlock();
+      var neo = caretParagraphBlock() || appendParagraphBlock();
       if (!neo) {
         post({ type: 'status', message: '粘贴失败：先把光标放到正文里' });
         return false;
