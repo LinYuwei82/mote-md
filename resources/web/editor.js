@@ -5355,13 +5355,10 @@
         insertPastedText(text, el);
         return true;
       }
-      // 光标落在块外空白区：原生粘贴本来可以插入，这里不能直接报失败。
-      // 先在光标处补一个段落块，再走与块内相同的插入路径。
-      var neo = caretParagraphBlock();
-      if (!neo) {
-        post({ type: 'status', message: '粘贴失败：先把光标放到正文里' });
-        return false;
-      }
+      // 光标落在块外空白区：WebView2 下选区在 body（不在 #editor 内），
+      // caretParagraphBlock 取不到块。与 document 的 paste 监听同口径，退回
+      // 文档末尾补一个段落块，否则“点空白区粘贴”会没有反应。
+      var neo = caretParagraphBlock() || appendParagraphBlock();
       insertPastedText(text, neo);
       return true;
     },
