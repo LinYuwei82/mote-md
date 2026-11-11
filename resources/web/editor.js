@@ -3325,8 +3325,36 @@
     return parts.join('\n');
   }
 
-  // 选区 → HTML。与纯文本同口径（按块裁剪、跨块逐个取），但保留块级标签与
-  // 行内着色用的 class，粘到 Word / 邮件里仍有标题、列表、代码块的样子。
+  // 块内真正的语义元素（h1/ul/pre…）。段落块没有内层元素，包装时用 <p>。
+  function blockSemantic(el) {
+    if (!el || !el.querySelector)
+      return null;
+    return el.querySelector(':scope > h1, :scope > h2, :scope > h3, :scope > h4, ' +
+                             ':scope > h5, :scope > h6, :scope > p, :scope > ul, ' +
+                             ':scope > ol, :scope > blockquote, :scope > pre, ' +
+                             ':scope > table');
+  }
+
+  // 外部应用没有本页 CSS，只靠 class 拿不到标题字号与列表符号，必须把计算样式
+  // 内联。WKWebView 写剪贴板时会保留 style 属性、丢掉 class，这层正好兜住。
+  var COPY_STYLE_PROPS = ['font-size', 'font-weight', 'font-style', 'font-family',
+                          'color', 'text-decoration', 'list-style-type',
+                          'margin-top', 'margin-bottom', 'padding-left',
+                          'white-space', 'background-color'];
+
+  function applyCopyStyle(source, target) {
+    if (!source || !window.getComputedStyle || !target.style)
+      return;
+    var cs = window.getComputedStyle(source);
+    for (var i = 0; i < COPY_STYLE_PROPS.length; i++) {
+      var value = cs.getPropertyValue(COPY_STYLE_PROPS[i]);
+      if (value)
+        target.style.setProperty(COPY_STYLE_PROPS[i], value);
+    }
+  }
+
+  // 选区 → HTML。与纯文本同口径（按块裁剪、跨块逐个取），但保留块级语义，
+  // 粘到 Word / 邮件 / TextEdit 里仍有标题层级、列表符号与代码块的样子。
   // 复制走 HTML 是给“粘到外部应用”用的；粘回 Mote 仍只读 text/plain。
   function selectionHtml() {
     var selection = window.getSelection();
@@ -3343,10 +3371,20 @@
         sub.setStart(range.startContainer, range.startOffset);
       if (el.contains(range.endContainer))
         sub.setEnd(range.endContainer, range.endOffset);
-      // cloneNode(false) 保留块自身的标签（h1/p/ul/pre/table…）与 class，
-      // 只把裁剪后的子节点装进去，避免整块的编辑态属性带出去。
-      var shell = el.cloneNode(false);
-      shell.appendChild(sub.cloneContents());
+      var fragment = sub.cloneContents();
+      var inner = blockSemantic(el);
+      var only = fragment.childNodes.length === 1 ? fragment.firstChild : null;
+      var shell;
+      // 整块选中时 cloneContents 已经带出内层语义标签（<h1>、<ul>…），不能再套
+      // 一层；否则外壳要按语义元素重建。早先拿外层块 div 当外壳，内层 <h1> 不在
+      // 选区里，HTML 里只剩 <div class="block h1">，外部应用拿不到标题层级。
+      if (inner && only && only.nodeType === 1 && only.nodeName === inner.nodeName) {
+        shell = only;
+      } else {
+        shell = document.createElement(inner ? inner.tagName.toLowerCase() : 'p');
+        shell.appendChild(fragment);
+      }
+      applyCopyStyle(inner || el, shell);
       holder.appendChild(shell);
     }
     sanitizeCopyHtml(holder);
