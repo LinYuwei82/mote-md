@@ -232,8 +232,8 @@ PowerShell 里当前目录不会自动执行，需要写 `.\packaging\package_wi
 3. `nmake /NOLOGO`，或 `mingw32-make -j%NUMBER_OF_PROCESSORS%`；
 4. 复制 exe 到 `dist\Mote-Windows\`，执行
    `windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw`；
-5. 删除 `opengl32sw.dll`、`d3dcompiler_47.dll`、`Qt6Pdf/Qml/Quick` DLL、`translations\`、
-   `qml\`、`*.pdb/*.exp/*.lib`，并复制 `resources\samples\`；
+5. 删除 `opengl32sw.dll`、`d3dcompiler_47.dll`、`Qt6Pdf/Qml/Quick` DLL、`translations\` 下的其它 `.qm`、
+   `qml\`、`*.pdb/*.exp/*.lib`，只保留 `translations\qtbase_zh_CN.qm`，并复制 `resources\samples\`；
 6. `Compress-Archive` 压成 `dist\Mote-Windows.zip`。
 
 成功时最后会打印：

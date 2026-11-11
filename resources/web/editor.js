@@ -3182,12 +3182,15 @@
 
   // 把一段纯文本插到目标块：语言徽标、表格与代码块各有专门路径，其余按普通
   // 文本插入。原生粘贴事件与外壳剪贴板入口（菜单/快捷键/右键）共用这一实现。
-  function insertPastedText(text, el) {
+  function insertPastedText(text, el, baselineDone) {
     text = String(text === undefined || text === null ? '' : text);
+    // 块外粘贴在补空块之前已经落过撤销基线（baselineDone）：这里若再提交，
+    // 会把「只多一个空块」的中间态写进历史，一次 Cmd+Z 就停在空块上。
+    if (!baselineDone)
+      commitHistory();
     if (el && isCodeBlock(el) && selectionInsideLang(el)) {
       // 徽标里粘贴：只按纯文本改语言名（和手输一样剔除空白/反引号），
       // 否则会落到下面代码块分支，被 insertCodeText 的兜底追加到正文末尾。
-      commitHistory();
       document.execCommand('insertText', false, text.replace(/[\s`]/g, ''));
       setTimeout(commitHistory, 0);
       return;
@@ -3195,7 +3198,6 @@
     if (el && el.classList.contains('table')) {
       // 单元格是单行结构：整张 Markdown 表格直接替换当前表格；其余多行文本
       // 压成一行插入（换行会被 WebKit 变成 <div>/<br>，把表格结构写坏）。
-      commitHistory();
       var raw = text.replace(/\r\n?/g, '\n');
       var rows = raw.split('\n');
       if (isTableSource(rows)) {
@@ -3215,7 +3217,6 @@
     }
     if (el && isCodeBlock(el)) {
       // 代码块直接按字符插入，多行粘贴不会变成 <div>/<br>，结构始终是行文本
-      commitHistory();
       if (!insertCodeText(el, text.replace(/\r\n?/g, '\n')))
         document.execCommand('insertText', false, text);
       scheduleDirty();
@@ -3223,8 +3224,45 @@
       setTimeout(commitHistory, 0);
       return;
     }
-    commitHistory();
+    if (text.indexOf('\n') >= 0) {
+      insertMultilinePaste(el, text, baselineDone);
+      return;
+    }
     document.execCommand('insertText', false, text);
+    setTimeout(commitHistory, 0);
+  }
+
+  // 多行粘贴：单个换行是块内软换行（与 renderBlock 的 <br> + mk-nl 表示一致），
+  // 空行是块分隔。整段交给 execCommand('insertText') 的话，WKWebView 会把换行
+  // 变成 <div>，块内 textContent 只剩一段文字，落盘时行与行就粘在一起了。
+  function multilinePasteHtml(text) {
+    return text.split('\n').map(escapeHtml).join('<br>' + newlineMarker());
+  }
+
+  function insertMultilinePaste(el, text, baselineDone) {
+    var chunks = String(text).replace(/\r\n?/g, '\n').replace(/\n+$/, '').split(/\n[ \t]*\n+/);
+    if (!chunks.length)
+      chunks = [''];
+    if (!baselineDone)
+      commitHistory();
+    document.execCommand('insertHTML', false, multilinePasteHtml(chunks[0]));
+    var last = el;
+    for (var i = 1; i < chunks.length; i++) {
+      var neo = document.createElement('div');
+      neo.className = 'block';
+      neo.setAttribute('contenteditable', 'true');
+      root.insertBefore(neo, last.nextSibling);
+      renderBlock(neo, '');
+      neo.innerHTML = multilinePasteHtml(chunks[i]);
+      neo.classList.add('editing');
+      last = neo;
+    }
+    if (last !== el) {
+      last.focus();
+      setCaret(last, last.textContent.length);
+    }
+    scheduleDirty();
+    scheduleCommit();
     setTimeout(commitHistory, 0);
   }
 
@@ -3280,18 +3318,22 @@
     var picture = clipboardImageFile(clipboard);
     if (picture) {
       event.preventDefault();
-      if (!inRoot)
-        appendParagraphBlock();
+      // 不预建空块：落图回调 insertImage 本来就会在文末补块。预建的块在撤销
+      // 基线之外，一次 Cmd+Z 会留下一个空块。
       postImageFile(picture, 'paste');
       return;
     }
     event.preventDefault();
     var el = blockOf(target);
-    if (!el && inRoot)
-      el = caretParagraphBlock();
-    if (!el)
-      el = appendParagraphBlock();
-    insertPastedText(clipboard.getData('text/plain'), el);
+    var baselineDone = false;
+    if (!el) {
+      // 块外粘贴要先补块才有落点。撤销基线必须落在补块之前：否则快照里已经
+      // 含这个空块，Cmd+Z 只撤掉文字，空块与落盘空行都会留下。
+      commitHistory();
+      baselineDone = true;
+      el = inRoot ? caretParagraphBlock() : appendParagraphBlock();
+    }
+    insertPastedText(clipboard.getData('text/plain'), el, baselineDone);
   });
 
   // 复制时剔除行号栏。CSS 的 user-select:none 只约束真实拖选，
@@ -3322,11 +3364,12 @@
       // 列表符号（- / 1.）、任务标记（[ ] / [x]）、链接语法（[ / ](url)）与图片
       // 语法（![](src)）都是 Markdown 原文的一部分：复制出去必须仍能原样贴回，
       // 只有行内标记按可见文本剔除。图片标记不保留的话，剪贴板里只剩 <img>，
-      // 原文和地址一起消失。
+      // 原文和地址一起消失。行内代码的反引号同理：纯文本里没有它就贴不回代码样式。
       if (junk[i].classList && (junk[i].classList.contains('mk-bullet')
           || junk[i].classList.contains('mk-task')
           || junk[i].classList.contains('mk-link')
-          || junk[i].classList.contains('mk-img')))
+          || junk[i].classList.contains('mk-img')
+          || junk[i].classList.contains('mk-code')))
         continue;
       junk[i].parentNode.removeChild(junk[i]);
     }
@@ -3473,6 +3516,14 @@
         if (!e.classList.length)
           e.removeAttribute('class');
       }
+    }
+    // 行内代码在页内靠 CSS 取等宽字体，复制出去只剩 <code> 语义；Word 的 HTML
+    // 导入不认 UA 默认等宽，会把它并进正文东亚字体（实测变宋体），这里显式内联
+    // 等宽字体栈。代码块（<pre> 内）本来就有自己的样式，不动。
+    var codes = holder.querySelectorAll('code');
+    for (var c = 0; c < codes.length; c++) {
+      if (!codes[c].closest || !codes[c].closest('pre'))
+        codes[c].style.setProperty('font-family', 'Menlo, Consolas, monospace');
     }
   }
 
@@ -5317,14 +5368,16 @@
         insertPastedText(text, el);
         return true;
       }
-      // 光标落在块外空白区：原生粘贴本来可以插入，这里不能直接报失败。
-      // 先在光标处补一个段落块，再走与块内相同的插入路径。
-      var neo = caretParagraphBlock();
+      // 块外空白区：WebView2 下选区在 body（不在 #editor 内），caretParagraphBlock
+      // 取不到块，退回文末补一个段落块；两条建块路径共用同一个撤销基线。
+      // 基线必须先于建块，否则空块会被算进“粘贴前”的快照，撤销后残留。
+      commitHistory();
+      var neo = caretParagraphBlock() || appendParagraphBlock();
       if (!neo) {
         post({ type: 'status', message: '粘贴失败：先把光标放到正文里' });
         return false;
       }
-      insertPastedText(text, neo);
+      insertPastedText(text, neo, true);
       return true;
     },
     // 右键「转为」/ 工具栏下拉：不做 toggle，已是目标类型保持不动
