@@ -99,3 +99,11 @@
 - **共享代码**（`resources/web/editor.js`、`resources/web/editor.css`、`src/webview.h`、`src/webviewbase*`、`src/webpage*`、`src/webwindow*`、`resources/` 其余内容）的改动可以落在任一功能分支上，但提交信息里要写明「共享层」。
 - 一条分支上如果混入了另一平台机器的提交，**合并前在 PR 描述里注明**，不通过改写历史来「纠正」。
 - **现状记录（2026-11-11）**：`mac/clipboard` 上除 Mac 侧三笔外，还包含 Windows 机器提交的 `64c8780`、`aa561f9` 两笔共享层修复；内容不涉及 Windows 专属文件，按上述规则处理、不改写历史。
+
+### 生效范围
+
+本节自本提交起生效，不追溯既往：早于本节的提交不要求补写「共享层」，也不要求补建 `win/*` 分支。
+
+- **豁免一**：`mac/clipboard` 的 `ec6d40f`、`7816b7f`、`78f9b79`、`64c8780`、`aa561f9` 五笔未标注「共享层」，不改写历史。
+- **豁免二**：`v0.3.0` 及之前的 Windows 专属改动（`webview_win*`、`Mote.pro` 的 `win32` 作用域、Windows 打包脚本，如 `526904c`、`780d307`、`db1e4b5`、`54df37e`、`378df1d` 等）直接落在 `main`，不追补分支。
+- 从下一次 Windows 专属改动起，须新开 `win/<主题>`；共享层改动落在任一功能分支时，须在提交信息写「共享层」。
