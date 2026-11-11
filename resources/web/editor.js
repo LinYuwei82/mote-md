@@ -3517,6 +3517,14 @@
           e.removeAttribute('class');
       }
     }
+    // 行内代码在页内靠 CSS 取等宽字体，复制出去只剩 <code> 语义；Word 的 HTML
+    // 导入不认 UA 默认等宽，会把它并进正文东亚字体（实测变宋体），这里显式内联
+    // 等宽字体栈。代码块（<pre> 内）本来就有自己的样式，不动。
+    var codes = holder.querySelectorAll('code');
+    for (var c = 0; c < codes.length; c++) {
+      if (!codes[c].closest || !codes[c].closest('pre'))
+        codes[c].style.setProperty('font-family', 'Menlo, Consolas, monospace');
+    }
   }
 
   // 「有没有可复制 / 可剪切的内容」的唯一判定：空段落块会算出 "\n"，因此纯空白
