@@ -316,7 +316,8 @@ pre.code-block {
    （top/right 各留 0.35–0.45rem 内缩），整条都在边框内，不再挂到框外。
    头栏只占很窄的一条，代码正文从下一行开始；横向滚动只发生在 .code-scroll 内，
    按钮位置始终稳定。渲染态即可用，user-select:none，连选/三击整段复制都不会
-   把语言名或按钮带进剪贴板。 */
+   把语言名或按钮带进剪贴板。头栏与代码之间不再画分隔线；min-height 在
+   border-box 下包含原来那 1px，去掉边框后条高与代码首行位置都保持不变。 */
 .code-tools {
   flex: 0 0 100%;
   display: flex;
@@ -326,7 +327,6 @@ pre.code-block {
   min-height: 1.85rem;
   /* 右侧给绝对定位的复制按钮留位，长语言名截断后也碰不到按钮 */
   padding: 0 1.95rem 0 0.6rem;
-  border-bottom: 1px solid var(--border-hair);
 }
 
 .code-lang {
