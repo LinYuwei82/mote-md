@@ -3180,34 +3180,23 @@
     reader.readAsDataURL(file);
   }
 
-  // 粘贴统一转为纯文本，避免把富文本结构带进 Markdown；粘贴整体作为一个撤销步骤
-  root.addEventListener('paste', function (event) {
-    var clipboard = event.clipboardData || window.clipboardData;
-    if (!clipboard)
-      return;
-    var picture = clipboardImageFile(clipboard);
-    if (picture) {
-      event.preventDefault();
-      postImageFile(picture, 'paste');
-      return;
-    }
-    var text = clipboard.getData('text/plain');
-    var el = blockOf(event.target);
+  // 把一段纯文本插到目标块：语言徽标、表格与代码块各有专门路径，其余按普通
+  // 文本插入。原生粘贴事件与外壳剪贴板入口（菜单/快捷键/右键）共用这一实现。
+  function insertPastedText(text, el) {
+    text = String(text === undefined || text === null ? '' : text);
     if (el && isCodeBlock(el) && selectionInsideLang(el)) {
       // 徽标里粘贴：只按纯文本改语言名（和手输一样剔除空白/反引号），
       // 否则会落到下面代码块分支，被 insertCodeText 的兜底追加到正文末尾。
-      event.preventDefault();
       commitHistory();
-      document.execCommand('insertText', false, String(text).replace(/[\s`]/g, ''));
+      document.execCommand('insertText', false, text.replace(/[\s`]/g, ''));
       setTimeout(commitHistory, 0);
       return;
     }
     if (el && el.classList.contains('table')) {
       // 单元格是单行结构：整张 Markdown 表格直接替换当前表格；其余多行文本
       // 压成一行插入（换行会被 WebKit 变成 <div>/<br>，把表格结构写坏）。
-      event.preventDefault();
       commitHistory();
-      var raw = String(text).replace(/\r\n?/g, '\n');
+      var raw = text.replace(/\r\n?/g, '\n');
       var rows = raw.split('\n');
       if (isTableSource(rows)) {
         renderBlock(el, raw.replace(/\n+$/, ''));
@@ -3226,28 +3215,88 @@
     }
     if (el && isCodeBlock(el)) {
       // 代码块直接按字符插入，多行粘贴不会变成 <div>/<br>，结构始终是行文本
-      event.preventDefault();
       commitHistory();
-      if (!insertCodeText(el, String(text).replace(/\r\n?/g, '\n')))
+      if (!insertCodeText(el, text.replace(/\r\n?/g, '\n')))
         document.execCommand('insertText', false, text);
       scheduleDirty();
       scheduleCommit();
       setTimeout(commitHistory, 0);
       return;
     }
-    event.preventDefault();
     commitHistory();
     document.execCommand('insertText', false, text);
     setTimeout(commitHistory, 0);
+  }
+
+  // 光标停在块外（#editor 直接子节点之间）时，在光标处补一个空段落块并交还
+  // 焦点。块外没有可归属的原文，直接 insertText 会把文本写到 root 层，
+  // collectBlocks 序列化时看不到它，等于粘贴后一保存就丢。
+  function caretParagraphBlock() {
+    var selection = window.getSelection();
+    if (!selection || !selection.rangeCount)
+      return null;
+    var range = selection.getRangeAt(0);
+    if (range.startContainer !== root && !root.contains(range.startContainer))
+      return null;
+    var neo = document.createElement('div');
+    neo.className = 'block';
+    neo.setAttribute('contenteditable', 'true');
+    range.insertNode(neo);
+    renderBlock(neo, '');
+    neo.focus();
+    setCaret(neo, 0);
+    return neo;
+  }
+
+  // 点击最后一块下方的空白区时，选区与事件目标都落在 #editor 外（body），
+  // 没有可归属的块。这里在文档末尾补一个段落块并聚焦，粘贴内容才有落点。
+  function appendParagraphBlock() {
+    var neo = document.createElement('div');
+    neo.className = 'block';
+    neo.setAttribute('contenteditable', 'true');
+    root.appendChild(neo);
+    renderBlock(neo, '');
+    neo.classList.add('editing');
+    neo.focus();
+    setCaret(neo, 0);
+    if (neo.scrollIntoView)
+      neo.scrollIntoView({ block: 'nearest' });
+    return neo;
+  }
+
+  // 粘贴统一转为纯文本，避免把富文本结构带进 Markdown；粘贴整体作为一个撤销步骤。
+  // 监听挂在 document 上：块外空白区的 paste 事件目标是 body，挂在 root 上收不到。
+  document.addEventListener('paste', function (event) {
+    if (mode === 'source')
+      return;
+    var target = event.target;
+    // 页面内的表单控件（查找框、重命名输入等）保留原生粘贴
+    if (target && (target.nodeName === 'INPUT' || target.nodeName === 'TEXTAREA'))
+      return;
+    var clipboard = event.clipboardData || window.clipboardData;
+    if (!clipboard)
+      return;
+    var inRoot = target === root || (root.contains && root.contains(target));
+    var picture = clipboardImageFile(clipboard);
+    if (picture) {
+      event.preventDefault();
+      if (!inRoot)
+        appendParagraphBlock();
+      postImageFile(picture, 'paste');
+      return;
+    }
+    event.preventDefault();
+    var el = blockOf(target);
+    if (!el && inRoot)
+      el = caretParagraphBlock();
+    if (!el)
+      el = appendParagraphBlock();
+    insertPastedText(clipboard.getData('text/plain'), el);
   });
 
   // 复制时剔除行号栏。CSS 的 user-select:none 只约束真实拖选，
   // 程序化 Range 仍会把 gutter 文本算进选区，这里统一兜底。
-  document.addEventListener('copy', function (event) {
-    var selection = window.getSelection();
-    if (!selection || selection.isCollapsed || !selection.rangeCount || !event.clipboardData)
-      return;
-    var fragment = selection.getRangeAt(0).cloneContents();
+  function cleanCopyFragment(fragment) {
     // 视觉换行在纯文本里还原成真正的换行。<br> 与零宽换行标记是同一处换行的
     // 两种表示（标记只负责 textContent），同一位置只保留一个 \n。
     var nls = fragment.querySelectorAll ? fragment.querySelectorAll('.mk-nl') : [];
@@ -3267,8 +3316,6 @@
     // 行号栏、零宽标记与语言徽标都不属于正文：复制时要剔除。表格例外——表格里
     // 的 |、对齐行与换行就是原文，复制出去必须能原样贴回 Markdown。
     var junk = fragment.querySelectorAll ? fragment.querySelectorAll('.gutter, .mk, .code-lang') : [];
-    if (!junk.length && !brs.length && !nls.length)
-      return;
     for (var i = 0; i < junk.length; i++) {
       if (junk[i].closest && junk[i].closest('table'))
         continue;
@@ -3283,8 +3330,188 @@
         continue;
       junk[i].parentNode.removeChild(junk[i]);
     }
-    event.clipboardData.setData('text/plain', fragment.textContent);
+    return fragment.textContent;
+  }
+
+  // 选区 → 纯文本。块与块之间必须补一个换行：textContent 会把相邻块的文字
+  // 直接粘在一起（跨两段复制曾得到「第一段第二段」）。块内仍按复制规则清理。
+  // 复制、剪切与右键菜单共用这一个口径。
+  function selectionPlainText() {
+    var selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount)
+      return '';
+    var range = selection.getRangeAt(0);
+    var blocks = selectedBlocks();
+    var parts = [];
+    for (var i = 0; i < blocks.length; i++) {
+      var el = blocks[i];
+      var sub = document.createRange();
+      sub.selectNodeContents(el);
+      if (el.contains(range.startContainer))
+        sub.setStart(range.startContainer, range.startOffset);
+      if (el.contains(range.endContainer))
+        sub.setEnd(range.endContainer, range.endOffset);
+      parts.push(cleanCopyFragment(sub.cloneContents()));
+    }
+    return parts.join('\n');
+  }
+
+  // 块内真正的语义元素（h1/ul/pre…）。段落块没有内层元素，包装时用 <p>。
+  function blockSemantic(el) {
+    if (!el || !el.querySelector)
+      return null;
+    return el.querySelector(':scope > h1, :scope > h2, :scope > h3, :scope > h4, ' +
+                             ':scope > h5, :scope > h6, :scope > p, :scope > ul, ' +
+                             ':scope > ol, :scope > blockquote, :scope > pre, ' +
+                             ':scope > table');
+  }
+
+  // 外部应用没有本页 CSS，只靠 class 拿不到标题字号与列表符号，必须把计算样式
+  // 内联。WKWebView 写剪贴板时会保留 style 属性、丢掉 class，这层正好兜住。
+  var COPY_STYLE_PROPS = ['font-size', 'font-weight', 'font-style', 'font-family',
+                          'color', 'text-decoration', 'list-style-type',
+                          'margin-top', 'margin-bottom', 'padding-left',
+                          'white-space', 'background-color'];
+
+  function applyCopyStyle(source, target) {
+    if (!source || !window.getComputedStyle || !target.style)
+      return;
+    var cs = window.getComputedStyle(source);
+    for (var i = 0; i < COPY_STYLE_PROPS.length; i++) {
+      var value = cs.getPropertyValue(COPY_STYLE_PROPS[i]);
+      if (value)
+        target.style.setProperty(COPY_STYLE_PROPS[i], value);
+    }
+  }
+
+  // 代码高亮全靠 class，外部应用没有本页样式表，复制出去会退化成单色。
+  // 克隆内容与原文按文档顺序一一对应，因此可以直接把每个 token 的计算颜色
+  // 内联到克隆节点；与父级同色的 token（本来就没有专用颜色）保持继承，不硬造。
+  function inlineCodeTokenColors(source, sub, shell) {
+    if (!source || !source.querySelectorAll || !shell || !shell.querySelectorAll
+        || !window.getComputedStyle || !sub)
+      return;
+    var candidates = source.querySelectorAll('[class*="tok-"]');
+    var originals = [];
+    for (var i = 0; i < candidates.length; i++) {
+      if (sub.intersectsNode(candidates[i]))
+        originals.push(candidates[i]);
+    }
+    var clones = shell.querySelectorAll('[class*="tok-"]');
+    if (!originals.length || originals.length !== clones.length)
+      return;
+    for (var j = 0; j < originals.length; j++) {
+      var own = window.getComputedStyle(originals[j]).color;
+      var parentEl = originals[j].parentElement;
+      var inherited = parentEl ? window.getComputedStyle(parentEl).color : '';
+      if (own && own !== inherited)
+        clones[j].style.color = own;
+    }
+  }
+
+  // 选区 → HTML。与纯文本同口径（按块裁剪、跨块逐个取），但保留块级语义，
+  // 粘到 Word / 邮件 / TextEdit 里仍有标题层级、列表符号与代码块的样子。
+  // 复制走 HTML 是给“粘到外部应用”用的；粘回 Mote 仍只读 text/plain。
+  function selectionHtml() {
+    var selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount)
+      return '';
+    var range = selection.getRangeAt(0);
+    var blocks = selectedBlocks();
+    var holder = document.createElement('div');
+    for (var i = 0; i < blocks.length; i++) {
+      var el = blocks[i];
+      var sub = document.createRange();
+      sub.selectNodeContents(el);
+      if (el.contains(range.startContainer))
+        sub.setStart(range.startContainer, range.startOffset);
+      if (el.contains(range.endContainer))
+        sub.setEnd(range.endContainer, range.endOffset);
+      var fragment = sub.cloneContents();
+      var inner = blockSemantic(el);
+      var only = fragment.childNodes.length === 1 ? fragment.firstChild : null;
+      var shell;
+      // 整块选中时 cloneContents 已经带出内层语义标签（<h1>、<ul>…），不能再套
+      // 一层；否则外壳要按语义元素重建。早先拿外层块 div 当外壳，内层 <h1> 不在
+      // 选区里，HTML 里只剩 <div class="block h1">，外部应用拿不到标题层级。
+      if (inner && only && only.nodeType === 1 && only.nodeName === inner.nodeName) {
+        shell = only;
+      } else {
+        shell = document.createElement(inner ? inner.tagName.toLowerCase() : 'p');
+        shell.appendChild(fragment);
+      }
+      applyCopyStyle(inner || el, shell);
+      inlineCodeTokenColors(el, sub, shell);
+      holder.appendChild(shell);
+    }
+    sanitizeCopyHtml(holder);
+    return holder.innerHTML;
+  }
+
+  // 编辑器专用节点与属性对粘贴目标没有意义，甚至会把 contenteditable 一起带过去。
+  function sanitizeCopyHtml(holder) {
+    // 零宽标记（#、-、反引号等）在编辑器里靠 font-size:0 藏起来，粘到 Word /
+    // 邮件时没有这份 CSS 就会原样露出来，必须连同 gutter 一起剥掉。
+    var junk = holder.querySelectorAll('.mk, .gutter, .line-numbers, .code-lang');
+    for (var i = junk.length - 1; i >= 0; i--) {
+      if (junk[i].parentNode)
+        junk[i].parentNode.removeChild(junk[i]);
+    }
+    var all = holder.querySelectorAll('*');
+    for (var j = 0; j < all.length; j++) {
+      var e = all[j];
+      e.removeAttribute('contenteditable');
+      e.removeAttribute('spellcheck');
+      e.removeAttribute('id');
+      var attrs = e.attributes;
+      for (var k = attrs.length - 1; k >= 0; k--) {
+        if (attrs[k].name.indexOf('data-') === 0)
+          e.removeAttribute(attrs[k].name);
+      }
+      if (e.classList) {
+        e.classList.remove('editing', 'focused', 'placeholder', 'empty');
+        if (!e.classList.length)
+          e.removeAttribute('class');
+      }
+    }
+  }
+
+  // 「有没有可复制 / 可剪切的内容」的唯一判定：空段落块会算出 "\n"，因此纯空白
+  // 一律视为没有内容。这里只做判断、不改写文本本身——选中含前后空白的真实文本
+  // 仍按原样复制，不会因为判空白顺带 trim 掉用户内容。
+  function clipboardTextIsBlank(text) {
+    return !text || !text.trim();
+  }
+
+  // 原生 copy 事件：只在编辑区接管，源码模式交给 textarea 自己。
+  // text/plain 给粘回 Mote 与纯文本编辑器；text/html 给 Word / 邮件这类目标，
+  // macOS 由 WebKit 落到 NSPasteboard 的 public.html，Windows 由宿主写 CF_HTML。
+  document.addEventListener('copy', function (event) {
+    if (!event.clipboardData || mode === 'source')
+      return;
+    var text = selectionPlainText();
+    if (clipboardTextIsBlank(text)) {
+      // 不写剪贴板：否则空段落块的 "\n" 会覆盖用户上一次复制的内容
+      event.preventDefault();
+      post({ type: 'status', message: '没有可复制的内容：先选中文字' });
+      return;
+    }
+    event.clipboardData.setData('text/plain', text);
+    var html = selectionHtml();
+    if (html)
+      event.clipboardData.setData('text/html', html);
     event.preventDefault();
+  });
+
+  // 剪切事件：macOS 走 AppKit 的 cut: 时进入这里（Windows 由宿主直接调
+  // clipboardCopy）。纯空白选区要连同删除一起取消，两个平台行为才一致。
+  document.addEventListener('cut', function (event) {
+    if (mode === 'source')
+      return;
+    if (!clipboardTextIsBlank(selectionPlainText()))
+      return;
+    event.preventDefault();
+    post({ type: 'status', message: '没有可剪切的内容：先选中文字' });
   });
 
   /* ---------------- 查找 / 替换（Cmd+F） ----------------
@@ -4786,9 +5013,18 @@
   function openTurnMenu(x, y) {
     closeSlash(false);
     closeTurnMenu();
+    var selection = window.getSelection();
+    // 剪切/复制要有非空选区才可用；粘贴是否可用取决于系统剪贴板，页面没有读取
+    // 权限，只能保持可用（剪贴板为空时原生侧本来就什么都不做）。
+    var hasRange = !!(selection && selection.rangeCount && !selection.isCollapsed);
     turnMenu = document.createElement('div');
     turnMenu.id = 'turn-menu';
-    var html = '<div class="turn-title">转为</div>';
+    var html = '';
+    html += '<div class="turn-item' + (hasRange ? '' : ' is-disabled') + '" data-edit="cut">剪切</div>';
+    html += '<div class="turn-item' + (hasRange ? '' : ' is-disabled') + '" data-edit="copy">复制</div>';
+    html += '<div class="turn-item" data-edit="paste">粘贴</div>';
+    html += '<div class="turn-sep"></div>';
+    html += '<div class="turn-title">转为</div>';
     TURN_ITEMS.forEach(function (item) {
       html += '<div class="turn-item" data-key="' + item.key + '">' + escapeHtml(item.label) + '</div>';
     });
@@ -4797,10 +5033,17 @@
       var hit = event.target.closest ? event.target.closest('.turn-item') : null;
       if (!hit)
         return;
+      // preventDefault 保住选区：菜单项在页面里，按下时不能挪掉光标/选区
       event.preventDefault();
-      var key = hit.getAttribute('data-key');
+      if (hit.classList.contains('is-disabled'))
+        return;
+      var command = hit.getAttribute('data-edit');
       closeTurnMenu();
-      formatAction(key);
+      // 剪贴板三项交回宿主执行，与编辑菜单、快捷键完全同一条路径
+      if (command)
+        post({ type: 'editCommand', command: command });
+      else
+        formatAction(hit.getAttribute('data-key'));
     });
     placeMenu(turnMenu, { left: x, top: y, bottom: y, right: x });
   }
@@ -5027,6 +5270,62 @@
     // 供原生菜单 / 快捷键直接驱动（不依赖页面是否收到 keydown）
     format: function (name) {
       formatAction(String(name === undefined || name === null ? '' : name));
+    },
+    // 剪贴板：外壳菜单 / 快捷键 / 右键菜单的唯一下发点。平台 WebView 没有
+    // 可编程的编辑命令接口（WKWebView 的 copy:/paste: 只存在于菜单响应链，
+    // WebView2 只有自带加速键），所以复制/剪切由页面算出纯文本经 clipboardWrite
+    // 交给外壳写系统剪贴板；粘贴由外壳读剪贴板后回灌，插入路径与原生粘贴一致。
+    clipboardCopy: function (cut) {
+      if (mode === 'source')
+        return false;
+      var text = selectionPlainText();
+      // 空段落块会算出 "\n"，纯空白一律按「没有内容」处理：只提示、不写剪贴板。
+      // 这里只判断不改写 text，选中含前后空白的真实文本仍按原样复制。
+      if (clipboardTextIsBlank(text)) {
+        // 宿主（WebView2 加速键）先把按键标成已处理，页面这里再静默返回 false
+        // 就成了“按了没反应”。空选区给一条状态栏提示，算出的结果仍是失败。
+        post({
+          type: 'status',
+          message: cut ? '没有可剪切的内容：先选中文字' : '没有可复制的内容：先选中文字'
+        });
+        return false;
+      }
+      // html 是新增的可选字段：旧宿主忽略它仍按纯文本写入，新宿主同时写
+      // text/html，粘到 Word / 邮件里保留标题、列表、代码块的样子。
+      post({ type: 'clipboardWrite', text: text, html: selectionHtml() });
+      if (cut) {
+        commitHistory();
+        document.execCommand('delete');
+        scheduleDirty();
+        scheduleCommit();
+        setTimeout(commitHistory, 0);
+      }
+      return true;
+    },
+    clipboardPaste: function (text) {
+      if (mode === 'source')
+        return false;
+      text = String(text === undefined || text === null ? '' : text);
+      if (!text) {
+        post({ type: 'status', message: '剪贴板里没有可粘贴的文本' });
+        return false;
+      }
+      var selection = window.getSelection();
+      var node = selection && selection.rangeCount ? selection.anchorNode : null;
+      var el = node ? blockOf(node) : null;
+      if (el) {
+        insertPastedText(text, el);
+        return true;
+      }
+      // 光标落在块外空白区：原生粘贴本来可以插入，这里不能直接报失败。
+      // 先在光标处补一个段落块，再走与块内相同的插入路径。
+      var neo = caretParagraphBlock();
+      if (!neo) {
+        post({ type: 'status', message: '粘贴失败：先把光标放到正文里' });
+        return false;
+      }
+      insertPastedText(text, neo);
+      return true;
     },
     // 右键「转为」/ 工具栏下拉：不做 toggle，已是目标类型保持不动
     convert: function (kind) {

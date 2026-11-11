@@ -77,6 +77,9 @@ private:
     QAction *m_exportAction = nullptr;
     QAction *m_undoAction = nullptr;
     QAction *m_redoAction = nullptr;
+    QAction *m_cutAction = nullptr;
+    QAction *m_copyAction = nullptr;
+    QAction *m_pasteAction = nullptr;
     QAction *m_tocAction = nullptr;
     QAction *m_sourceAction = nullptr;
     QAction *m_zoomInAction = nullptr;

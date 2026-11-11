@@ -793,3 +793,13 @@ body.inline-proto .block.h6.editing {
 .turn-item:hover {
   background: var(--bg-active);
 }
+
+.turn-item.is-disabled {
+  color: var(--muted-3);
+}
+
+.turn-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border-hair);
+}

@@ -171,6 +171,30 @@ void WebWindow::createActions()
             m_web->redo();
     });
 
+    // 剪切 / 复制 / 粘贴：WKWebView 与 WebView2 都没有给宿主的可编辑命令接口
+    // （macOS 走 AppKit 响应链，Windows 走页面桥，见 MacWebView::clipboardCommand
+    // 与 WebViewBase::clipboardCommand）。菜单、快捷键与右键菜单共用这一个入口。
+    m_cutAction = new QAction(tr("剪切"), this);
+    m_cutAction->setShortcut(QKeySequence::Cut);
+    connect(m_cutAction, &QAction::triggered, this, [this] {
+        if (m_web)
+            m_web->clipboardCommand(QStringLiteral("cut"));
+    });
+
+    m_copyAction = new QAction(tr("复制"), this);
+    m_copyAction->setShortcut(QKeySequence::Copy);
+    connect(m_copyAction, &QAction::triggered, this, [this] {
+        if (m_web)
+            m_web->clipboardCommand(QStringLiteral("copy"));
+    });
+
+    m_pasteAction = new QAction(tr("粘贴"), this);
+    m_pasteAction->setShortcut(QKeySequence::Paste);
+    connect(m_pasteAction, &QAction::triggered, this, [this] {
+        if (m_web)
+            m_web->clipboardCommand(QStringLiteral("paste"));
+    });
+
     m_tocAction = new QAction(tr("目录"), this);
     m_tocAction->setCheckable(true);
     // 原 Cmd+Shift+T 让给「表格」；目录改用 Cmd+Shift+L（L = list/outline），
@@ -259,6 +283,10 @@ void WebWindow::createUi()
     QMenu *editMenu = menuBar()->addMenu(tr("编辑"));
     editMenu->addAction(m_undoAction);
     editMenu->addAction(m_redoAction);
+    editMenu->addSeparator();
+    editMenu->addAction(m_cutAction);
+    editMenu->addAction(m_copyAction);
+    editMenu->addAction(m_pasteAction);
 
     // 格式菜单：快捷键与「转为」同一套动作实现。Cmd+1/2/3 是切换语义，
     // 同级别再按一次回正文；表格/分隔线是插入，不改动已有内容。
@@ -566,6 +594,14 @@ void WebWindow::applyViewState(bool tocOn, bool sourceOn, qreal zoom)
 {
     m_tocAction->setChecked(tocOn);
     m_sourceAction->setChecked(sourceOn);
+    // 源码模式是 textarea 自己的原生剪贴板：macOS 把剪切/复制/粘贴直接转发给
+    // WebKit 响应链，两种模式都成立；Windows 的页面桥只覆盖渲染态，源码模式要
+    // 交回 WebView2 自带的加速键，所以只在 Windows 上禁用这三项。
+#ifdef Q_OS_WIN
+    m_cutAction->setEnabled(!sourceOn);
+    m_copyAction->setEnabled(!sourceOn);
+    m_pasteAction->setEnabled(!sourceOn);
+#endif
     if (!qFuzzyCompare(zoom, m_lastZoom)) {
         m_lastZoom = zoom;
         showStatus(tr("缩放：%1%").arg(qRound(zoom * 100)));

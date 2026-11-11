@@ -28,6 +28,11 @@ public:
     // 供原生菜单直接驱动前端的自建历史栈（不依赖页面是否收到 keydown）
     virtual void undo() = 0;
     virtual void redo() = 0;
+    // 基础编辑：剪切 / 复制 / 粘贴，command 取 "cut" / "copy" / "paste"。
+    // 系统 WebView 没有给宿主的可编程编辑命令接口（WKWebView 的 cut:/copy:/paste:
+    // 只经由菜单响应链生效，WebView2 只有自带加速键），因此统一由页面实现：
+    // 复制/剪切把纯文本回传宿主写系统剪贴板，粘贴把剪贴板内容送回页面插入。
+    virtual void clipboardCommand(const QString &command) = 0;
     // 视图控制：目录侧栏、源码模式、缩放（前端实现，Qt 只负责下发与同步状态）
     virtual void toggleToc() = 0;
     virtual void toggleSource() = 0;
