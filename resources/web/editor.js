@@ -3381,6 +3381,13 @@
     }
   }
 
+  // 「有没有可复制 / 可剪切的内容」的唯一判定：空段落块会算出 "\n"，因此纯空白
+  // 一律视为没有内容。这里只做判断、不改写文本本身——选中含前后空白的真实文本
+  // 仍按原样复制，不会因为判空白顺带 trim 掉用户内容。
+  function clipboardTextIsBlank(text) {
+    return !text || !text.trim();
+  }
+
   // 原生 copy 事件：只在编辑区接管，源码模式交给 textarea 自己。
   // text/plain 给粘回 Mote 与纯文本编辑器；text/html 给 Word / 邮件这类目标，
   // macOS 由 WebKit 落到 NSPasteboard 的 public.html，Windows 由宿主写 CF_HTML。
@@ -3388,13 +3395,28 @@
     if (!event.clipboardData || mode === 'source')
       return;
     var text = selectionPlainText();
-    if (!text)
+    if (clipboardTextIsBlank(text)) {
+      // 不写剪贴板：否则空段落块的 "\n" 会覆盖用户上一次复制的内容
+      event.preventDefault();
+      post({ type: 'status', message: '没有可复制的内容：先选中文字' });
       return;
+    }
     event.clipboardData.setData('text/plain', text);
     var html = selectionHtml();
     if (html)
       event.clipboardData.setData('text/html', html);
     event.preventDefault();
+  });
+
+  // 剪切事件：macOS 走 AppKit 的 cut: 时进入这里（Windows 由宿主直接调
+  // clipboardCopy）。纯空白选区要连同删除一起取消，两个平台行为才一致。
+  document.addEventListener('cut', function (event) {
+    if (mode === 'source')
+      return;
+    if (!clipboardTextIsBlank(selectionPlainText()))
+      return;
+    event.preventDefault();
+    post({ type: 'status', message: '没有可剪切的内容：先选中文字' });
   });
 
   /* ---------------- 查找 / 替换（Cmd+F） ----------------
@@ -5162,7 +5184,9 @@
       if (mode === 'source')
         return false;
       var text = selectionPlainText();
-      if (!text) {
+      // 空段落块会算出 "\n"，纯空白一律按「没有内容」处理：只提示、不写剪贴板。
+      // 这里只判断不改写 text，选中含前后空白的真实文本仍按原样复制。
+      if (clipboardTextIsBlank(text)) {
         // 宿主（WebView2 加速键）先把按键标成已处理，页面这里再静默返回 false
         // 就成了“按了没反应”。空选区给一条状态栏提示，算出的结果仍是失败。
         post({
