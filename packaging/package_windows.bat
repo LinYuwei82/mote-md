@@ -108,7 +108,13 @@ if exist "%OUT%\Qt6Pdf.dll" del /q "%OUT%\Qt6Pdf.dll"
 if exist "%OUT%\imageformats\qpdf.dll" del /q "%OUT%\imageformats\qpdf.dll"
 if exist "%OUT%\Qt6Qml.dll" del /q "%OUT%\Qt6Qml.dll"
 if exist "%OUT%\Qt6Quick.dll" del /q "%OUT%\Qt6Quick.dll"
+REM Qt standard buttons (QMessageBox Save/Discard/Cancel) are translated by
+REM qtbase_zh_CN.qm. windeployqt runs with --no-translations above, so copy
+REM only that single file instead of the whole translations directory.
 if exist "%OUT%\translations" rmdir /s /q "%OUT%\translations"
+mkdir "%OUT%\translations"
+copy /y "%QTDIR%\translations\qtbase_zh_CN.qm" "%OUT%\translations\" >nul
+if errorlevel 1 goto :fail
 if exist "%OUT%\qml" rmdir /s /q "%OUT%\qml"
 del /q "%OUT%\*.pdb" 2>nul
 del /q "%OUT%\*.exp" 2>nul

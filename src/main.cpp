@@ -1,8 +1,11 @@
 #include <QApplication>
+#include <QDebug>
 #include <QFile>
 #include <QFont>
 #include <QFontDatabase>
 #include <QIcon>
+#include <QLibraryInfo>
+#include <QTranslator>
 
 #include "mainwindow.h"
 #include "webwindow.h"
@@ -15,6 +18,16 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral(MOTE_VERSION));
     QCoreApplication::setOrganizationName(QStringLiteral("Mote"));
     QApplication::setApplicationDisplayName(QStringLiteral("Mote"));
+
+    // 界面文案本身是硬编码中文，但 Qt 自带控件（QMessageBox 的「保存/不保存/取消」、
+    // 可编辑控件的右键菜单等）走的是 qtbase 翻译。不装翻译器时这些标准按钮会回落到
+    // 英文，因此这里固定加载 qtbase_zh_CN；找不到 .qm 时保持英文，不影响启动。
+    QTranslator qtTranslator;
+    const QString qtTranslations = QLibraryInfo::path(QLibraryInfo::TranslationsPath);
+    if (qtTranslator.load(QStringLiteral("qtbase_zh_CN"), qtTranslations))
+        app.installTranslator(&qtTranslator);
+    else
+        qWarning("未能加载 Qt 中文翻译：%s", qPrintable(qtTranslations));
 
     // 正文基准 16.5pt（原 13pt）。
     // macOS 的系统默认字体没有中文字面，只设字重时中文仍回落到 PingFang Regular，

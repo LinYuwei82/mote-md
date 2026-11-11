@@ -66,6 +66,18 @@ DMG_PATH="$DIST_DIR/${PKG_NAME}-${APP_VERSION}.dmg"
 echo "==> 3/${TOTAL} macdeployqt 部署 Qt 框架与插件"
 "$MACDEPLOYQT" "$APP_PATH" -always-overwrite -no-codesign -libpath="$QT_LIB"
 
+# macdeployqt 不带 Qt 翻译。QMessageBox 的「保存/不保存/取消」等标准按钮文案来自
+# qtbase_zh_CN.qm。app 包内 QLibraryInfo::path(TranslationsPath) 解析到
+# Contents/translations（不是 Contents/Resources/translations，已实测），缺文件直接失败。
+QT_TRANSLATIONS="$(qmake6 -query QT_INSTALL_TRANSLATIONS)"
+if [ -f "$QT_TRANSLATIONS/qtbase_zh_CN.qm" ]; then
+    mkdir -p "$APP_PATH/Contents/translations"
+    cp "$QT_TRANSLATIONS/qtbase_zh_CN.qm" "$APP_PATH/Contents/translations/"
+else
+    echo "错误：找不到 $QT_TRANSLATIONS/qtbase_zh_CN.qm，标准按钮会显示英文" >&2
+    exit 1
+fi
+
 echo "==> 4/${TOTAL} 删除用不到的插件与被牵连的大依赖（虚拟键盘/QML/PDF/SVG）"
 PLUGINS="$APP_PATH/Contents/PlugIns"
 FRAMEWORKS="$APP_PATH/Contents/Frameworks"

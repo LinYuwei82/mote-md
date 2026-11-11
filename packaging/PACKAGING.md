@@ -655,7 +655,8 @@ packaging\package_windows.bat
 5. `windeployqt --release --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw`
    部署 Qt DLL、MSVC 运行库与 `plugins\`（`platforms\qwindows.dll`、`imageformats\`、`styles\` 等）；
 6. 从 WebView2 SDK 复制 `build\native\x64\WebView2Loader.dll` 到 `dist\Mote-Windows\`；
-7. 删除 `opengl32sw.dll`、`d3dcompiler_47.dll`、`translations\`、`qml\`、`*.pdb` 等无用文件；
+7. 删除 `opengl32sw.dll`、`d3dcompiler_47.dll`、`translations\` 下的其它 `.qm`、`qml\`、`*.pdb` 等无用文件，
+   只保留 `translations\qtbase_zh_CN.qm`（QMessageBox 等标准按钮的中文文案来自它）；
 8. 复制 `samples\`（示例 md 与图片）与 `licenses\`（`JetBrainsMono-OFL.txt`、`LICENSE-AGPL-3.0.txt`）；
 9. 用 PowerShell `Compress-Archive` 压成 `dist\Mote-Windows.zip`。
 
