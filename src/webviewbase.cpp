@@ -230,6 +230,12 @@ void WebViewBase::clipboardCommand(const QString &command)
             }
         }
     }
+    // 资源管理器复制文件时剪贴板是 text/uri-list（CF_HDROP），data->text()
+    // 会给出 "file:///…"；那是文件列表，不是可粘贴的正文，按无文本处理。
+    if (data->hasUrls()) {
+        emit statusMessage(tr("剪贴板里没有可粘贴的文本"));
+        return;
+    }
     const QString text = data->text();
     if (text.isEmpty()) {
         emit statusMessage(tr("剪贴板里没有可粘贴的文本"));
