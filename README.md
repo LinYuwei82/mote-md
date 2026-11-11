@@ -122,6 +122,7 @@ backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建
 - [docs/COLLAB.md](docs/COLLAB.md)：macOS + Windows 双机协作（clone、分工、冲突、Windows 环境）
 - [tools/preflight.sh](tools/preflight.sh) / [tools/preflight.bat](tools/preflight.bat)：本机自检（仓库状态 → 独立目录构建 → macOS 启动冒烟）
 - [docs/DECISIONS.md](docs/DECISIONS.md)：架构与交互的决策记录（接手前先读）
+- [分支命名与归属](docs/DECISIONS.md#四分支命名与归属)：平台专属分支、共享层改动与跨平台提交的归属约定
 
 ## 第三方与许可
 
