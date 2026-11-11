@@ -736,6 +736,17 @@
     return offset;
   }
 
+  // 代码块右上角浮层的两个图标：与页面同用线性描边 + currentColor，
+  // 复制按钮平时半透明，hover 才显形；成功后短暂换成对勾。
+  var COPY_ICON = '<svg class="i-copy" viewBox="0 0 16 16" width="12" height="12"'
+    + ' fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">'
+    + '<rect x="5.4" y="5.4" width="7.8" height="7.8" rx="1.6"></rect>'
+    + '<path d="M10.6 5.4V4.2A1.8 1.8 0 0 0 8.8 2.4H4.2A1.8 1.8 0 0 0 2.4 4.2v4.6'
+    + 'a1.8 1.8 0 0 0 1.8 1.8h1.2"></path></svg>';
+  var DONE_ICON = '<svg class="i-done" viewBox="0 0 16 16" width="12" height="12"'
+    + ' fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">'
+    + '<path d="M3.2 8.6l3 3 6.6-6.8"></path></svg>';
+
   function renderCode(el, code, lang) {
     // 结尾的 \n 属于正文（末行之后的空行），不能再剥掉，否则编辑-重排往返会
     // 悄悄少一行；围栏前那个 \n 已由 renderBlock 的匹配式吃掉。
@@ -748,14 +759,37 @@
     // 之外：横向滚动只作用于代码，行号与分隔线始终留在左侧。不用 position:sticky
     // ——sticky 与横向滚动条共存时，WebKit 在整篇重建后会把块高少算一个滚动条。
     //
-    // 语言徽标：绝对定位在代码框右侧留白（left:100%），不参与 flex 排版、不占
-    // 高度，也不覆盖任何代码字形；它在渲染态就可点，单击即进入语言编辑。
+    // 语言徽标与复制按钮同处右上角浮层（.code-tools）：整块绝对定位在代码框
+    // 右侧留白，两者用 flex 排开，语言名再长也只把按钮往右推，既不会互相压住，
+    // 也不覆盖任何代码字形。按钮在渲染态即可点，不必先进入编辑。
     // 文本不进 <code>、也不进 dataset.raw 的正文部分——原文首行围栏由 dataset.lang 拼回。
     return '<pre class="code-block">'
+      + '<span class="code-tools" contenteditable="false">'
       + '<span class="code-lang" contenteditable="true" spellcheck="false"'
+      + (lang ? ' title="' + escapeHtml(lang) + '"' : '')
       + ' aria-label="代码语言">' + escapeHtml(lang || '') + '</span>'
+      + '<button type="button" class="code-copy" tabindex="-1"'
+      + ' aria-label="复制代码" title="复制代码">' + COPY_ICON + DONE_ICON + '</button>'
+      + '</span>'
       + '<div class="gutter" contenteditable="false" aria-hidden="true">' + gutter + '</div>'
       + '<div class="code-scroll"><code>' + colored.join('\n') + '</code></div></pre>';
+  }
+
+  // 代码块复制按钮：只写 <code> 里的正文（行号栏、语言徽标都不在 <code> 内），
+  // 多行与制表符原样保留。走与复制/剪切同一条 clipboardWrite 回路，不另造剪贴板
+  // 逻辑；成功只在按钮上做短暂反馈，不弹对话框，也不进入编辑态、不动撤销栈。
+  function copyCodeBlock(btn) {
+    var block = btn && btn.closest ? btn.closest('.block.code') : null;
+    if (!block)
+      return;
+    post({ type: 'clipboardWrite', text: codeText(block) });
+    btn.classList.add('copied');
+    if (btn._copiedTimer)
+      clearTimeout(btn._copiedTimer);
+    btn._copiedTimer = setTimeout(function () {
+      btn.classList.remove('copied');
+      btn._copiedTimer = null;
+    }, 1200);
   }
 
   // WebKit 在整篇重建（撤销/重做、预览↔源码）后，不会把横向滚动条的高度算进
@@ -1326,7 +1360,12 @@
     badge.setAttribute('spellcheck', 'false');
     badge.setAttribute('aria-label', '代码语言');
     badge.textContent = el.dataset.lang || '';
-    pre.insertBefore(badge, pre.firstChild);
+    badge.title = el.dataset.lang || '';
+    var tools = pre.querySelector('.code-tools');
+    if (tools)
+      tools.insertBefore(badge, tools.firstChild);
+    else
+      pre.insertBefore(badge, pre.firstChild);
     return badge;
   }
 
@@ -2612,12 +2651,24 @@
   // 任务复选框：按下时阻止聚焦与选区折叠，点击只切换该行的勾选标记。
   root.addEventListener('mousedown', function (event) {
     var box = event.target;
+    // 复制按钮不抢焦点：preventDefault 后选区/光标都留在原处，既不会把代码块
+    // 切进编辑态，也不会触发 focusin 里的编辑流程。
+    if (box && box.closest && box.closest('.code-copy')) {
+      event.preventDefault();
+      return;
+    }
     if (box && box.classList && box.classList.contains('task-check'))
       event.preventDefault();
   });
 
   root.addEventListener('click', function (event) {
     var target = event.target;
+    var copyBtn = target && target.closest ? target.closest('.code-copy') : null;
+    if (copyBtn) {
+      event.preventDefault();
+      copyCodeBlock(copyBtn);
+      return;
+    }
     var anchor = target && target.closest ? target.closest('a.md-link') : null;
     if (anchor) {
       // 链接永远不让 WebView 自己导航：普通点击只落到「进入编辑」，
@@ -3357,7 +3408,7 @@
     }
     // 行号栏、零宽标记与语言徽标都不属于正文：复制时要剔除。表格例外——表格里
     // 的 |、对齐行与换行就是原文，复制出去必须能原样贴回 Markdown。
-    var junk = fragment.querySelectorAll ? fragment.querySelectorAll('.gutter, .mk, .code-lang') : [];
+    var junk = fragment.querySelectorAll ? fragment.querySelectorAll('.gutter, .mk, .code-tools, .code-lang') : [];
     for (var i = 0; i < junk.length; i++) {
       if (junk[i].closest && junk[i].closest('table'))
         continue;
@@ -3495,7 +3546,7 @@
   function sanitizeCopyHtml(holder) {
     // 零宽标记（#、-、反引号等）在编辑器里靠 font-size:0 藏起来，粘到 Word /
     // 邮件时没有这份 CSS 就会原样露出来，必须连同 gutter 一起剥掉。
-    var junk = holder.querySelectorAll('.mk, .gutter, .line-numbers, .code-lang');
+    var junk = holder.querySelectorAll('.mk, .gutter, .line-numbers, .code-tools, .code-lang');
     for (var i = junk.length - 1; i >= 0; i--) {
       if (junk[i].parentNode)
         junk[i].parentNode.removeChild(junk[i]);
@@ -5192,7 +5243,7 @@
         marks[i].parentNode.removeChild(marks[i]);
     }
     // 行号栏与语言徽标是编辑器外壳，不属于文档内容
-    var chrome = body.querySelectorAll('.gutter, .code-lang');
+    var chrome = body.querySelectorAll('.gutter, .code-tools, .code-lang');
     for (var c = chrome.length - 1; c >= 0; c--) {
       if (chrome[c].parentNode)
         chrome[c].parentNode.removeChild(chrome[c]);

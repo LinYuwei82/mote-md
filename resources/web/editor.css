@@ -311,16 +311,22 @@ pre.code-block {
   border-radius: 4px;
 }
 
-/* 语言徽标：绝对定位到代码框右侧留白（left:100% 起向右生长），因此无论语言名
-   多长都不会压住任何代码字形；绝对定位不占排版，块几何不受显隐影响。
-   渲染态就常驻可见（半透明）并且可点——单击即可编辑语言，不必先进入编辑态；
-   渲染态 user-select:none，连选/三击整段复制都不会把语言名带进剪贴板。 */
-.code-lang {
+/* 右上角浮层：语言徽标 + 复制按钮同处一排。整块绝对定位到代码框右侧留白
+   （left:100% 起向右生长），因此无论语言名多长都不会压住任何代码字形；
+   绝对定位不占排版，块几何不受显隐影响。渲染态即可用，不必先进入编辑态；
+   渲染态 user-select:none，连选/三击整段复制都不会把语言名或按钮带进剪贴板。 */
+.code-tools {
   position: absolute;
   top: 0.42rem;
   left: 100%;
   margin-left: 0.4rem;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.code-lang {
   padding: 0.04rem 0.35rem;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -335,7 +341,47 @@ pre.code-block {
   opacity: 0.5;
   -webkit-user-select: none;
   user-select: none;
+  /* 语言名过长时省略，保证复制按钮始终留在窗口内、与徽标不重叠；
+     进入语言编辑（点击徽标）时放宽上限，hover 有 title 可看全名。 */
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
+.code-lang:focus {
+  max-width: 12rem;
+}
+
+/* 复制按钮：与徽标同样平时半透明、hover 才显形；成功后短暂换成对勾 */
+.code-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: pointer;
+  outline: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.code-copy:hover,
+.code-copy:focus-visible {
+  opacity: 1;
+  border-color: var(--border-hover);
+  background: var(--bg);
+}
+
+.code-copy .i-done { display: none; }
+.code-copy.copied { opacity: 1; color: var(--accent); }
+.code-copy.copied .i-copy { display: none; }
+.code-copy.copied .i-done { display: inline; }
 
 .code-lang:hover {
   opacity: 1;
