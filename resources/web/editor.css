@@ -344,17 +344,34 @@ pre.code-block {
   white-space: pre;
   outline: none;
   opacity: 0.5;
+  cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
   /* 语言名过长时省略，保证复制按钮始终留在代码块内、与徽标不重叠；
-     进入语言编辑（点击徽标）时放宽上限，hover 有 title 可看全名。 */
+     hover 有 title 可看全名，点开选择器可搜索切换。 */
   max-width: 7rem;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.code-lang:focus {
-  max-width: 12rem;
+/* 徽标后的展开指示：用两条边画出的 V 形，空 span 没有文本，不会进入
+   textContent 或剪贴板；打开下拉（徽标 aria-expanded=true）时旋转 180°。 */
+.code-lang-caret {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid var(--faint-3);
+  border-bottom: 1px solid var(--faint-3);
+  transform: translateY(-1.5px) rotate(45deg);
+  transform-origin: center;
+  transition: transform 120ms ease;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.code-lang[aria-expanded="true"] + .code-lang-caret {
+  transform: translateY(1px) rotate(225deg);
 }
 
 /* 复制按钮：绝对定位在代码块内部右上角，平时半透明、hover 才显形；
@@ -863,6 +880,74 @@ body.inline-proto .block.h6.editing {
   background: var(--border-hair);
 }
 
+/* 代码块语言选择器：挂在 body 上，position:fixed，天然躲开代码块的 overflow，
+   也不参与正文排版。宽度固定，位置由 JS 按徽标矩形钳进窗口内。 */
+#lang-menu {
+  position: fixed;
+  z-index: 50;
+  width: 216px;
+  padding: 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--shadow-menu);
+  font-family: -apple-system, "PingFang SC", sans-serif;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+#lang-search {
+  width: 100%;
+  margin: 0 0 5px;
+  padding: 4px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: var(--bg);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text-strong);
+  outline: none;
+}
+
+#lang-search:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.lang-list {
+  max-height: 264px;
+  overflow-y: auto;
+}
+
+.lang-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: default;
+}
+
+.lang-item.active {
+  background: var(--bg-active);
+}
+
+.lang-item.is-current {
+  color: var(--accent);
+}
+
+.lang-check {
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.lang-empty {
+  padding: 6px 8px;
+  color: var(--muted-3);
+}
+
 /* ---------------- 打印 / 导出 PDF ----------------
    宿主按 A4、无页眉页脚打印当前页面；这里只用 @media print 清掉界面外壳，
    不改 DOM、不动撤销栈，导出前后文档与脏标记都不变。
@@ -900,6 +985,7 @@ body.inline-proto .block.h6.editing {
   #find-bar,
   #slash-menu,
   #turn-menu,
+  #lang-menu,
   .mk,
   .code-tools,
   .gutter { display: none !important; }
@@ -956,6 +1042,7 @@ body.pdf-export #toc,
 body.pdf-export #find-bar,
 body.pdf-export #slash-menu,
 body.pdf-export #turn-menu,
+body.pdf-export #lang-menu,
 body.pdf-export .mk,
 body.pdf-export .code-tools,
 body.pdf-export .gutter { display: none !important; }
