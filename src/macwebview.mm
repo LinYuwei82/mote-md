@@ -5,6 +5,9 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QPointer>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QTimer>
@@ -14,6 +17,7 @@
 #import <WebKit/WebKit.h>
 
 #include <cstdio>
+#include <QFileInfo>
 
 namespace {
 
@@ -339,6 +343,147 @@ void MacWebView::clipboardCommand(const QString &command)
     // 早先菜单里没有这三项，AppKit 就没有对应的 key equivalent，WKWebView 收不到
     // 命令，Cmd+C/X/V 因此完全无反应。
     [NSApp sendAction:action to:nil from:nil];
+}
+
+// 导出 PDF：走 WKWebView 的打印操作（与 createPDFWithConfiguration 同一套渲染，
+// 导出 PDF：WKWebView 的打印操作在本项目的页面结构上会无限分页（根节点
+// min-height:100% 在分页上下文里被当成“每页满高”，实测会把磁盘写满），因此改为：
+// 1) 用 createPDFWithConfiguration 把整篇正文抓成一张高图 PDF（同一套 WebKit 渲染，
+//    中文、图片、代码高亮与等宽字体全保留）；
+// 2) 再按 A4 内容区把这张高页切成多页矢量 PDF（CoreGraphics 绘制，文字仍是文字）。
+// 页面侧只用 @media print 隐藏外壳，不改 DOM，导出前后文档、撤销栈、脏标记都不动。
+namespace {
+
+// 把 createPDF 得到的一整页高图切成 A4 多页；失败返回 nil。
+NSData *moteSlicePdfToA4(NSData *source)
+{
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)source);
+    CGPDFDocumentRef sourceDoc = CGPDFDocumentCreateWithProvider(provider);
+    CGDataProviderRelease(provider);
+    if (!sourceDoc || CGPDFDocumentGetNumberOfPages(sourceDoc) < 1) {
+        if (sourceDoc)
+            CGPDFDocumentRelease(sourceDoc);
+        return nil;
+    }
+
+    CGPDFPageRef sourcePage = CGPDFDocumentGetPage(sourceDoc, 1);
+    const CGRect box = CGPDFPageGetBoxRect(sourcePage, kCGPDFMediaBox);
+    // A4 纵向与 18/20 mm 边距（与 Windows 侧 PrintToPdf 的设置一致）
+    const CGFloat pageW = 595.28;
+    const CGFloat pageH = 841.89;
+    const CGFloat marginLeft = 51.0;
+    const CGFloat marginRight = 51.0;
+    const CGFloat marginTop = 56.7;
+    const CGFloat marginBottom = 56.7;
+    const CGFloat contentW = pageW - marginLeft - marginRight;
+    const CGFloat contentH = pageH - marginTop - marginBottom;
+    if (box.size.width <= 0 || box.size.height <= 0) {
+        CGPDFDocumentRelease(sourceDoc);
+        return nil;
+    }
+
+    const CGFloat scale = contentW / box.size.width;
+    const CGFloat sliceHeight = contentH / scale; // 每页覆盖多少源高度
+    const int pageCount = static_cast<int>(ceil(box.size.height / sliceHeight));
+    // 上限兜底：真实文档不会超过 200 页，超出说明量到的尺寸异常，宁可失败也不写巨型文件
+    if (pageCount <= 0 || pageCount > 200) {
+        CGPDFDocumentRelease(sourceDoc);
+        return nil;
+    }
+
+    NSMutableData *output = [NSMutableData data];
+    CGDataConsumerRef consumer = CGDataConsumerCreateWithCFData((CFMutableDataRef)output);
+    CGRect mediaBox = CGRectMake(0, 0, pageW, pageH);
+    CGContextRef ctx = CGPDFContextCreate(consumer, &mediaBox, NULL);
+    CGDataConsumerRelease(consumer);
+    if (!ctx) {
+        CGPDFDocumentRelease(sourceDoc);
+        return nil;
+    }
+
+    for (int i = 0; i < pageCount; i++) {
+        const CGFloat top = i * sliceHeight;
+        const CGFloat bottom = MIN(box.size.height, top + sliceHeight);
+        const CGFloat visibleH = bottom - top;
+        const CGFloat outputH = visibleH * scale;
+        CGPDFContextBeginPage(ctx, NULL);
+        CGContextSaveGState(ctx);
+        // 源页原点在左下：把当前切片对齐到 A4 内容区的底部（首页贴顶）
+        CGContextTranslateCTM(ctx, marginLeft, marginBottom + contentH - outputH);
+        CGContextScaleCTM(ctx, scale, scale);
+        CGContextTranslateCTM(ctx, 0, -(box.size.height - bottom));
+        CGContextClipToRect(ctx, CGRectMake(0, box.size.height - bottom, box.size.width, visibleH));
+        CGContextDrawPDFPage(ctx, sourcePage);
+        CGContextRestoreGState(ctx);
+        CGPDFContextEndPage(ctx);
+    }
+    CGPDFContextClose(ctx);
+    CGContextRelease(ctx);
+    CGPDFDocumentRelease(sourceDoc);
+    return output;
+}
+
+} // namespace
+
+void MacWebView::exportPdfNative(const QString &filePath)
+{
+    WKWebView *web = static_cast<WKWebView *>(m_webView);
+    if (!web) {
+        emit pdfExportFailed(tr("导出失败：页面还没准备好"));
+        return;
+    }
+
+    const QString path = filePath;
+    // 同名旧文件不能算本次成功：先删掉，成功与否由产物是否存在、是否非空判定
+    QFile::remove(path);
+
+    // 先进入导出态（隐藏外壳）并量整篇正文尺寸（CSS px）；pdfBegin 只加 body 的
+    // class，导出结束（含失败）立刻 pdfEnd 还原，不改正文节点。
+    NSString *measure = @"window.mote && window.mote.pdfBegin()";
+    QPointer<MacWebView> guard(this);
+    [web evaluateJavaScript:measure
+          completionHandler:^(id result, NSError *error) {
+            MacWebView *owner = guard.data();
+            if (!owner)
+                return;
+            const QString json = result ? QString::fromNSString([result description]) : QString();
+            const QJsonObject dims = QJsonDocument::fromJson(json.toUtf8()).object();
+            const double width = dims.value(QStringLiteral("w")).toDouble();
+            const double height = dims.value(QStringLiteral("h")).toDouble();
+            if (width < 10 || height < 10) {
+                Q_UNUSED(error)
+                [web evaluateJavaScript:@"window.mote && window.mote.pdfEnd()"
+                      completionHandler:nil];
+                emit owner->pdfExportFailed(tr("导出失败：没有可导出的正文"));
+                return;
+            }
+
+            WKPDFConfiguration *configuration = [[WKPDFConfiguration alloc] init];
+            configuration.rect = CGRectMake(0, 0, width, height);
+            [web createPDFWithConfiguration:configuration
+                          completionHandler:^(NSData *data, NSError *pdfError) {
+                            [configuration release];
+                            MacWebView *inner = guard.data();
+                            if (!inner)
+                                return;
+                            // 无论成败都先还原页面显示，别让导出态留在界面上
+                            [web evaluateJavaScript:@"window.mote && window.mote.pdfEnd()"
+                                  completionHandler:nil];
+                            NSData *sliced = data ? moteSlicePdfToA4(data) : nil;
+                            const BOOL written = sliced
+                                && [sliced writeToFile:path.toNSString() atomically:YES];
+                            const QFileInfo pdf(path);
+                            if (!written || !pdf.exists() || pdf.size() <= 0) {
+                                Q_UNUSED(pdfError)
+                                QFile::remove(path);
+                                emit inner->pdfExportFailed(
+                                    tr("导出失败：无法写入 %1")
+                                        .arg(QDir::toNativeSeparators(path)));
+                                return;
+                            }
+                            emit inner->pdfExportFinished(path);
+                          }];
+          }];
 }
 
 void MacWebView::ensureHost()

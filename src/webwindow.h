@@ -31,7 +31,7 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
-    enum class AfterSave { None, OpenDialog, OpenPath, NewDocument, Close };
+    enum class AfterSave { None, OpenDialog, OpenPath, NewDocument, Close, ExportPdf };
 
     void createActions();
     void createUi();
@@ -59,6 +59,10 @@ private:
     void handleSaveAs();
     void handleExportHtml();
     void handleExportReady(const QString &html);
+    void handleExportPdf();
+    void promptExportPdf();
+    void handlePdfFinished(const QString &filePath);
+    void handlePdfFailed(const QString &message);
     void handleOpenLink(const QString &href);
     void handleSaveRequested(const QString &text);
     void handleDroppedText(const QString &name, const QString &text);
@@ -75,6 +79,7 @@ private:
     QAction *m_saveAction = nullptr;
     QAction *m_saveAsAction = nullptr;
     QAction *m_exportAction = nullptr;
+    QAction *m_exportPdfAction = nullptr;
     QAction *m_undoAction = nullptr;
     QAction *m_redoAction = nullptr;
     QAction *m_cutAction = nullptr;
@@ -94,6 +99,7 @@ private:
     QString m_lastText;
     bool m_dirty = false;
     bool m_saveAsRequested = false;
+    bool m_sourceOn = false;
     bool m_followSystem = true;
     bool m_dark = false;
     qreal m_lastZoom = 1.0;

@@ -5480,6 +5480,21 @@
     // 原生「导出 HTML…」：拼好整篇自包含 HTML 后回传，由 Qt 侧写盘并内嵌图片
     exportHtml: function (title) {
       post({ type: 'export', html: buildExportHtml(title) });
+    },
+    // PDF 导出：createPDF / PrintToPdf 走屏幕媒体，@media print 不生效，
+    // 所以由宿主在导出前加 body.pdf-export（样式里清外壳），导出完成立刻移除。
+    // 只动 body 的 class，不碰正文节点，因此不改文档、不进撤销栈、不置脏标记。
+    pdfBegin: function () {
+      document.body.classList.add('pdf-export');
+      var ed = document.getElementById('editor');
+      var rect = ed ? ed.getBoundingClientRect() : { width: 0 };
+      return JSON.stringify({
+        w: Math.ceil(rect.width || 0),
+        h: Math.ceil(document.documentElement.scrollHeight || 0)
+      });
+    },
+    pdfEnd: function () {
+      document.body.classList.remove('pdf-export');
     }
   };
 

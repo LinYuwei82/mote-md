@@ -44,6 +44,9 @@ public:
     virtual void applyFormat(const QString &action) = 0;
     // 导出自包含 HTML：前端渲染好整篇 HTML 后经 exportHtmlReady 回传，由外壳写盘
     virtual void requestExportHtml(const QString &title) = 0;
+    // 导出 PDF：渲染态整篇正文，A4、无页眉页脚。各平台异步完成，
+    // 成功发 pdfExportFinished，失败发 pdfExportFailed（含可读原因）。
+    virtual void requestExportPdf(const QString &filePath) = 0;
 
 signals:
     void ready();
@@ -63,6 +66,9 @@ signals:
     void openLinkRequested(const QString &href);
     // 导出的自包含 HTML（图片仍是原文里的相对路径，由外壳读盘替换成 base64）
     void exportHtmlReady(const QString &html);
+    // PDF 导出结果：成功带回最终路径，失败带回可读原因
+    void pdfExportFinished(const QString &filePath);
+    void pdfExportFailed(const QString &message);
 };
 
 // 平台工厂：macOS 返回 WKWebView 实现，Windows 返回 WebView2 实现；

@@ -40,6 +40,7 @@ public:
     void setTheme(const QString &mode) override;
     void applyFormat(const QString &action) override;
     void requestExportHtml(const QString &title) override;
+    void requestExportPdf(const QString &filePath) override;
 
     // 由平台消息桥调用：参数是前端 postMessage 的 JSON 文本
     void handleMessage(const QString &json);
@@ -68,6 +69,10 @@ protected:
     virtual void pageReady() {}
     // Windows 可用 PostWebMessageAsJson 走大文档通道，macOS 保持脚本注入
     virtual void injectMarkdown(const QString &text);
+    // 平台打印钩子：把渲染态整篇正文写成 A4 PDF 到 filePath。
+    // 异步的平台（WebView2 的 PrintToPdfAsync）在完成时自行发信号；
+    // 同步的平台（WKWebView 的打印操作）返回后立即发信号。
+    virtual void exportPdfNative(const QString &filePath) = 0;
 
     void applyTheme();
     void applyBaseHref();
@@ -84,6 +89,7 @@ protected:
     bool m_pageReady = false;
     quint64 m_pageGeneration = 0; // 见 pageGeneration()
     QString m_theme = QStringLiteral("light"); // 页面就绪前先记住，ready 后补发
+    QString m_pendingPdfPath; // ready 之前请求的 PDF 导出：页面就绪后再执行
 };
 
 #endif // WEBVIEWBASE_H

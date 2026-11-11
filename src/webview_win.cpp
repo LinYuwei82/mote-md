@@ -483,6 +483,76 @@ private:
     bool m_chunked = false;
 };
 
+// pdfBegin 脚本执行完：页面已隐藏外壳，再启动 PrintToPdfAsync，避免抓到旧布局
+class BeginPdfHandler final
+    : public RefCounted
+    , public ICoreWebView2ExecuteScriptCompletedHandler
+{
+public:
+    explicit BeginPdfHandler(WebView2Editor *owner) : m_owner(owner) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **ppv) override
+    {
+        if (!ppv)
+            return E_POINTER;
+        if (riid == IID_IUnknown || riid == IID_ICoreWebView2ExecuteScriptCompletedHandler) {
+            *ppv = static_cast<ICoreWebView2ExecuteScriptCompletedHandler *>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return RefCounted::AddRef(); }
+    ULONG STDMETHODCALLTYPE Release() override { return RefCounted::Release(); }
+
+    HRESULT STDMETHODCALLTYPE Invoke(HRESULT errorCode, LPCWSTR resultObjectAsJson) override
+    {
+        Q_UNUSED(errorCode)
+        Q_UNUSED(resultObjectAsJson)
+        if (m_owner)
+            m_owner->onPdfBeginDone();
+        return S_OK;
+    }
+
+private:
+    QPointer<WebView2Editor> m_owner;
+};
+
+// PDF 导出完成：PrintToPdfAsync 在 UI 线程回调，成功与否转交宿主统一发信号
+class PrintPdfHandler final
+    : public RefCounted
+    , public ICoreWebView2PrintToPdfCompletedHandler
+{
+public:
+    explicit PrintPdfHandler(WebView2Editor *owner) : m_owner(owner) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **ppv) override
+    {
+        if (!ppv)
+            return E_POINTER;
+        if (riid == IID_IUnknown || riid == IID_ICoreWebView2PrintToPdfCompletedHandler) {
+            *ppv = static_cast<ICoreWebView2PrintToPdfCompletedHandler *>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return RefCounted::AddRef(); }
+    ULONG STDMETHODCALLTYPE Release() override { return RefCounted::Release(); }
+
+    HRESULT STDMETHODCALLTYPE Invoke(HRESULT errorCode, BOOL isSuccessful) override
+    {
+        if (m_owner)
+            m_owner->onPdfExported(SUCCEEDED(errorCode) && isSuccessful);
+        return S_OK;
+    }
+
+private:
+    QPointer<WebView2Editor> m_owner;
+};
+
 Qt::Key keyFromVirtualKey(UINT vk)
 {
     if (vk >= 'A' && vk <= 'Z')
@@ -1047,6 +1117,112 @@ void WebView2Editor::onInjectResult(long hr, const QString &resultJson, bool chu
                        tr("<p>%1：%2</p><p>正文没有进入编辑器。可以先把文档「另存为」到"
                           "可写目录再重新打开，或重启 Mote 后重试。</p>")
                            .arg(channel, reason.toHtmlEscaped()));
+}
+
+void WebView2Editor::exportPdfNative(const QString &filePath)
+{
+    auto *web = static_cast<ICoreWebView2 *>(m_webView);
+    auto *environment = static_cast<ICoreWebView2Environment *>(m_environment);
+    if (!web || !environment) {
+        emit pdfExportFailed(tr("导出失败：页面还没准备好"));
+        return;
+    }
+
+    // PrintToPdf 在 ICoreWebView2_7，打印设置工厂在 ICoreWebView2Environment6。
+    // 老 Runtime（< 108）没有这两个接口：显式报版本过低，而不是静默失败。
+    ICoreWebView2_7 *web7 = nullptr;
+    if (FAILED(web->QueryInterface(IID_ICoreWebView2_7, reinterpret_cast<void **>(&web7)))
+        || !web7) {
+        emit pdfExportFailed(tr("导出失败：WebView2 Runtime 版本过低，需要 108 或更高版本"));
+        return;
+    }
+    ICoreWebView2Environment6 *environment6 = nullptr;
+    ICoreWebView2PrintSettings *settings = nullptr;
+    if (FAILED(environment->QueryInterface(IID_ICoreWebView2Environment6,
+                                           reinterpret_cast<void **>(&environment6)))
+        || !environment6 || FAILED(environment6->CreatePrintSettings(&settings)) || !settings) {
+        if (environment6)
+            environment6->Release();
+        web7->Release();
+        emit pdfExportFailed(tr("导出失败：无法创建打印设置"));
+        return;
+    }
+
+    // A4 纵向（英寸）、18/20 mm 边距；打印背景以保留代码高亮与表格底色；无页眉页脚
+    settings->put_PageWidth(8.27);
+    settings->put_PageHeight(11.69);
+    settings->put_MarginLeft(0.71);
+    settings->put_MarginRight(0.71);
+    settings->put_MarginTop(0.79);
+    settings->put_MarginBottom(0.79);
+    settings->put_ShouldPrintBackgrounds(TRUE);
+    settings->put_ShouldPrintHeaderAndFooter(FALSE);
+    settings->put_Orientation(COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT);
+
+    m_pdfPath = filePath;
+    m_pdfWeb7 = web7;          // 引用移交 onPdfBeginDone 释放
+    m_pdfSettings = settings;
+
+    // 先让页面进入导出态（隐藏侧栏/行号栏/右上角浮层），脚本执行完再打印
+    auto *begin = new BeginPdfHandler(this);
+    const HRESULT hr = web->ExecuteScript(L"window.mote && window.mote.pdfBegin();", begin);
+    begin->Release();
+    environment6->Release();
+    if (FAILED(hr)) {
+        m_pdfPath.clear();
+        web7->Release();
+        settings->Release();
+        m_pdfWeb7 = nullptr;
+        m_pdfSettings = nullptr;
+        emit pdfExportFailed(tr("导出失败：无法准备打印页面"));
+    }
+}
+
+void WebView2Editor::onPdfBeginDone()
+{
+    auto *web7 = static_cast<ICoreWebView2_7 *>(m_pdfWeb7);
+    auto *settings = static_cast<ICoreWebView2PrintSettings *>(m_pdfSettings);
+    m_pdfWeb7 = nullptr;
+    m_pdfSettings = nullptr;
+    if (!web7 || !settings || m_pdfPath.isEmpty()) {
+        if (web7)
+            web7->Release();
+        if (settings)
+            settings->Release();
+        m_pdfPath.clear();
+        emit pdfExportFailed(tr("导出失败：无法准备打印页面"));
+        return;
+    }
+
+    auto *handler = new PrintPdfHandler(this);
+    const HRESULT hr = web7->PrintToPdf(m_pdfPath.toStdWString().c_str(), settings, handler);
+    handler->Release();
+    settings->Release();
+    web7->Release();
+    if (FAILED(hr)) {
+        const QString path = m_pdfPath;
+        m_pdfPath.clear();
+        emit pdfExportFailed(tr("导出失败：无法写入 %1")
+                                 .arg(QDir::toNativeSeparators(path)));
+    }
+}
+
+void WebView2Editor::onPdfExported(bool success)
+{
+    // 无论成败都退出导出态，别让隐藏了外壳的页面留在界面上
+    evaluateJs(QStringLiteral("window.mote && window.mote.pdfEnd();"));
+    const QString path = m_pdfPath;
+    m_pdfPath.clear();
+    const QFileInfo pdf(path);
+    if (!success || path.isEmpty() || !pdf.exists() || pdf.size() <= 0) {
+        // 失败时删掉可能存在的 0 字节文件，避免留下半成品
+        if (!path.isEmpty() && pdf.exists() && pdf.size() <= 0)
+            QFile::remove(path);
+        emit pdfExportFailed(tr("导出失败：无法写入 %1")
+                                 .arg(QDir::toNativeSeparators(path)));
+        return;
+    }
+    emit pdfExportFinished(path);
 }
 
 void WebView2Editor::loadPage(const QUrl &baseDir)

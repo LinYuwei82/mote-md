@@ -12,6 +12,7 @@
 #include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimer>
 #include <QMimeData>
 #include <QRegularExpression>
 
@@ -298,6 +299,21 @@ void WebViewBase::requestExportHtml(const QString &title)
                    .arg(moteJsonLiteral(title)));
 }
 
+void WebViewBase::requestExportPdf(const QString &filePath)
+{
+    if (filePath.isEmpty()) {
+        emit pdfExportFailed(tr("导出失败：没有指定保存位置"));
+        return;
+    }
+    // 另存为会换目录并重载页面；保存完成立刻导出时页面还没 ready。
+    // 这里先记下目标，等 ready 后补做，避免「页面还没准备好」的假失败。
+    if (!m_pageReady) {
+        m_pendingPdfPath = filePath;
+        return;
+    }
+    exportPdfNative(filePath);
+}
+
 void WebViewBase::insertImage(const QString &rel)
 {
     evaluateJs(QStringLiteral("window.mote && window.mote.insertImage(%1);")
@@ -407,6 +423,12 @@ void WebViewBase::handleMessage(const QString &json)
         applyTheme();
         emit ready();
         pageReady();
+        // 另存为后立刻导出：页面刚重载完，给图片与字体一点时间再抓
+        if (!m_pendingPdfPath.isEmpty()) {
+            const QString pending = m_pendingPdfPath;
+            m_pendingPdfPath.clear();
+            QTimer::singleShot(400, this, [this, pending] { exportPdfNative(pending); });
+        }
         return;
     }
     if (type == QLatin1String("view")) {

@@ -24,6 +24,7 @@ protected:
     void evaluateJs(const QString &js) override;
     void loadPage(const QUrl &baseDir) override;
     void pageReady() override;
+    void exportPdfNative(const QString &filePath) override;
 
 private:
     void ensureWebView();
