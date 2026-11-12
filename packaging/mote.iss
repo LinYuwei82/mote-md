@@ -5,7 +5,7 @@
 ;    powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 ;
 ;  版本号由 build_installer.ps1 从 Mote.pro 的 VERSION 读取，再以 /DMyAppVersion 传入；
-;  手工编译时必须自己传：ISCC.exe /DMyAppVersion=0.3.2 packaging\mote.iss
+;  手工编译时必须自己传：ISCC.exe /DMyAppVersion=0.3.3 packaging\mote.iss
 ;
 ;  安装形态：按用户安装（LocalAppData），无需管理员；带卸载程序。
 ;  .md 关联：独立 ProgID Mote.md + 可选接管默认程序，卸载时只清理自己写入的项。
