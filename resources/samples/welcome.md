@@ -1,23 +1,26 @@
 # Mote · 使用说明
 
-这是一个 **C++20 + Qt 6** 外壳加系统 WebView 的 Markdown 编辑器：窗口、文件对话框与
-保存由 Qt 负责，正文的渲染与编辑交给系统 WebView（macOS 上是 `WKWebView`）里的
-前端页面完成，不引入任何前端框架与外部运行时。
+Mote 是一个 **C++20 原生薄外壳 + 系统 WebView** 的 Markdown 查看 / 编辑器。窗口、菜单、
+文件对话框、导出与剪贴板由原生外壳负责：macOS 用 AppKit + `WKWebView`（发布包不含 Qt），
+Windows 用 Win32 + WebView2（实现到 N3，尚未通过实机验证）。正文的渲染与编辑交给系统
+WebView 里的前端页面完成，不引入任何前端框架与外部运行时。
 
 ## 快速上手
 
-1. 点击工具栏的 **打开**（`Cmd+O`），或直接把 `.md` 文件拖进窗口。
+1. 用「文件 → 打开」（`Cmd+O`），或直接把 `.md` 文件拖进窗口。
 2. 直接点击正文即可编辑：当前块显示 Markdown 原文，其余块保持排版效果。
 3. 点击别处结束编辑，修改会自动写回文档；`Cmd+S` 保存回原文件。
 
-> 提示：未保存的修改会在关闭按钮上显示圆点，关闭窗口时还会再问一次。
+> 提示：未保存的修改会在窗口标题上标出 `*`（macOS 关闭按钮上还会出现圆点），
+> 关闭或打开另一个文件时还会再问一次。Windows 上把 `Cmd` 换成 `Ctrl`、
+> `Option` 换成 `Alt`。
 
 ## 支持的排版元素
 
 ### 文本
 
 普通段落、**加粗**、*斜体*、`行内代码`，以及
-[Qt 官网链接](https://www.qt.io)。
+[外部链接](https://www.apple.com)（外部链接用 `Cmd+Click` 打开，普通点击仍是进入编辑）。
 
 ### 列表
 
@@ -33,19 +36,33 @@
 2. 阅读或编辑
 3. 保存退出
 
+任务列表（复选框可直接点，原文里的 `[ ]` / `[x]` 会跟着变）：
+
+- [x] 打开一份文档
+- [ ] 试着切换源码模式（`Cmd+E`）
+- [ ] 导出一份 PDF 或 HTML
+
 ### 代码块
 
 围栏代码块会保留等宽字体、浅色背景与左侧行号，并按语言做语法高亮。
 
 ```cpp
 // 代码块使用等宽字体，并带浅色背景
-#include <QTextDocument>
+#include <string>
+#include <vector>
 
-int main(int argc, char *argv[])
+std::vector<int> fibonacci(int n)
 {
-    QTextDocument doc;
-    doc.setMarkdown(QStringLiteral("# 你好，Markdown"));
-    return 0;
+    std::vector<int> result;
+    int a = 0;
+    int b = 1;
+    while (static_cast<int>(result.size()) < n) {
+        result.push_back(a);
+        const int next = a + b;
+        a = b;
+        b = next;
+    }
+    return result;
 }
 ```
 
@@ -82,7 +99,7 @@ JSON：
 {
   "name": "Mote",
   "version": "1.0.0",
-  "keywords": ["markdown", "qt6"],
+  "keywords": ["markdown", "native", "webview"],
   "enabled": true,
   "zoom": 1.0
 }
@@ -107,8 +124,9 @@ Shell：
 #!/usr/bin/env bash
 # 在临时目录做一次干净构建
 BUILD_DIR="${TMPDIR:-/tmp}/mote-build"
-mkdir -p "$BUILD_DIR" && cd "$BUILD_DIR"
-qmake6 /path/to/Mote.pro && make -j4
+cmake -S native -B "$BUILD_DIR"
+cmake --build "$BUILD_DIR"
+ctest --test-dir "$BUILD_DIR"
 ```
 
 SQL：
@@ -124,15 +142,15 @@ ORDER BY total DESC
 LIMIT 10;
 ```
 
-CMake（这里只是示例，本项目用 qmake）：
+CMake（Mote 的原生构建即用 CMake，这里只是示例）：
 
 ```cmake
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.25)
 project(Mote LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
-add_executable(Mote src/main.cpp src/mainwindow.cpp)
-target_link_libraries(Mote PRIVATE Qt6::Widgets)
+add_executable(Mote native/main.mm native/main_window.mm)
+target_link_libraries(Mote PRIVATE "-framework Cocoa" "-framework WebKit")
 ```
 
 没有语言标识的代码块（保持纯文本样式）：
@@ -150,11 +168,15 @@ second line
 | 保存 | `Cmd+S` | 保存当前文档 |
 | 另存为 | `Cmd+Shift+S` | 写入新文件 |
 | 新建 | `Cmd+N` | 空白文档，标题「未命名 - Mote」 |
+| 查找替换 | `Cmd+F` | 跨块跳转命中，不破坏行内标记 |
 | 粗体 / 斜体 / 链接 | `Cmd+B` / `Cmd+I` / `Cmd+K` | 再按一次取消 |
 | 标题 1/2/3 | `Cmd+1/2/3` | 同级别再按一次回正文 |
 | 行内代码 / 代码块 | `Cmd+Shift+K` / `Cmd+Shift+C` | 整块转换 |
 | 无序 / 有序列表 | `Cmd+Shift+8` / `Cmd+Shift+7` | 多选可合并成一个列表 |
 | 引用 / 表格 | `Cmd+Shift+B` / `Cmd+Shift+T` | 整块转换为引用 / 表格 |
+| 目录 / 源码模式 | `Cmd+Shift+L` / `Cmd+E` | 目录开关 / 纯文本切换 |
+| 导出 HTML | `Option+Cmd+E` | 单文件自包含 HTML |
+| 导出 PDF | `Cmd+P` | A4 多页（当前仅 macOS；源码模式下禁用） |
 | 斜杠命令 | 行首输入 `/` | 上下键选择，Enter 插入，Esc 取消 |
 | 转为 | 右键任意块 | 正文 / 标题 / 列表 / 引用 / 代码块 |
 
@@ -164,13 +186,17 @@ second line
 
 ![应用图标](sample-diagram.png)
 
+拖入或粘贴的图片会保存到文档同目录的 `assets/`，并插入相对路径。
+
 ## 关于本项目
 
-- 界面：Qt Widgets 外壳（窗口、工具栏、文件对话框、保存），正文由系统 WebView 承载。
+- 外壳：macOS 用 AppKit + `WKWebView`，Windows 用 Win32 + WebView2；两端共用同一份前端页面与 `core/`。
 - 渲染：前端按空行切块，聚焦块显示 Markdown 原文，其余块渲染为 HTML。
 - 高亮：正文预览按语言着色；源码模式（`Cmd+E`）为纯文本。
+- 状态栏：画在页面底部，显示打开 / 保存 / 导出的提示与「中文 N 字 · 英文 M 词」字数统计。
 - 编辑：直接点击正文，保存时把整篇 Markdown 写回 UTF-8。
-- 资源：图标、样式、前端页面和这份示例文档全部通过 `.qrc` 编进可执行文件，不依赖外部路径。
+- 导出：macOS 已支持 PDF（A4 多页）与单文件 HTML；Windows 侧的导出计划在 N4 实现。
+- 资源：图标、样式、前端页面和这份示例文档都随应用一起打包，不依赖外部路径。
 
 ---
 
