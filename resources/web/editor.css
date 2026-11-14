@@ -120,7 +120,7 @@ body {
   grid-template-columns: 0 minmax(0, 1fr);
 }
 
-body.toc-open #layout { grid-template-columns: 15.5rem minmax(0, 1fr); }
+body.toc-open #layout { grid-template-columns: 15rem minmax(0, 1fr); }
 
 /* 源码模式占满整行，侧栏暂时收起（降级点：源码态不提供目录高亮） */
 body.source-mode #layout { grid-template-columns: 0 minmax(0, 1fr); }
@@ -137,9 +137,9 @@ body.source-mode #layout { grid-template-columns: 0 minmax(0, 1fr); }
   top: 0;
   height: 100vh;
   overflow-y: auto;
-  padding: 2.4rem 0.7rem 2rem 1.1rem;
+  padding: 3.1rem 0.8rem 2rem 1.4rem;
   border-right: 1px solid var(--border-toc);
-  background: var(--bg-soft);
+  background: transparent;
   opacity: 0;
   pointer-events: none;
   /* 整栏手型：条目之间与内边距区域移动时不闪回箭头。滚动条由系统绘制，
@@ -155,27 +155,34 @@ body.toc-open #toc {
 body.source-mode #toc { display: none; }
 
 #toc-title {
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
   color: var(--muted-2);
-  margin: 0 0 0.7rem 0.5rem;
+  margin: 0 0 0.8rem 0.55rem;
 }
 
 .toc-item {
   display: block;
-  padding: 0.22rem 0.5rem;
-  border-radius: 4px;
+  padding: 0.28rem 0.6rem;
+  border-radius: 6px;
   color: var(--muted-4);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   line-height: 1.5;
   text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 100ms ease, background-color 100ms ease;
 }
 
 .toc-item:hover { background: var(--bg-hover); color: var(--text); }
-.toc-item.active { background: var(--bg-toc-active); color: var(--accent-strong); }
+/* 当前项不铺一整块底色：左侧 2px 强调条 + 文字强调色，目录更安静 */
+.toc-item.active {
+  background: transparent;
+  box-shadow: inset 2px 0 0 var(--accent);
+  color: var(--accent-strong);
+  font-weight: 500;
+}
 
 .toc-empty {
   padding: 0.4rem 0.6rem;
@@ -184,9 +191,9 @@ body.source-mode #toc { display: none; }
 }
 
 #editor {
-  max-width: 52rem;
+  max-width: 50rem;
   margin: 0 auto;
-  padding: 2.7rem 3.4rem 8.5rem;
+  padding: 3.2rem 3.6rem 9rem;
   outline: none;
   caret-color: var(--text);
 }
@@ -249,24 +256,27 @@ body:not(.inline-proto) .block.editing.code {
 }
 
 .block h1, .block h2, .block h3, .block h4, .block h5, .block h6 {
-  margin: 1.1em 0 0.5em;
+  margin: 1.4em 0 0.5em;
   font-weight: 600;
   line-height: 1.35;
   color: var(--heading);
 }
 
-.block h1 { font-size: 1.9em; }
-.block h2 { font-size: 1.5em; }
-.block h3 { font-size: 1.26em; }
-.block h4 { font-size: 1.12em; }
-.block h5 { font-size: 1.04em; }
+.block h1 { font-size: 1.95em; letter-spacing: -0.015em; }
+.block h2 { font-size: 1.42em; letter-spacing: -0.01em; }
+.block h3 { font-size: 1.16em; }
+.block h4 { font-size: 1.08em; }
+.block h5 { font-size: 1.02em; }
 .block h6 { font-size: 1em; color: var(--muted); }
 
-.block.h1.editing { font-size: 1.9em; font-weight: 600; line-height: 1.35; }
-.block.h2.editing { font-size: 1.5em; font-weight: 600; line-height: 1.35; }
-.block.h3.editing { font-size: 1.26em; font-weight: 600; line-height: 1.35; }
-.block.h4.editing { font-size: 1.12em; font-weight: 600; line-height: 1.35; }
-.block.h5.editing { font-size: 1.04em; font-weight: 600; line-height: 1.35; }
+/* 首块标题不带上边距，避免正文整体被顶低一截 */
+#editor > .block:first-child > :first-child { margin-top: 0; }
+
+.block.h1.editing { font-size: 1.95em; letter-spacing: -0.015em; font-weight: 600; line-height: 1.35; }
+.block.h2.editing { font-size: 1.42em; letter-spacing: -0.01em; font-weight: 600; line-height: 1.35; }
+.block.h3.editing { font-size: 1.16em; font-weight: 600; line-height: 1.35; }
+.block.h4.editing { font-size: 1.08em; font-weight: 600; line-height: 1.35; }
+.block.h5.editing { font-size: 1.02em; font-weight: 600; line-height: 1.35; }
 .block.h6.editing { font-size: 1em; font-weight: 600; color: var(--muted); }
 
 p { margin: 0 0 0.85em; }
@@ -306,10 +316,11 @@ pre.code-block {
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
-  margin: 0.9em 0 1.1em;
+  margin: 1em 0 1.2em;
   padding: 0;
   background: var(--bg-code);
-  border-radius: 4px;
+  border: 1px solid var(--border-hair);
+  border-radius: 8px;
 }
 
 /* 代码块顶部头栏：语言徽标靠左，复制按钮绝对定位在代码块内部右上角
