@@ -59,6 +59,7 @@ configure_file(
 # 无 Qt、无平台 API 的核心：两个构建共用（Qt 构建后续同样接这里的源码）
 add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/base64.cpp"
+  "${MOTE_REPO_ROOT}/core/command_table.cpp"
   "${MOTE_REPO_ROOT}/core/editor_controller.cpp"
   "${MOTE_REPO_ROOT}/core/image_store.cpp"
   "${MOTE_REPO_ROOT}/core/js_bridge.cpp"

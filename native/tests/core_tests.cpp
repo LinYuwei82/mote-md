@@ -2,6 +2,7 @@
 // 不链接任何 UI 框架，ctest 直接跑。
 
 #include "core/base64.h"
+#include "core/command_table.h"
 #include "core/editor_controller.h"
 #include "core/image_store.h"
 #include "core/js_bridge.h"
@@ -12,6 +13,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -443,6 +445,73 @@ static void testPdfPending()
     CHECK_EQ(host.pdfPaths.size(), static_cast<size_t>(2));
 }
 
+static void testCommandTable()
+{
+    using mote::CommandId;
+    using mote::CommandSpec;
+    using mote::MenuSpec;
+
+    const std::vector<MenuSpec> &menus = mote::menus();
+    CHECK_EQ(menus.size(), static_cast<size_t>(4));
+    CHECK_EQ(menus.at(0).title, std::string("文件"));
+    CHECK_EQ(menus.at(1).title, std::string("编辑"));
+    CHECK_EQ(menus.at(2).title, std::string("格式"));
+    CHECK_EQ(menus.at(3).title, std::string("视图"));
+
+    // 每个菜单项都能解析出规格，且同一命令只出现一次
+    std::vector<CommandId> seen;
+    std::set<std::string> shortcuts;
+    for (const MenuSpec &menu : menus) {
+        for (const CommandId id : menu.items) {
+            if (id == CommandId::Separator)
+                continue;
+            const CommandSpec *spec = mote::findCommand(id);
+            CHECK(spec != nullptr);
+            if (!spec)
+                continue;
+            bool duplicated = false;
+            for (const CommandId previous : seen) {
+                if (previous == id)
+                    duplicated = true;
+            }
+            CHECK(!duplicated);
+            seen.push_back(id);
+
+            CHECK(!spec->title.empty());
+            for (const std::string &shortcut : spec->shortcuts) {
+                // 快捷键全局唯一：新增命令时最容易在这里发现冲突
+                CHECK(shortcuts.insert(shortcut).second);
+            }
+            if (spec->disabledInSource)
+                CHECK(id == CommandId::ExportPdf);
+        }
+    }
+    CHECK_EQ(seen.size(), static_cast<size_t>(33));
+
+    // 格式项与前端 formatAction 的名称必须逐字一致
+    const CommandSpec *inlineCode = mote::findCommand(CommandId::FormatInlineCode);
+    CHECK(inlineCode && inlineCode->formatAction == "inlineCode");
+    const CommandSpec *paragraph = mote::findCommand(CommandId::FormatParagraph);
+    CHECK(paragraph && paragraph->formatAction == "paragraph" && paragraph->shortcuts.empty());
+    const CommandSpec *hr = mote::findCommand(CommandId::FormatHr);
+    CHECK(hr && hr->formatAction == "hr" && hr->shortcuts.empty());
+
+    // 可勾选项与多快捷键
+    const CommandSpec *toc = mote::findCommand(CommandId::ToggleToc);
+    CHECK(toc && toc->checkable && toc->shortcuts.at(0) == "cmd+shift+l");
+    const CommandSpec *source = mote::findCommand(CommandId::ToggleSource);
+    CHECK(source && source->shortcuts.size() == 2 && source->shortcuts.at(1) == "cmd+/");
+    const CommandSpec *zoomIn = mote::findCommand(CommandId::ZoomIn);
+    CHECK(zoomIn && zoomIn->shortcuts.size() == 3);
+
+    // 视图菜单顺序（目录 → 源码 → 分隔 → 深色 → 跟随 → 分隔 → 缩放三连）
+    const std::vector<CommandId> &view = menus.at(3).items;
+    CHECK_EQ(view.size(), static_cast<size_t>(9));
+    CHECK(view.at(0) == CommandId::ToggleToc);
+    CHECK(view.at(2) == CommandId::Separator);
+    CHECK(view.at(8) == CommandId::ZoomReset);
+}
+
 int main()
 {
     testJson();
@@ -456,6 +525,7 @@ int main()
     testClipboardCommands();
     testImageMessages();
     testPdfPending();
+    testCommandTable();
 
     if (gFailures == 0) {
         std::printf("core 单测通过：%d 项断言\n", gChecks);
