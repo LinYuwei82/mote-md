@@ -4,7 +4,7 @@
 
 ## 功能
 
-按当前实际已实现的能力（macOS 已验收；Windows 原生外壳实现到 N3，尚未通过实机验证；Windows 上快捷键把 `Cmd` 换成 `Ctrl`）：
+按当前实际已实现的能力（macOS 与 Windows 原生外壳均已实机验收，仍有 mac 对照等缺口，见 [阶段 B 验收记录](docs/thin-shell-stage-b-acceptance.md)；Windows 上快捷键把 `Cmd` 换成 `Ctrl`）：
 
 - **所见即所得块编辑**：正文按空行切块，点击某块即就地显示该块的 Markdown 原文，其余块保持排版效果；离开该块后按原文重新渲染。
 - **代码块**：围栏代码块带语法高亮（内置轻量高亮，无第三方解析/高亮库）、左侧行号与语言徽标；点击徽标可改语言。
@@ -22,7 +22,7 @@
 - **深色模式**：默认跟随系统外观（macOS 读 `NSApp.effectiveAppearance`，Windows 读注册表 `AppsUseLightTheme` 并响应 `WM_SETTINGCHANGE`），也可用「视图 → 深色模式」(`Cmd+Shift+D`) 手动切换；手动切换后可用「跟随系统外观」交回系统。切换只换配色，不改文档内容、块几何与编辑状态。
 - **链接**：渲染态下 `[文字](地址)` 的文字显示为蓝色带下划线的链接（地址本身仍是零宽标记，不占位、不进入框选复制）；普通点击仍进入编辑态，`Cmd+Click` 才跳转——外部链接交给系统默认浏览器，相对路径的 `.md` 在应用内打开（走未保存确认），文件不存在时弹提示不崩。编辑态显示原始 `[文字](地址)`，复制出去是标准 Markdown。
 - **导出 HTML**：`Option+Cmd+E`（「文件 → 导出 HTML…」）导出单文件自包含 HTML——样式内联、图片转 base64 内嵌、代码高亮与任务复选框状态保留，导出过程不改动原文档与 `dataset.raw`。
-- **导出 PDF**（macOS）：`Cmd+P`（「文件 → 导出 PDF…」）导出 A4 多页、无页眉页脚；源码模式下禁用。Windows 侧待 N4。
+- **导出 PDF**：`Cmd+P`（「文件 → 导出 PDF…」）导出 A4 多页、无页眉页脚；源码模式下禁用。macOS 与 Windows 均已实现，两端分页切点由各自 WebView 引擎决定，未做逐页像素比对。
 - **页面内状态栏**：原生外壳把状态栏画在前端页面底部（`body.platform-mac` / `body.platform-win`），显示打开/保存/导出提示与字数统计；Qt 构建不启用，避免出现两条状态栏。
 - **目录手型光标**：鼠标移到目录栏（条目文字行、行间空隙、栏内空白）都是系统手型指针，避免移动时手型闪烁；折叠按钮与滚动条保留自身光标语义。
 
@@ -58,13 +58,15 @@ bash packaging/package_macos.sh --native --dmg
 
 ### Windows 原生外壳（默认发布路径）
 
-需要 VS2022（C++ 桌面开发）、CMake ≥ 3.25、WebView2 SDK（`WEBVIEW2_SDK`）与 Evergreen Runtime：
+需要 VS2022（C++ 桌面开发）、CMake ≥ 3.25、WebView2 SDK（`WEBVIEW2_SDK`）与 Evergreen Runtime。从零装机的完整步骤（Build Tools 组件 ID、静默安装、各项验证命令）见 [docs/windows-native-build-setup.md](docs/windows-native-build-setup.md)。
 
 ```bat
 set WEBVIEW2_SDK=C:\dev\webview2sdk\pkg
 cmake -S native -B build-native-win -A x64
 cmake --build build-native-win --config Release
 ```
+
+用 Ninja 时：`cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build-native-ninja`，产物在 `build-native-ninja\`。
 
 打包（产物 `dist/Mote-Windows/` 与 `dist/Mote-Windows.zip`，不含 Qt）：
 
@@ -75,6 +77,8 @@ powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 验收项、实测结论与仍未覆盖的项（干净机、IME 组词、mac 截图对照）见
 [docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)；
 打包细节见 [packaging/PACKAGING.md](packaging/PACKAGING.md) 第 6 节。
+
+Windows 已知限制：文件相关快捷键里 `Ctrl+Shift+S`（另存为）与 `Ctrl+Alt+E`（导出 HTML）会被 WebView2/系统层先吃掉，编辑区按不出效果，用「文件」菜单或工具栏对应项；其余 `Ctrl+S/O/P/…`、`Ctrl+Shift+L/D`、`Ctrl+/` 正常。
 
 ### Qt 构建（保留的对照/回退路径）
 

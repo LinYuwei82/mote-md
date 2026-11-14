@@ -67,7 +67,7 @@ native/CMakeLists.txt          # if(APPLE) / elseif(WIN32) 两套 target
 | 页面加载 | 临时页面写到文档目录（或 `%TEMP%\MoteNative`），`CoreWebView2::Navigate` 到 `file://`；保留现有桥脚本把 `chrome.webview` 映射到 `window.webkit.messageHandlers.mote` |
 | 正文注入 | 沿用现有「单条 ExecuteScript + 分片回落」双通道，回执仍是 `'ok'` |
 | 菜单 | `CreateMenu/CreatePopupMenu`，命令 ID 直接用 `CommandId`；`WM_COMMAND` 转 `performCommand` |
-| 快捷键 | `TranslateAccelerator` + 命令表；`cmd→Ctrl`。WebView2 的 `AcceleratorKeyPressed` 只补页面独有键，避免和菜单重复触发 |
+| 快捷键 | 命令表 → `HACCEL` 与原生菜单；WebView2 在消息循环前截获编辑区按键，因此 `AcceleratorKeyPressed` 负责把「虚拟键 + 修饰键」映射回命令表并 `perform_command`（与 `TranslateAccelerator` 同源，`cmd→Ctrl`）。`Ctrl+V` 在此先问图片剪贴板 |
 | 打开/保存 | `IFileOpenDialog` / `IFileSaveDialog`（`FOS_FORCEFILESYSTEM`），UTF-8 读写，原子替换用 `ReplaceFile` |
 | 未保存确认 | `TaskDialogIndirect`：保存 / 不保存 / 取消；`MOTE_ANSWER` 可跳过 |
 | 拖放 | 搬 `webview_win_drop.cpp` 的 `CF_HDROP` 解析与 `RegisterDragDrop`，判定/处理仍调 `EditorController` |
@@ -85,34 +85,58 @@ native/CMakeLists.txt          # if(APPLE) / elseif(WIN32) 两套 target
 - **SDK**：继续用环境变量 `WEBVIEW2_SDK`，默认 `C:/dev/webview2sdk/pkg`；CMake 找不到时明确报错。
 - **运行时**：启动时 `GetAvailableCoreWebView2BrowserVersionString` 检测；缺失则弹窗并给出 Evergreen Runtime 下载地址，不随包分发内核。
 - **版本**：CMake 从 `Mote.pro` 读 `VERSION`，生成 `app.rc`（图标、`FileVersion`、`ProductVersion`），去掉手工同步。
-- **产物**：`dist/Mote-Windows-native/`：`Mote.exe`、`WebView2Loader.dll`、`samples/`、`licenses/`；同名 zip。阶段 B 期间加 `-native` 后缀，与 Qt 版共存。
+- **产物**：`dist/Mote-Windows/`：`Mote.exe`、`WebView2Loader.dll`、`web/`、`fonts/`、`samples/`、`licenses/`；同名 zip。已按默认产物发布（不再带 `-native` 后缀）；Qt 路径保留为回退，并存时给原生脚本传 `-OutName Mote-Windows-native`。
 - **自检**：新增 `packaging/package_windows_native.ps1` 或扩展现有 bat：检查产物目录无 `Qt6*.dll`、无 `platforms/qwindows.dll`；`dumpbin /dependents` 只允许系统 DLL + `WebView2Loader.dll`。
 
 ## 8. 里程碑
 
-| 里程碑 | 内容 | 验收 |
-|---|---|---|
-| N0 | CMake 多平台、WinMain、WebView2 初始化、空白窗口 | 构建通过；`dumpbin` 无 Qt；能渲染示例 Markdown |
-| N1 | 接 `EditorController`：消息桥、打开/保存/未保存确认、标题脏标记 | 与 mac 同一套 core 单测；手工打开/保存/另存为 |
-| N2 | 菜单命令表 → HMENU、快捷键、编辑/格式/视图命令 | 33 个命令逐项可用；`Cmd→Ctrl` 映射正确；无重复触发 |
-| N3 | 拖放、剪贴板、链接、主题、状态栏 | 拖 `.md` 打开、拖图片落盘、复制剪切粘贴、深色切换 |
-| N4 | PDF/HTML 导出 | A4 单页/多页无裁切；HTML 图片内联；失败路径还原页面 |
-| N5 | 打包、自检、截图基线 | zip 体积、无 Qt 依赖、固定样例页数/截图与 mac 对照 |
+状态列以 `docs/thin-shell-stage-b-acceptance.md` 的实测记录为准（2026-11-14）。
 
-每个里程碑单独中文提交；N0–N4 期间 Windows 正式产物仍由 Qt 脚本产出，不切默认。
+| 里程碑 | 内容 | 验收 | 状态 |
+|---|---|---|---|
+| N0 | CMake 多平台、WinMain、WebView2 初始化、空白窗口 | 构建通过；`dumpbin` 无 Qt；能渲染示例 Markdown | 完成 |
+| N1 | 接 `EditorController`：消息桥、打开/保存/未保存确认、标题脏标记 | 与 mac 同一套 core 单测；手工打开/保存/另存为 | 完成 |
+| N2 | 菜单命令表 → HMENU、快捷键、编辑/格式/视图命令 | 33 个命令逐项可用；`Cmd→Ctrl` 映射正确；无重复触发 | 完成（快捷键分发在 N6 冒烟中修正，见 8.2） |
+| N3 | 拖放、剪贴板、链接、主题、状态栏 | 拖 `.md` 打开、拖图片落盘、复制剪切粘贴、深色切换 | 完成 |
+| N4 | PDF/HTML 导出 | A4 单页/多页无裁切；HTML 图片内联；失败路径还原页面 | 完成（PDF 只验页数/体积/文字层，未逐页比对） |
+| N5 | 打包、自检、截图基线 | zip 体积、无 Qt 依赖、固定样例页数/截图与 mac 对照 | 完成（mac 对照未做） |
+| N6 | 可交付验收与回归、默认产物切换 | 功能矩阵复跑、验收记录、原子保存、`MOTE_DROP` | 完成（缺口见 8.1） |
+
+### 8.1 当前状态（2026-11-14）
+
+**已完成**：N0–N6 全部落地，Windows 默认发布包为原生产物（`dist/Mote-Windows`，Qt 脚本保留回退）。原子保存（`ReplaceFile`）、`MOTE_DROP` 端到端、中文 Unicode 输入、1.5 MB 文档加载、PDF/HTML 导出、剪贴板图片（保留 alpha）、快照基线均实机通过。
+
+**部分完成**：
+
+- 快捷键：`Ctrl+S/O/P`、`Ctrl+Shift+L/D`、`Ctrl+/`、`Ctrl+V` 实测生效；`Ctrl+Shift+S`（另存为）与 `Ctrl+Alt+E`（导出 HTML）在 Windows 上被 Chromium/系统先截获，`AcceleratorKeyPressed` 收不到，编辑区按不出来，需走菜单。修法要么改共享 `resources/web/editor.js` 做页面层转发（影响 mac），要么改成平台专属键位——都属跨平台行为变更，待决定。
+- IME 组词/候选窗未验：本机只有 US 键盘布局，无法自动化；IME 最终提交走的 Unicode 路径已实测。
+
+**未闭合**：
+
+- mac 截图对照：需 mac 机按 `PACKAGING.md` 6.2 的命令产出基线后比对。
+- PDF 跨平台逐页像素比对：两引擎分页切点不同，目前只验页数/体积/文字层。
+- 干净机验证：无 VS/Qt 的机器解压即用、缺 WebView2 Runtime 的提示，尚未在真实干净机跑过。
+
+**待决定**：上面两条失败快捷键的处理方式（是否动共享前端 JS / 是否改 Windows 键位）。
+
+### 8.2 冒烟中发现并修复的问题
+
+1. **外壳快捷键整体失效**：WebView2 在消息循环之前截获键盘，`TranslateAccelerator` 只对原生菜单生效，编辑区聚焦时 `Ctrl+P`、`Ctrl+/`、`Ctrl+Shift+L/D` 全部无反应。修法：`AcceleratorKeyPressed` 统一走 `mote::win::command_for_shortcut`（与加速键表同源、跳过 WebView2 原生编辑命令）→ `perform_command`；`Ctrl+V` 仍先走图片剪贴板。同时设 `ICoreWebView2Settings3::put_AreBrowserAcceleratorKeysEnabled(FALSE)`，避免 Chromium 内置浏览器快捷键抢键。
+2. **诊断缺口**：`MOTE_KEYLOG` 增加 `NATIVE key vk=<虚拟键> mods=<修饰键位掩码>`，用于区分「外壳没收到」与「收到了但没匹配」。
+3. 遗留：`Ctrl+Shift+S`/`Ctrl+Alt+E` 仍未到达外壳（见 8.1），非本次改动可解。
 
 ## 9. 风险与回退
 
 - **输入法/IME**：WebView2 自身处理 IME，但 Win32 窗口需正确转发 `WM_IME_*`；N1 起用中文输入法实测。
-- **快捷键冲突**：`Alt` 菜单键、`Ctrl+Z/Y`、`Ctrl+Shift+Z` 与页面按键可能双触发；以 `AcceleratorKeyPressed` 只补差集解决，N2 用 `MOTE_KEYLOG` 回归。
+- **快捷键冲突**：`Alt` 菜单键、`Ctrl+Z/Y`、`Ctrl+Shift+Z` 与页面按键可能双触发；`AcceleratorKeyPressed` 统一按命令表分发后，双触发已消除（实测 `Ctrl+P`、`Ctrl+/`、`Ctrl+Shift+L/D`）。仍有两键（`Ctrl+Shift+S`、`Ctrl+Alt+E`）在到达外壳之前被截获，见 8.1。
 - **PDF 差异**：PrintToPdf 的分页由引擎决定，与 mac 的切点排页不同；用同一长文档比对页数与首末页截图，差异写进验收记录。
 - **WebView2 版本**：`PrintToPdf` 需要 Runtime 108+；低于此版本明确报错。
 - **回退**：新外壳只存在于 `platform/win/` 与 CMake 的 WIN32 分支；Qt Windows 构建与 `package_windows.bat` 保持可用，删分支即可回退。
 
 ## 10. 验收标准
 
-- `dumpbin /dependents Mote.exe` 无任何 Qt DLL，仅系统库 + `WebView2Loader.dll`
-- exe + Loader 总体积目标 ≤ 3 MB；zip ≤ 2 MB
-- 功能矩阵（编辑/文件/视图/格式/导出/拖放/剪贴板）逐项与 0.3.4 Windows 版一致
-- core 单测在 Windows 上通过（含路径与图片落盘）
-- `MOTE_SNAPSHOT` 与 mac 同文档截图对照：正文排版一致，状态栏类名不同但样式一致
+- `dumpbin /dependents Mote.exe` 无任何 Qt DLL，仅系统库 + `WebView2Loader.dll` —— 已满足
+- exe + Loader 总体积目标 ≤ 3 MB；zip ≤ 2 MB —— 已满足（exe 635 KB / loader 166 KB / zip 609 KB）
+- 功能矩阵（编辑/文件/视图/格式/导出/拖放/剪贴板）逐项与 0.3.4 Windows 版一致 —— 除 8.1 列出的两键外已实测通过
+- core 单测在 Windows 上通过（含路径与图片落盘）—— 已满足
+- `MOTE_SNAPSHOT` 与 mac 同文档截图对照：正文排版一致，状态栏类名不同但样式一致 —— 未完成（需 mac 机）
