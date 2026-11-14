@@ -134,12 +134,41 @@ bool read_text_file(const std::string &path, std::string *text)
 
 bool write_text_file(const std::string &path, const std::string &text)
 {
-    std::ofstream file(std::filesystem::path(utf8_to_wide(path)),
-                       std::ios::binary | std::ios::trunc);
-    if (!file)
-        return false;
-    file.write(text.data(), static_cast<std::streamsize>(text.size()));
-    return file.good();
+    // 先写同目录临时文件再换名：写到一半崩溃或断电时，原文档仍是完整的一份。
+    const std::filesystem::path target(utf8_to_wide(path));
+    std::filesystem::path temp = target;
+    temp += L".tmp-" + std::to_wstring(GetCurrentProcessId());
+    {
+        std::ofstream file(temp, std::ios::binary | std::ios::trunc);
+        if (!file)
+            return false;
+        file.write(text.data(), static_cast<std::streamsize>(text.size()));
+        file.flush();
+        if (!file.good()) {
+            file.close();
+            std::error_code ignored;
+            std::filesystem::remove(temp, ignored);
+            return false;
+        }
+    }
+
+    if (!ReplaceFileW(target.c_str(), temp.c_str(), nullptr,
+                      REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr)) {
+        const DWORD error = GetLastError();
+        // 首次保存时目标还不存在，ReplaceFile 报 ERROR_FILE_NOT_FOUND；
+        // 其它错误（被占用、无权限、目录不存在）保留原文件，清掉临时文件。
+        if (error != ERROR_FILE_NOT_FOUND) {
+            std::error_code ignored;
+            std::filesystem::remove(temp, ignored);
+            return false;
+        }
+        if (!MoveFileExW(temp.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+            std::error_code ignored;
+            std::filesystem::remove(temp, ignored);
+            return false;
+        }
+    }
+    return true;
 }
 
 std::string with_extension(std::string path, const char *extension)
