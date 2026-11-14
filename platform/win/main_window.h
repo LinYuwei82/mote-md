@@ -99,6 +99,10 @@ private:
     std::unique_ptr<mote::EditorController> controller_;
     HHOOK keyboard_hook_ = nullptr;
     UINT last_shortcut_key_ = 0;
+    // 钩子里自己维护修饰键状态：真实键盘下 GetAsyncKeyState 可能与回调时序不同步
+    bool hook_ctrl_ = false;
+    bool hook_shift_ = false;
+    bool hook_alt_ = false;
     HACCEL accel_ = nullptr;
     HWND drop_hwnd_ = nullptr;
     void *drop_target_ = nullptr;

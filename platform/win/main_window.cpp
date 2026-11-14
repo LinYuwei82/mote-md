@@ -436,11 +436,36 @@ LRESULT CALLBACK MoteMainWindow::keyboard_hook(int code, WPARAM wparam, LPARAM l
     if (!self || !self->hwnd_)
         return CallNextHookEx(nullptr, code, wparam, lparam);
 
-    if (wparam == WM_KEYUP || wparam == WM_SYSKEYUP) {
+    const UINT key = reinterpret_cast<KBDLLHOOKSTRUCT *>(lparam)->vkCode;
+    const bool down = wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN;
+    const bool up = wparam == WM_KEYUP || wparam == WM_SYSKEYUP;
+
+    // 钩子按队列顺序收到所有按键，在这里维护修饰键状态比查全局键状态更可靠
+    switch (key) {
+    case VK_CONTROL:
+    case VK_LCONTROL:
+    case VK_RCONTROL:
+        self->hook_ctrl_ = down;
+        break;
+    case VK_SHIFT:
+    case VK_LSHIFT:
+    case VK_RSHIFT:
+        self->hook_shift_ = down;
+        break;
+    case VK_MENU:
+    case VK_LMENU:
+    case VK_RMENU:
+        self->hook_alt_ = down;
+        break;
+    default:
+        break;
+    }
+
+    if (up) {
         self->last_shortcut_key_ = 0;
         return CallNextHookEx(nullptr, code, wparam, lparam);
     }
-    if (wparam != WM_KEYDOWN && wparam != WM_SYSKEYDOWN)
+    if (!down)
         return CallNextHookEx(nullptr, code, wparam, lparam);
 
     // 只管本窗口在前台时的按键，别影响其它程序
@@ -448,16 +473,15 @@ LRESULT CALLBACK MoteMainWindow::keyboard_hook(int code, WPARAM wparam, LPARAM l
     if (!foreground || GetAncestor(foreground, GA_ROOT) != self->hwnd_)
         return CallNextHookEx(nullptr, code, wparam, lparam);
 
-    const UINT key = reinterpret_cast<KBDLLHOOKSTRUCT *>(lparam)->vkCode;
     if (key == self->last_shortcut_key_)
         return 1;  // 长按的自动重复只触发一次
 
     WORD modifiers = 0;
-    if (GetAsyncKeyState(VK_CONTROL) & 0x8000)
+    if (self->hook_ctrl_ || (GetAsyncKeyState(VK_CONTROL) & 0x8000))
         modifiers |= FCONTROL;
-    if (GetAsyncKeyState(VK_SHIFT) & 0x8000)
+    if (self->hook_shift_ || (GetAsyncKeyState(VK_SHIFT) & 0x8000))
         modifiers |= FSHIFT;
-    if (GetAsyncKeyState(VK_MENU) & 0x8000)
+    if (self->hook_alt_ || (GetAsyncKeyState(VK_MENU) & 0x8000))
         modifiers |= FALT;
 
     mote::CommandId command = mote::CommandId::New;
@@ -498,6 +522,9 @@ bool MoteMainWindow::create()
     // Chromium 在编辑区会先消费 Ctrl+Shift+S / Ctrl+Alt+E，连 AcceleratorKeyPressed
     // 都收不到；用进程内低级键盘钩子提前截获，键位与命令表保持一致。
     hook_owner_ = this;
+    hook_ctrl_ = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    hook_shift_ = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    hook_alt_ = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
     keyboard_hook_ = SetWindowsHookExW(WH_KEYBOARD_LL, &MoteMainWindow::keyboard_hook,
                                        GetModuleHandleW(nullptr), 0);
     log_line(std::string("NATIVE keyboard hook ") + (keyboard_hook_ ? "on" : "failed"));
@@ -623,6 +650,24 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
     case WM_SIZE:
         layout();
         return 0;
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN: {
+        // 焦点在窗口框架/菜单（还没进 WebView）时的兜底，和键盘钩子同一张命令表
+        WORD modifiers = 0;
+        if (GetKeyState(VK_CONTROL) < 0)
+            modifiers |= FCONTROL;
+        if (GetKeyState(VK_SHIFT) < 0)
+            modifiers |= FSHIFT;
+        if (GetKeyState(VK_MENU) < 0)
+            modifiers |= FALT;
+        mote::CommandId command = mote::CommandId::New;
+        if (mote::win::command_for_shortcut(modifiers, static_cast<UINT>(wparam),
+                                            &command)) {
+            perform_command(command);
+            return 0;
+        }
+        break;
+    }
     case WM_CLOSE:
         if (confirm_close())
             DestroyWindow(hwnd);
