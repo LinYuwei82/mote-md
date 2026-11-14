@@ -37,6 +37,12 @@ bool key_from_token(const std::string &token, UINT *key)
             *key = static_cast<UINT>(ch);
             return true;
         }
+        // 命令表里少数快捷键直接用单字符符号（如源码模式的 "cmd+/"），
+        // 与上面的单词形式等价处理，避免解析失败后被静默跳过。
+        if (ch == '/') {
+            *key = VK_OEM_2;
+            return true;
+        }
         return false;
     }
     // 符号键用词名表达，避免 "+" 既当分隔符又当键名
