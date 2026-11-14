@@ -10,6 +10,8 @@
 
 > 本机为 macOS，Windows 的两个产物由 Windows 机器按第 2 节脚本构建并校验，
 > 校验值见 `docs/release-notes-0.3.0.md`；本机未重复执行该流程。
+>
+> 这两个是 Qt 路径的旧产物。Windows 当前默认发布包是原生薄外壳，见第 6 节。
 
 ---
 
@@ -798,7 +800,9 @@ copy LICENSE dist\Mote-Windows\licenses\LICENSE-AGPL-3.0.txt
 
 ## 6. Windows 原生薄外壳（阶段 B）打包与基线
 
-与 Qt 版并存，产物带 `-native` 后缀；阶段 B 期间 Qt 脚本仍是正式产物。
+**这一节是 Windows 的默认发布路径**：产物 `dist/Mote-Windows/` 与 `dist/Mote-Windows.zip`，
+不含 Qt。Qt 打包（`package_windows.bat` + `build_installer.ps1`/`mote.iss`）保留为
+回退与对照路径，两边不要同时打到同一个目录。
 
 ### 6.1 打包
 
@@ -809,7 +813,8 @@ powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 ```
 
 - 默认构建目录 `build-native-ninja`（可用 `-BuildDir` 覆盖），`-SkipBuild` 跳过编译。
-- 产物 `dist/Mote-Windows-native/`：`Mote.exe`、`WebView2Loader.dll`、`web/`、`fonts/`、
+- 默认产物名 `Mote-Windows`（可用 `-OutName` 覆盖；与 Qt 包并存时传 `-OutName Mote-Windows-native`）。
+- 产物 `dist/Mote-Windows/`：`Mote.exe`、`WebView2Loader.dll`、`web/`、`fonts/`、
   `samples/`、`licenses/`；同名 zip。
 - 自检：产物内不得出现 `Qt6*.dll` 与 `platforms/qwindows.dll`；`dumpbin /dependents`
   只允许系统 DLL（`api-ms-*` 放行）。
@@ -832,7 +837,7 @@ Windows 用 `CapturePreview` 直接渲染（不依赖截屏）。基线命令：
 $env:MOTE_LOG="$env:TEMP\mote-snap.log"; $env:MOTE_KEYLOG="1"
 $env:MOTE_EVAL="document.querySelectorAll('.block').length"
 $env:MOTE_SNAPSHOT="$env:TEMP\mote-snap.png"
-dist\Mote-Windows-native\Mote.exe dist\Mote-Windows-native\samples\welcome.md
+dist\Mote-Windows\Mote.exe dist\Mote-Windows\samples\welcome.md
 ```
 
 实测：`JSLOG EVAL 44`（44 个 block），`NATIVE stats cjk=909 words=345`，

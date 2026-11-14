@@ -56,7 +56,7 @@ bash packaging/package_macos.sh --native --dmg
 
 `tools/preflight.sh --native` 可在干净构建后跑一次启动冒烟。
 
-### Windows 原生外壳（N0–N3，待实机验证）
+### Windows 原生外壳（默认发布路径）
 
 需要 VS2022（C++ 桌面开发）、CMake ≥ 3.25、WebView2 SDK（`WEBVIEW2_SDK`）与 Evergreen Runtime：
 
@@ -66,7 +66,15 @@ cmake -S native -B build-native-win -A x64
 cmake --build build-native-win --config Release
 ```
 
-验收项与已知风险见 [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)。在通过实机验证之前，Windows 不提供正式发布包。
+打包（产物 `dist/Mote-Windows/` 与 `dist/Mote-Windows.zip`，不含 Qt）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+```
+
+验收项、实测结论与仍未覆盖的项（干净机、IME 组词、mac 截图对照）见
+[docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)；
+打包细节见 [packaging/PACKAGING.md](packaging/PACKAGING.md) 第 6 节。
 
 ### Qt 构建（保留的对照/回退路径）
 
@@ -76,7 +84,7 @@ cmake --build build-native-win --config Release
 qmake6 Mote.pro && make -j4
 ```
 
-Qt 构建与原生构建共用 `resources/web/` 与 `core/`；版本号仍以 `Mote.pro` 的 `VERSION` 为唯一来源。Qt 版 macOS 打包为 `bash packaging/package_macos.sh`（不带 `--native`），Windows 打包脚本见 [packaging/WINDOWS-FROM-MACOS.md](packaging/WINDOWS-FROM-MACOS.md)。
+Qt 构建与原生构建共用 `resources/web/` 与 `core/`；版本号仍以 `Mote.pro` 的 `VERSION` 为唯一来源。Qt 版 macOS 打包为 `bash packaging/package_macos.sh`（不带 `--native`）；Windows 的 Qt 打包保留为回退，步骤见 [packaging/WINDOWS-FROM-MACOS.md](packaging/WINDOWS-FROM-MACOS.md)。
 
 ## 快捷键
 

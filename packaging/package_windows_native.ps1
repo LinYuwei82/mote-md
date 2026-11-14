@@ -1,12 +1,12 @@
 ﻿# Windows 原生薄外壳打包（阶段 B N5）
 # 用法：在已加载 MSVC 环境的 PowerShell 中执行
 #   powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
-# 产物：dist\Mote-Windows-native\ 与 dist\Mote-Windows-native.zip
-# 与 package_windows.bat 共存：阶段 B 期间两边都保留，原生产物带 -native 后缀。
+# 产物：dist\Mote-Windows\ 与 dist\Mote-Windows.zip（Windows 默认发布包）
+# Qt 路径仍保留为回退：如两边要同时存在，给本脚本传 -OutName Mote-Windows-native。
 
 param(
     [string]$BuildDir = "",
-    [string]$OutName = "Mote-Windows-native",
+    [string]$OutName = "Mote-Windows",
     [switch]$SkipBuild
 )
 
