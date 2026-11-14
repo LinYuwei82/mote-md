@@ -56,6 +56,17 @@ configure_file(
   "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
   @ONLY)
 
+# 无 Qt、无平台 API 的核心：两个构建共用（Qt 构建后续同样接这里的源码）
+add_library(mote_core STATIC
+  "${MOTE_REPO_ROOT}/core/base64.cpp"
+  "${MOTE_REPO_ROOT}/core/editor_controller.cpp"
+  "${MOTE_REPO_ROOT}/core/image_store.cpp"
+  "${MOTE_REPO_ROOT}/core/js_bridge.cpp"
+  "${MOTE_REPO_ROOT}/core/json.cpp"
+  "${MOTE_REPO_ROOT}/core/paths.cpp")
+target_include_directories(mote_core PUBLIC "${MOTE_REPO_ROOT}")
+target_compile_options(mote_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall>")
+
 add_executable(Mote MACOSX_BUNDLE
   ${MOTE_PLATFORM_MAC}/main.mm
   ${MOTE_PLATFORM_MAC}/web_host_view.mm
@@ -79,3 +90,10 @@ set_target_properties(Mote PROPERTIES
   MACOSX_BUNDLE_BUNDLE_VERSION "${MOTE_VERSION}"
   MACOSX_BUNDLE_SHORT_VERSION_STRING "${MOTE_VERSION}"
   MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+
+# 无窗口单测：cmake --build build-native && ctest --test-dir build-native
+enable_testing()
+add_executable(mote_core_tests tests/core_tests.cpp)
+target_link_libraries(mote_core_tests PRIVATE mote_core)
+target_compile_options(mote_core_tests PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall>")
+add_test(NAME mote_core_tests COMMAND mote_core_tests)
