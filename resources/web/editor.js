@@ -52,6 +52,22 @@
       window.webkit.messageHandlers.mote.postMessage(message);
   }
 
+  // 状态栏移入页面：原生外壳给 body 加 platform-mac 后 #statusbar 才显示，
+  // 消息 6 秒后自动清空（与 Qt 版 QStatusBar 的 showMessage 时长一致）。
+  var statusTimer = null;
+  function setStatus(text) {
+    var element = document.getElementById('status-message');
+    if (!element)
+      return;
+    element.textContent = String(text === undefined || text === null ? '' : text);
+    if (statusTimer)
+      clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () {
+      statusTimer = null;
+      element.textContent = '';
+    }, 6000);
+  }
+
   function escapeHtml(text) {
     return String(text)
       .replace(/&/g, '&amp;')
@@ -1303,6 +1319,9 @@
 
   function postWordCount() {
     var stats = countText(collectBlocks().map(plainTextOfRaw).join('\n'));
+    var label = document.getElementById('status-stats');
+    if (label)
+      label.textContent = '中文 ' + stats.cjk + ' 字 · 英文 ' + stats.words + ' 词';
     post({ type: 'stats', cjk: stats.cjk, words: stats.words });
   }
 
@@ -5637,6 +5656,7 @@
 
   window.mote = {
     setTheme: setTheme,
+    setStatus: setStatus,
     setMarkdown: function (text) {
       closeSlash(false);
       closeTurnMenu();

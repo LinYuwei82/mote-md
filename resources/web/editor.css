@@ -1084,3 +1084,44 @@ body.pdf-export .block h2,
 body.pdf-export .block h3 { break-after: avoid; }
 
 body.pdf-export .code-scroll { overflow: visible !important; }
+
+/* 状态栏移入页面：native 外壳给 body 加 platform-mac 后才显示。
+   Qt/Windows 构建不加这个类，继续用原有 QStatusBar，不会出现两条状态栏。 */
+#statusbar { display: none; }
+
+body.platform-mac {
+  padding-bottom: 24px;
+  box-sizing: border-box;
+}
+
+body.platform-mac #statusbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 24px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border-top: 1px solid var(--border-hair);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+#status-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#status-stats { margin-left: auto; flex: none; }
+
+/* 导出 PDF 时页面要按整篇排版，状态栏与底部留白都必须让位 */
+body.pdf-export { padding-bottom: 0; }
+body.pdf-export #statusbar { display: none; }

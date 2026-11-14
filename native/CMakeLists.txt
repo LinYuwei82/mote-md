@@ -73,6 +73,8 @@ add_executable(Mote MACOSX_BUNDLE
   ${MOTE_PLATFORM_MAC}/main_window.mm
   ${MOTE_PLATFORM_MAC}/menus.mm
   ${MOTE_PLATFORM_MAC}/dialogs.mm
+  ${MOTE_PLATFORM_MAC}/pdf_export.mm
+  ${MOTE_PLATFORM_MAC}/html_export.mm
   ${MOTE_PLATFORM_MAC}/web_host_view.mm
   ${MOTE_WEB_FILES}
   ${MOTE_FONT_FILES}

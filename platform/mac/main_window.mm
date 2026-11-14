@@ -1,11 +1,13 @@
 #import "main_window.h"
 
 #import "dialogs.h"
+#import "html_export.h"
 #import "menus.h"
 #import "web_host_view.h"
 
 #include "core/command_table.h"
 #include "core/editor_controller.h"
+#include "core/js_bridge.h"
 #include "core/paths.h"
 
 #include <cmath>
@@ -13,6 +15,7 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 typedef NS_ENUM(NSInteger, MoteAfterSave) {
@@ -38,6 +41,7 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
 @property(nonatomic) BOOL followSystem;
 @property(nonatomic) BOOL darkMode;
 @property(nonatomic) id keyMonitor;
+@property(nonatomic, copy) NSString *lastStatus;
 
 - (void)evaluateScript:(const std::string &)script;
 - (void)loadPageInDirectory:(const std::string &)directory;
@@ -73,7 +77,9 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
 - (void)resetAfterSave;
 - (void)setupDropHandlers;
 - (void)runDropProbeIfNeeded;
+- (void)runStartupCommandIfNeeded;
 - (BOOL)performNativeDrop:(NSArray<NSString *> *)paths;
+- (void)exportPdf;
 @end
 
 static BOOL MoteKeyLogEnabled(void)
@@ -340,14 +346,14 @@ private:
         [self beginSaveAs:YES];
         return;
     case mote::CommandId::ExportHtml:
-        [self showStatus:@"导出 HTML 将在后续里程碑接入"];
+        _controller->requestExportHtml(self.displayName.UTF8String);
         return;
     case mote::CommandId::ExportPdf:
         if (_sourceOn) {
             [self showStatus:@"源码模式下不能导出 PDF，先退出源码模式"];
             return;
         }
-        [self showStatus:@"导出 PDF 将在后续里程碑接入"];
+        [self exportPdf];
         return;
     case mote::CommandId::Undo:
         _controller->undo();
@@ -566,6 +572,36 @@ private:
     _controller->requestSnapshot();
 }
 
+- (void)exportPdf
+{
+    // 未命名文档没有目录：先另存为，保存完成后回到这里继续导出
+    if (self.filePath.length == 0) {
+        self.saveAsRequested = YES;
+        self.afterSave = MoteAfterSaveExportPdf;
+        _controller->requestSnapshot();
+        return;
+    }
+
+    NSString *suggested = [self.filePath.stringByDeletingPathExtension
+        stringByAppendingPathExtension:@"pdf"];
+    const char *promptOnly = std::getenv("MOTE_PDF_PROMPT");
+    if (promptOnly && *promptOnly) {
+        std::fprintf(stderr, "PDF suggestion: %s\n", suggested.UTF8String);
+        return;
+    }
+    const char *forced = std::getenv("MOTE_PDF_AS");
+    NSString *path = forced && *forced
+        ? [NSString stringWithUTF8String:forced]
+        : MoteSavePanel(@"导出 PDF", suggested, @"pdf");
+    if (path.length == 0)
+        return;
+    if (path.pathExtension.length == 0)
+        path = [path stringByAppendingPathExtension:@"pdf"];
+
+    [self showStatus:@"正在导出 PDF…"];
+    _controller->requestExportPdf(path.UTF8String);
+}
+
 - (void)saveText:(const std::string &)text
 {
     const BOOL wantsSaveAs = self.saveAsRequested;
@@ -666,7 +702,7 @@ private:
         [NSApp terminate:nil];
         break;
     case MoteAfterSaveExportPdf:
-        [self showStatus:@"导出 PDF 将在后续里程碑接入"];
+        [self exportPdf];
         break;
     case MoteAfterSaveNone:
         break;
@@ -744,10 +780,67 @@ private:
     if (MoteKeyLogEnabled())
         std::fprintf(stderr, "NATIVE ready gen=%llu\n",
                      (unsigned long long)_controller->pageGeneration());
+    // 状态栏移入页面：加上平台类后 #statusbar 才显示
+    [self.host evaluateJavaScript:
+        [NSString stringWithUTF8String:mote::js::enableStatusBar().c_str()]];
+    if (self.lastStatus.length > 0) {
+        [self showStatus:self.lastStatus];
+        self.window.subtitle = @"";
+    }
     [self.host focusEditor];
     [self.host runPageDiagnostics];
     [self runDropProbeIfNeeded];
+    [self runStartupCommandIfNeeded];
     [self updateWindowTitle];
+}
+
+// 诊断用（MOTE_COMMAND=exportPdf 等）：无法用键盘自动化触发菜单时，
+// 页面就绪后按命令表执行一次指定命令。
+- (void)runStartupCommandIfNeeded
+{
+    static BOOL done = NO;
+    if (done)
+        return;
+    const char *raw = std::getenv("MOTE_COMMAND");
+    if (!raw || !*raw)
+        return;
+    done = YES;
+
+    NSString *name = [[[NSString stringWithUTF8String:raw]
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]
+        lowercaseString];
+    const std::pair<const char *, mote::CommandId> table[] = {
+        { "new", mote::CommandId::New },
+        { "open", mote::CommandId::Open },
+        { "save", mote::CommandId::Save },
+        { "saveas", mote::CommandId::SaveAs },
+        { "exporthtml", mote::CommandId::ExportHtml },
+        { "exportpdf", mote::CommandId::ExportPdf },
+        { "toggletoc", mote::CommandId::ToggleToc },
+        { "togglesource", mote::CommandId::ToggleSource },
+        { "toggledark", mote::CommandId::ToggleDark },
+        { "followsystem", mote::CommandId::FollowSystem },
+        { "zoomin", mote::CommandId::ZoomIn },
+        { "zoomout", mote::CommandId::ZoomOut },
+        { "zoomreset", mote::CommandId::ZoomReset },
+    };
+    mote::CommandId id = mote::CommandId::Separator;
+    bool found = false;
+    for (const auto &entry : table) {
+        if ([name isEqualToString:[NSString stringWithUTF8String:entry.first]]) {
+            id = entry.second;
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+        return;
+
+    __weak MoteMainWindow *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.7 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+                       [weakSelf performCommand:id];
+                   });
 }
 
 #pragma mark - 拖放
@@ -806,14 +899,16 @@ private:
 {
     if (text.length == 0)
         return;
+    self.lastStatus = text;
+    if (_controller && _controller->pageReady()) {
+        self.window.subtitle = @"";
+        NSString *script =
+            [NSString stringWithUTF8String:mote::js::statusMessage(text.UTF8String).c_str()];
+        [self.host evaluateJavaScript:script];
+        return;
+    }
+    // 页面未就绪：先用窗口副标题兜底，ready 后再推进页面状态栏
     self.window.subtitle = text;
-    __weak MoteMainWindow *weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-                       MoteMainWindow *strongSelf = weakSelf;
-                       if ([strongSelf.window.subtitle isEqualToString:text])
-                           strongSelf.window.subtitle = @"";
-                   });
 }
 
 - (void)openExternalUrl:(const std::string &)rawUrl
@@ -862,14 +957,63 @@ private:
 
 - (void)htmlExportReady:(const std::string &)html
 {
-    (void)html;
-    [self showStatus:@"导出 HTML 将在后续里程碑接入"];
+    NSString *content = [NSString stringWithUTF8String:html.c_str()] ?: @"";
+    NSString *suggested = nil;
+    if (self.filePath.length > 0) {
+        suggested = [self.filePath.stringByDeletingPathExtension
+            stringByAppendingPathExtension:@"html"];
+    } else {
+        NSString *dir = self.lastDir.length > 0 ? self.lastDir : NSHomeDirectory();
+        suggested = [dir stringByAppendingPathComponent:@"未命名.html"];
+    }
+
+    const char *forced = std::getenv("MOTE_EXPORT_AS");
+    NSString *path = forced && *forced
+        ? [NSString stringWithUTF8String:forced]
+        : MoteSavePanel(@"导出 HTML", suggested, @"html");
+    if (path.length == 0)
+        return;
+    if (path.pathExtension.length == 0)
+        path = [path stringByAppendingPathExtension:@"html"];
+
+    int missing = 0;
+    NSString *inlined = MoteInlineLocalImages(content, self.lastDir, &missing);
+    NSData *data = [inlined dataUsingEncoding:NSUTF8StringEncoding];
+    NSError *error = nil;
+    if (![data writeToFile:path options:NSDataWritingAtomic error:&error]) {
+        MoteAlert(@"导出失败",
+                  [NSString stringWithFormat:@"无法写入文件：\n%@\n%@", path,
+                                             error.localizedDescription ?: @""]);
+        return;
+    }
+
+    const double kb = static_cast<double>(data.length) / 1024.0;
+    if (missing > 0) {
+        [self showStatus:[NSString stringWithFormat:@"已导出 %@（%.0f KB），%d 张图片读取失败",
+                                                   path, kb, missing]];
+    } else {
+        [self showStatus:[NSString stringWithFormat:@"已导出 %@（%.0f KB）", path, kb]];
+    }
 }
 
 - (void)requestPdfExport:(const std::string &)path
 {
-    (void)path;
-    [self showStatus:@"导出 PDF 将在后续里程碑接入"];
+    NSString *target = [NSString stringWithUTF8String:path.c_str()] ?: @"";
+    __weak MoteMainWindow *weakSelf = self;
+    [self.host exportPdfToPath:target
+                    completion:^(BOOL ok, NSString *message) {
+                      MoteMainWindow *window = weakSelf;
+                      if (!window)
+                          return;
+                      if (ok) {
+                          [window showStatus:
+                              [NSString stringWithFormat:@"已导出到 %@", target]];
+                          return;
+                      }
+                      NSString *reason = message.length > 0 ? message : @"导出失败";
+                      [window showStatus:reason];
+                      MoteAlert(@"导出失败", reason);
+                    }];
 }
 
 - (void)pdfExportFailed:(const std::string &)message

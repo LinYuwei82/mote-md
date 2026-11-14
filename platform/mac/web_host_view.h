@@ -22,4 +22,8 @@
 // 诊断钩子（MOTE_EVAL / MOTE_SNAPSHOT），页面 ready 后由外壳调用
 - (void)runPageDiagnostics;
 
+// 整篇导出 A4 PDF；completion 在主线程回调
+- (void)exportPdfToPath:(NSString *)path
+             completion:(void (^)(BOOL ok, NSString *message))completion;
+
 @end
