@@ -104,4 +104,14 @@ std::string clearBaseHref()
            "if(b&&b.parentNode)b.parentNode.removeChild(b);})();";
 }
 
+std::string enableStatusBar()
+{
+    return "(function(){if(document.body)document.body.classList.add('platform-mac');})();";
+}
+
+std::string statusMessage(std::string_view text)
+{
+    return call("setStatus", quoteJson(text));
+}
+
 } // namespace mote::js
