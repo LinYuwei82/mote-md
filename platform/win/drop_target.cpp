@@ -151,8 +151,8 @@ public:
     HRESULT STDMETHODCALLTYPE Drop(IDataObject *data, DWORD, POINTL, DWORD *effect) override
     {
         const bool acceptable = accepts(data);
-        acceptable_ = false;
         apply_effect(effect);
+        acceptable_ = false;
         if (!acceptable)
             return S_OK;
 
@@ -229,7 +229,14 @@ void *register_drop_target(HWND hwnd, DropCallbacks callbacks, std::string *erro
     }
 
     auto *target = new DropTarget(hwnd, std::move(callbacks));
-    const HRESULT registered = RegisterDragDrop(hwnd, target);
+    HRESULT registered = RegisterDragDrop(hwnd, target);
+    if (registered == DRAGDROP_E_ALREADYREGISTERED) {
+        // Chromium 会先给渲染子窗口注册自己的 IDropTarget，把文件拖放吃掉
+        // （表现为拖进来毫无反应）。AllowExternalDrop=false 只能拦住它新建
+        // 目标，拦不住已经存在的；这里显式换成本进程的目标。
+        RevokeDragDrop(hwnd);
+        registered = RegisterDragDrop(hwnd, target);
+    }
     if (FAILED(registered)) {
         if (std::getenv("MOTE_KEYLOG"))
             std::fprintf(stderr, "WIN RegisterDragDrop failed %s\n",

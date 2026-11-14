@@ -495,6 +495,7 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
     case mote::win::kDropMessage: {
         std::unique_ptr<std::vector<std::string>> paths(
             reinterpret_cast<std::vector<std::string> *>(lparam));
+        log_line("NATIVE drop paths=" + std::to_string(paths ? paths->size() : 0));
         if (paths && controller_)
             controller_->handleNativeFileDrop(*paths);
         return 0;
@@ -1094,8 +1095,14 @@ void MoteMainWindow::ensure_drop_target()
     }
     drop_target_ = target;
     drop_hwnd_ = target ? target_hwnd : nullptr;
-    if (!target)
+    if (!target) {
         log_line("NATIVE drop target unavailable: " + error);
+    } else {
+        wchar_t name[64] = {};
+        GetClassNameW(drop_hwnd_, name, 64);
+        log_line("NATIVE drop target on " + wide_to_utf8(name) + " "
+                 + std::to_string(reinterpret_cast<size_t>(drop_hwnd_)));
+    }
 }
 
 void MoteMainWindow::revoke_drop_target()
