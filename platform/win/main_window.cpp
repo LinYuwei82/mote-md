@@ -389,6 +389,8 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
     default:
         return DefWindowProcW(hwnd, message, wparam, lparam);
     }
+    // WM_TIMER / WM_SETTINGCHANGE 未命中的分支落到这里，与 default 一样交默认窗口过程
+    return DefWindowProcW(hwnd, message, wparam, lparam);
 }
 
 void MoteMainWindow::layout()
