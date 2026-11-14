@@ -389,6 +389,7 @@ void WebWindow::createUi()
 
     // 字数统计常驻右侧；左侧 showMessage 的临时提示不会覆盖它
     m_statsLabel = new QLabel(tr("中文 0 字 · 英文 0 词"), this);
+    statusBar()->setSizeGripEnabled(false);
     statusBar()->addPermanentWidget(m_statsLabel);
     statusBar()->showMessage(tr("就绪 · 可以把 .md 文件拖进窗口打开"));
     updateWindowTitle();
@@ -580,11 +581,19 @@ void WebWindow::applyTheme()
     // 状态栏是原生 Qt 控件，不随网页 CSS 变化：深色时单独上色，避免底部留一条白带。
     // 工具栏/菜单栏仍交给系统外观，不在这里改（见 README 的降级说明）。
     if (QStatusBar *bar = statusBar()) {
+        // 状态栏只做一条「薄底」：无边框、11px、上方 1px 发丝线，
+        // 与正文共用同一组颜色，避免底部自带一块系统灰。
         bar->setStyleSheet(m_dark
-            ? QStringLiteral("QStatusBar{background:#1b2027;color:#c3cdd7;}"
+            ? QStringLiteral("QStatusBar{background:#15191e;color:#8b98a5;"
+                             "border-top:1px solid #29313a;padding:1px 10px;}"
                              "QStatusBar::item{border:0;}"
-                             "QStatusBar QLabel{color:#c3cdd7;background:transparent;}")
-            : QString());
+                             "QStatusBar QLabel{color:#8b98a5;background:transparent;"
+                             "font-size:11px;padding:0 2px;}")
+            : QStringLiteral("QStatusBar{background:transparent;color:#8a94a0;"
+                             "border-top:1px solid #e6e9ee;padding:1px 10px;}"
+                             "QStatusBar::item{border:0;}"
+                             "QStatusBar QLabel{color:#8a94a0;background:transparent;"
+                             "font-size:11px;padding:0 2px;}"));
     }
 }
 
