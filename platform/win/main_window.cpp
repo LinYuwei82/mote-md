@@ -1,6 +1,7 @@
 #include "main_window.h"
 
 #include "dialogs.h"
+#include "menus.h"
 #include "web_host_view.h"
 
 #include "core/editor_controller.h"
@@ -9,12 +10,16 @@
 #include <shlobj.h>
 #include <shellapi.h>
 
+#include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cwchar>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace {
 
@@ -24,12 +29,7 @@ constexpr int kDefaultHeight = 820;
 constexpr int kMinWidth = 760;
 constexpr int kMinHeight = 520;
 
-// N1 只放最小文件菜单；N2 起改为从 core/command_table 生成完整菜单
-constexpr UINT kCommandNew = 40001;
-constexpr UINT kCommandOpen = 40002;
-constexpr UINT kCommandSave = 40003;
-constexpr UINT kCommandSaveAs = 40004;
-constexpr UINT kCommandExit = 40005;
+constexpr UINT_PTR kStartupCommandTimer = 1;
 
 std::wstring utf8_to_wide(const std::string &text)
 {
@@ -220,7 +220,7 @@ public:
     }
     void viewStateChanged(const mote::ViewState &state) override
     {
-        (void)state;
+        owner_.apply_view_state(state);
     }
     void statsChanged(int cjk, int words) override
     {
@@ -323,47 +323,38 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         load_builtin_sample();
         layout();
 
-        HMENU menu = CreateMenu();
-        HMENU file = CreatePopupMenu();
-        AppendMenuW(file, MF_STRING, kCommandNew, L"新建(&N)\tCtrl+N");
-        AppendMenuW(file, MF_STRING, kCommandOpen, L"打开(&O)...\tCtrl+O");
-        AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(file, MF_STRING, kCommandSave, L"保存(&S)\tCtrl+S");
-        AppendMenuW(file, MF_STRING, kCommandSaveAs, L"另存为(&A)...\tCtrl+Shift+S");
-        AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(file, MF_STRING, kCommandExit, L"退出(&X)");
-        AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(file), L"文件(&F)");
-        SetMenu(hwnd, menu);
-
-        ACCEL entries[] = {
-            { FVIRTKEY | FCONTROL, 'N', kCommandNew },
-            { FVIRTKEY | FCONTROL, 'O', kCommandOpen },
-            { FVIRTKEY | FCONTROL, 'S', kCommandSave },
-            { FVIRTKEY | FCONTROL | FSHIFT, 'S', kCommandSaveAs },
-        };
-        accel_ = CreateAcceleratorTableW(entries, ARRAYSIZE(entries));
+        SetMenu(hwnd, mote::win::build_main_menu());
+        accel_ = mote::win::build_accelerators();
+        follow_system_ = true;
+        apply_theme();
         return 0;
-    case WM_COMMAND:
-        switch (LOWORD(wparam)) {
-        case kCommandNew:
-            new_document();
-            return 0;
-        case kCommandOpen:
-            open_document();
-            return 0;
-        case kCommandSave:
-            begin_save_as(false);
-            return 0;
-        case kCommandSaveAs:
-            begin_save_as(true);
-            return 0;
-        case kCommandExit:
+    case WM_COMMAND: {
+        const UINT id = LOWORD(wparam);
+        if (id == mote::win::kExitCommandId) {
             SendMessageW(hwnd, WM_CLOSE, 0, 0);
             return 0;
-        default:
-            break;
         }
+        // 菜单项 id 就是 CommandId；未知 id（控件通知等）直接忽略
+        if (const mote::CommandSpec *spec =
+                mote::findCommand(static_cast<mote::CommandId>(id)))
+            perform_command(spec->id);
         return 0;
+    }
+    case WM_TIMER:
+        if (wparam == kStartupCommandTimer) {
+            KillTimer(hwnd, kStartupCommandTimer);
+            run_startup_command();
+            return 0;
+        }
+        break;
+    case WM_SETTINGCHANGE:
+        if (wparam == WM_SETTINGCHANGE && lparam && follow_system_
+            && std::wcscmp(reinterpret_cast<const wchar_t *>(lparam),
+                           L"ImmersiveColorSet") == 0) {
+            apply_theme();
+            return 0;
+        }
+        break;
     case WM_SIZE:
         layout();
         return 0;
@@ -644,6 +635,10 @@ void MoteMainWindow::page_ready()
     if (!pending_status_.empty())
         show_status(pending_status_);
     update_title();
+    update_menu_state();
+    // MOTE_COMMAND 诊断钩子：页面就绪后再等 700ms，避开首帧布局
+    if (!startup_command_done_ && std::getenv("MOTE_COMMAND"))
+        SetTimer(hwnd_, kStartupCommandTimer, 700, nullptr);
 }
 
 void MoteMainWindow::dirty_changed()
@@ -668,6 +663,189 @@ void MoteMainWindow::show_status(const std::string &text)
     pending_status_ = text;
     if (controller_ && controller_->pageReady())
         host_->evaluate_script(mote::js::statusMessage(text));
+}
+
+void MoteMainWindow::perform_command(mote::CommandId command)
+{
+    const mote::CommandSpec *spec = mote::findCommand(command);
+    if (std::getenv("MOTE_KEYLOG") && spec)
+        log_line("NATIVE command " + spec->title);
+
+    switch (command) {
+    case mote::CommandId::New:
+        new_document();
+        return;
+    case mote::CommandId::Open:
+        open_document();
+        return;
+    case mote::CommandId::Save:
+        begin_save_as(false);
+        return;
+    case mote::CommandId::SaveAs:
+        begin_save_as(true);
+        return;
+    case mote::CommandId::ExportHtml:
+        controller_->requestExportHtml(wide_to_utf8(display_name()));
+        return;
+    case mote::CommandId::ExportPdf:
+        if (source_on_) {
+            status_message("源码模式下不能导出 PDF，先退出源码模式");
+            return;
+        }
+        // 原生 PDF 分页导出在 N4 接入
+        status_message("导出 PDF 将在 N4 实现");
+        return;
+    case mote::CommandId::Undo:
+        controller_->undo();
+        return;
+    case mote::CommandId::Redo:
+        controller_->redo();
+        return;
+    // 剪切/复制/粘贴：菜单点击走页面桥；快捷键本身交给 WebView2 原生处理
+    case mote::CommandId::Cut:
+        controller_->clipboardCommand("cut");
+        return;
+    case mote::CommandId::Copy:
+        controller_->clipboardCommand("copy");
+        return;
+    case mote::CommandId::Paste:
+        controller_->clipboardCommand("paste");
+        return;
+    case mote::CommandId::SelectAll:
+        evaluate_script("document.execCommand('selectAll');");
+        return;
+    case mote::CommandId::ToggleToc:
+        controller_->toggleToc();
+        return;
+    case mote::CommandId::ToggleSource:
+        controller_->toggleSource();
+        return;
+    case mote::CommandId::ToggleDark:
+        follow_system_ = false;
+        dark_mode_ = !dark_mode_;
+        apply_theme();
+        return;
+    case mote::CommandId::FollowSystem:
+        follow_system_ = true;
+        apply_theme();
+        return;
+    case mote::CommandId::ZoomIn:
+        controller_->zoomBy(1);
+        return;
+    case mote::CommandId::ZoomOut:
+        controller_->zoomBy(-1);
+        return;
+    case mote::CommandId::ZoomReset:
+        controller_->resetZoom();
+        return;
+    default:
+        break;
+    }
+
+    // 剩余的是格式命令：动作名由 core 命令表给出，前端统一解释
+    if (spec && !spec->formatAction.empty())
+        controller_->applyFormat(spec->formatAction);
+}
+
+void MoteMainWindow::apply_view_state(const mote::ViewState &state)
+{
+    toc_on_ = state.toc;
+    source_on_ = state.source;
+    update_menu_state();
+    if (std::getenv("MOTE_KEYLOG"))
+        log_line("NATIVE view toc=" + std::to_string(state.toc ? 1 : 0)
+                 + " source=" + std::to_string(state.source ? 1 : 0)
+                 + " zoom=" + std::to_string(state.zoom));
+    if (std::abs(state.zoom - last_zoom_) > 0.001) {
+        last_zoom_ = state.zoom;
+        status_message("缩放：" + std::to_string(
+            static_cast<int>(std::lround(state.zoom * 100))) + "%");
+    }
+}
+
+bool MoteMainWindow::system_is_dark() const
+{
+    // Windows 没有公开的系统外观 API：读「应用模式」注册表值，
+    // 0 = 深色，1 = 浅色；读取失败时按浅色处理。
+    HKEY key = nullptr;
+    DWORD value = 1;
+    DWORD size = sizeof(value);
+    if (RegOpenKeyExW(HKEY_CURRENT_USER,
+                      L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                      0, KEY_READ, &key) == ERROR_SUCCESS) {
+        RegQueryValueExW(key, L"AppsUseLightTheme", nullptr, nullptr,
+                         reinterpret_cast<LPBYTE>(&value), &size);
+        RegCloseKey(key);
+    }
+    return value == 0;
+}
+
+void MoteMainWindow::apply_theme()
+{
+    if (follow_system_)
+        dark_mode_ = system_is_dark();
+    if (controller_)
+        controller_->setTheme(dark_mode_ ? "dark" : "light");
+    update_menu_state();
+}
+
+void MoteMainWindow::update_menu_state()
+{
+    if (!hwnd_)
+        return;
+    HMENU menu = GetMenu(hwnd_);
+    if (!menu)
+        return;
+    mote::win::set_command_checked(menu, mote::CommandId::ToggleToc, toc_on_);
+    mote::win::set_command_checked(menu, mote::CommandId::ToggleSource, source_on_);
+    mote::win::set_command_checked(menu, mote::CommandId::ToggleDark, dark_mode_);
+    mote::win::set_command_checked(menu, mote::CommandId::FollowSystem, follow_system_);
+    // 与 Qt 版一致：源码模式（textarea）由 WebView2 原生处理编辑命令
+    mote::win::set_command_enabled(menu, mote::CommandId::ExportPdf, !source_on_);
+    mote::win::set_command_enabled(menu, mote::CommandId::Cut, !source_on_);
+    mote::win::set_command_enabled(menu, mote::CommandId::Copy, !source_on_);
+    mote::win::set_command_enabled(menu, mote::CommandId::Paste, !source_on_);
+    DrawMenuBar(hwnd_);
+}
+
+void MoteMainWindow::run_startup_command()
+{
+    if (startup_command_done_)
+        return;
+    const char *raw = std::getenv("MOTE_COMMAND");
+    if (!raw || !*raw)
+        return;
+    startup_command_done_ = true;
+
+    std::string name;
+    for (const char *item = raw; *item; ++item) {
+        const unsigned char ch = static_cast<unsigned char>(*item);
+        if (!std::isspace(ch))
+            name += static_cast<char>(std::tolower(ch));
+    }
+
+    const std::pair<const char *, mote::CommandId> table[] = {
+        { "new", mote::CommandId::New },
+        { "open", mote::CommandId::Open },
+        { "save", mote::CommandId::Save },
+        { "saveas", mote::CommandId::SaveAs },
+        { "exporthtml", mote::CommandId::ExportHtml },
+        { "exportpdf", mote::CommandId::ExportPdf },
+        { "toggletoc", mote::CommandId::ToggleToc },
+        { "togglesource", mote::CommandId::ToggleSource },
+        { "toggledark", mote::CommandId::ToggleDark },
+        { "followsystem", mote::CommandId::FollowSystem },
+        { "zoomin", mote::CommandId::ZoomIn },
+        { "zoomout", mote::CommandId::ZoomOut },
+        { "zoomreset", mote::CommandId::ZoomReset },
+    };
+    for (const auto &entry : table) {
+        if (name == entry.first) {
+            log_line("NATIVE startup command " + name);
+            perform_command(entry.second);
+            return;
+        }
+    }
 }
 
 void MoteMainWindow::drop_received(const std::string &name, const std::string &text)

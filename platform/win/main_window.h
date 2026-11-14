@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include "core/command_table.h"
+
 #include <memory>
 #include <string>
 
@@ -10,6 +12,7 @@ class WebHostView;
 
 namespace mote {
 class EditorController;
+struct ViewState;
 }
 
 // Windows 原生主窗口（阶段 B N1）：窗口、文档状态、打开/保存/未保存确认。
@@ -63,6 +66,13 @@ private:
     bool confirm_close();
     void show_status(const std::string &text);
 
+    void perform_command(mote::CommandId command);
+    void apply_view_state(const mote::ViewState &state);
+    void apply_theme();
+    bool system_is_dark() const;
+    void update_menu_state();
+    void run_startup_command();
+
     HINSTANCE instance_ = nullptr;
     HWND hwnd_ = nullptr;
     std::unique_ptr<WebHostView> host_;
@@ -74,6 +84,12 @@ private:
     std::string last_text_;
     std::string pending_status_;
     bool save_as_requested_ = false;
+    bool toc_on_ = false;
+    bool source_on_ = false;
+    bool follow_system_ = true;
+    bool dark_mode_ = false;
+    bool startup_command_done_ = false;
+    double last_zoom_ = 1.0;
     AfterSave after_save_ = AfterSave::None;
     std::string after_save_path_;
 };
