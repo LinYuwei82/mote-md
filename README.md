@@ -1,10 +1,10 @@
 # Mote
 
-**C++20 + Qt 6 的 Markdown 查看 / 编辑器：窗口、菜单、文件读写由 Qt 负责，正文的渲染与编辑交给系统 WebView（macOS 用 WKWebView，Windows 用 WebView2），不引入任何前端框架或运行时；两端都支持系统级拖放，Windows 安装包会注册 `.md` 文件关联。**
+**C++20 原生薄外壳 + 系统 WebView 的 Markdown 查看 / 编辑器：macOS 用 AppKit + WKWebView（发布包不含 Qt），Windows 用 Win32 + WebView2；正文的渲染与编辑交给系统 WebView，前端零框架、零构建，不引入 Electron 一类运行时。两端共用 `core/` 与同一份前端资源。**
 
 ## 功能
 
-按当前实际已实现的能力（macOS 与 Windows 提供同一套；Windows 上快捷键把 `Cmd` 换成 `Ctrl`）：
+按当前实际已实现的能力（macOS 已验收；Windows 原生外壳实现到 N3，尚未通过实机验证；Windows 上快捷键把 `Cmd` 换成 `Ctrl`）：
 
 - **所见即所得块编辑**：正文按空行切块，点击某块即就地显示该块的 Markdown 原文，其余块保持排版效果；离开该块后按原文重新渲染。
 - **代码块**：围栏代码块带语法高亮（内置轻量高亮，无第三方解析/高亮库）、左侧行号与语言徽标；点击徽标可改语言。
@@ -19,45 +19,74 @@
 - **块类型转换**：右键任意块弹出「转为」，支持正文、标题 1–3、无序/有序列表、引用、代码块；多选可合并成一个列表。
 - **任务列表**：`- [ ]` / `- [x]`（`*`、`+` 作列表符号、缩进子项同样支持）渲染成可点击复选框；点击即改写原文的 `[ ]`／`[x]`，一次撤销可还原。复选框不进入框选复制的文本，复制出去仍是标准 Markdown 任务列表；编辑态下任务标记是可见文本，可直接用键盘改。
 - **字数统计**：状态栏右侧显示「中文 N 字 · 英文 M 词」。中文按 CJK 字符逐个计数（含扩展 A 区与兼容区），英文按「连续字母/数字算一个词、词内可含 `'`／`-`／`’`」计数；代码块正文计入、围栏与行号不计。
-- **深色模式**：默认跟随系统外观（`QStyleHints::colorScheme`），也可用「视图 → 深色模式」(`Cmd+Shift+D`) 手动切换；手动切换后可用「跟随系统外观」交回系统。切换只换配色，不改文档内容、块几何与编辑状态。
+- **深色模式**：默认跟随系统外观（macOS 读 `NSApp.effectiveAppearance`，Windows 读注册表 `AppsUseLightTheme` 并响应 `WM_SETTINGCHANGE`），也可用「视图 → 深色模式」(`Cmd+Shift+D`) 手动切换；手动切换后可用「跟随系统外观」交回系统。切换只换配色，不改文档内容、块几何与编辑状态。
 - **链接**：渲染态下 `[文字](地址)` 的文字显示为蓝色带下划线的链接（地址本身仍是零宽标记，不占位、不进入框选复制）；普通点击仍进入编辑态，`Cmd+Click` 才跳转——外部链接交给系统默认浏览器，相对路径的 `.md` 在应用内打开（走未保存确认），文件不存在时弹提示不崩。编辑态显示原始 `[文字](地址)`，复制出去是标准 Markdown。
 - **导出 HTML**：`Option+Cmd+E`（「文件 → 导出 HTML…」）导出单文件自包含 HTML——样式内联、图片转 base64 内嵌、代码高亮与任务复选框状态保留，导出过程不改动原文档与 `dataset.raw`。
+- **导出 PDF**（macOS）：`Cmd+P`（「文件 → 导出 PDF…」）导出 A4 多页、无页眉页脚；源码模式下禁用。Windows 侧待 N4。
+- **页面内状态栏**：原生外壳把状态栏画在前端页面底部（`body.platform-mac` / `body.platform-win`），显示打开/保存/导出提示与字数统计；Qt 构建不启用，避免出现两条状态栏。
 - **目录手型光标**：鼠标移到目录栏（条目文字行、行间空隙、栏内空白）都是系统手型指针，避免移动时手型闪烁；折叠按钮与滚动条保留自身光标语义。
 
 ## 构建与运行（macOS）
 
 依赖：
 
-- macOS 14 及以上（Apple Silicon，arm64）；构建目标为 `-mmacosx-version-min=14.0`，更早的系统未经测试
-- Qt 6.x（开发时使用 Homebrew 的 6.11.1，要求 `qmake6` 与 `macdeployqt` 在 `PATH` 中）
-- Xcode Command Line Tools（`make`、`codesign`、`iconutil`、`strip`）
+- macOS 14 及以上（Apple Silicon，arm64）；CMake 目标为 `-mmacosx-version-min=14.0`
+- Xcode Command Line Tools
+- CMake 3.25+
+- **不需要 Qt**
 
 构建：
 
 ```bash
-qmake6 Mote.pro && make -j4
-open ./Mote.app                       # 或直接运行
-./Mote.app/Contents/MacOS/Mote 文档.md  # 带参数打开文件
+cmake -S native -B build-native
+cmake --build build-native
+ctest --test-dir build-native                    # core 单测，无需 GUI
+
+open build-native/Mote.app                       # 或直接运行
+./build-native/Mote.app/Contents/MacOS/Mote 文档.md
 ```
 
-设置 `MOTE_LEGACY_QT=1` 可回退到迁移前的纯 Qt 文本引擎实现，仅用于对照排查。
-
-一键打包（影子构建 + `macdeployqt` + Ad-hoc 签名 + zip）：
+一键打包（构建 + Ad-hoc 签名 + zip/DMG + 依赖自检）：
 
 ```bash
-bash packaging/package_macos.sh
-# 产物：dist/Mote-macOS.zip（含 Mote.app、samples/、licenses/）
+bash packaging/package_macos.sh --native --dmg
+# 产物：dist/Mote-macOS-native.zip / dist/Mote-macOS-native-*.dmg
+# 当前体积：.app 约 1.2 MB，DMG 约 579 KB
 ```
 
-Windows 用 `packaging/package_windows.bat` 构建并产出绿色版 zip，安装包另由
-`packaging/build_installer.ps1` 生成，详见 [packaging/WINDOWS-FROM-MACOS.md](packaging/WINDOWS-FROM-MACOS.md)。
+`tools/preflight.sh --native` 可在干净构建后跑一次启动冒烟。
+
+### Windows 原生外壳（N0–N3，待实机验证）
+
+需要 VS2022（C++ 桌面开发）、CMake ≥ 3.25、WebView2 SDK（`WEBVIEW2_SDK`）与 Evergreen Runtime：
+
+```bat
+set WEBVIEW2_SDK=C:\dev\webview2sdk\pkg
+cmake -S native -B build-native-win -A x64
+cmake --build build-native-win --config Release
+```
+
+验收项与已知风险见 [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)。在通过实机验证之前，Windows 不提供正式发布包。
+
+### Qt 构建（保留的对照/回退路径）
+
+仓库根的 `Mote.pro` 与 `src/` 仍可构建，用于与原生外壳对照或在 Windows 原生验证未完成时兜底：
+
+```bash
+qmake6 Mote.pro && make -j4
+```
+
+Qt 构建与原生构建共用 `resources/web/` 与 `core/`；版本号仍以 `Mote.pro` 的 `VERSION` 为唯一来源。Qt 版 macOS 打包为 `bash packaging/package_macos.sh`（不带 `--native`），Windows 打包脚本见 [packaging/WINDOWS-FROM-MACOS.md](packaging/WINDOWS-FROM-MACOS.md)。
 
 ## 快捷键
+
+macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 
 | 分组 | 快捷键 | 作用 |
 | --- | --- | --- |
 | 文件 | `Cmd+N` / `Cmd+O` / `Cmd+S` / `Cmd+Shift+S` | 新建 / 打开 / 保存 / 另存为 |
 | 文件 | `Option+Cmd+E` | 导出 HTML（自包含单文件） |
+| 文件 | `Cmd+P` | 导出 PDF（A4 多页；源码模式下禁用） |
 | 编辑 | `Cmd+Z` / `Cmd+Shift+Z` | 撤销 / 重做 |
 | 编辑 | `Cmd+C` / `Cmd+X` / `Cmd+V` | 复制 / 剪切 / 粘贴 |
 | 编辑 | `Cmd+F` | 查找替换条 |
@@ -77,46 +106,52 @@ Windows 用 `packaging/package_windows.bat` 构建并产出绿色版 zip，安�
 
 - **仅 arm64**：macOS 包只含 arm64 切片，Intel Mac 需自行重新构建。
 - **Ad-hoc 签名、未公证**：从网络下载的 zip 首次打开可能被 Gatekeeper 拦截，需右键「打开」。
-- **包体积主要来自 Qt ICU**：`libicudata` 约 32 MB，压缩后整个 zip 约 30 MB。
+- **macOS 包不含 Qt**：`.app` 约 1.2 MB，DMG 约 579 KB；主要体积来自应用自身与内联字体，WebKit 由系统提供。
 - **源码模式无语法高亮**：`Cmd+E` 下是纯文本编辑区。
 - **查找/替换不跨块**：可以在所有块之间跳转命中，但单个命中不会跨越块边界或行内标记。
 - **上下方向键不跨块**：跨块移动光标需鼠标点击。
-- **深色模式只覆盖正文区域**：网页侧（正文、标题、引用、表格、行内代码、代码块与语法高亮、目录、查找高亮、斜杠浮层）全部跟随主题；状态栏在深色下单独上色。工具栏与菜单栏仍是系统原生外观，不随文档主题变化。
+- **深色模式只覆盖正文区域**：网页侧（正文、标题、引用、表格、行内代码、代码块与语法高亮、目录、查找高亮、斜杠浮层）全部跟随主题；状态栏在深色下单独上色。菜单栏仍是系统原生外观，不随文档主题变化。
 - **链接只支持两种跳转**：`Cmd+Click` 外部链接（http/https/mailto）与相对路径的 `.md`；**锚点链接**（`#标题`）因为没有生成标题锚点，只在状态栏提示「暂不支持」；**图片**按 `img` 渲染，没有 `<a>` 包裹，`Cmd+Click` 不触发任何跳转（相对路径图片仍按文档目录正常显示与导出内嵌）。
 - **导出 HTML 是「网页快照」**：单文件、无外部依赖、无脚本；导出后不提供任何交互（链接仍可点，但任务复选框是静态图形）。
-- **不提供导出 PDF**：`WKWebView` 的 `createPDFWithConfiguration:`（macOS 11+）配置只有 `rect` 与 `allowTransparentBackground` 两个属性（前者定页尺寸，后者只影响背景是否透明），只能出**单张长页**、无法分页；唯一的分页路径 `printOperationWithPrintInfo:` 在本机（macOS 26.2）三种参数组合下都会失控——20 秒内写出 408–982 MB 且不返回，只能杀进程。因此不做半成品，详见 [packaging/PACKAGING.md](packaging/PACKAGING.md) 的评估记录。
+- **导出能力按平台分阶段**：macOS 已支持 PDF（CGPDFContext 分段抓取 + A4 拼页）与 HTML；Windows 原生外壳的导出仍是占位，计划在 N4 实现。
+- **Windows 原生外壳未完成验收**：N0–N3 代码已入库，但尚未在真实 Windows 上编译/运行验证；验证清单见 [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)。
 - **任务复选框的复制**：复制处理器剔除隐藏标记；脚本用 `DataTransfer` 走产品同一条 `copy` 处理逻辑验证，真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 - 目录在源码模式下隐藏；正在编辑的块在重排前标题高亮可能滞后一帧。
 
 ## 目录结构
 
 ```
-Mote.pro                 qmake 工程（C++20，Release）
-src/                     Qt 外壳与 WebView 桥接
-  main.cpp               入口；默认 WebWindow，MOTE_LEGACY_QT=1 回退旧引擎
-  webwindow.*            新架构主窗口：菜单、文件对话框、保存、拖拽
-  webview.h              WebView 抽象接口
-  macwebview.mm          macOS WKWebView 实现
-  webview_win.*          Windows WebView2 实现（webview_win_drop.* 负责系统拖放）
-  webview_stub.cpp       仅非 macOS / 非 Windows 平台的占位（返回 nullptr）
-  mainwindow.*           旧 Qt 文本引擎主窗口（仅回退用）
-  previewview.*          旧 Qt 文本引擎的预览视图（仅回退用）
-  codehighlighter.*      旧 Qt 文本引擎的代码着色（仅回退用）
+native/CMakeLists.txt    原生构建入口：读 Mote.pro 版本号，按平台生成 target
+core/                    无 Qt、无平台 API 的共享核心
+  json / base64 / paths  协议解析、图片解码、路径与 file:// 目录
+  js_bridge              外壳 → 页面的脚本片段
+  editor_controller      页面代次、ready 缓存、消息分发、脏标记
+  image_store            assets/ 落盘与重名处理
+  command_table          菜单唯一来源
+  inject_chunks          大文档分片切分（UTF-8 安全）
+platform/mac/            AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放
+platform/win/            Win32 + WebView2：N0–N3，待实机验证
 resources/
-  web/                   前端编辑器（editor.html / editor.css / editor.js）
-  fonts/                 JetBrains Mono（Light / Regular / Bold）与 OFL.txt
+  web/                   前端编辑器（editor.html / editor.css / editor.js，唯一一份）
+  fonts/                 JetBrains Mono（Light）与 OFL.txt
   icons/  styles/        应用图标与 Qt 样式表
   samples/               内置示例文档与示例图
   win/                   Windows 资源脚本（图标）
-  resources.qrc          以上资源全部编进可执行文件
-packaging/               打包脚本（macOS / Windows）与交付文档
-docs/                    架构文档
+  resources.qrc          Qt 构建的资源清单
+src/                     Qt 外壳（保留的对照/回退路径）
+Mote.pro                 qmake 工程；VERSION 是版本号唯一来源
+packaging/               打包脚本（原生 / Qt / Windows）与交付文档
+docs/                    架构、设计与验收文档
 screenshots/             文档引用的截图
-backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建，仅作历史参考）
+backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建）
 ```
 
 ## 文档
 
+- [docs/技术方案.md](docs/技术方案.md)：N3 后的实际架构、方案 A/B 取舍与实施状态
+- [docs/thin-shell-stage-a.md](docs/thin-shell-stage-a.md) / [docs/thin-shell-stage-b.md](docs/thin-shell-stage-b.md)：macOS / Windows 薄外壳设计与里程碑
+- [docs/thin-shell-stage-a-acceptance.md](docs/thin-shell-stage-a-acceptance.md)：macOS 原生外壳验收记录（体积、依赖、行为）
+- [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)：Windows 实机验证交接单
 - [packaging/PACKAGING.md](packaging/PACKAGING.md)：打包、产物、干净环境验证与逐项验收记录
 - [docs/WEBVIEW-ARCHITECTURE.md](docs/WEBVIEW-ARCHITECTURE.md)：分层、消息协议、按键链路与前端块模型
 - [packaging/WINDOWS-FROM-MACOS.md](packaging/WINDOWS-FROM-MACOS.md)：在 Windows 上构建的步骤与注意事项
@@ -127,10 +162,11 @@ backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建
 
 ## 第三方与许可
 
-- **Qt 6**：LGPLv3，动态链接；发布包内为独立框架，可替换。
+- **系统 WebKit**：macOS 自带框架，不随包分发。
+- **WebView2 Runtime**：Windows 由系统/用户安装的 Evergreen Runtime 提供，不随包分发。
+- **Qt 6**：仅用于保留的对照/回退构建，LGPLv3、动态链接；macOS 原生发布包不含 Qt。
 - **JetBrains Mono**：SIL Open Font License 1.1；仓库内 [resources/fonts/OFL.txt](resources/fonts/OFL.txt)，
   发布包内 `licenses/JetBrainsMono-OFL.txt`。
-- **系统 WebKit**：macOS 自带框架，不随包分发。
 
 ## 许可证
 
