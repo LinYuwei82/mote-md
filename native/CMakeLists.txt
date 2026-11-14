@@ -1,12 +1,18 @@
 cmake_minimum_required(VERSION 3.25)
 
-# macOS 原生薄外壳（阶段 A）。Qt 构建仍由仓库根的 Mote.pro 负责，两者互不影响。
+# 原生薄外壳：macOS（阶段 A，AppKit + WKWebView）与 Windows（阶段 B，Win32 + WebView2）。
+# Qt 构建仍由仓库根的 Mote.pro 负责，两者互不影响。
 # 用法：cmake -S native -B build-native && cmake --build build-native
 
-project(MoteNative VERSION 0.0.0 LANGUAGES C CXX OBJCXX)
+if(WIN32)
+  project(MoteNative VERSION 0.0.0 LANGUAGES C CXX)
+else()
+  project(MoteNative VERSION 0.0.0 LANGUAGES C CXX OBJCXX)
+endif()
 
 get_filename_component(MOTE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 set(MOTE_PLATFORM_MAC "${MOTE_REPO_ROOT}/platform/mac")
+set(MOTE_PLATFORM_WIN "${MOTE_REPO_ROOT}/platform/win")
 
 # 版本号唯一来源：Mote.pro 的 VERSION 行
 file(READ "${MOTE_REPO_ROOT}/Mote.pro" MOTE_PRO_CONTENT)
@@ -18,45 +24,11 @@ set(MOTE_VERSION "${CMAKE_MATCH_1}")
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
-if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-  set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0")
-endif()
-if(NOT CMAKE_OSX_ARCHITECTURES)
-  set(CMAKE_OSX_ARCHITECTURES "arm64")
-endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_OBJCXX_STANDARD 20)
 
-# 前端资源只有一份：直接引用仓库 resources/，构建时拷进 bundle。
-set(MOTE_WEB_FILES
-  "${MOTE_REPO_ROOT}/resources/web/editor.html"
-  "${MOTE_REPO_ROOT}/resources/web/editor.css"
-  "${MOTE_REPO_ROOT}/resources/web/editor.js")
-set(MOTE_FONT_FILES
-  "${MOTE_REPO_ROOT}/resources/fonts/JetBrainsMono-Light.ttf")
-set(MOTE_SAMPLE_FILES
-  "${MOTE_REPO_ROOT}/resources/samples/welcome.md")
-set(MOTE_ICON_FILES
-  "${MOTE_REPO_ROOT}/resources/icons/app.icns")
-
-set_source_files_properties(${MOTE_WEB_FILES} PROPERTIES
-  MACOSX_PACKAGE_LOCATION "Resources/web")
-set_source_files_properties(${MOTE_FONT_FILES} PROPERTIES
-  MACOSX_PACKAGE_LOCATION "Resources/fonts")
-set_source_files_properties(${MOTE_SAMPLE_FILES} PROPERTIES
-  MACOSX_PACKAGE_LOCATION "Resources/samples")
-set_source_files_properties(${MOTE_ICON_FILES} PROPERTIES
-  MACOSX_PACKAGE_LOCATION "Resources")
-
-set(MOTE_EXECUTABLE_NAME "Mote")
-configure_file(
-  "${MOTE_PLATFORM_MAC}/Info.plist.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
-  @ONLY)
-
-# 无 Qt、无平台 API 的核心：两个构建共用（Qt 构建后续同样接这里的源码）
+# 无 Qt、无平台 API 的核心：macOS 与 Windows 共用
 add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/base64.cpp"
   "${MOTE_REPO_ROOT}/core/command_table.cpp"
@@ -66,42 +38,150 @@ add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/json.cpp"
   "${MOTE_REPO_ROOT}/core/paths.cpp")
 target_include_directories(mote_core PUBLIC "${MOTE_REPO_ROOT}")
-target_compile_options(mote_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall>")
 
-add_executable(Mote MACOSX_BUNDLE
-  ${MOTE_PLATFORM_MAC}/main.mm
-  ${MOTE_PLATFORM_MAC}/main_window.mm
-  ${MOTE_PLATFORM_MAC}/menus.mm
-  ${MOTE_PLATFORM_MAC}/dialogs.mm
-  ${MOTE_PLATFORM_MAC}/pdf_export.mm
-  ${MOTE_PLATFORM_MAC}/html_export.mm
-  ${MOTE_PLATFORM_MAC}/web_host_view.mm
-  ${MOTE_WEB_FILES}
-  ${MOTE_FONT_FILES}
-  ${MOTE_SAMPLE_FILES}
-  ${MOTE_ICON_FILES})
-
-target_compile_options(Mote PRIVATE
-  "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>"
-  "$<$<COMPILE_LANGUAGE:CXX>:-Wall>"
-  "$<$<COMPILE_LANGUAGE:OBJCXX>:-Wall>")
-
-target_link_libraries(Mote PRIVATE
-  mote_core
-  "-framework Cocoa"
-  "-framework WebKit"
-  "-framework UniformTypeIdentifiers")
-
-set_target_properties(Mote PROPERTIES
-  MACOSX_BUNDLE_BUNDLE_NAME "Mote"
-  MACOSX_BUNDLE_GUI_IDENTIFIER "com.mote.Mote"
-  MACOSX_BUNDLE_BUNDLE_VERSION "${MOTE_VERSION}"
-  MACOSX_BUNDLE_SHORT_VERSION_STRING "${MOTE_VERSION}"
-  MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+if(MSVC)
+  target_compile_options(mote_core PRIVATE /utf-8 /W4)
+else()
+  target_compile_options(mote_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall>")
+endif()
 
 # 无窗口单测：cmake --build build-native && ctest --test-dir build-native
 enable_testing()
 add_executable(mote_core_tests tests/core_tests.cpp)
 target_link_libraries(mote_core_tests PRIVATE mote_core)
-target_compile_options(mote_core_tests PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall>")
+if(MSVC)
+  target_compile_options(mote_core_tests PRIVATE /utf-8 /W4)
+else()
+  target_compile_options(mote_core_tests PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall>")
+endif()
 add_test(NAME mote_core_tests COMMAND mote_core_tests)
+
+if(WIN32)
+  # ---------------------------------------------------------------- Windows
+  set(MOTE_WEBVIEW2_SDK "$ENV{WEBVIEW2_SDK}")
+  if(NOT MOTE_WEBVIEW2_SDK)
+    set(MOTE_WEBVIEW2_SDK "C:/dev/webview2sdk/pkg")
+  endif()
+  if(NOT EXISTS "${MOTE_WEBVIEW2_SDK}/build/native/include/WebView2.h")
+    message(FATAL_ERROR
+      "未找到 WebView2 SDK：请设置 WEBVIEW2_SDK，或把 NuGet 包解压到 C:/dev/webview2sdk/pkg")
+  endif()
+
+  string(REPLACE "." ";" MOTE_VERSION_PARTS "${MOTE_VERSION}")
+  list(GET MOTE_VERSION_PARTS 0 MOTE_VERSION_MAJOR)
+  list(GET MOTE_VERSION_PARTS 1 MOTE_VERSION_MINOR)
+  list(GET MOTE_VERSION_PARTS 2 MOTE_VERSION_PATCH)
+  set(MOTE_VERSION_COMMA
+    "${MOTE_VERSION_MAJOR},${MOTE_VERSION_MINOR},${MOTE_VERSION_PATCH}")
+  set(MOTE_WIN_ICON "${MOTE_REPO_ROOT}/resources/win/app.ico")
+  # rc.exe 以 .rc 所在目录解析相对路径：把图标拷到生成目录，避免绝对路径转义
+  configure_file("${MOTE_WIN_ICON}" "${CMAKE_CURRENT_BINARY_DIR}/app.ico" COPYONLY)
+  configure_file(
+    "${MOTE_PLATFORM_WIN}/app.rc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/app.rc"
+    @ONLY)
+
+  add_executable(Mote WIN32
+    "${MOTE_PLATFORM_WIN}/main.cpp"
+    "${MOTE_PLATFORM_WIN}/main_window.cpp"
+    "${MOTE_PLATFORM_WIN}/web_host_view.cpp"
+    "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
+
+  target_include_directories(Mote PRIVATE
+    "${MOTE_WEBVIEW2_SDK}/build/native/include")
+  target_link_libraries(Mote PRIVATE
+    mote_core user32 gdi32 ole32 oleaut32 shlwapi shell32 comctl32 urlmon)
+  target_compile_definitions(Mote PRIVATE
+    UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00)
+  target_compile_options(Mote PRIVATE /utf-8 /W4 /permissive-)
+
+  # 前端资源只有一份：构建时拷到 exe 同级，运行时按 exe 目录定位
+  add_custom_command(TARGET Mote POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Mote>/web"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      "${MOTE_REPO_ROOT}/resources/web" "$<TARGET_FILE_DIR:Mote>/web"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Mote>/fonts"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${MOTE_REPO_ROOT}/resources/fonts/JetBrainsMono-Light.ttf"
+      "$<TARGET_FILE_DIR:Mote>/fonts/JetBrainsMono-Light.ttf"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Mote>/samples"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${MOTE_REPO_ROOT}/resources/samples/welcome.md"
+      "$<TARGET_FILE_DIR:Mote>/samples/welcome.md")
+
+  set(MOTE_WEBVIEW2_LOADER "${MOTE_WEBVIEW2_SDK}/build/native/x64/WebView2Loader.dll")
+  if(EXISTS "${MOTE_WEBVIEW2_LOADER}")
+    add_custom_command(TARGET Mote POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${MOTE_WEBVIEW2_LOADER}" "$<TARGET_FILE_DIR:Mote>/WebView2Loader.dll")
+  else()
+    message(WARNING "未找到 ${MOTE_WEBVIEW2_LOADER}，运行时需手动提供 WebView2Loader.dll")
+  endif()
+else()
+  # ------------------------------------------------------------------ macOS
+  if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0")
+  endif()
+  if(NOT CMAKE_OSX_ARCHITECTURES)
+    set(CMAKE_OSX_ARCHITECTURES "arm64")
+  endif()
+  set(CMAKE_OBJCXX_STANDARD 20)
+
+  # 前端资源只有一份：直接引用仓库 resources/，构建时拷进 bundle。
+  set(MOTE_WEB_FILES
+    "${MOTE_REPO_ROOT}/resources/web/editor.html"
+    "${MOTE_REPO_ROOT}/resources/web/editor.css"
+    "${MOTE_REPO_ROOT}/resources/web/editor.js")
+  set(MOTE_FONT_FILES
+    "${MOTE_REPO_ROOT}/resources/fonts/JetBrainsMono-Light.ttf")
+  set(MOTE_SAMPLE_FILES
+    "${MOTE_REPO_ROOT}/resources/samples/welcome.md")
+  set(MOTE_ICON_FILES
+    "${MOTE_REPO_ROOT}/resources/icons/app.icns")
+
+  set_source_files_properties(${MOTE_WEB_FILES} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources/web")
+  set_source_files_properties(${MOTE_FONT_FILES} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources/fonts")
+  set_source_files_properties(${MOTE_SAMPLE_FILES} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources/samples")
+  set_source_files_properties(${MOTE_ICON_FILES} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources")
+
+  set(MOTE_EXECUTABLE_NAME "Mote")
+  configure_file(
+    "${MOTE_PLATFORM_MAC}/Info.plist.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
+    @ONLY)
+
+  add_executable(Mote MACOSX_BUNDLE
+    ${MOTE_PLATFORM_MAC}/main.mm
+    ${MOTE_PLATFORM_MAC}/main_window.mm
+    ${MOTE_PLATFORM_MAC}/menus.mm
+    ${MOTE_PLATFORM_MAC}/dialogs.mm
+    ${MOTE_PLATFORM_MAC}/pdf_export.mm
+    ${MOTE_PLATFORM_MAC}/html_export.mm
+    ${MOTE_PLATFORM_MAC}/web_host_view.mm
+    ${MOTE_WEB_FILES}
+    ${MOTE_FONT_FILES}
+    ${MOTE_SAMPLE_FILES}
+    ${MOTE_ICON_FILES})
+
+  target_compile_options(Mote PRIVATE
+    "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>"
+    "$<$<COMPILE_LANGUAGE:CXX>:-Wall>"
+    "$<$<COMPILE_LANGUAGE:OBJCXX>:-Wall>")
+
+  target_link_libraries(Mote PRIVATE
+    mote_core
+    "-framework Cocoa"
+    "-framework WebKit"
+    "-framework UniformTypeIdentifiers")
+
+  set_target_properties(Mote PROPERTIES
+    MACOSX_BUNDLE_BUNDLE_NAME "Mote"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.mote.Mote"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${MOTE_VERSION}"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${MOTE_VERSION}"
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+endif()
