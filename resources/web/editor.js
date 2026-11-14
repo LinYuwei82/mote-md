@@ -38,6 +38,9 @@
   var tocVisible = false;
   var tocItems = [];
   var tocTimer = null;
+  // 目录项的文档纵坐标缓存：滚动高亮改二分查表，不再每次滚动对每个标题
+  // 调 getBoundingClientRect（900 个标题时每帧 900 次布局读取）。
+  var tocTops = null;
   var spyScheduled = false;
 
   /* ---------------- 基础工具 ---------------- */
@@ -2298,6 +2301,7 @@
         + (0.5 + (item.level - 1) * 0.75) + 'rem">' + escapeHtml(item.label) + '</a>';
     }
     tocList.innerHTML = html || '<div class="toc-empty">没有标题</div>';
+    tocTops = null;
     updateActiveHeading();
   }
 
@@ -2314,17 +2318,30 @@
 
   // 以视口顶部往下 80px 为判定线：最后一个越过判定线的标题即“当前标题”。
   // 降级点：只在渲染态按块位置计算，编辑中的块尚未重排，滚动时可能滞后一帧。
+  function tocOffsets() {
+    if (tocTops && tocTops.length === tocItems.length)
+      return tocTops;
+    tocTops = [];
+    for (var i = 0; i < tocItems.length; i++)
+      tocTops.push(tocItems[i].el.getBoundingClientRect().top + window.scrollY);
+    return tocTops;
+  }
+
   function updateActiveHeading() {
     if (!tocVisible || !tocItems.length)
       return;
-    var limit = 80;
-    var active = 0;
-    for (var i = 0; i < tocItems.length; i++) {
-      var rect = tocItems[i].el.getBoundingClientRect();
-      if (rect.top <= limit)
-        active = i;
-      else
-        break;
+    var tops = tocOffsets();
+    var y = window.scrollY + 80;
+    // 最后一个 top <= y 的项；二分避免逐项读布局
+    var lo = 0, hi = tops.length - 1, active = 0;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (tops[mid] <= y) {
+        active = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
     }
     var nodes = tocList.querySelectorAll('.toc-item');
     for (var j = 0; j < nodes.length; j++)
@@ -2334,8 +2351,10 @@
   function toggleToc() {
     tocVisible = !tocVisible;
     document.body.classList.toggle('toc-open', tocVisible);
+    // 先让侧栏出现，列表放到下一轮事件循环再建：900 个标题的构建约 40ms，
+    // 同步做会把点击/快捷键那一帧顶住。
     if (tocVisible)
-      refreshToc();
+      setTimeout(function () { if (tocVisible) refreshToc(); }, 0);
     postView();
   }
 
@@ -4276,6 +4295,9 @@
       updateActiveHeading();
     });
   });
+
+  // 视口或字号变化后标题纵坐标失效，下一次滚动高亮时重算
+  window.addEventListener('resize', function () { tocTops = null; });
 
   if (tocList) {
     tocList.addEventListener('click', function (event) {
