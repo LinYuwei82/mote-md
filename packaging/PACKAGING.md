@@ -18,7 +18,10 @@
 ### 1.1 环境
 
 - macOS 14 及以上（Apple Silicon，arm64）；更早的系统未经测试
-- Qt 6.11.1（Homebrew，`qmake6` / `macdeployqt` 在 PATH 中）
+- Qt 6.11.1（`qmake6` / `macdeployqt` 在 PATH 中），来源二选一：
+  - **官方安装器（推荐，不带 ICU）**：`QMAKE=~/Qt/6.11.1/macos/bin/qmake6`，打出的 DMG 约 24MB
+  - Homebrew：Qt 链接 ICU，包内多出约 37MB（`libicudata` 32MB），DMG 约 34MB
+  - 脚本会在包内发现 `libicu*.dylib` 时打印提示；代码两边完全一样，只有 Qt 构建不同
 - Xcode Command Line Tools（提供 `codesign`、`iconutil`、`strip`）
 - 工程目录：`/Users/lin/Projects/mote`（不在 iCloud 同步范围，避免每次构建都触发同步）
 

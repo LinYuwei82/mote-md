@@ -33,8 +33,11 @@ ZIP_PATH="$DIST_DIR/${PKG_NAME}.zip"
 TOTAL=7
 [ "$WITH_DMG" -eq 1 ] && TOTAL=8
 
-QT_BIN="$(qmake6 -query QT_INSTALL_BINS)"
-QT_LIB="$(qmake6 -query QT_INSTALL_LIBS)"
+# Qt 来源可用 QMAKE 指定。Homebrew 的 Qt 链接 ICU，会多带约 37MB（DMG 因此约 34MB）；
+# 官方安装器的 macOS 二进制不依赖 ICU，同一个工程打出来 DMG 约 24MB。代码不用改。
+QMAKE="${QMAKE:-qmake6}"
+QT_BIN="$("$QMAKE" -query QT_INSTALL_BINS)"
+QT_LIB="$("$QMAKE" -query QT_INSTALL_LIBS)"
 MACDEPLOYQT="$QT_BIN/macdeployqt"
 [ -x "$MACDEPLOYQT" ] || { echo "错误：找不到 macdeployqt（$MACDEPLOYQT）"; exit 1; }
 
@@ -51,7 +54,7 @@ mkdir -p "$DIST_DIR"
 
 echo "==> 2/${TOTAL} qmake + make (Release)"
 cd "$BUILD_DIR"
-qmake6 "$ROOT/Mote.pro"
+"$QMAKE" "$ROOT/Mote.pro"
 make -j"$(sysctl -n hw.ncpu)"
 
 APP_PATH="$BUILD_DIR/${APP_NAME}.app"
@@ -66,10 +69,18 @@ DMG_PATH="$DIST_DIR/${PKG_NAME}-${APP_VERSION}.dmg"
 echo "==> 3/${TOTAL} macdeployqt 部署 Qt 框架与插件"
 "$MACDEPLOYQT" "$APP_PATH" -always-overwrite -no-codesign -libpath="$QT_LIB"
 
+# 提示 Qt 来源带来的体积差：Homebrew Qt 链接 ICU，包内会多出约 37MB。
+ICU_BYTES="$(find "$APP_PATH/Contents/Frameworks" -name 'libicu*.dylib' -print0 2>/dev/null \
+    | xargs -0 stat -f%z 2>/dev/null | awk '{s += $1} END {print s + 0}')"
+if [ "${ICU_BYTES:-0}" -gt 0 ]; then
+    echo "    提示：本包 Qt 自带 ICU，约 $((ICU_BYTES / 1048576)) MB。"
+    echo "          改用官方 Qt 可去掉它：QMAKE=~/Qt/6.11.1/macos/bin/qmake6 $0 ..."
+fi
+
 # macdeployqt 不带 Qt 翻译。QMessageBox 的「保存/不保存/取消」等标准按钮文案来自
 # qtbase_zh_CN.qm。app 包内 QLibraryInfo::path(TranslationsPath) 解析到
 # Contents/translations（不是 Contents/Resources/translations，已实测），缺文件直接失败。
-QT_TRANSLATIONS="$(qmake6 -query QT_INSTALL_TRANSLATIONS)"
+QT_TRANSLATIONS="$("$QMAKE" -query QT_INSTALL_TRANSLATIONS)"
 if [ -f "$QT_TRANSLATIONS/qtbase_zh_CN.qm" ]; then
     mkdir -p "$APP_PATH/Contents/translations"
     cp "$QT_TRANSLATIONS/qtbase_zh_CN.qm" "$APP_PATH/Contents/translations/"
