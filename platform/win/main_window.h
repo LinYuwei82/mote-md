@@ -61,6 +61,10 @@ private:
     enum class AfterSave { None, OpenDialog, OpenPath, NewDocument, Close, ExportPdf };
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
+    // 低级键盘钩子：WebView2/Chromium 会先吃掉部分组合键（Ctrl+Shift+S、
+    // Ctrl+Alt+E），AcceleratorKeyPressed 收不到，只能在本进程内提前截获
+    static LRESULT CALLBACK keyboard_hook(int code, WPARAM wparam, LPARAM lparam);
+    static MoteMainWindow *hook_owner_;
     LRESULT handle_message(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
     void layout();
     void update_title();
@@ -93,6 +97,8 @@ private:
     std::unique_ptr<WebHostView> host_;
     std::unique_ptr<ShellHost> shell_;
     std::unique_ptr<mote::EditorController> controller_;
+    HHOOK keyboard_hook_ = nullptr;
+    UINT last_shortcut_key_ = 0;
     HACCEL accel_ = nullptr;
     HWND drop_hwnd_ = nullptr;
     void *drop_target_ = nullptr;

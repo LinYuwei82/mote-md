@@ -40,6 +40,8 @@ constexpr int kMinHeight = 520;
 constexpr UINT_PTR kStartupCommandTimer = 1;
 constexpr UINT_PTR kSnapshotTimer = 2;
 constexpr UINT_PTR kDropProbeTimer = 3;
+// 键盘钩子截获的组合键回到窗口线程后，再用这条消息统一走 perform_command
+constexpr UINT kShortcutMessage = WM_APP + 7;
 
 std::wstring utf8_to_wide(const std::string &text)
 {
@@ -414,8 +416,60 @@ MoteMainWindow::MoteMainWindow(HINSTANCE instance)
 
 MoteMainWindow::~MoteMainWindow()
 {
+    if (keyboard_hook_) {
+        UnhookWindowsHookEx(keyboard_hook_);
+        keyboard_hook_ = nullptr;
+    }
+    if (hook_owner_ == this)
+        hook_owner_ = nullptr;
     if (hwnd_ && IsWindow(hwnd_))
         DestroyWindow(hwnd_);
+}
+
+MoteMainWindow *MoteMainWindow::hook_owner_ = nullptr;
+
+LRESULT CALLBACK MoteMainWindow::keyboard_hook(int code, WPARAM wparam, LPARAM lparam)
+{
+    if (code != HC_ACTION)
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+    MoteMainWindow *self = hook_owner_;
+    if (!self || !self->hwnd_)
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+
+    if (wparam == WM_KEYUP || wparam == WM_SYSKEYUP) {
+        self->last_shortcut_key_ = 0;
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+    }
+    if (wparam != WM_KEYDOWN && wparam != WM_SYSKEYDOWN)
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+
+    // 只管本窗口在前台时的按键，别影响其它程序
+    const HWND foreground = GetForegroundWindow();
+    if (!foreground || GetAncestor(foreground, GA_ROOT) != self->hwnd_)
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+
+    const UINT key = reinterpret_cast<KBDLLHOOKSTRUCT *>(lparam)->vkCode;
+    if (key == self->last_shortcut_key_)
+        return 1;  // 长按的自动重复只触发一次
+
+    WORD modifiers = 0;
+    if (GetAsyncKeyState(VK_CONTROL) & 0x8000)
+        modifiers |= FCONTROL;
+    if (GetAsyncKeyState(VK_SHIFT) & 0x8000)
+        modifiers |= FSHIFT;
+    if (GetAsyncKeyState(VK_MENU) & 0x8000)
+        modifiers |= FALT;
+
+    mote::CommandId command = mote::CommandId::New;
+    if (!mote::win::command_for_shortcut(modifiers, key, &command))
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+
+    self->last_shortcut_key_ = key;
+    if (!env_value("MOTE_KEYLOG").empty())
+        log_line("NATIVE key vk=" + std::to_string(key)
+                 + " mods=" + std::to_string(modifiers));
+    PostMessageW(self->hwnd_, kShortcutMessage, static_cast<WPARAM>(command), 0);
+    return 1;  // 已由外壳处理，Chromium 不再执行默认行为
 }
 
 bool MoteMainWindow::create()
@@ -438,7 +492,16 @@ bool MoteMainWindow::create()
     hwnd_ = CreateWindowExW(0, kWindowClass, L"Mote", WS_OVERLAPPEDWINDOW,
                             CW_USEDEFAULT, CW_USEDEFAULT, frame.right - frame.left,
                             frame.bottom - frame.top, nullptr, nullptr, instance_, this);
-    return hwnd_ != nullptr;
+    if (!hwnd_)
+        return false;
+
+    // Chromium 在编辑区会先消费 Ctrl+Shift+S / Ctrl+Alt+E，连 AcceleratorKeyPressed
+    // 都收不到；用进程内低级键盘钩子提前截获，键位与命令表保持一致。
+    hook_owner_ = this;
+    keyboard_hook_ = SetWindowsHookExW(WH_KEYBOARD_LL, &MoteMainWindow::keyboard_hook,
+                                       GetModuleHandleW(nullptr), 0);
+    log_line(std::string("NATIVE keyboard hook ") + (keyboard_hook_ ? "on" : "failed"));
+    return true;
 }
 
 void MoteMainWindow::show(int show_command)
@@ -512,6 +575,9 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             perform_command(spec->id);
         return 0;
     }
+    case kShortcutMessage:
+        perform_command(static_cast<mote::CommandId>(wparam));
+        return 0;
     case WM_TIMER:
         if (wparam == kStartupCommandTimer) {
             KillTimer(hwnd, kStartupCommandTimer);
@@ -1282,15 +1348,16 @@ bool MoteMainWindow::paste_clipboard_image()
 
 bool MoteMainWindow::handle_accelerator(UINT key, WORD modifiers)
 {
+    mote::CommandId command = mote::CommandId::New;
+    const bool matched = mote::win::command_for_shortcut(modifiers, key, &command);
     if (!env_value("MOTE_KEYLOG").empty())
         log_line("NATIVE key vk=" + std::to_string(key)
-                 + " mods=" + std::to_string(modifiers));
+                 + " mods=" + std::to_string(modifiers)
+                 + (matched ? " cmd=" + std::to_string(static_cast<int>(command)) : ""));
     // Ctrl+V 先问剪贴板是不是图片：Chromium 转码会丢 alpha，外壳自己走图片管线
     if (key == 'V' && modifiers == FCONTROL)
         return paste_clipboard_image();
-
-    mote::CommandId command = mote::CommandId::New;
-    if (!mote::win::command_for_shortcut(modifiers, key, &command))
+    if (!matched)
         return false;
     // 编辑类命令（撤销/剪切/复制/粘贴）留给 WebView2 原生处理
     perform_command(command);
