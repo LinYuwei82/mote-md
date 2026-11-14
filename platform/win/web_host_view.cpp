@@ -3,6 +3,7 @@
 #include "core/js_bridge.h"
 
 #include <shlobj.h>
+#include <shlwapi.h>
 #include <urlmon.h>
 #include <wrl/event.h>
 
@@ -36,10 +37,19 @@ const wchar_t kBridgeScript[] = LR"JS(
 })();
 )JS";
 
+std::wstring utf8_to_wide(const std::string &text);
+std::string wide_to_utf8(const std::wstring &text);
+
 void log_line(const wchar_t *text)
 {
     OutputDebugStringW(text);
     OutputDebugStringW(L"\n");
+    if (const char *path = std::getenv("MOTE_LOG"); path && *path) {
+        std::ofstream file(std::filesystem::path(utf8_to_wide(path)),
+                           std::ios::app | std::ios::binary);
+        if (file)
+            file << wide_to_utf8(text) << "\n";
+    }
 }
 
 std::wstring exe_directory()
@@ -247,15 +257,18 @@ void WebHostView::initialize()
     // 缺失时给出可操作的提示，而不是启动即崩。
     loader_ = LoadLibraryW(L"WebView2Loader.dll");
     if (!loader_) {
+        log_line(L"load WebView2Loader.dll failed");
         fail(L"缺少 WebView2Loader.dll。\n\n请重新解压完整压缩包，或重新安装 Mote。");
         return;
     }
+    log_line(L"WebView2Loader.dll loaded");
 
     auto get_version = reinterpret_cast<GetVersionFn>(
         GetProcAddress(loader_, "GetAvailableCoreWebView2BrowserVersionString"));
     auto create_environment = reinterpret_cast<CreateEnvironmentFn>(
         GetProcAddress(loader_, "CreateCoreWebView2EnvironmentWithOptions"));
     if (!get_version || !create_environment) {
+        log_line(L"GetProcAddress failed");
         fail(L"WebView2Loader.dll 版本不匹配（缺少环境创建接口）。");
         return;
     }
@@ -263,20 +276,25 @@ void WebHostView::initialize()
     LPWSTR version = nullptr;
     const HRESULT version_result = get_version(nullptr, &version);
     if (FAILED(version_result) || !version) {
+        log_line(L"GetAvailableCoreWebView2BrowserVersionString failed");
         fail(L"未检测到 Microsoft Edge WebView2 Runtime。\n\n"
              L"请安装运行时后重试：https://go.microsoft.com/fwlink/p/?LinkId=2124703");
         return;
     }
+    log_line((std::wstring(L"WebView2 runtime: ") + version).c_str());
     CoTaskMemFree(version);
 
     const std::wstring data_directory = user_data_directory();
+    log_line((std::wstring(L"data dir: ") + data_directory).c_str());
     const HRESULT created = create_environment(
         nullptr, data_directory.c_str(), nullptr,
         Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [this](HRESULT result, ICoreWebView2Environment *environment) -> HRESULT {
+                log_line(L"env callback fired");
                 if (!*alive_)
                     return S_OK;
                 if (FAILED(result) || !environment) {
+                    log_line(L"env creation failed");
                     fail(L"WebView2 环境创建失败。");
                     return S_OK;
                 }
@@ -287,6 +305,7 @@ void WebHostView::initialize()
                         ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
                         [this](HRESULT controller_result,
                                ICoreWebView2Controller *controller) -> HRESULT {
+                            log_line(L"controller callback fired");
                             if (*alive_)
                                 on_controller_created(controller_result, controller);
                             return S_OK;
@@ -295,8 +314,10 @@ void WebHostView::initialize()
                 return S_OK;
             })
             .Get());
-    if (FAILED(created))
+    if (FAILED(created)) {
+        log_line(L"CreateCoreWebView2EnvironmentWithOptions failed");
         fail(L"WebView2 环境创建失败。");
+    }
 }
 
 void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller *controller)
@@ -317,7 +338,7 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
         return;
     }
 
-    webview_->AddScriptToExecuteOnDocumentCreated(kBridgeScript, &bridge_token_);
+    webview_->AddScriptToExecuteOnDocumentCreated(kBridgeScript, nullptr);
 
     // 页面消息：先比对 URL fragment 的页面代次，丢掉上一个页面迟到的消息
     webview_->add_WebMessageReceived(

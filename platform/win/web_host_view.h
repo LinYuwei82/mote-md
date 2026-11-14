@@ -39,7 +39,6 @@ private:
     Microsoft::WRL::ComPtr<ICoreWebView2> webview_;
     EventRegistrationToken navigation_token_{};
     EventRegistrationToken message_token_{};
-    EventRegistrationToken bridge_token_{};
     std::function<void()> page_loaded_;
     std::function<void(std::string_view)> message_;
     std::wstring page_file_;
