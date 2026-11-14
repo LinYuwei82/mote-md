@@ -16,11 +16,11 @@ class WebHostView
 public:
     // on_page_loaded：导航完成（用于聚焦、启用状态栏、刷新标题）
     // on_message：页面 postMessage 的 JSON 文本，已按页面代次过滤
-    // on_image_paste：Ctrl+V 时先问外壳剪贴板里有没有图片；返回 true 表示已处理，
-    //                 Chromium 不再执行默认粘贴（避免它把 CF_DIB 转码时丢 alpha）
+    // on_accelerator：编辑区按下的组合键（虚拟键 + FCONTROL/FSHIFT/FALT）；
+    //                 返回 true 表示外壳已处理，Chromium 不再执行默认行为
     WebHostView(HWND parent, std::function<void()> on_page_loaded,
                 std::function<void(std::string_view)> on_message,
-                std::function<bool()> on_image_paste = {});
+                std::function<bool(UINT, WORD)> on_accelerator = {});
     ~WebHostView();
 
     void resize(int width, int height);
@@ -55,7 +55,7 @@ private:
     EventRegistrationToken accelerator_token_{};
     std::function<void()> page_loaded_;
     std::function<void(std::string_view)> message_;
-    std::function<bool()> image_paste_;
+    std::function<bool(UINT, WORD)> accelerator_;
     std::wstring page_file_;
     unsigned generation_ = 0;
     bool page_pending_ = false;

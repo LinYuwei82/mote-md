@@ -487,7 +487,9 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
                 if (controller_)
                     controller_->handleMessage(json);
             },
-            [this] { return paste_clipboard_image(); });
+            [this](UINT key, WORD modifiers) {
+                return handle_accelerator(key, modifiers);
+            });
         shell_ = std::make_unique<ShellHost>(*this);
         controller_ = std::make_unique<mote::EditorController>(*shell_);
         load_builtin_sample();
@@ -1275,6 +1277,23 @@ bool MoteMainWindow::paste_clipboard_image()
     if (!clipboard_has_image())
         return false;
     controller_->clipboardCommand("paste");
+    return true;
+}
+
+bool MoteMainWindow::handle_accelerator(UINT key, WORD modifiers)
+{
+    if (!env_value("MOTE_KEYLOG").empty())
+        log_line("NATIVE key vk=" + std::to_string(key)
+                 + " mods=" + std::to_string(modifiers));
+    // Ctrl+V 先问剪贴板是不是图片：Chromium 转码会丢 alpha，外壳自己走图片管线
+    if (key == 'V' && modifiers == FCONTROL)
+        return paste_clipboard_image();
+
+    mote::CommandId command = mote::CommandId::New;
+    if (!mote::win::command_for_shortcut(modifiers, key, &command))
+        return false;
+    // 编辑类命令（撤销/剪切/复制/粘贴）留给 WebView2 原生处理
+    perform_command(command);
     return true;
 }
 

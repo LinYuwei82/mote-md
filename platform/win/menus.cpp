@@ -237,6 +237,29 @@ HACCEL build_accelerators()
     return CreateAcceleratorTableW(entries.data(), static_cast<int>(entries.size()));
 }
 
+bool command_for_shortcut(WORD modifiers, UINT key, CommandId *id)
+{
+    if (!id)
+        return false;
+    for (const MenuSpec &menu : menus()) {
+        for (const CommandId command_id : menu.items) {
+            const CommandSpec *command = findCommand(command_id);
+            if (!command || uses_webview_native_edit(command_id))
+                continue;
+            for (const std::string &shortcut : command->shortcuts) {
+                ParsedShortcut parsed;
+                if (!parse_shortcut(shortcut, &parsed))
+                    continue;
+                if (parsed.modifiers == modifiers && parsed.key == key) {
+                    *id = command_id;
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 void set_command_checked(HMENU menu, CommandId id, bool checked)
 {
     if (!menu)

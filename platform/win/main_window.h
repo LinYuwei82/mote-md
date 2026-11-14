@@ -44,6 +44,8 @@ public:
     bool clipboard_image(std::vector<std::uint8_t> *bytes, std::string *mime);
     // Ctrl+V 钩子：剪贴板里是图片时由外壳粘贴（保留 alpha），否则交回 Chromium
     bool paste_clipboard_image();
+    // 编辑区组合键：先给图片粘贴，再按命令表分发；返回 true 表示已处理
+    bool handle_accelerator(UINT key, WORD modifiers);
     void navigation_completed();
     void page_ready();
     void dirty_changed();
