@@ -99,6 +99,29 @@ rm -rf "$FRAMEWORKS/QtVirtualKeyboard.framework" \
        "$FRAMEWORKS/QtSvg.framework"
 rm -rf "$FRAMEWORKS"/QtQml*.framework "$FRAMEWORKS"/QtQuick*.framework
 
+# QtNetwork 与 OpenSSL 只是被间接拖进来的（QtPdf 之流），业务代码没有 QNetwork/QSsl 引用。
+# 这里按「包内是否还有二进制引用」判断，而不是写死删除：换 Qt 构建后若真有依赖会自动保留。
+# 注意 QtDBus 不能按同样逻辑删——官方 macOS Qt 的 QtGui 直接链接它。
+references_any() {
+    local token="$1" f
+    while IFS= read -r -d '' f; do
+        case "$f" in */"$token"*) continue ;; esac
+        if otool -L "$f" 2>/dev/null | grep -q "$token"; then
+            return 0
+        fi
+    done < <(find "$APP_PATH/Contents" -type f -perm +111 -print0)
+    return 1
+}
+
+for token in QtNetwork.framework libssl libcrypto; do
+    if references_any "$token"; then
+        echo "    $token 仍被引用，保留"
+    else
+        find "$APP_PATH/Contents" -name "${token}*" -prune -exec rm -rf {} + 2>/dev/null
+        echo "    已移除未被引用的 $token"
+    fi
+done
+
 echo "==> 5/${TOTAL} 修正体外的绝对库路径、去掉开发机 rpath、strip、清理扩展属性"
 EXE="$APP_PATH/Contents/MacOS/${APP_NAME}"
 
