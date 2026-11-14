@@ -6,6 +6,7 @@ cmake_minimum_required(VERSION 3.25)
 project(MoteNative VERSION 0.0.0 LANGUAGES C CXX OBJCXX)
 
 get_filename_component(MOTE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+set(MOTE_PLATFORM_MAC "${MOTE_REPO_ROOT}/platform/mac")
 
 # 版本号唯一来源：Mote.pro 的 VERSION 行
 file(READ "${MOTE_REPO_ROOT}/Mote.pro" MOTE_PRO_CONTENT)
@@ -51,13 +52,13 @@ set_source_files_properties(${MOTE_ICON_FILES} PROPERTIES
 
 set(MOTE_EXECUTABLE_NAME "Mote")
 configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/platform/mac/Info.plist.in"
+  "${MOTE_PLATFORM_MAC}/Info.plist.in"
   "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
   @ONLY)
 
 add_executable(Mote MACOSX_BUNDLE
-  platform/mac/main.mm
-  platform/mac/web_host_view.mm
+  ${MOTE_PLATFORM_MAC}/main.mm
+  ${MOTE_PLATFORM_MAC}/web_host_view.mm
   ${MOTE_WEB_FILES}
   ${MOTE_FONT_FILES}
   ${MOTE_SAMPLE_FILES}
