@@ -3,11 +3,12 @@
 #import <WebKit/WebKit.h>
 
 #include <cstdlib>
+#include <unistd.h>
 
 @interface MoteWebHostView () <WKNavigationDelegate>
 @property(nonatomic, strong) WKWebView *webView;
 @property(nonatomic) NSUInteger pageGeneration;
-- (void)handleScriptMessage:(WKScriptMessage *)message;
+@property(nonatomic, copy) NSString *pageFile;
 @end
 
 // 消息桥单独成对象：WKUserContentController 强引用 handler，
@@ -22,7 +23,21 @@
       didReceiveScriptMessage:(WKScriptMessage *)message
 {
     (void)controller;
-    [self.host handleScriptMessage:message];
+    MoteWebHostView *host = self.host;
+    if (!host || ![message.body isKindOfClass:[NSDictionary class]])
+        return;
+
+    // 跨页竞态防线：页面 URL 的 fragment 记录加载时的代次，
+    // 上一个页面迟到的消息代次对不上就丢弃。
+    NSString *token = message.frameInfo.request.URL.fragment;
+    if (token.length > 0) {
+        NSString *expected = [NSString stringWithFormat:@"g%lu",
+                              (unsigned long)host.pageGeneration];
+        if (![token isEqualToString:expected])
+            return;
+    }
+    if (host.messageHandler)
+        host.messageHandler((NSDictionary *)message.body);
 }
 
 @end
@@ -106,18 +121,18 @@ static NSString *MotePageHTML(void)
     return page;
 }
 
-// 把任意文本变成 JS 字面量（借用 JSON 编码，再剥掉数组方括号）
-static NSString *MoteJsonLiteral(NSString *text)
+static NSString *MoteHtmlEscaped(NSString *text)
 {
-    NSData *data = [NSJSONSerialization dataWithJSONObject:@[text ?: @""]
-                                                   options:0
-                                                     error:NULL];
-    if (!data)
-        return @"\"\"";
-    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    if (json.length < 2)
-        return @"\"\"";
-    return [json substringWithRange:NSMakeRange(1, json.length - 2)];
+    NSMutableString *out = [text mutableCopy];
+    [out replaceOccurrencesOfString:@"&" withString:@"&amp;" options:0
+                              range:NSMakeRange(0, out.length)];
+    [out replaceOccurrencesOfString:@"\"" withString:@"&quot;" options:0
+                              range:NSMakeRange(0, out.length)];
+    [out replaceOccurrencesOfString:@"<" withString:@"&lt;" options:0
+                              range:NSMakeRange(0, out.length)];
+    [out replaceOccurrencesOfString:@">" withString:@"&gt;" options:0
+                              range:NSMakeRange(0, out.length)];
+    return out;
 }
 
 @implementation MoteWebHostView
@@ -141,21 +156,43 @@ static NSString *MoteJsonLiteral(NSString *text)
     return self;
 }
 
-- (void)loadEditorPage
+- (void)loadEditorPageInDirectory:(NSString *)directory
 {
     // 临时页面必须用 loadFileURL 加载：loadHTMLString 的页面没有来源，
     // WebKit 会拒绝一切 file:// 子资源（图片永远显示不出来）。
-    // 文档目录接入后（M3）临时页改写到文档同目录，这里先落在临时目录。
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"MoteNative"];
-    [[NSFileManager defaultManager] createDirectoryAtPath:dir
-                             withIntermediateDirectories:YES
-                                              attributes:nil
-                                                   error:NULL];
-    NSString *path = [dir stringByAppendingPathComponent:@"preview.html"];
-    if (![MotePageHTML() writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL]) {
+    // 主文档还必须落在读权限目录内，所以有文档目录时写进文档目录。
+    NSString *dir = directory.length > 0 ? directory : @"";
+    if (dir.length == 0 || ![[NSFileManager defaultManager] isWritableFileAtPath:dir]) {
+        dir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"MoteNative"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                                 withIntermediateDirectories:YES
+                                                  attributes:nil
+                                                       error:NULL];
+    }
+    NSString *path = [dir stringByAppendingPathComponent:
+        [NSString stringWithFormat:@".mote-preview-%d.html", (int)getpid()]];
+
+    NSMutableString *page = [MotePageHTML() mutableCopy];
+    if (directory.length > 0) {
+        NSString *base = [[NSURL fileURLWithPath:directory isDirectory:YES] absoluteString];
+        if (![base hasSuffix:@"/"])
+            base = [base stringByAppendingString:@"/"];
+        // 只替换页面模板自己的 </head>（第一处），避免改到内嵌 JS 里的字面量
+        NSRange head = [page rangeOfString:@"</head>"];
+        if (head.location != NSNotFound) {
+            NSString *tag = [NSString stringWithFormat:@"<base href=\"%@\"></head>",
+                                                      MoteHtmlEscaped(base)];
+            [page replaceCharactersInRange:head withString:tag];
+        }
+    }
+
+    if (self.pageFile.length > 0 && ![self.pageFile isEqualToString:path])
+        [[NSFileManager defaultManager] removeItemAtPath:self.pageFile error:NULL];
+    if (![page writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL]) {
         NSLog(@"Mote: 无法写入临时页面 %@", path);
         return;
     }
+    self.pageFile = path;
 
     // 页面代次写进 fragment，消息桥据此丢弃上一个页面迟到的消息
     ++_pageGeneration;
@@ -167,29 +204,20 @@ static NSString *MoteJsonLiteral(NSString *text)
       allowingReadAccessToURL:[NSURL fileURLWithPath:dir isDirectory:YES]];
 }
 
-- (void)setMarkdown:(NSString *)text
+- (void)evaluateJavaScript:(NSString *)script
 {
-    NSString *js = [NSString stringWithFormat:@"window.mote && window.mote.setMarkdown(%@);",
-                                             MoteJsonLiteral(text)];
-    [self.webView evaluateJavaScript:js completionHandler:nil];
+    [self.webView evaluateJavaScript:script completionHandler:nil];
 }
 
-- (void)handleScriptMessage:(WKScriptMessage *)message
+- (void)focusEditor
 {
-    if (![message.body isKindOfClass:[NSDictionary class]])
-        return;
+    [self.window makeFirstResponder:self.webView];
+}
 
-    NSString *token = message.frameInfo.request.URL.fragment;
-    if (token.length > 0) {
-        NSString *expected = [NSString stringWithFormat:@"g%lu", (unsigned long)_pageGeneration];
-        if (![token isEqualToString:expected])
-            return;
-    }
-
-    NSDictionary *body = (NSDictionary *)message.body;
-    NSString *type = body[@"type"];
-    if ([type isKindOfClass:[NSString class]] && [type isEqualToString:@"ready"])
-        [self.delegate webHostDidBecomeReady:self];
+- (void)dealloc
+{
+    if (self.pageFile.length > 0)
+        [[NSFileManager defaultManager] removeItemAtPath:self.pageFile error:NULL];
 }
 
 #pragma mark - WKNavigationDelegate

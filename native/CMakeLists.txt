@@ -70,6 +70,9 @@ target_compile_options(mote_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall>")
 
 add_executable(Mote MACOSX_BUNDLE
   ${MOTE_PLATFORM_MAC}/main.mm
+  ${MOTE_PLATFORM_MAC}/main_window.mm
+  ${MOTE_PLATFORM_MAC}/menus.mm
+  ${MOTE_PLATFORM_MAC}/dialogs.mm
   ${MOTE_PLATFORM_MAC}/web_host_view.mm
   ${MOTE_WEB_FILES}
   ${MOTE_FONT_FILES}
@@ -82,8 +85,10 @@ target_compile_options(Mote PRIVATE
   "$<$<COMPILE_LANGUAGE:OBJCXX>:-Wall>")
 
 target_link_libraries(Mote PRIVATE
+  mote_core
   "-framework Cocoa"
-  "-framework WebKit")
+  "-framework WebKit"
+  "-framework UniformTypeIdentifiers")
 
 set_target_properties(Mote PROPERTIES
   MACOSX_BUNDLE_BUNDLE_NAME "Mote"

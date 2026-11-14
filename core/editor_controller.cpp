@@ -18,6 +18,11 @@ void EditorController::setMarkdown(const std::string &text, const std::string &b
         m_hasPending = true;
         m_pageLoaded = true;
         m_pageReady = false;
+        // 新文档以载入的文本为基准：打开/新建后立刻是「未修改」
+        if (m_dirty) {
+            m_dirty = false;
+            m_host.dirtyChanged(false);
+        }
         // 换页前推进代次：旧页面迟到的 ready 会带着旧 token，被消息桥丢弃
         ++m_pageGeneration;
         m_host.loadPage(baseDir);

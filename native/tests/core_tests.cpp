@@ -363,6 +363,13 @@ static void testDirtyTracking()
     // 撤销回保存点：页面回报 false，状态保持一致
     controller.handleMessage(R"({"type":"dirty","value":false})");
     CHECK(!controller.dirty());
+
+    // 打开/换文档后立即回到「未修改」
+    controller.handleMessage(R"({"type":"dirty","value":true})");
+    CHECK(controller.dirty());
+    controller.setMarkdown("new doc", "/tmp/other");
+    CHECK(!controller.dirty());
+    CHECK_EQ(host.dirtyValues.back(), false);
 }
 
 static void testClipboardCommands()

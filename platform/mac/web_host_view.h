@@ -2,20 +2,17 @@
 
 #import <Cocoa/Cocoa.h>
 
-@class MoteWebHostView;
-
-@protocol MoteWebHostDelegate <NSObject>
-// 页面完成初始化（editor.js 发出 ready）后回调，此后才可以推正文
-- (void)webHostDidBecomeReady:(MoteWebHostView *)host;
-@end
-
 // WKWebView 宿主：负责临时页面、消息桥与导航兜底。
-// M0 只暴露加载页面与推正文，打开/保存等动作在后续里程碑接入。
+// 页面就绪/正文注入/状态同步都由 core 的 EditorController 驱动，
+// 这里只提供「加载页面」「执行脚本」「把页面消息交出去」三件事。
 @interface MoteWebHostView : NSView
 
-@property(nonatomic, weak) id<MoteWebHostDelegate> delegate;
+// 页面消息（已确认页面代次）；由外壳转给 EditorController::handleMessage
+@property(nonatomic, copy) void (^messageHandler)(NSDictionary *body);
 
-- (void)loadEditorPage;
-- (void)setMarkdown:(NSString *)text;
+// directory 为空表示未命名文档：临时页面落在系统临时目录
+- (void)loadEditorPageInDirectory:(NSString *)directory;
+- (void)evaluateJavaScript:(NSString *)script;
+- (void)focusEditor;
 
 @end
