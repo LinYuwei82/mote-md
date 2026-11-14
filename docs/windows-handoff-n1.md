@@ -6,7 +6,7 @@
 
 - 仓库：`mote`
 - 分支：`native-shell`
-- 提交：`fa9cb9b`（N1）；N0 为 `294c205`
+- 基线：N1 `fa9cb9b`；N2 `4de6776`（以 `git log -1` 为准，本文档自身的提交在其后）
 - 不要修改 `main`、`platform/mac/`、`core/` 的既有行为
 - 不要运行 Windows 打包（原生打包在 N5，当前 `packaging/package_windows.bat` 仍是 Qt 流程）
 - 所有改动只提交到 `native-shell`
@@ -103,7 +103,62 @@ NATIVE save <path>
 4. 屏幕缩放比例与 WebView2 Runtime 版本
 5. 失败项对应的截图
 
-## 8. 参考
+## 8. N2 追加验证：菜单与快捷键
+
+### 菜单结构
+
+| 菜单 | 项数 | 内容 |
+|---|---|---|
+| 文件 | 6 + 退出 | 新建、打开、保存、另存为、导出 HTML…、导出 PDF…、退出 |
+| 编辑 | 6 | 撤销、重做、剪切、复制、粘贴、全选 |
+| 格式 | 14 | 粗体、斜体、行内代码、链接、标题 1–3、正文、无序/有序列表、引用、代码块、表格、分隔线 |
+| 视图 | 7 | 目录、源码模式、深色模式、跟随系统外观、放大、缩小、实际大小 |
+
+菜单项右侧应显示 Windows 风格快捷键（`Ctrl+S`、`Ctrl+Shift+Z`、`Ctrl+=` 等）。
+
+### 快捷键
+
+| 操作 | 快捷键 |
+|---|---|
+| 文件 | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
+| 撤销 / 重做 | `Ctrl+Z` / `Ctrl+Shift+Z` |
+| 格式 | `Ctrl+B`、`Ctrl+I`、`Ctrl+K`、`Ctrl+Shift+K`、`Ctrl+1/2/3`、`Ctrl+Shift+8/7/B/C/T` |
+| 目录 | `Ctrl+Shift+L` |
+| 源码模式 | `Ctrl+E` 或 `Ctrl+/` |
+| 深色模式 | `Ctrl+Shift+D` |
+| 缩放 | `Ctrl+=` 放大、`Ctrl+-` 缩小、`Ctrl+0` 实际大小 |
+| 导出 | `Ctrl+Alt+E` 导出 HTML、`Ctrl+P` 导出 PDF |
+
+逐项确认：按下后只触发一次、不重复执行，且与菜单项行为一致。
+
+### 勾选与禁用
+
+1. 视图菜单里“目录”“源码模式”“深色模式”“跟随系统外观”应按当前状态显示勾选
+2. 首次启动默认勾选“跟随系统外观”；系统切到深色后，页面与勾选状态应同步变化
+3. 进入源码模式后：导出 PDF、剪切、复制、粘贴四项变灰；退出源码模式后恢复
+4. 源码模式下 `Ctrl+C` / `Ctrl+V` / `Ctrl+X` / `Ctrl+A` 仍可用（这几个键交给 WebView2 原生处理，不经宿主）
+5. 所见即所得模式下点击编辑菜单的复制/粘贴，应与快捷键结果一致
+
+### 诊断命令
+
+```bat
+set MOTE_COMMAND=togglesource
+set MOTE_KEYLOG=1
+set MOTE_LOG=%TEMP%\mote.log
+build-native-win\Release\Mote.exe
+```
+
+页面就绪约 700ms 后执行一次指定命令。可用值：`new`、`open`、`save`、`saveas`、`exporthtml`、`exportpdf`、`toggletoc`、`togglesource`、`toggledark`、`followsystem`、`zoomin`、`zoomout`、`zoomreset`。
+
+日志应出现 `NATIVE command 源码模式`、`NATIVE view toc=0 source=1 zoom=1.00`。
+
+### 本阶段未覆盖
+
+- 导出 HTML / PDF 仍是占位提示，N4 实现
+- 拖放仍是占位提示，N3 实现
+- 源码模式下通过菜单点击复制/粘贴会置灰，这是有意行为
+
+## 9. 参考
 
 - 设计与里程碑：[`thin-shell-stage-b.md`](thin-shell-stage-b.md)
 - N1 代码：[`platform/win/main_window.cpp`](../platform/win/main_window.cpp)、[`web_host_view.cpp`](../platform/win/web_host_view.cpp)、[`dialogs.cpp`](../platform/win/dialogs.cpp)
