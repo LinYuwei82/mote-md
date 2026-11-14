@@ -78,7 +78,7 @@ powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 [docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)；
 打包细节见 [packaging/PACKAGING.md](packaging/PACKAGING.md) 第 6 节。
 
-Windows 已知限制：文件相关快捷键里 `Ctrl+Shift+S`（另存为）与 `Ctrl+Alt+E`（导出 HTML）会被 WebView2/系统层先吃掉，编辑区按不出效果，用「文件」菜单或工具栏对应项；其余 `Ctrl+S/O/P/…`、`Ctrl+Shift+L/D`、`Ctrl+/` 正常。
+快捷键说明：`Ctrl+Shift+S`（另存为）与 `Ctrl+Alt+E`（导出 HTML）会被 WebView2/Chromium 在浏览器层先消费，外壳用进程内低级键盘钩子提前截获，键位与 mac 侧保持一致（`Cmd` 对应 `Ctrl`）；其余 `Ctrl+S/O/P/…`、`Ctrl+Shift+L/D`、`Ctrl+/` 走 `AcceleratorKeyPressed` 分发。
 
 ### Qt 构建（保留的对照/回退路径）
 

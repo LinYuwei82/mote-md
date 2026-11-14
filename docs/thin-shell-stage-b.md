@@ -104,11 +104,10 @@ native/CMakeLists.txt          # if(APPLE) / elseif(WIN32) 两套 target
 
 ### 8.1 当前状态（2026-11-14）
 
-**已完成**：N0–N6 全部落地，Windows 默认发布包为原生产物（`dist/Mote-Windows`，Qt 脚本保留回退）。原子保存（`ReplaceFile`）、`MOTE_DROP` 端到端、中文 Unicode 输入、1.5 MB 文档加载、PDF/HTML 导出、剪贴板图片（保留 alpha）、快照基线均实机通过。
+**已完成**：N0–N6 全部落地，Windows 默认发布包为原生产物（`dist/Mote-Windows`，Qt 脚本保留回退）。原子保存（`ReplaceFile`）、`MOTE_DROP` 端到端、中文 Unicode 输入、1.5 MB 文档加载、PDF/HTML 导出、剪贴板图片（保留 alpha）、快照基线、命令表全部快捷键（含 `Ctrl+Shift+S`、`Ctrl+Alt+E`）均实机通过。
 
 **部分完成**：
 
-- 快捷键：`Ctrl+S/O/P`、`Ctrl+Shift+L/D`、`Ctrl+/`、`Ctrl+V` 实测生效；`Ctrl+Shift+S`（另存为）与 `Ctrl+Alt+E`（导出 HTML）在 Windows 上被 Chromium/系统先截获，`AcceleratorKeyPressed` 收不到，编辑区按不出来，需走菜单。修法要么改共享 `resources/web/editor.js` 做页面层转发（影响 mac），要么改成平台专属键位——都属跨平台行为变更，待决定。
 - IME 组词/候选窗未验：本机只有 US 键盘布局，无法自动化；IME 最终提交走的 Unicode 路径已实测。
 
 **未闭合**：
@@ -117,18 +116,16 @@ native/CMakeLists.txt          # if(APPLE) / elseif(WIN32) 两套 target
 - PDF 跨平台逐页像素比对：两引擎分页切点不同，目前只验页数/体积/文字层。
 - 干净机验证：无 VS/Qt 的机器解压即用、缺 WebView2 Runtime 的提示，尚未在真实干净机跑过。
 
-**待决定**：上面两条失败快捷键的处理方式（是否动共享前端 JS / 是否改 Windows 键位）。
-
 ### 8.2 冒烟中发现并修复的问题
 
 1. **外壳快捷键整体失效**：WebView2 在消息循环之前截获键盘，`TranslateAccelerator` 只对原生菜单生效，编辑区聚焦时 `Ctrl+P`、`Ctrl+/`、`Ctrl+Shift+L/D` 全部无反应。修法：`AcceleratorKeyPressed` 统一走 `mote::win::command_for_shortcut`（与加速键表同源、跳过 WebView2 原生编辑命令）→ `perform_command`；`Ctrl+V` 仍先走图片剪贴板。同时设 `ICoreWebView2Settings3::put_AreBrowserAcceleratorKeysEnabled(FALSE)`，避免 Chromium 内置浏览器快捷键抢键。
 2. **诊断缺口**：`MOTE_KEYLOG` 增加 `NATIVE key vk=<虚拟键> mods=<修饰键位掩码>`，用于区分「外壳没收到」与「收到了但没匹配」。
-3. 遗留：`Ctrl+Shift+S`/`Ctrl+Alt+E` 仍未到达外壳（见 8.1），非本次改动可解。
+3. **两条 Shift/Alt 组合键被浏览器层消费**：`Ctrl+Shift+S`、`Ctrl+Alt+E` 连 `AcceleratorKeyPressed` 都收不到。修法：进程内低级键盘钩子（`WH_KEYBOARD_LL`，仅前台为本窗口时生效）用 `command_for_shortcut` 匹配后 `PostMessage` 回窗口线程执行，键位不变、mac 侧与共享 `resources/web/editor.js` 均未改动。实测 `vk=83 mods=12 → 另存为`、`vk=69 mods=24 → 导出 HTML`，其余快捷键回归通过。
 
 ## 9. 风险与回退
 
 - **输入法/IME**：WebView2 自身处理 IME，但 Win32 窗口需正确转发 `WM_IME_*`；N1 起用中文输入法实测。
-- **快捷键冲突**：`Alt` 菜单键、`Ctrl+Z/Y`、`Ctrl+Shift+Z` 与页面按键可能双触发；`AcceleratorKeyPressed` 统一按命令表分发后，双触发已消除（实测 `Ctrl+P`、`Ctrl+/`、`Ctrl+Shift+L/D`）。仍有两键（`Ctrl+Shift+S`、`Ctrl+Alt+E`）在到达外壳之前被截获，见 8.1。
+- **快捷键冲突**：`Alt` 菜单键、`Ctrl+Z/Y`、`Ctrl+Shift+Z` 与页面按键可能双触发；`AcceleratorKeyPressed` 统一按命令表分发后双触发已消除，Chromium 层先消费的两条组合键由键盘钩子兜底（见 8.2）。
 - **PDF 差异**：PrintToPdf 的分页由引擎决定，与 mac 的切点排页不同；用同一长文档比对页数与首末页截图，差异写进验收记录。
 - **WebView2 版本**：`PrintToPdf` 需要 Runtime 108+；低于此版本明确报错。
 - **回退**：新外壳只存在于 `platform/win/` 与 CMake 的 WIN32 分支；Qt Windows 构建与 `package_windows.bat` 保持可用，删分支即可回退。
