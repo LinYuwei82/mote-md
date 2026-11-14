@@ -6,7 +6,13 @@
 #include <urlmon.h>
 #include <wrl/event.h>
 
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -14,6 +20,21 @@ using GetVersionFn = HRESULT(STDMETHODCALLTYPE *)(PCWSTR, LPWSTR *);
 using CreateEnvironmentFn = HRESULT(STDMETHODCALLTYPE *)(
     PCWSTR, PCWSTR, ICoreWebView2EnvironmentOptions *,
     ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *);
+
+// 页面只认 window.webkit.messageHandlers.mote，这里把 WebView2 的 postMessage 接过去。
+// 必须在导航前用 AddScriptToExecuteOnDocumentCreated 注入，页面初始化就能发消息。
+const wchar_t kBridgeScript[] = LR"JS(
+(function () {
+  if (window.__moteWinBridge) return;
+  window.__moteWinBridge = true;
+  function post(message) {
+    try { window.chrome.webview.postMessage(message); } catch (e) {}
+  }
+  window.webkit = window.webkit || {};
+  window.webkit.messageHandlers = window.webkit.messageHandlers || {};
+  window.webkit.messageHandlers.mote = { postMessage: post };
+})();
+)JS";
 
 void log_line(const wchar_t *text)
 {
@@ -61,10 +82,143 @@ std::wstring utf8_to_wide(const std::string &text)
     return wide;
 }
 
+std::string wide_to_utf8(const std::wstring &text)
+{
+    if (text.empty())
+        return std::string();
+    const int length = WideCharToMultiByte(CP_UTF8, 0, text.data(),
+                                           static_cast<int>(text.size()), nullptr, 0,
+                                           nullptr, nullptr);
+    std::string narrow(static_cast<size_t>(length), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
+                        narrow.data(), length, nullptr, nullptr);
+    return narrow;
+}
+
+std::string read_file(const std::wstring &path)
+{
+    std::ifstream file(std::filesystem::path(path), std::ios::binary);
+    if (!file)
+        return std::string();
+    return std::string(std::istreambuf_iterator<char>(file),
+                       std::istreambuf_iterator<char>());
+}
+
+bool write_file(const std::wstring &path, const std::string &bytes)
+{
+    std::ofstream file(std::filesystem::path(path),
+                       std::ios::binary | std::ios::trunc);
+    if (!file)
+        return false;
+    file.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    return file.good();
+}
+
+void replace_all(std::string &text, const std::string &needle, const std::string &value)
+{
+    if (needle.empty())
+        return;
+    size_t position = 0;
+    while ((position = text.find(needle, position)) != std::string::npos) {
+        text.replace(position, needle.size(), value);
+        position += value.size();
+    }
+}
+
+std::string html_escape(const std::string &text)
+{
+    std::string escaped;
+    escaped.reserve(text.size());
+    for (const char ch : text) {
+        switch (ch) {
+        case '&': escaped += "&amp;"; break;
+        case '"': escaped += "&quot;"; break;
+        case '<': escaped += "&lt;"; break;
+        case '>': escaped += "&gt;"; break;
+        default: escaped += ch; break;
+        }
+    }
+    return escaped;
+}
+
+std::string base64_encode(const std::string &bytes)
+{
+    static const char table[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve(((bytes.size() + 2) / 3) * 4);
+    size_t index = 0;
+    while (index + 2 < bytes.size()) {
+        const unsigned int value = (static_cast<unsigned char>(bytes[index]) << 16)
+            | (static_cast<unsigned char>(bytes[index + 1]) << 8)
+            | static_cast<unsigned char>(bytes[index + 2]);
+        out += table[(value >> 18) & 0x3F];
+        out += table[(value >> 12) & 0x3F];
+        out += table[(value >> 6) & 0x3F];
+        out += table[value & 0x3F];
+        index += 3;
+    }
+    if (index < bytes.size()) {
+        const unsigned int value = (static_cast<unsigned char>(bytes[index]) << 16)
+            | (index + 1 < bytes.size() ? static_cast<unsigned char>(bytes[index + 1]) << 8 : 0);
+        out += table[(value >> 18) & 0x3F];
+        out += table[(value >> 12) & 0x3F];
+        out += index + 1 < bytes.size() ? table[(value >> 6) & 0x3F] : '=';
+        out += '=';
+    }
+    return out;
+}
+
+bool inline_proto_enabled()
+{
+    const char *value = std::getenv("MOTE_INLINE_PROTO");
+    if (!value)
+        return true;
+    const std::string text(value);
+    return text != "0" && text != "false" && text != "off";
+}
+
+std::wstring directory_of(const std::wstring &path)
+{
+    const size_t slash = path.find_last_of(L"\\/");
+    return slash == std::wstring::npos ? std::wstring() : path.substr(0, slash);
+}
+
+// 文档目录为 baseURL 时，相对图片/资源才能解析；目录 URL 必须以 / 结尾
+std::string directory_url(const std::string &directory)
+{
+    const std::wstring wide = utf8_to_wide(directory);
+    wchar_t url[2048] = {};
+    DWORD length = 2048;
+    std::string result;
+    if (SUCCEEDED(UrlCreateFromPathW(wide.c_str(), url, &length, 0)))
+        result = wide_to_utf8(url);
+    if (result.empty())
+        return result;
+    if (result.back() != '/')
+        result += '/';
+    return result;
+}
+
+std::wstring font_face_css()
+{
+    const std::string font = read_file(exe_directory() + L"\\fonts\\JetBrainsMono-Light.ttf");
+    if (font.empty())
+        return std::wstring();
+    const std::string css =
+        "@font-face{font-family:'JetBrains Mono';src:url(data:font/ttf;base64,"
+        + base64_encode(font)
+        + ") format('truetype');font-weight:300;font-style:normal;font-display:block;}";
+    return utf8_to_wide(css);
+}
+
 } // namespace
 
-WebHostView::WebHostView(HWND parent)
+WebHostView::WebHostView(HWND parent, std::function<void()> on_page_loaded,
+                         std::function<void(std::string_view)> on_message)
     : parent_(parent)
+    , page_loaded_(std::move(on_page_loaded))
+    , message_(std::move(on_message))
 {
     initialize();
 }
@@ -82,6 +236,9 @@ WebHostView::~WebHostView()
         FreeLibrary(loader_);
         loader_ = nullptr;
     }
+    // 临时页面写在文档目录，退出时尽量清理自己那份
+    if (!page_file_.empty())
+        DeleteFileW(page_file_.c_str());
 }
 
 void WebHostView::initialize()
@@ -160,6 +317,30 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
         return;
     }
 
+    webview_->AddScriptToExecuteOnDocumentCreated(kBridgeScript, &bridge_token_);
+
+    // 页面消息：先比对 URL fragment 的页面代次，丢掉上一个页面迟到的消息
+    webview_->add_WebMessageReceived(
+        Microsoft::WRL::Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+            [this](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *args) -> HRESULT {
+                if (!*alive_ || !args || !message_)
+                    return S_OK;
+                LPWSTR source = nullptr;
+                LPWSTR json = nullptr;
+                args->get_Source(&source);
+                args->get_WebMessageAsJson(&json);
+                const bool current = source && is_current_source(source);
+                if (current && json)
+                    message_(wide_to_utf8(json));
+                if (source)
+                    CoTaskMemFree(source);
+                if (json)
+                    CoTaskMemFree(json);
+                return S_OK;
+            })
+            .Get(),
+        &message_token_);
+
     webview_->add_NavigationCompleted(
         Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
             [this](ICoreWebView2 *, ICoreWebView2NavigationCompletedEventArgs *args) -> HRESULT {
@@ -172,45 +353,110 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
                     fail(L"编辑器页面加载失败。");
                     return S_OK;
                 }
-                ready_ = true;
-                inject_sample();
+                log_line(L"page loaded");
+                if (page_loaded_)
+                    page_loaded_();
                 return S_OK;
             })
             .Get(),
         &navigation_token_);
 
-    navigate_to_editor();
+    if (page_pending_) {
+        page_pending_ = false;
+        load_page(pending_dir_);
+    }
 }
 
-void WebHostView::navigate_to_editor()
+void WebHostView::load_page(const std::string &base_dir)
 {
-    const std::wstring page = exe_directory() + L"\\web\\editor.html";
-    if (GetFileAttributesW(page.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        fail(L"缺少 web/editor.html。\n\n请确认发布包完整，web 目录应与 Mote.exe 同级。");
+    if (!webview_) {
+        // 控制器还没建好：记住目录，建好后补一次导航
+        page_pending_ = true;
+        pending_dir_ = base_dir;
         return;
     }
 
-    wchar_t url[2048] = {};
-    DWORD url_length = 2048;
-    std::wstring target;
-    if (SUCCEEDED(UrlCreateFromPathW(page.c_str(), url, &url_length, 0)))
-        target = url;
-    else
-        target = L"file:///" + page;
-
+    ++generation_;
+    std::wstring url;
+    if (!build_page(base_dir, &url)) {
+        fail(L"无法准备编辑器页面。\n\n请确认发布包内的 web 目录完整。");
+        return;
+    }
     log_line(L"navigate editor page");
-    webview_->Navigate(target.c_str());
+    webview_->Navigate(url.c_str());
 }
 
-void WebHostView::inject_sample()
+bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
 {
-    // N0 只验证页面与渲染链路：直接调前端 API 注入示例正文；
-    // N1 起改由 core::EditorController 统一注入与消息分发。
-    const std::string script = mote::js::setMarkdown(
-        "# 阶段 B N0\n\n"
-        "WebView2 已就绪，页面资源来自 `resources/web`，由原生外壳直接加载。\n\n"
-        "- 无 Qt 依赖\n"
-        "- 与 macOS 共用前端\n");
+    const std::wstring web_dir = exe_directory() + L"\\web";
+    std::string page = read_file(web_dir + L"\\editor.html");
+    const std::string css = read_file(web_dir + L"\\editor.css");
+    const std::string js = read_file(web_dir + L"\\editor.js");
+    if (page.empty() || css.empty() || js.empty())
+        return false;
+
+    std::string style = wide_to_utf8(font_face_css());
+    style += css;
+    replace_all(page, "__MOTE_CSS__", style);
+    const std::string flag = inline_proto_enabled()
+        ? "window.MOTE_INLINE_PROTO=true;"
+        : "window.MOTE_INLINE_PROTO=false;";
+    replace_all(page, "__MOTE_JS__", flag + js);
+
+    if (!base_dir.empty()) {
+        const std::string base = html_escape(directory_url(base_dir));
+        const size_t head = page.find("</head>");
+        if (!base.empty() && head != std::string::npos) {
+            page.insert(head, "<base href=\"" + base + "\">");
+        }
+    }
+
+    std::wstring directory;
+    if (base_dir.empty()) {
+        wchar_t temp[MAX_PATH] = {};
+        GetTempPathW(MAX_PATH, temp);
+        directory = temp;
+        if (!directory.empty() && directory.back() == L'\\')
+            directory.pop_back();
+    } else {
+        directory = utf8_to_wide(base_dir);
+    }
+
+    const std::wstring name = L"\\.mote-preview-"
+        + std::to_wstring(GetCurrentProcessId()) + L".html";
+    const std::wstring page_path = directory + name;
+    if (!write_file(page_path, page))
+        return false;
+
+    if (!page_file_.empty() && page_file_ != page_path)
+        DeleteFileW(page_file_.c_str());
+    page_file_ = page_path;
+
+    wchar_t raw_url[2048] = {};
+    DWORD length = 2048;
+    if (FAILED(UrlCreateFromPathW(page_path.c_str(), raw_url, &length, 0)))
+        return false;
+
+    std::wstring target(raw_url);
+    target += L"#g";
+    target += std::to_wstring(generation_);
+    *url = target;
+    return true;
+}
+
+bool WebHostView::is_current_source(const std::wstring &source) const
+{
+    const size_t hash = source.find_last_of(L'#');
+    // 没有 fragment 时无法判断代次，按 Qt 版行为放行；带 fragment 则必须匹配
+    if (hash == std::wstring::npos)
+        return true;
+    return source.substr(hash + 1) == L"g" + std::to_wstring(generation_);
+}
+
+void WebHostView::evaluate_script(const std::string &script)
+{
+    if (!webview_ || script.empty())
+        return;
     webview_->ExecuteScript(utf8_to_wide(script).c_str(), nullptr);
 }
 
@@ -220,6 +466,12 @@ void WebHostView::resize(int width, int height)
         return;
     RECT bounds = { 0, 0, width, height };
     controller_->put_Bounds(bounds);
+}
+
+void WebHostView::focus()
+{
+    if (controller_)
+        controller_->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
 }
 
 void WebHostView::fail(const wchar_t *message)

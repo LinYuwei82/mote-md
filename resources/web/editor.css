@@ -1089,12 +1089,14 @@ body.pdf-export .code-scroll { overflow: visible !important; }
    Qt/Windows 构建不加这个类，继续用原有 QStatusBar，不会出现两条状态栏。 */
 #statusbar { display: none; }
 
-body.platform-mac {
+body.platform-mac,
+body.platform-win {
   padding-bottom: 24px;
   box-sizing: border-box;
 }
 
-body.platform-mac #statusbar {
+body.platform-mac #statusbar,
+body.platform-win #statusbar {
   position: fixed;
   left: 0;
   right: 0;

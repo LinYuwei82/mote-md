@@ -3,10 +3,17 @@
 #include <windows.h>
 
 #include <memory>
+#include <string>
 
+class ShellHost;
 class WebHostView;
 
-// Windows 原生主窗口（阶段 B N0）：创建窗口、承载 WebView2、同步客户区尺寸。
+namespace mote {
+class EditorController;
+}
+
+// Windows 原生主窗口（阶段 B N1）：窗口、文档状态、打开/保存/未保存确认。
+// 页面协议与状态机在 core/EditorController，平台能力由 ShellHost 转发到这里。
 class MoteMainWindow
 {
 public:
@@ -16,13 +23,57 @@ public:
     bool create();
     void show(int show_command);
     int run_message_loop();
+    void open_path(const std::string &path);
+
+    // ShellHost → 外壳
+    void evaluate_script(const std::string &script);
+    void load_page(const std::string &base_dir);
+    void set_clipboard(const std::string &text, const std::string &html);
+    std::string clipboard_text();
+    void open_external(const std::string &url);
+    void save_requested_text(const std::string &text);
+    void open_requested();
+    void drop_received(const std::string &name, const std::string &text);
+    void navigation_completed();
+    void page_ready();
+    void dirty_changed();
+    void status_message(const std::string &text);
+    void error_message(const std::string &text);
 
 private:
+    friend class ShellHost;
+
+    enum class AfterSave { None, OpenDialog, OpenPath, NewDocument, Close, ExportPdf };
+
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
     LRESULT handle_message(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
     void layout();
+    void update_title();
+    std::wstring display_name() const;
+    void load_builtin_sample();
+    void new_document();
+    void start_new_document();
+    void open_document();
+    void begin_save_as(bool save_as);
+    void save_text(const std::string &text);
+    bool write_text(const std::string &text, const std::string &path);
+    bool prepare_for_replace(AfterSave after, const std::string &path);
+    void run_after_save();
+    void reset_after_save();
+    bool confirm_close();
+    void show_status(const std::string &text);
 
     HINSTANCE instance_ = nullptr;
     HWND hwnd_ = nullptr;
     std::unique_ptr<WebHostView> host_;
+    std::unique_ptr<ShellHost> shell_;
+    std::unique_ptr<mote::EditorController> controller_;
+    HACCEL accel_ = nullptr;
+    std::string file_path_;
+    std::string last_dir_;
+    std::string last_text_;
+    std::string pending_status_;
+    bool save_as_requested_ = false;
+    AfterSave after_save_ = AfterSave::None;
+    std::string after_save_path_;
 };

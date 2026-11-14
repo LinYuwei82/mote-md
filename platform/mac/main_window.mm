@@ -782,7 +782,7 @@ private:
                      (unsigned long long)_controller->pageGeneration());
     // 状态栏移入页面：加上平台类后 #statusbar 才显示
     [self.host evaluateJavaScript:
-        [NSString stringWithUTF8String:mote::js::enableStatusBar().c_str()]];
+        [NSString stringWithUTF8String:mote::js::enableStatusBar("mac").c_str()]];
     if (self.lastStatus.length > 0) {
         [self showStatus:self.lastStatus];
         self.window.subtitle = @"";

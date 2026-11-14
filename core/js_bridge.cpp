@@ -104,9 +104,10 @@ std::string clearBaseHref()
            "if(b&&b.parentNode)b.parentNode.removeChild(b);})();";
 }
 
-std::string enableStatusBar()
+std::string enableStatusBar(std::string_view platform)
 {
-    return "(function(){if(document.body)document.body.classList.add('platform-mac');})();";
+    return "(function(){if(document.body)document.body.classList.add('platform-" + std::string(platform)
+        + "');})();";
 }
 
 std::string statusMessage(std::string_view text)
