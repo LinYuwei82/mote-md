@@ -210,22 +210,21 @@ void *register_drop_target(HWND hwnd, DropCallbacks callbacks, std::string *erro
         return nullptr;
     }
 
-    // OLE 拖放要求 STA；主线程由 main.cpp 的 CoInitializeEx(COINIT_APARTMENTTHREADED)
-    // 保证，这里只做校验，失败就退回页面内 drop 事件兜底。
+    // OLE 拖放要求本线程调用过 OleInitialize；仅 CoInitializeEx 不够，
+    // 否则 RegisterDragDrop 会返回 E_OUTOFMEMORY。已初始化时返回 S_FALSE，无副作用。
     APTTYPE type = APTTYPE_CURRENT;
     APTTYPEQUALIFIER qualifier = APTTYPEQUALIFIER_NONE;
     const HRESULT apartment = CoGetApartmentType(&type, &qualifier);
-    if (apartment == CO_E_NOTINITIALIZED) {
-        const HRESULT initialized = OleInitialize(nullptr);
-        if (FAILED(initialized)) {
-            if (error)
-                *error = "OleInitialize 失败 " + hr_string(initialized);
-            return nullptr;
-        }
-    } else if (apartment == S_OK && type != APTTYPE_STA && type != APTTYPE_MAINSTA) {
+    if (apartment == S_OK && type != APTTYPE_STA && type != APTTYPE_MAINSTA) {
         if (error)
             *error = "当前线程不是 STA 套间（类型 " + std::to_string(static_cast<int>(type))
                 + "）";
+        return nullptr;
+    }
+    const HRESULT initialized = OleInitialize(nullptr);
+    if (FAILED(initialized)) {
+        if (error)
+            *error = "OleInitialize 失败 " + hr_string(initialized);
         return nullptr;
     }
 
