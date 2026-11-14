@@ -1,23 +1,27 @@
 #!/bin/bash
-# macOS 打包脚本：编译 -> macdeployqt -> 清理冗余插件/框架 -> 清理扩展属性 -> 临时签名 -> 打 zip
+# macOS 打包脚本：编译 -> 部署 -> 清理冗余依赖 -> 清理扩展属性 -> 临时签名 -> 打 zip
 # 用法：
-#   bash packaging/package_macos.sh           # 只出 dist/Mote-macOS.zip（原有流程）
+#   bash packaging/package_macos.sh           # Qt 构建（Windows 继续用 Qt，macOS 旧流程）
+#   bash packaging/package_macos.sh --native  # 原生 AppKit + CMake 构建（无 Qt）
 #   bash packaging/package_macos.sh --dmg     # 额外出 dist/Mote-macOS-<版本>.dmg（拖拽安装）
 #   bash packaging/package_macos.sh --clean-dist   # 先清空 dist/（默认保留其它旧产物）
 set -euo pipefail
 
 WITH_DMG=0
 CLEAN_DIST=0
+NATIVE=0
 for arg in "$@"; do
     case "$arg" in
         --dmg) WITH_DMG=1 ;;
         --clean-dist) CLEAN_DIST=1 ;;
+        --native) NATIVE=1 ;;
         -h|--help)
-            echo "用法: bash packaging/package_macos.sh [--dmg] [--clean-dist]"
+            echo "用法: bash packaging/package_macos.sh [--native] [--dmg] [--clean-dist]"
+            echo "  --native      用 native/ 的 CMake 工程构建（AppKit + WKWebView，无 Qt）"
             echo "  --dmg         在 zip 之外再产出一个拖拽安装式 DMG（卷标 Mote，UDZO 压缩）"
             echo "  --clean-dist  先清空 dist/（默认只覆盖同名产物，保留 dist 里的其它文件）"
             exit 0 ;;
-        *) echo "未知参数：${arg}（可用：--dmg, --clean-dist）"; exit 2 ;;
+        *) echo "未知参数：${arg}（可用：--native, --dmg, --clean-dist）"; exit 2 ;;
     esac
 done
 
@@ -25,21 +29,32 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="Mote"
 # 构建/签名放在非同步目录：工程若位于 iCloud“文稿”等 FileProvider 目录，
 # 系统会反复给 .app 加 FinderInfo 扩展属性，导致 codesign 失败。
-BUILD_DIR="${TMPDIR:-/tmp}/mote-build"
+if [ "$NATIVE" -eq 1 ]; then
+    BUILD_DIR="${TMPDIR:-/tmp}/mote-build-native"
+else
+    BUILD_DIR="${TMPDIR:-/tmp}/mote-build"
+fi
 DIST_DIR="$ROOT/dist"
-PKG_NAME="${APP_NAME}-macOS"
+# 阶段 A 两种外壳共存：原生包用 -native 后缀，不覆盖 Qt 版同版本产物
+if [ "$NATIVE" -eq 1 ]; then
+    PKG_NAME="${APP_NAME}-macOS-native"
+else
+    PKG_NAME="${APP_NAME}-macOS"
+fi
 ZIP_PATH="$DIST_DIR/${PKG_NAME}.zip"
 # 进度编号随是否产出 DMG 变化
 TOTAL=7
 [ "$WITH_DMG" -eq 1 ] && TOTAL=8
 
-# Qt 来源可用 QMAKE 指定。Homebrew 的 Qt 链接 ICU，会多带约 37MB（DMG 因此约 34MB）；
-# 官方安装器的 macOS 二进制不依赖 ICU，同一个工程打出来 DMG 约 24MB。代码不用改。
-QMAKE="${QMAKE:-qmake6}"
-QT_BIN="$("$QMAKE" -query QT_INSTALL_BINS)"
-QT_LIB="$("$QMAKE" -query QT_INSTALL_LIBS)"
-MACDEPLOYQT="$QT_BIN/macdeployqt"
-[ -x "$MACDEPLOYQT" ] || { echo "错误：找不到 macdeployqt（$MACDEPLOYQT）"; exit 1; }
+if [ "$NATIVE" -eq 0 ]; then
+    # Qt 来源可用 QMAKE 指定。Homebrew 的 Qt 链接 ICU，会多带约 37MB（DMG 因此约 34MB）；
+    # 官方安装器的 macOS 二进制不依赖 ICU，同一个工程打出来 DMG 约 24MB。代码不用改。
+    QMAKE="${QMAKE:-qmake6}"
+    QT_BIN="$("$QMAKE" -query QT_INSTALL_BINS)"
+    QT_LIB="$("$QMAKE" -query QT_INSTALL_LIBS)"
+    MACDEPLOYQT="$QT_BIN/macdeployqt"
+    [ -x "$MACDEPLOYQT" ] || { echo "错误：找不到 macdeployqt（$MACDEPLOYQT）"; exit 1; }
+fi
 
 echo "==> 1/${TOTAL} 清理并创建影子构建目录"
 rm -rf "$BUILD_DIR"
@@ -52,12 +67,18 @@ if [ "$CLEAN_DIST" -eq 1 ]; then
 fi
 mkdir -p "$DIST_DIR"
 
-echo "==> 2/${TOTAL} qmake + make (Release)"
-cd "$BUILD_DIR"
-"$QMAKE" "$ROOT/Mote.pro"
-make -j"$(sysctl -n hw.ncpu)"
-
-APP_PATH="$BUILD_DIR/${APP_NAME}.app"
+if [ "$NATIVE" -eq 1 ]; then
+    echo "==> 2/${TOTAL} cmake + build (Release)"
+    cmake -S "$ROOT/native" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
+    cmake --build "$BUILD_DIR" --config Release -j"$(sysctl -n hw.ncpu)"
+    APP_PATH="$BUILD_DIR/${APP_NAME}.app"
+else
+    echo "==> 2/${TOTAL} qmake + make (Release)"
+    cd "$BUILD_DIR"
+    "$QMAKE" "$ROOT/Mote.pro"
+    make -j"$(sysctl -n hw.ncpu)"
+    APP_PATH="$BUILD_DIR/${APP_NAME}.app"
+fi
 [ -d "$APP_PATH" ] || { echo "错误：构建失败，未生成 $APP_PATH"; exit 1; }
 
 # DMG 文件名带版本号：版本直接读构建产物里的 Info.plist（qmake 已按 Mote.pro 的
@@ -66,7 +87,14 @@ APP_VERSION="$(plutil -extract CFBundleShortVersionString raw "$APP_PATH/Content
 [ -n "$APP_VERSION" ] || { echo "错误：无法从 $APP_PATH 读取版本号"; exit 1; }
 DMG_PATH="$DIST_DIR/${PKG_NAME}-${APP_VERSION}.dmg"
 
-echo "==> 3/${TOTAL} macdeployqt 部署 Qt 框架与插件"
+echo "==> 3/${TOTAL} 部署依赖"
+if [ "$NATIVE" -eq 1 ]; then
+    echo "    跳过 macdeployqt（原生构建只依赖系统框架）"
+    if otool -L "$APP_PATH/Contents/MacOS/${APP_NAME}" | grep -q "Qt"; then
+        echo "错误：原生构建仍然链接了 Qt" >&2
+        exit 1
+    fi
+else
 "$MACDEPLOYQT" "$APP_PATH" -always-overwrite -no-codesign -libpath="$QT_LIB"
 
 # 提示 Qt 来源带来的体积差：Homebrew Qt 链接 ICU，包内会多出约 37MB。
@@ -88,7 +116,11 @@ else
     echo "错误：找不到 $QT_TRANSLATIONS/qtbase_zh_CN.qm，标准按钮会显示英文" >&2
     exit 1
 fi
+fi  # 结束 Qt 部署分支
 
+if [ "$NATIVE" -eq 1 ]; then
+    echo "==> 4/${TOTAL} 跳过 Qt 插件与框架清理（原生构建没有 Qt 依赖）"
+else
 echo "==> 4/${TOTAL} 删除用不到的插件与被牵连的大依赖（虚拟键盘/QML/PDF/SVG）"
 PLUGINS="$APP_PATH/Contents/PlugIns"
 FRAMEWORKS="$APP_PATH/Contents/Frameworks"
@@ -121,9 +153,12 @@ for token in QtNetwork.framework libssl libcrypto; do
         echo "    已移除未被引用的 $token"
     fi
 done
+fi  # 结束 Qt 清理分支
 
 echo "==> 5/${TOTAL} 修正体外的绝对库路径、去掉开发机 rpath、strip、清理扩展属性"
 EXE="$APP_PATH/Contents/MacOS/${APP_NAME}"
+
+if [ "$NATIVE" -eq 0 ]; then
 
 # macdeployqt 偶尔漏改某些传递依赖（如 Homebrew 的 libbrotlicommon），这里统一改写为包内路径。
 # 依赖有两种形态：独立 dylib（取 basename）与 framework 内的二进制
@@ -177,6 +212,7 @@ find "$FRAMEWORKS" -type f -print0 \
     done
 
 while install_name_tool -delete_rpath "$QT_LIB" "$EXE" 2>/dev/null; do :; done
+fi  # 结束 Qt 依赖改写分支
 strip -x "$EXE" 2>/dev/null || true
 find "$APP_PATH" -maxdepth 4 -name "*.dSYM" -exec rm -rf {} + 2>/dev/null || true
 find "$APP_PATH" -maxdepth 4 -name ".DS_Store" -delete 2>/dev/null || true
@@ -209,7 +245,7 @@ xattr -d "com.apple.fileprovider.fpfs#P" "$APP_PATH" 2>/dev/null || true
 scan_external_paths() {
     local mode="$1"
     local macho=0 bad=0
-    local l_hb=0 l_ul=0 l_user=0 d_hb=0 d_ul=0 d_user=0
+    local l_hb=0 l_ul=0 l_user=0 d_hb=0 d_ul=0 d_user=0 q_hits=0
     local f deps ids hit
     while IFS= read -r -d '' f; do
         file "$f" | grep -q "Mach-O" || continue
@@ -222,6 +258,7 @@ scan_external_paths() {
         d_hb=$((d_hb + $(printf '%s\n' "$ids" | grep -c '/opt/homebrew' || true)))
         d_ul=$((d_ul + $(printf '%s\n' "$ids" | grep -c '/usr/local' || true)))
         d_user=$((d_user + $(printf '%s\n' "$ids" | grep -c '/Users/' || true)))
+        q_hits=$((q_hits + $(printf '%s\n' "$deps" | grep -c 'Qt' || true)))
         while IFS= read -r hit; do
             echo "  [外部路径·依赖] ${f#"$APP_PATH"/}: $hit" >&2
             bad=1
@@ -231,8 +268,13 @@ scan_external_paths() {
             bad=1
         done < <(printf '%s\n' "$ids" | grep -E '/opt/homebrew|/usr/local|/Users/' || true)
     done < <(find "$APP_PATH/Contents" -type f -print0)
+    # 原生构建不该出现任何 Qt 链接；Qt 构建则本来就该有，只在 native 模式检查
+    if [ "$NATIVE" -eq 1 ] && [ "$q_hits" -ne 0 ]; then
+        echo "错误：原生包内仍有 $q_hits 行 Qt 链接" >&2
+        bad=1
+    fi
     if [ "$mode" = "fail" ] && [ "$bad" -ne 0 ]; then
-        echo "错误：包内仍有指向开发机绝对路径的 Mach-O，停止出包" >&2
+        echo "错误：包内仍有指向开发机绝对路径或 Qt 的 Mach-O，停止出包" >&2
         exit 1
     fi
     if [ "$mode" = "report" ]; then
@@ -240,6 +282,9 @@ scan_external_paths() {
         echo "  Mach-O 文件数：$macho"
         echo "  otool -L：/opt/homebrew $l_hb 行，/usr/local $l_ul 行，/Users/ $l_user 行"
         echo "  otool -D：/opt/homebrew $d_hb 行，/usr/local $d_ul 行，/Users/ $d_user 行"
+        if [ "$NATIVE" -eq 1 ]; then
+            echo "  Qt 链接：$q_hits 行（原生构建应为 0）"
+        fi
         if [ "$bad" -eq 0 ]; then
             echo "  结果：通过"
         else

@@ -2,7 +2,8 @@
 # 本机自检（macOS）：仓库状态 → 独立目录构建 → 启动冒烟
 #
 # 用法：
-#   bash tools/preflight.sh              # 构建 + 启动冒烟
+#   bash tools/preflight.sh              # Qt 构建 + 启动冒烟
+#   bash tools/preflight.sh --native     # 原生构建（CMake/AppKit）+ 启动冒烟
 #   bash tools/preflight.sh --no-smoke   # 只构建
 #   MOTE_PREFLIGHT_DIR=/tmp/xxx bash tools/preflight.sh
 #
@@ -13,12 +14,14 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${MOTE_PREFLIGHT_DIR:-/tmp/mote-preflight}"
 SMOKE=1
+NATIVE=0
 
 for arg in "$@"; do
     case "$arg" in
         --no-smoke) SMOKE=0 ;;
-        -h|--help) sed -n '2,9p' "${BASH_SOURCE[0]}"; exit 0 ;;
-        *) printf '未知参数：%s（可用：--no-smoke）\n' "$arg" >&2; exit 2 ;;
+        --native) NATIVE=1 ;;
+        -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        *) printf '未知参数：%s（可用：--native, --no-smoke）\n' "$arg" >&2; exit 2 ;;
     esac
 done
 
@@ -43,19 +46,27 @@ else
     green "工作区干净"
 fi
 
-info "== 2. 寻找 Qt =="
-QMAKE=""
-for candidate in qmake6 qmake; do
-    if command -v "$candidate" >/dev/null 2>&1; then
-        QMAKE="$candidate"
-        break
+info "== 2. 选择构建 =="
+if [ "$NATIVE" -eq 1 ]; then
+    if ! command -v cmake >/dev/null 2>&1; then
+        red "找不到 cmake：先安装 CMake 后重试"
+        exit 1
     fi
-done
-if [ -z "$QMAKE" ]; then
-    red "找不到 qmake6 或 qmake：把 Qt 的 bin 目录加进 PATH 后重试"
-    exit 1
+    info "使用原生构建（native/，AppKit + WKWebView）"
+else
+    QMAKE=""
+    for candidate in qmake6 qmake; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            QMAKE="$candidate"
+            break
+        fi
+    done
+    if [ -z "$QMAKE" ]; then
+        red "找不到 qmake6 或 qmake：把 Qt 的 bin 目录加进 PATH 后重试"
+        exit 1
+    fi
+    info "使用 $("$QMAKE" -v 2>&1 | tail -1)"
 fi
-info "使用 $("$QMAKE" -v 2>&1 | tail -1)"
 
 info "== 3. 独立目录构建 =="
 info "构建目录：$BUILD_DIR"
@@ -64,10 +75,17 @@ mkdir -p "$BUILD_DIR" || { red "无法创建 $BUILD_DIR"; exit 1; }
 
 LOG="$BUILD_DIR/build.log"
 JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
-(
-    cd "$BUILD_DIR" || exit 1
-    "$QMAKE" "$ROOT/Mote.pro" && make -j"$JOBS"
-) > "$LOG" 2>&1
+if [ "$NATIVE" -eq 1 ]; then
+    (
+        cmake -S "$ROOT/native" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release \
+            && cmake --build "$BUILD_DIR" --config Release -j"$JOBS"
+    ) > "$LOG" 2>&1
+else
+    (
+        cd "$BUILD_DIR" || exit 1
+        "$QMAKE" "$ROOT/Mote.pro" && make -j"$JOBS"
+    ) > "$LOG" 2>&1
+fi
 
 if [ $? -ne 0 ]; then
     red "构建失败，第一条错误："
