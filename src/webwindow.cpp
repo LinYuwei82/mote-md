@@ -27,7 +27,6 @@
 #include <QStatusBar>
 #include <QStyleHints>
 #include <QTimer>
-#include <QToolBar>
 #include <QUrl>
 
 #include <cstdio>
@@ -349,17 +348,9 @@ void WebWindow::createUi()
         }
     }
 
-    auto *toolBar = addToolBar(tr("工具栏"));
-    toolBar->setMovable(false);
-    toolBar->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    toolBar->addAction(m_newAction);
-    toolBar->addAction(m_openAction);
-    toolBar->addAction(m_saveAction);
-    toolBar->addAction(m_saveAsAction);
-    toolBar->addSeparator();
-    toolBar->addAction(m_tocAction);
-    toolBar->addAction(m_sourceAction);
-
+    // 工具栏已去掉：打开/保存/另存为/目录/源码都在菜单里有同一批 QAction，
+    // 保留一条只有文字的工具栏只增加视觉噪声与重复入口。窗口只留菜单栏、
+    // 正文与状态栏三段。
     m_web = createWebEditor(this);
     if (m_web) {
         connect(m_web, &WebEditor::dirtyChanged, this, &WebWindow::markModified);
