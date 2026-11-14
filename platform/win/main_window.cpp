@@ -1,6 +1,7 @@
 #include "main_window.h"
 
 #include "dialogs.h"
+#include "drop_target.h"
 #include "menus.h"
 #include "web_host_view.h"
 
@@ -9,11 +10,15 @@
 
 #include <shlobj.h>
 #include <shellapi.h>
+#include <shlwapi.h>
+#include <wincodec.h>
+#include <wrl/client.h>
 
 #include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <cwchar>
 #include <filesystem>
 #include <fstream>
@@ -143,6 +148,84 @@ std::string with_extension(std::string path, const char *extension)
     return path;
 }
 
+// 剪贴板里的 CF_DIB 是裸 BITMAPINFOHEADER + 像素；补 14 字节文件头后用
+// WIC 的 BMP 解码器读入、PNG 编码器写出，得到与 macOS 一致的 PNG 资源。
+bool encode_dib_to_png(const std::vector<std::uint8_t> &dib, std::vector<std::uint8_t> *png)
+{
+    if (dib.size() < sizeof(BITMAPINFOHEADER))
+        return false;
+
+    BITMAPINFOHEADER info = {};
+    std::memcpy(&info, dib.data(), sizeof(info));
+
+    BITMAPFILEHEADER file = {};
+    file.bfType = 0x4D42;
+    file.bfOffBits = static_cast<DWORD>(sizeof(BITMAPFILEHEADER) + info.biSize);
+    if (info.biBitCount <= 8) {
+        const DWORD colors = info.biClrUsed ? info.biClrUsed : (1u << info.biBitCount);
+        file.bfOffBits += colors * 4;
+    } else if (info.biCompression == BI_BITFIELDS) {
+        file.bfOffBits += 12;
+    }
+    file.bfSize = static_cast<DWORD>(sizeof(BITMAPFILEHEADER) + dib.size());
+
+    std::vector<std::uint8_t> bmp(file.bfSize);
+    std::memcpy(bmp.data(), &file, sizeof(file));
+    std::memcpy(bmp.data() + sizeof(file), dib.data(), dib.size());
+
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IWICImagingFactory> factory;
+    if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&factory))))
+        return false;
+
+    ComPtr<IStream> input;
+    input.Attach(SHCreateMemStream(bmp.data(), static_cast<UINT>(bmp.size())));
+    if (!input)
+        return false;
+
+    ComPtr<IWICBitmapDecoder> decoder;
+    if (FAILED(factory->CreateDecoderFromStream(input.Get(), nullptr,
+                                                WICDecodeMetadataCacheOnLoad, &decoder)))
+        return false;
+    ComPtr<IWICBitmapFrameDecode> frame;
+    if (FAILED(decoder->GetFrame(0, &frame)))
+        return false;
+
+    ComPtr<IStream> output;
+    output.Attach(SHCreateMemStream(nullptr, 0));
+    if (!output)
+        return false;
+    ComPtr<IWICBitmapEncoder> encoder;
+    if (FAILED(factory->CreateEncoder(GUID_ContainerFormatPng, nullptr, &encoder)))
+        return false;
+    if (FAILED(encoder->Initialize(output.Get(), WICBitmapEncoderNoCache)))
+        return false;
+
+    ComPtr<IWICBitmapFrameEncode> encode_frame;
+    ComPtr<IPropertyBag2> properties;
+    if (FAILED(encoder->CreateNewFrame(&encode_frame, &properties)))
+        return false;
+    if (FAILED(encode_frame->Initialize(properties.Get())))
+        return false;
+    if (FAILED(encode_frame->WriteSource(frame.Get(), nullptr)))
+        return false;
+    if (FAILED(encode_frame->Commit()) || FAILED(encoder->Commit()))
+        return false;
+
+    STATSTG stat = {};
+    if (FAILED(output->Stat(&stat, STATFLAG_NONAME)))
+        return false;
+    LARGE_INTEGER start = {};
+    output->Seek(start, STREAM_SEEK_SET, nullptr);
+    png->assign(static_cast<size_t>(stat.cbSize.QuadPart), 0);
+    ULONG read = 0;
+    if (FAILED(output->Read(png->data(), static_cast<ULONG>(png->size()), &read)))
+        return false;
+    png->resize(read);
+    return !png->empty();
+}
+
 void put_clipboard_bytes(UINT format, const std::string &bytes)
 {
     HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes.size() + 1);
@@ -170,6 +253,11 @@ public:
 
     void evaluateJs(const std::string &script) override { owner_.evaluate_script(script); }
     void loadPage(const std::string &base_dir) override { owner_.load_page(base_dir); }
+    void injectDocument(const std::string &text) override { owner_.inject_document(text); }
+    bool clipboardImage(std::vector<std::uint8_t> *bytes, std::string *mime) override
+    {
+        return owner_.clipboard_image(bytes, mime);
+    }
     void setClipboard(const std::string &text, const std::string &html) override
     {
         owner_.set_clipboard(text, html);
@@ -201,8 +289,7 @@ public:
     }
     void fileDropRequested(const std::string &path) override
     {
-        (void)path;
-        owner_.status_message("原生拖放将在 N3 实现");
+        owner_.file_drop_requested(path);
     }
     void statusMessage(const std::string &message) override
     {
@@ -355,6 +442,13 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             return 0;
         }
         break;
+    case mote::win::kDropMessage: {
+        std::unique_ptr<std::vector<std::string>> paths(
+            reinterpret_cast<std::vector<std::string> *>(lparam));
+        if (paths && controller_)
+            controller_->handleNativeFileDrop(*paths);
+        return 0;
+    }
     case WM_SIZE:
         layout();
         return 0;
@@ -363,6 +457,7 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             DestroyWindow(hwnd);
         return 0;
     case WM_DESTROY:
+        revoke_drop_target();
         host_.reset();
         controller_.reset();
         shell_.reset();
@@ -625,6 +720,7 @@ void MoteMainWindow::navigation_completed()
         return;
     host_->evaluate_script(mote::js::enableStatusBar("win"));
     host_->focus();
+    ensure_drop_target();
     update_title();
     log_line("NATIVE navigation completed");
 }
@@ -848,6 +944,107 @@ void MoteMainWindow::run_startup_command()
     }
 }
 
+void MoteMainWindow::inject_document(const std::string &text)
+{
+    if (host_)
+        host_->inject_markdown(text);
+}
+
+void MoteMainWindow::file_drop_requested(const std::string &path)
+{
+    if (path.empty())
+        return;
+    if (!prepare_for_replace(AfterSave::OpenPath, path))
+        return;
+    open_path(path);
+}
+
+bool MoteMainWindow::clipboard_image(std::vector<std::uint8_t> *bytes, std::string *mime)
+{
+    if (!OpenClipboard(hwnd_))
+        return false;
+
+    bool found = false;
+    // 浏览器/截图工具常直接给 PNG；没有时再解 CF_DIB
+    const UINT png_format = RegisterClipboardFormatW(L"PNG");
+    if (png_format != 0) {
+        if (HANDLE data = GetClipboardData(png_format)) {
+            if (auto *locked = static_cast<const std::uint8_t *>(GlobalLock(data))) {
+                const size_t size = GlobalSize(data);
+                if (size > 0) {
+                    bytes->assign(locked, locked + size);
+                    *mime = "image/png";
+                    found = true;
+                }
+                GlobalUnlock(data);
+            }
+        }
+    }
+
+    if (!found) {
+        if (HANDLE data = GetClipboardData(CF_DIB)) {
+            if (auto *locked = static_cast<const std::uint8_t *>(GlobalLock(data))) {
+                const size_t size = GlobalSize(data);
+                std::vector<std::uint8_t> dib(locked, locked + size);
+                GlobalUnlock(data);
+                std::vector<std::uint8_t> png;
+                if (encode_dib_to_png(dib, &png)) {
+                    *bytes = std::move(png);
+                    *mime = "image/png";
+                    found = true;
+                }
+            }
+        }
+    }
+
+    CloseClipboard();
+    return found;
+}
+
+void MoteMainWindow::ensure_drop_target()
+{
+    if (!hwnd_ || !controller_)
+        return;
+
+    HWND wanted = mote::win::find_drop_window(hwnd_);
+    if (!wanted)
+        wanted = hwnd_;
+    if (drop_target_ && drop_hwnd_ == wanted && IsWindow(drop_hwnd_))
+        return;
+    revoke_drop_target();
+
+    mote::win::DropCallbacks callbacks;
+    callbacks.can_accept = [this](const std::vector<std::string> &paths) {
+        return controller_ && controller_->acceptsNativeFileDrop(paths);
+    };
+    callbacks.perform = [this](const std::vector<std::string> &paths) {
+        if (controller_)
+            controller_->handleNativeFileDrop(paths);
+    };
+
+    std::string error;
+    HWND target_hwnd = wanted;
+    void *target = mote::win::register_drop_target(wanted, callbacks, &error);
+    if (!target && wanted != hwnd_) {
+        // 子窗口注册失败（例如属于其他进程且拒绝）：退回主窗口
+        target_hwnd = hwnd_;
+        target = mote::win::register_drop_target(hwnd_, callbacks, &error);
+    }
+    drop_target_ = target;
+    drop_hwnd_ = target ? target_hwnd : nullptr;
+    if (!target)
+        log_line("NATIVE drop target unavailable: " + error);
+}
+
+void MoteMainWindow::revoke_drop_target()
+{
+    if (drop_target_) {
+        mote::win::revoke_drop_target(drop_hwnd_, drop_target_);
+        drop_target_ = nullptr;
+    }
+    drop_hwnd_ = nullptr;
+}
+
 void MoteMainWindow::drop_received(const std::string &name, const std::string &text)
 {
     (void)name;
@@ -898,6 +1095,9 @@ void MoteMainWindow::set_clipboard(const std::string &text, const std::string &h
 
 std::string MoteMainWindow::clipboard_text()
 {
+    // 资源管理器复制的文件列表不是可粘贴正文，与 Qt 版同口径
+    if (IsClipboardFormatAvailable(CF_HDROP))
+        return std::string();
     if (!OpenClipboard(hwnd_))
         return std::string();
     std::string result;

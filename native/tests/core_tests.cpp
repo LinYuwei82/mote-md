@@ -5,6 +5,7 @@
 #include "core/command_table.h"
 #include "core/editor_controller.h"
 #include "core/image_store.h"
+#include "core/inject_chunks.h"
 #include "core/js_bridge.h"
 #include "core/json.h"
 #include "core/paths.h"
@@ -66,6 +67,14 @@ public:
         clipboardHtmlValue = html;
     }
     std::string clipboardText() override { return clipboard; }
+    bool clipboardImage(std::vector<std::uint8_t> *bytes, std::string *mime) override
+    {
+        if (imageBytes.empty())
+            return false;
+        *bytes = imageBytes;
+        *mime = imageMime;
+        return true;
+    }
     void openExternal(const std::string &url) override { externalUrl = url; }
     void saveRequested(const std::string &text) override { savedText = text; }
     void openRequested() override { ++openCount; }
@@ -105,6 +114,8 @@ public:
     std::vector<std::string> pdfPaths;
     std::vector<std::string> logs;
     std::string clipboard;
+    std::vector<std::uint8_t> imageBytes;
+    std::string imageMime = "image/png";
     std::string clipboardTextValue;
     std::string clipboardHtmlValue;
     std::string externalUrl;
@@ -429,6 +440,86 @@ static void testImageMessages()
     fs::remove_all(dir, error);
 }
 
+static void testInjectDocumentHook()
+{
+    // 平台可以接管正文注入（Windows 大文档走分片）；默认实现仍是一条脚本
+    class InjectCaptureHost : public TestHost
+    {
+    public:
+        void injectDocument(const std::string &text) override { injected.push_back(text); }
+        std::vector<std::string> injected;
+    };
+
+    InjectCaptureHost host;
+    EditorController controller(host);
+    controller.setMarkdown("大文档正文", "/tmp/hook");
+    controller.handleMessage(R"({"type":"ready"})");
+    CHECK_EQ(host.injected.size(), static_cast<size_t>(1));
+    CHECK_EQ(host.injected.at(0), std::string("大文档正文"));
+    CHECK(!host.hasScript("setMarkdown("));
+}
+
+static void testClipboardImagePaste()
+{
+    const std::string dir = makeTempDir();
+    TestHost host;
+    EditorController controller(host);
+    controller.setMarkdown("", dir);
+    controller.handleMessage(R"({"type":"ready"})");
+    host.scripts.clear();
+
+    host.imageBytes = {0x89, 'P', 'N', 'G', 0x1A};
+    host.clipboard = "不应被使用";
+    controller.clipboardCommand("paste");
+    CHECK(host.hasScript("insertImage(\"assets/paste-"));
+    CHECK(!host.hasScript("clipboardPaste"));
+    CHECK(host.status.find("已保存图片：assets/paste-") != std::string::npos);
+
+    bool has_png = false;
+    std::error_code error;
+    for (const auto &entry : fs::directory_iterator(fs::path(dir) / "assets", error)) {
+        if (entry.path().extension() == ".png")
+            has_png = true;
+    }
+    CHECK(has_png);
+    fs::remove_all(dir, error);
+}
+
+static void testChunkSplitting()
+{
+    using mote::splitUtf8ByBudget;
+
+    CHECK(splitUtf8ByBudget("", 16).empty());
+    CHECK(splitUtf8ByBudget("abc", 0).empty());
+
+    // 预算按 JSON 转义后的长度算：引号占 2 字节，所以 a 与引号不能同片
+    const std::vector<std::string> quoted = splitUtf8ByBudget("a\"b", 2);
+    CHECK_EQ(quoted.size(), static_cast<size_t>(3));
+    CHECK_EQ(quoted.at(0), std::string("a"));
+    CHECK_EQ(quoted.at(1), std::string("\""));
+    CHECK_EQ(quoted.at(2), std::string("b"));
+
+    // 中文每字符 3 字节，不能拆成半个字符
+    const std::vector<std::string> chinese = splitUtf8ByBudget("中文", 4);
+    CHECK_EQ(chinese.size(), static_cast<size_t>(2));
+    CHECK_EQ(chinese.at(0), std::string("中"));
+    CHECK_EQ(chinese.at(1), std::string("文"));
+
+    // 单个 emoji 超过预算时独占一片，且不截断
+    const std::vector<std::string> emoji = splitUtf8ByBudget("😀", 3);
+    CHECK_EQ(emoji.size(), static_cast<size_t>(1));
+    CHECK_EQ(emoji.at(0), std::string("😀"));
+
+    // 任意预算下拼回去必须与原文一致
+    const std::string mixed = "a\"b\\c\n中文😀xyz";
+    for (const std::size_t budget : { 1, 2, 4, 8, 64 }) {
+        std::string joined;
+        for (const std::string &chunk : splitUtf8ByBudget(mixed, budget))
+            joined += chunk;
+        CHECK_EQ(joined, mixed);
+    }
+}
+
 static void testPdfPending()
 {
     TestHost host;
@@ -530,6 +621,9 @@ int main()
     testMessageDispatch();
     testDirtyTracking();
     testClipboardCommands();
+    testInjectDocumentHook();
+    testClipboardImagePaste();
+    testChunkSplitting();
     testImageMessages();
     testPdfPending();
     testCommandTable();

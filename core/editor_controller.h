@@ -24,12 +24,22 @@ public:
     virtual void evaluateJs(const std::string &script) = 0;
     virtual void loadPage(const std::string &baseDir) = 0;
 
+    // 正文注入：默认拼一条 setMarkdown 脚本；大文档平台可覆盖为消息或分片通道
+    virtual void injectDocument(const std::string &text);
+
     virtual void setClipboard(const std::string &text, const std::string &html)
     {
         (void)text;
         (void)html;
     }
     virtual std::string clipboardText() { return {}; }
+    // 剪贴板里的图片：平台解码成 PNG/JPEG 字节后交给 core 落盘，返回 false 表示没有图片
+    virtual bool clipboardImage(std::vector<std::uint8_t> *bytes, std::string *mime)
+    {
+        (void)bytes;
+        (void)mime;
+        return false;
+    }
     virtual void openExternal(const std::string &url) { (void)url; }
     virtual void saveRequested(const std::string &text) { (void)text; }
     virtual void openRequested() {}

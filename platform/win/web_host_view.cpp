@@ -1,6 +1,8 @@
 #include "web_host_view.h"
 
+#include "core/inject_chunks.h"
 #include "core/js_bridge.h"
+#include "core/json.h"
 
 #include <shlobj.h>
 #include <urlmon.h>
@@ -33,8 +35,21 @@ const wchar_t kBridgeScript[] = LR"JS(
   window.webkit = window.webkit || {};
   window.webkit.messageHandlers = window.webkit.messageHandlers || {};
   window.webkit.messageHandlers.mote = { postMessage: post };
+  // 大文档注入通道：宿主 PostWebMessageAsJson 不占 ExecuteScript 的体积额度
+  if (window.chrome && window.chrome.webview) {
+    window.chrome.webview.addEventListener('message', function (event) {
+      var data = event.data;
+      if (data && data.__mote === 'setMarkdown' && window.mote)
+        window.mote.setMarkdown(data.text);
+    });
+  }
 })();
 )JS";
+
+// 单条脚本与单条消息的体积预算：WebView2 在 2MB 量级封顶，
+// 各留一半余量给 JSON 转义与 UTF-8 膨胀（中文每字符 3 字节）。
+constexpr std::size_t kScriptBudget = 512 * 1024;
+constexpr std::size_t kMessageBudget = 1536 * 1024;
 
 void log_line(const wchar_t *text)
 {
@@ -458,6 +473,39 @@ void WebHostView::evaluate_script(const std::string &script)
     if (!webview_ || script.empty())
         return;
     webview_->ExecuteScript(utf8_to_wide(script).c_str(), nullptr);
+}
+
+void WebHostView::inject_markdown(const std::string &text)
+{
+    if (!webview_) {
+        // 页面未就绪时 core 会缓存正文，等 ready 后重走这里
+        return;
+    }
+
+    const std::string quoted = mote::quoteJson(text);
+    // 通道一：单条脚本，体积最省
+    if (quoted.size() <= kScriptBudget) {
+        evaluate_script(mote::js::setMarkdown(text));
+        return;
+    }
+
+    // 通道二：PostWebMessageAsJson，由文档创建时注入的桥接脚本转交页面
+    const std::string payload =
+        "{\"__mote\":\"setMarkdown\",\"text\":" + quoted + "}";
+    if (payload.size() <= kMessageBudget
+        && SUCCEEDED(webview_->PostWebMessageAsJson(utf8_to_wide(payload).c_str()))) {
+        return;
+    }
+
+    // 通道三：分片 ExecuteScript，最后一片之后拼接并交给页面
+    auto run = [this](const std::string &script) {
+        webview_->ExecuteScript(utf8_to_wide(script).c_str(), nullptr);
+    };
+    run("window.__moteInject=[];");
+    for (const std::string &chunk : mote::splitUtf8ByBudget(text, kScriptBudget))
+        run("window.__moteInject.push(" + mote::quoteJson(chunk) + ");");
+    run("(function(){var t=(window.__moteInject||[]).join('');"
+        "window.__moteInject=[];window.mote&&window.mote.setMarkdown(t);})();");
 }
 
 void WebHostView::resize(int width, int height)
