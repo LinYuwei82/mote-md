@@ -41,6 +41,8 @@
   // 目录项的文档纵坐标缓存：滚动高亮改二分查表，不再每次滚动对每个标题
   // 调 getBoundingClientRect（900 个标题时每帧 900 次布局读取）。
   var tocTops = null;
+  // 标题集合的签名：正文段落增删不应导致目录整天重建。
+  var tocSig = null;
   var spyScheduled = false;
 
   /* ---------------- 基础工具 ---------------- */
@@ -2291,9 +2293,22 @@
   }
 
   function refreshToc() {
-    if (!tocVisible || !tocList)
+    if (!tocVisible || !tocList) {
+      tocSig = null;
       return;
-    tocItems = tocData();
+    }
+    var items = tocData();
+    var sig = '';
+    for (var k = 0; k < items.length; k++)
+      sig += items[k].level + '|' + items[k].label + '\n';
+    // 标题没变且原节点仍在文档里：只重算高亮，不重建 innerHTML
+    if (sig === tocSig && items.length === tocItems.length
+        && (!items.length || (tocItems[0].el && tocItems[0].el.isConnected))) {
+      updateActiveHeading();
+      return;
+    }
+    tocSig = sig;
+    tocItems = items;
     var html = '';
     for (var i = 0; i < tocItems.length; i++) {
       var item = tocItems[i];
