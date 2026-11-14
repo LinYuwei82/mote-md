@@ -1,5 +1,7 @@
 #include "dialogs.h"
 
+#include "env.h"
+
 #include <commctrl.h>
 #include <shobjidl.h>
 #include <wrl/client.h>
@@ -147,13 +149,13 @@ std::string MoteSaveDialog(HWND owner, const std::wstring &title,
 MoteSaveChoice MoteConfirmUnsaved(HWND owner, const std::wstring &display_name)
 {
     // 诊断用（MOTE_ANSWER=cancel|discard|save）：跳过弹窗直接给出答案
-    if (const char *forced = std::getenv("MOTE_ANSWER")) {
-        const std::string value(forced);
-        if (value == "cancel")
+    const std::string forced = env_value("MOTE_ANSWER");
+    if (!forced.empty()) {
+        if (forced == "cancel")
             return MoteSaveChoice::Cancel;
-        if (value == "discard")
+        if (forced == "discard")
             return MoteSaveChoice::Discard;
-        if (value == "save")
+        if (forced == "save")
             return MoteSaveChoice::Save;
     }
 

@@ -14,7 +14,7 @@
 
 | 项 | 结论 | 实测 |
 |---|---|---|
-| 构建 | 通过 | CMake + Ninja 全量 19/19；仅既有 `getenv` C4996 |
+| 构建 | 通过 | 干净重建 CMake + Ninja 全量 21/21；警告 0、错误 0（`getenv` 的 C4996 已按 `_dupenv_s` 真正消除，未关告警） |
 | core 单测 | 通过 | `mote_core_tests` 292 项断言 |
 | 菜单 / 命令分发 | 通过 | 菜单树 4 菜单 / 7+17+9 项；`WM_COMMAND` 与 `MOTE_COMMAND` 均触发 `NATIVE command` |
 | 快捷键 | 通过 | 命令表 token 与加速键集合比对无缺失；`Ctrl+/` 切换源码模式（`source=1`） |

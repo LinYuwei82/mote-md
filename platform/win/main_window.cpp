@@ -2,6 +2,7 @@
 
 #include "dialogs.h"
 #include "drop_target.h"
+#include "env.h"
 #include "html_export.h"
 #include "menus.h"
 #include "pdf_export.h"
@@ -70,7 +71,8 @@ void log_line(const std::string &text)
     const std::wstring wide = utf8_to_wide(text);
     OutputDebugStringW(wide.c_str());
     OutputDebugStringW(L"\n");
-    if (const char *path = std::getenv("MOTE_LOG"); path && *path) {
+    const std::string path = env_value("MOTE_LOG");
+    if (!path.empty()) {
         std::ofstream file(std::filesystem::path(utf8_to_wide(path)),
                            std::ios::app | std::ios::binary);
         if (file)
@@ -391,13 +393,13 @@ public:
     }
     void statsChanged(int cjk, int words) override
     {
-        if (std::getenv("MOTE_KEYLOG"))
+        if (!env_value("MOTE_KEYLOG").empty())
             log_line("NATIVE stats cjk=" + std::to_string(cjk)
                      + " words=" + std::to_string(words));
     }
     void logMessage(const std::string &message) override
     {
-        if (std::getenv("MOTE_KEYLOG"))
+        if (!env_value("MOTE_KEYLOG").empty())
             log_line("JSLOG " + message);
     }
 
@@ -516,8 +518,8 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         }
         if (wparam == kSnapshotTimer) {
             KillTimer(hwnd, kSnapshotTimer);
-            if (const char *snapshot = std::getenv("MOTE_SNAPSHOT");
-                snapshot && *snapshot && host_) {
+            const std::string snapshot = env_value("MOTE_SNAPSHOT");
+            if (!snapshot.empty() && host_) {
                 const std::string path = snapshot;
                 host_->capture_preview(path, [this, path](bool ok) {
                     log_line(std::string("SNAPSHOT ") + (ok ? "OK " : "ERR ") + path);
@@ -698,7 +700,7 @@ void MoteMainWindow::save_text(const std::string &text)
         std::string suggested = path;
         if (suggested.empty())
             suggested = dir + "\\未命名.md";
-        if (const char *forced = std::getenv("MOTE_SAVE_AS"); forced && *forced)
+        if (const std::string forced = env_value("MOTE_SAVE_AS"); !forced.empty())
             path = forced;
         else
             path = MoteSaveDialog(hwnd_, L"另存为", suggested, L"md");
@@ -744,13 +746,12 @@ void MoteMainWindow::prompt_export_pdf()
         base = base.substr(0, dot);
     const std::string suggested = parent_dir(file_path_) + "\\" + base + ".pdf";
 
-    if (const char *prompt_only = std::getenv("MOTE_PDF_PROMPT");
-        prompt_only && *prompt_only) {
+    if (!env_value("MOTE_PDF_PROMPT").empty()) {
         log_line("NATIVE pdf suggested=" + suggested);
         return;
     }
     std::string path;
-    if (const char *forced = std::getenv("MOTE_PDF_AS"); forced && *forced)
+    if (const std::string forced = env_value("MOTE_PDF_AS"); !forced.empty())
         path = forced;
     else
         path = MoteSaveDialog(hwnd_, L"导出 PDF", suggested, L"pdf");
@@ -781,13 +782,12 @@ void MoteMainWindow::export_html_ready(const std::string &html)
         suggested = parent_dir(file_path_) + "\\" + base + ".html";
     }
 
-    if (const char *prompt_only = std::getenv("MOTE_EXPORT_PROMPT");
-        prompt_only && *prompt_only) {
+    if (!env_value("MOTE_EXPORT_PROMPT").empty()) {
         log_line("NATIVE export suggested=" + suggested);
         return;
     }
     std::string path;
-    if (const char *forced = std::getenv("MOTE_EXPORT_AS"); forced && *forced)
+    if (const std::string forced = env_value("MOTE_EXPORT_AS"); !forced.empty())
         path = forced;
     else
         path = MoteSaveDialog(hwnd_, L"导出 HTML", suggested, L"html");
@@ -948,31 +948,34 @@ void MoteMainWindow::page_ready()
     update_title();
     update_menu_state();
     // MOTE_COMMAND 诊断钩子：页面就绪后再等 700ms，避开首帧布局
-    if (!startup_command_done_ && std::getenv("MOTE_COMMAND"))
+    if (!startup_command_done_ && !env_value("MOTE_COMMAND").empty())
         SetTimer(hwnd_, kStartupCommandTimer, 700, nullptr);
 
     // 与 mac 同名的诊断钩子：MOTE_EVAL 打一条 JSLOG，MOTE_SNAPSHOT 出 PNG
     if (!diagnostics_started_) {
         diagnostics_started_ = true;
-        if (const char *expression = std::getenv("MOTE_EVAL"); expression && *expression) {
+        const std::string expression = env_value("MOTE_EVAL");
+        if (!expression.empty()) {
             const std::string probe =
-                "(function(){try{var r=(" + std::string(expression)
+                "(function(){try{var r=(" + expression
                 + ");window.chrome.webview.postMessage({type:'log',message:'EVAL '+String(r)});}"
                   "catch(e){window.chrome.webview.postMessage({type:'log',message:'EVALERR '+e});}})();";
             host_->evaluate_script(probe);
             log_line("NATIVE eval scheduled");
         }
-        if (const char *snapshot = std::getenv("MOTE_SNAPSHOT"); snapshot && *snapshot) {
-            const char *raw = std::getenv("MOTE_SNAPSHOT_DELAY");
-            const double delay = raw && *raw ? std::atof(raw) : 2000.0;
+        const std::string snapshot = env_value("MOTE_SNAPSHOT");
+        if (!snapshot.empty()) {
+            const std::string raw = env_value("MOTE_SNAPSHOT_DELAY");
+            const double delay = !raw.empty() ? std::atof(raw.c_str()) : 2000.0;
             SetTimer(hwnd_, kSnapshotTimer, static_cast<UINT>(delay < 0 ? 0 : delay), nullptr);
         }
         // 与 mac 同名同义：页面就绪 900ms 后把指定路径当成一次真实拖放。
         // mac 用 ':' 分隔；Windows 盘符本身带 ':'，这里改成分号。
         if (!drop_probe_done_) {
-            if (const char *paths = std::getenv("MOTE_DROP"); paths && *paths) {
+            const std::string paths = env_value("MOTE_DROP");
+            if (!paths.empty()) {
                 drop_probe_done_ = true;
-                std::string list = paths;
+                const std::string list = paths;
                 size_t start = 0;
                 while (start <= list.size()) {
                     const size_t end = list.find(';', start);
@@ -1021,7 +1024,7 @@ void MoteMainWindow::show_status(const std::string &text)
 void MoteMainWindow::perform_command(mote::CommandId command)
 {
     const mote::CommandSpec *spec = mote::findCommand(command);
-    if (std::getenv("MOTE_KEYLOG") && spec)
+    if (!env_value("MOTE_KEYLOG").empty() && spec)
         log_line("NATIVE command " + spec->title);
 
     switch (command) {
@@ -1112,7 +1115,7 @@ void MoteMainWindow::apply_view_state(const mote::ViewState &state)
     toc_on_ = state.toc;
     source_on_ = state.source;
     update_menu_state();
-    if (std::getenv("MOTE_KEYLOG"))
+    if (!env_value("MOTE_KEYLOG").empty())
         log_line("NATIVE view toc=" + std::to_string(state.toc ? 1 : 0)
                  + " source=" + std::to_string(state.source ? 1 : 0)
                  + " zoom=" + std::to_string(state.zoom));
@@ -1172,13 +1175,13 @@ void MoteMainWindow::run_startup_command()
 {
     if (startup_command_done_)
         return;
-    const char *raw = std::getenv("MOTE_COMMAND");
-    if (!raw || !*raw)
+    const std::string raw = env_value("MOTE_COMMAND");
+    if (raw.empty())
         return;
     startup_command_done_ = true;
 
     std::string name;
-    for (const char *item = raw; *item; ++item) {
+    for (const char *item = raw.c_str(); *item; ++item) {
         const unsigned char ch = static_cast<unsigned char>(*item);
         if (!std::isspace(ch))
             name += static_cast<char>(std::tolower(ch));

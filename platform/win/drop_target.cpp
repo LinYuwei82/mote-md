@@ -1,5 +1,7 @@
 #include "drop_target.h"
 
+#include "env.h"
+
 #include <objbase.h>
 #include <shellapi.h>
 
@@ -238,7 +240,7 @@ void *register_drop_target(HWND hwnd, DropCallbacks callbacks, std::string *erro
         registered = RegisterDragDrop(hwnd, target);
     }
     if (FAILED(registered)) {
-        if (std::getenv("MOTE_KEYLOG"))
+        if (!env_value("MOTE_KEYLOG").empty())
             std::fprintf(stderr, "WIN RegisterDragDrop failed %s\n",
                          hr_string(registered).c_str());
         if (error)

@@ -1,5 +1,7 @@
 #include "web_host_view.h"
 
+#include "env.h"
+
 #include "core/inject_chunks.h"
 #include "core/js_bridge.h"
 #include "core/json.h"
@@ -59,7 +61,8 @@ void log_line(const wchar_t *text)
 {
     OutputDebugStringW(text);
     OutputDebugStringW(L"\n");
-    if (const char *path = std::getenv("MOTE_LOG"); path && *path) {
+    const std::string path = env_value("MOTE_LOG");
+    if (!path.empty()) {
         std::ofstream file(std::filesystem::path(utf8_to_wide(path)),
                            std::ios::app | std::ios::binary);
         if (file)
@@ -196,10 +199,7 @@ std::string base64_encode(const std::string &bytes)
 
 bool inline_proto_enabled()
 {
-    const char *value = std::getenv("MOTE_INLINE_PROTO");
-    if (!value)
-        return true;
-    const std::string text(value);
+    const std::string text = env_value("MOTE_INLINE_PROTO");
     return text != "0" && text != "false" && text != "off";
 }
 

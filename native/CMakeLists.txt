@@ -103,10 +103,7 @@ if(WIN32)
     mote_core user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32
     urlmon windowscodecs)
   target_compile_definitions(Mote PRIVATE
-    UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00
-    # MOTE_* 诊断开关统一用 std::getenv 读取；MSVC 的 SDL 检查会对它报 C4996，
-    # 按编译器提示关闭这一条（只影响本目标，不改变任何行为）。
-    _CRT_SECURE_NO_WARNINGS)
+    UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00)
   target_compile_options(Mote PRIVATE /utf-8 /W4 /permissive-)
   # 关闭链接器自动生成的 manifest，改用 app.manifest（Common Controls v6）
   target_link_options(Mote PRIVATE /MANIFEST:NO)
