@@ -23,6 +23,8 @@ public:
     void resize(int width, int height);
     void load_page(const std::string &base_dir);
     void evaluate_script(const std::string &script);
+    // 正文注入：小文档单条脚本，大文档走消息通道，再大则分片拼接
+    void inject_markdown(const std::string &text);
     void focus();
 
 private:

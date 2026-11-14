@@ -10,6 +10,11 @@
 
 namespace mote {
 
+void EditorHost::injectDocument(const std::string &text)
+{
+    evaluateJs(js::setMarkdown(text));
+}
+
 void EditorController::setMarkdown(const std::string &text, const std::string &baseDir)
 {
     if (!m_pageLoaded || baseDir != m_baseDir) {
@@ -79,7 +84,7 @@ void EditorController::applyBaseHref()
 
 void EditorController::injectMarkdown(const std::string &text)
 {
-    m_host.evaluateJs(js::setMarkdown(text));
+    m_host.injectDocument(text);
     m_hasPending = false;
 }
 
@@ -117,6 +122,14 @@ void EditorController::clipboardCommand(const std::string &command)
     }
     if (command != "paste")
         return;
+
+    // 图片优先，与页面原生粘贴分支同一口径：解码后的字节交给图片落盘逻辑
+    std::vector<std::uint8_t> image;
+    std::string mime;
+    if (m_host.clipboardImage(&image, &mime) && !image.empty()) {
+        saveImageBytes(image, mime.empty() ? "image/png" : mime, "paste", true);
+        return;
+    }
 
     const std::string text = m_host.clipboardText();
     if (text.empty()) {

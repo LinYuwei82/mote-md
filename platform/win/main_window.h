@@ -4,8 +4,10 @@
 
 #include "core/command_table.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 class ShellHost;
 class WebHostView;
@@ -37,6 +39,9 @@ public:
     void save_requested_text(const std::string &text);
     void open_requested();
     void drop_received(const std::string &name, const std::string &text);
+    void inject_document(const std::string &text);
+    void file_drop_requested(const std::string &path);
+    bool clipboard_image(std::vector<std::uint8_t> *bytes, std::string *mime);
     void navigation_completed();
     void page_ready();
     void dirty_changed();
@@ -72,6 +77,8 @@ private:
     bool system_is_dark() const;
     void update_menu_state();
     void run_startup_command();
+    void ensure_drop_target();
+    void revoke_drop_target();
 
     HINSTANCE instance_ = nullptr;
     HWND hwnd_ = nullptr;
@@ -79,6 +86,8 @@ private:
     std::unique_ptr<ShellHost> shell_;
     std::unique_ptr<mote::EditorController> controller_;
     HACCEL accel_ = nullptr;
+    HWND drop_hwnd_ = nullptr;
+    void *drop_target_ = nullptr;
     std::string file_path_;
     std::string last_dir_;
     std::string last_text_;

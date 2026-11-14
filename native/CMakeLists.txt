@@ -37,6 +37,7 @@ add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/command_table.cpp"
   "${MOTE_REPO_ROOT}/core/editor_controller.cpp"
   "${MOTE_REPO_ROOT}/core/image_store.cpp"
+  "${MOTE_REPO_ROOT}/core/inject_chunks.cpp"
   "${MOTE_REPO_ROOT}/core/js_bridge.cpp"
   "${MOTE_REPO_ROOT}/core/json.cpp"
   "${MOTE_REPO_ROOT}/core/paths.cpp")
@@ -89,6 +90,7 @@ if(WIN32)
     "${MOTE_PLATFORM_WIN}/main.cpp"
     "${MOTE_PLATFORM_WIN}/main_window.cpp"
     "${MOTE_PLATFORM_WIN}/menus.cpp"
+    "${MOTE_PLATFORM_WIN}/drop_target.cpp"
     "${MOTE_PLATFORM_WIN}/dialogs.cpp"
     "${MOTE_PLATFORM_WIN}/web_host_view.cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
@@ -96,7 +98,8 @@ if(WIN32)
   target_include_directories(Mote PRIVATE
     "${MOTE_WEBVIEW2_SDK}/build/native/include")
   target_link_libraries(Mote PRIVATE
-    mote_core user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32 urlmon)
+    mote_core user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32
+    urlmon windowscodecs)
   target_compile_definitions(Mote PRIVATE
     UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00)
   target_compile_options(Mote PRIVATE /utf-8 /W4 /permissive-)
