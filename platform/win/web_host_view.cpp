@@ -554,6 +554,34 @@ void WebHostView::evaluate_script_result(
             .Get());
 }
 
+void WebHostView::capture_preview(const std::string &path, std::function<void(bool)> callback)
+{
+    if (!webview_ || path.empty()) {
+        if (callback)
+            callback(false);
+        return;
+    }
+    Microsoft::WRL::ComPtr<IStream> stream;
+    const std::wstring wide = utf8_to_wide(path);
+    if (FAILED(SHCreateStreamOnFileEx(wide.c_str(),
+                                      STGM_CREATE | STGM_WRITE | STGM_SHARE_DENY_WRITE,
+                                      FILE_ATTRIBUTE_NORMAL, TRUE, nullptr, &stream))) {
+        if (callback)
+            callback(false);
+        return;
+    }
+    auto alive = alive_;
+    webview_->CapturePreview(
+        COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, stream.Get(),
+        Microsoft::WRL::Callback<ICoreWebView2CapturePreviewCompletedHandler>(
+            [alive, callback](HRESULT error) -> HRESULT {
+                if (*alive && callback)
+                    callback(SUCCEEDED(error));
+                return S_OK;
+            })
+            .Get());
+}
+
 void WebHostView::print_to_pdf(const std::string &path, double scale,
                                std::function<void(bool)> callback)
 {

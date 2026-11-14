@@ -32,6 +32,8 @@ public:
     // A4 纵向打印，边距与 mac 一致；scale 由调用方按正文宽度算好
     void print_to_pdf(const std::string &path, double scale,
                       std::function<void(bool)> callback);
+    // 诊断用（MOTE_SNAPSHOT）：直接把 WebView2 画面渲染成 PNG
+    void capture_preview(const std::string &path, std::function<void(bool)> callback);
     // 正文注入：小文档单条脚本，大文档走消息通道，再大则分片拼接
     void inject_markdown(const std::string &text);
     void focus();

@@ -793,3 +793,51 @@ copy LICENSE dist\Mote-Windows\licenses\LICENSE-AGPL-3.0.txt
 6. **链接的复制验证方式**：`Cmd+A`/`Cmd+C` 在 WKWebView + Qt 的外壳里不会产生选区（历史遗留），
    因此链接的「复制出标准 Markdown」走产品自身的 `copy` 处理器 + 合成 `DataTransfer` 读取
    `text/plain` 验证；真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
+
+---
+
+## 6. Windows 原生薄外壳（阶段 B）打包与基线
+
+与 Qt 版并存，产物带 `-native` 后缀；阶段 B 期间 Qt 脚本仍是正式产物。
+
+### 6.1 打包
+
+在已加载 MSVC 2022 x64 环境的 PowerShell 中：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+```
+
+- 默认构建目录 `build-native-ninja`（可用 `-BuildDir` 覆盖），`-SkipBuild` 跳过编译。
+- 产物 `dist/Mote-Windows-native/`：`Mote.exe`、`WebView2Loader.dll`、`web/`、`fonts/`、
+  `samples/`、`licenses/`；同名 zip。
+- 自检：产物内不得出现 `Qt6*.dll` 与 `platforms/qwindows.dll`；`dumpbin /dependents`
+  只允许系统 DLL（`api-ms-*` 放行）。
+- 实测（2026-11-14，MSVC 14.44 / WebView2 Runtime 157.0.4341.46）：
+
+| 项 | 值 |
+|---|---|
+| Mote.exe | 632,832 字节（静态 CRT） |
+| WebView2Loader.dll | 165,968 字节 |
+| zip | 607,489 字节 |
+| 依赖 | USER32 / ole32 / ADVAPI32 / SHLWAPI / SHELL32 / COMCTL32 / KERNEL32 |
+| Qt 文件 | 0 |
+
+### 6.2 截图与页面基线
+
+`MOTE_EVAL`、`MOTE_SNAPSHOT`、`MOTE_SNAPSHOT_DELAY` 在 Windows 与 mac 同名同义；
+Windows 用 `CapturePreview` 直接渲染（不依赖截屏）。基线命令：
+
+```powershell
+$env:MOTE_LOG="$env:TEMP\mote-snap.log"; $env:MOTE_KEYLOG="1"
+$env:MOTE_EVAL="document.querySelectorAll('.block').length"
+$env:MOTE_SNAPSHOT="$env:TEMP\mote-snap.png"
+dist\Mote-Windows-native\Mote.exe dist\Mote-Windows-native\samples\welcome.md
+```
+
+实测：`JSLOG EVAL 44`（44 个 block），`NATIVE stats cjk=909 words=345`，
+PNG 1180×800 / 105,464 字节，页面正常渲染。
+
+mac 对照基线需在 mac 上以同一命令产出后比对（当前 Windows 机器无法运行 mac 版），
+比对时关注：正文排版、代码块高亮、状态栏样式（类名不同但样式应一致）。
+

@@ -37,6 +37,7 @@ constexpr int kMinWidth = 760;
 constexpr int kMinHeight = 520;
 
 constexpr UINT_PTR kStartupCommandTimer = 1;
+constexpr UINT_PTR kSnapshotTimer = 2;
 
 std::wstring utf8_to_wide(const std::string &text)
 {
@@ -483,6 +484,17 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             run_startup_command();
             return 0;
         }
+        if (wparam == kSnapshotTimer) {
+            KillTimer(hwnd, kSnapshotTimer);
+            if (const char *snapshot = std::getenv("MOTE_SNAPSHOT");
+                snapshot && *snapshot && host_) {
+                const std::string path = snapshot;
+                host_->capture_preview(path, [this, path](bool ok) {
+                    log_line(std::string("SNAPSHOT ") + (ok ? "OK " : "ERR ") + path);
+                });
+            }
+            return 0;
+        }
         break;
     case WM_SETTINGCHANGE:
         if (wparam == WM_SETTINGCHANGE && lparam && follow_system_
@@ -900,6 +912,24 @@ void MoteMainWindow::page_ready()
     // MOTE_COMMAND 诊断钩子：页面就绪后再等 700ms，避开首帧布局
     if (!startup_command_done_ && std::getenv("MOTE_COMMAND"))
         SetTimer(hwnd_, kStartupCommandTimer, 700, nullptr);
+
+    // 与 mac 同名的诊断钩子：MOTE_EVAL 打一条 JSLOG，MOTE_SNAPSHOT 出 PNG
+    if (!diagnostics_started_) {
+        diagnostics_started_ = true;
+        if (const char *expression = std::getenv("MOTE_EVAL"); expression && *expression) {
+            const std::string probe =
+                "(function(){try{var r=(" + std::string(expression)
+                + ");window.chrome.webview.postMessage({type:'log',message:'EVAL '+String(r)});}"
+                  "catch(e){window.chrome.webview.postMessage({type:'log',message:'EVALERR '+e});}})();";
+            host_->evaluate_script(probe);
+            log_line("NATIVE eval scheduled");
+        }
+        if (const char *snapshot = std::getenv("MOTE_SNAPSHOT"); snapshot && *snapshot) {
+            const char *raw = std::getenv("MOTE_SNAPSHOT_DELAY");
+            const double delay = raw && *raw ? std::atof(raw) : 2000.0;
+            SetTimer(hwnd_, kSnapshotTimer, static_cast<UINT>(delay < 0 ? 0 : delay), nullptr);
+        }
+    }
 }
 
 void MoteMainWindow::dirty_changed()
