@@ -105,6 +105,8 @@ private:
     bool dark_mode_ = false;
     bool startup_command_done_ = false;
     bool diagnostics_started_ = false;
+    bool drop_probe_done_ = false;
+    std::vector<std::string> drop_probe_paths_;
     double last_zoom_ = 1.0;
     AfterSave after_save_ = AfterSave::None;
     std::string after_save_path_;

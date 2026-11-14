@@ -38,6 +38,7 @@ constexpr int kMinHeight = 520;
 
 constexpr UINT_PTR kStartupCommandTimer = 1;
 constexpr UINT_PTR kSnapshotTimer = 2;
+constexpr UINT_PTR kDropProbeTimer = 3;
 
 std::wstring utf8_to_wide(const std::string &text)
 {
@@ -524,6 +525,14 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             }
             return 0;
         }
+        if (wparam == kDropProbeTimer) {
+            KillTimer(hwnd, kDropProbeTimer);
+            log_line("NATIVE drop probe paths="
+                     + std::to_string(drop_probe_paths_.size()));
+            if (controller_ && !drop_probe_paths_.empty())
+                controller_->handleNativeFileDrop(drop_probe_paths_);
+            return 0;
+        }
         break;
     case WM_SETTINGCHANGE:
         if (wparam == WM_SETTINGCHANGE && lparam && follow_system_
@@ -957,6 +966,30 @@ void MoteMainWindow::page_ready()
             const char *raw = std::getenv("MOTE_SNAPSHOT_DELAY");
             const double delay = raw && *raw ? std::atof(raw) : 2000.0;
             SetTimer(hwnd_, kSnapshotTimer, static_cast<UINT>(delay < 0 ? 0 : delay), nullptr);
+        }
+        // 与 mac 同名同义：页面就绪 900ms 后把指定路径当成一次真实拖放。
+        // mac 用 ':' 分隔；Windows 盘符本身带 ':'，这里改成分号。
+        if (!drop_probe_done_) {
+            if (const char *paths = std::getenv("MOTE_DROP"); paths && *paths) {
+                drop_probe_done_ = true;
+                std::string list = paths;
+                size_t start = 0;
+                while (start <= list.size()) {
+                    const size_t end = list.find(';', start);
+                    const std::string item = list.substr(
+                        start, end == std::string::npos ? std::string::npos : end - start);
+                    if (!item.empty())
+                        drop_probe_paths_.push_back(item);
+                    if (end == std::string::npos)
+                        break;
+                    start = end + 1;
+                }
+                if (!drop_probe_paths_.empty()) {
+                    log_line("NATIVE drop probe scheduled paths="
+                             + std::to_string(drop_probe_paths_.size()));
+                    SetTimer(hwnd_, kDropProbeTimer, 900, nullptr);
+                }
+            }
         }
     }
 }
