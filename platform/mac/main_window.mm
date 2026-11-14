@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <vector>
 
 typedef NS_ENUM(NSInteger, MoteAfterSave) {
     MoteAfterSaveNone = 0,
@@ -70,7 +71,26 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
 - (BOOL)prepareForReplace:(MoteAfterSave)after path:(NSString *)path;
 - (void)runAfterSave;
 - (void)resetAfterSave;
+- (void)setupDropHandlers;
+- (void)runDropProbeIfNeeded;
+- (BOOL)performNativeDrop:(NSArray<NSString *> *)paths;
 @end
+
+static BOOL MoteKeyLogEnabled(void)
+{
+    return std::getenv("MOTE_KEYLOG") != nullptr;
+}
+
+static std::vector<std::string> MotePathsToVector(NSArray<NSString *> *paths)
+{
+    std::vector<std::string> result;
+    result.reserve(paths.count);
+    for (NSString *path in paths) {
+        if (path.UTF8String)
+            result.emplace_back(path.UTF8String);
+    }
+    return result;
+}
 
 namespace {
 
@@ -182,6 +202,7 @@ private:
     std::unique_ptr<mote::EditorController> _controller;
     BOOL _tocOn;
     BOOL _sourceOn;
+    BOOL _dropProbeDone;
     double _lastZoom;
 }
 
@@ -218,6 +239,7 @@ private:
 
     _shell = std::make_unique<ShellHost>(self);
     _controller = std::make_unique<mote::EditorController>(*_shell);
+    [self setupDropHandlers];
 
     [self installMenu];
     [self loadBuiltinSample];
@@ -273,6 +295,12 @@ private:
     if (NSApp.modalWindow || !self.window.isKeyWindow)
         return event;
 
+    if (MoteKeyLogEnabled()) {
+        std::fprintf(stderr, "NATIVE keydown chars=%s flags=%lu\n",
+                     event.charactersIgnoringModifiers.UTF8String,
+                     (unsigned long)event.modifierFlags);
+    }
+
     for (const mote::MenuSpec &menu : mote::menus()) {
         for (const mote::CommandId id : menu.items) {
             const mote::CommandSpec *spec = mote::findCommand(id);
@@ -281,6 +309,8 @@ private:
             for (const std::string &shortcut : spec->shortcuts) {
                 NSString *text = [NSString stringWithUTF8String:shortcut.c_str()];
                 if (MoteEventMatchesShortcut(event, text)) {
+                    if (MoteKeyLogEnabled())
+                        std::fprintf(stderr, "NATIVE key matched %s\n", shortcut.c_str());
                     [self performCommand:id];
                     return nil;
                 }
@@ -293,6 +323,8 @@ private:
 - (void)performCommand:(mote::CommandId)command
 {
     const mote::CommandSpec *spec = mote::findCommand(command);
+    if (MoteKeyLogEnabled() && spec)
+        std::fprintf(stderr, "NATIVE command %s\n", spec->title.c_str());
 
     switch (command) {
     case mote::CommandId::New:
@@ -381,6 +413,9 @@ private:
     _tocOn = state.toc;
     _sourceOn = state.source;
     [self updateMenuStates];
+    if (MoteKeyLogEnabled())
+        std::fprintf(stderr, "NATIVE view toc=%d source=%d zoom=%.2f\n", state.toc ? 1 : 0,
+                     state.source ? 1 : 0, state.zoom);
     if (std::abs(state.zoom - _lastZoom) > 0.001) {
         _lastZoom = state.zoom;
         [self showStatus:[NSString stringWithFormat:@"缩放：%d%%", (int)lround(state.zoom * 100)]];
@@ -446,6 +481,9 @@ private:
     self.window.documentEdited = _controller && _controller->dirty();
     if (self.filePath.length > 0)
         [self.window setRepresentedFilename:self.filePath];
+    if (MoteKeyLogEnabled())
+        std::fprintf(stderr, "NATIVE title=%s dirty=%d\n", self.window.title.UTF8String,
+                     _controller && _controller->dirty() ? 1 : 0);
 }
 
 - (void)newDocument
@@ -496,6 +534,8 @@ private:
     self.lastText = text;
     _controller->setMarkdown(text.UTF8String, self.lastDir.UTF8String);
     [self updateWindowTitle];
+    if (MoteKeyLogEnabled())
+        std::fprintf(stderr, "NATIVE open %s\n", path.UTF8String);
     [self showStatus:[NSString stringWithFormat:@"已打开：%@", path]];
 }
 
@@ -565,6 +605,9 @@ private:
     // 另存为可能换了目录：图片落盘位置跟随新的 .md 路径
     _controller->setBaseDir(self.lastDir.UTF8String);
     [self updateWindowTitle];
+    if (MoteKeyLogEnabled())
+        std::fprintf(stderr, "NATIVE save %s bytes=%lu\n", path.UTF8String,
+                     (unsigned long)[content lengthOfBytesUsingEncoding:NSUTF8StringEncoding]);
     [self showStatus:[NSString stringWithFormat:@"已保存：%@", path]];
     [self runAfterSave];
 }
@@ -698,8 +741,65 @@ private:
 
 - (void)pageBecameReady
 {
+    if (MoteKeyLogEnabled())
+        std::fprintf(stderr, "NATIVE ready gen=%llu\n",
+                     (unsigned long long)_controller->pageGeneration());
     [self.host focusEditor];
+    [self.host runPageDiagnostics];
+    [self runDropProbeIfNeeded];
     [self updateWindowTitle];
+}
+
+#pragma mark - 拖放
+
+- (void)setupDropHandlers
+{
+    __weak MoteMainWindow *weakSelf = self;
+    self.host.canAcceptFileDrop = ^BOOL(NSArray<NSString *> *paths) {
+        MoteMainWindow *window = weakSelf;
+        return window && window->_controller->acceptsNativeFileDrop(MotePathsToVector(paths));
+    };
+    self.host.performFileDrop = ^BOOL(NSArray<NSString *> *paths) {
+        MoteMainWindow *window = weakSelf;
+        if (!window)
+            return NO;
+        const std::vector<std::string> list = MotePathsToVector(paths);
+        const bool handled = window->_controller->handleNativeFileDrop(list);
+        if (MoteKeyLogEnabled()) {
+            for (const std::string &path : list)
+                std::fprintf(stderr, "NATIVE drop %s -> %d\n", path.c_str(), handled ? 1 : 0);
+        }
+        return handled;
+    };
+}
+
+// 诊断用（MOTE_DROP=路径[:路径]）：自动化环境无法模拟 Finder 拖放，
+// 页面就绪后把同一套拖放处理按时调用一次。
+- (void)runDropProbeIfNeeded
+{
+    if (_dropProbeDone)
+        return;
+    const char *probe = std::getenv("MOTE_DROP");
+    if (!probe || !*probe)
+        return;
+    _dropProbeDone = YES;
+
+    NSString *text = [NSString stringWithUTF8String:probe];
+    NSMutableArray<NSString *> *paths = [NSMutableArray array];
+    for (NSString *part in [text componentsSeparatedByString:@":"]) {
+        if (part.length > 0)
+            [paths addObject:part];
+    }
+    __weak MoteMainWindow *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.9 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+                       [weakSelf performNativeDrop:paths];
+                   });
+}
+
+- (BOOL)performNativeDrop:(NSArray<NSString *> *)paths
+{
+    return self.host.performFileDrop ? self.host.performFileDrop(paths) : NO;
 }
 
 - (void)showStatus:(NSString *)text

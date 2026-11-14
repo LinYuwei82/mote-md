@@ -10,9 +10,16 @@
 // 页面消息（已确认页面代次）；由外壳转给 EditorController::handleMessage
 @property(nonatomic, copy) void (^messageHandler)(NSDictionary *body);
 
+// 原生文件拖放：判定与处理都交给 core，宿主只负责从拖放板取路径
+@property(nonatomic, copy) BOOL (^canAcceptFileDrop)(NSArray<NSString *> *paths);
+@property(nonatomic, copy) BOOL (^performFileDrop)(NSArray<NSString *> *paths);
+
 // directory 为空表示未命名文档：临时页面落在系统临时目录
 - (void)loadEditorPageInDirectory:(NSString *)directory;
 - (void)evaluateJavaScript:(NSString *)script;
 - (void)focusEditor;
+
+// 诊断钩子（MOTE_EVAL / MOTE_SNAPSHOT），页面 ready 后由外壳调用
+- (void)runPageDiagnostics;
 
 @end
