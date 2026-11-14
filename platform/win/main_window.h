@@ -42,6 +42,8 @@ public:
     void inject_document(const std::string &text);
     void file_drop_requested(const std::string &path);
     bool clipboard_image(std::vector<std::uint8_t> *bytes, std::string *mime);
+    // Ctrl+V 钩子：剪贴板里是图片时由外壳粘贴（保留 alpha），否则交回 Chromium
+    bool paste_clipboard_image();
     void navigation_completed();
     void page_ready();
     void dirty_changed();

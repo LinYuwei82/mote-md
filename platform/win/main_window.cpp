@@ -158,39 +158,81 @@ bool encode_dib_to_png(const std::vector<std::uint8_t> &dib, std::vector<std::ui
     BITMAPINFOHEADER info = {};
     std::memcpy(&info, dib.data(), sizeof(info));
 
-    BITMAPFILEHEADER file = {};
-    file.bfType = 0x4D42;
-    file.bfOffBits = static_cast<DWORD>(sizeof(BITMAPFILEHEADER) + info.biSize);
-    if (info.biBitCount <= 8) {
-        const DWORD colors = info.biClrUsed ? info.biClrUsed : (1u << info.biBitCount);
-        file.bfOffBits += colors * 4;
-    } else if (info.biCompression == BI_BITFIELDS) {
-        file.bfOffBits += 12;
-    }
-    file.bfSize = static_cast<DWORD>(sizeof(BITMAPFILEHEADER) + dib.size());
-
-    std::vector<std::uint8_t> bmp(file.bfSize);
-    std::memcpy(bmp.data(), &file, sizeof(file));
-    std::memcpy(bmp.data() + sizeof(file), dib.data(), dib.size());
-
     using Microsoft::WRL::ComPtr;
     ComPtr<IWICImagingFactory> factory;
     if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
                                 IID_PPV_ARGS(&factory))))
         return false;
 
-    ComPtr<IStream> input;
-    input.Attach(SHCreateMemStream(bmp.data(), static_cast<UINT>(bmp.size())));
-    if (!input)
-        return false;
+    // 32bpp BI_RGB 的 alpha 字节在 BMP 规范里未定义，WIC 解码时会直接丢掉；
+    // 浏览器和截图工具却常在这里写真实 alpha。只要这些字节既非全 0（视为
+    // 未定义）也非全 255（不透明），就按 BGRA 原样送进 PNG 编码器。
+    ComPtr<IWICBitmapSource> source;
+    if (info.biBitCount == 32 && info.biCompression == BI_RGB && info.biWidth > 0
+        && info.biHeight != 0) {
+        const size_t width = static_cast<size_t>(info.biWidth);
+        const size_t height = static_cast<size_t>(info.biHeight < 0 ? -info.biHeight
+                                                                     : info.biHeight);
+        const size_t stride = width * 4;
+        const size_t offset = static_cast<size_t>(info.biSize);
+        if (offset >= sizeof(BITMAPINFOHEADER) && dib.size() >= offset + stride * height) {
+            const std::uint8_t *raw = dib.data() + offset;
+            bool any_alpha = false;
+            bool any_translucent = false;
+            for (size_t pixel = 0; pixel < width * height; ++pixel) {
+                const std::uint8_t alpha = raw[pixel * 4 + 3];
+                any_alpha = any_alpha || alpha != 0;
+                any_translucent = any_translucent || alpha != 255;
+            }
+            if (any_alpha && any_translucent) {
+                std::vector<std::uint8_t> pixels(stride * height);
+                const bool top_down = info.biHeight < 0;
+                for (size_t row = 0; row < height; ++row) {
+                    const size_t source_row = top_down ? row : height - 1 - row;
+                    std::memcpy(pixels.data() + row * stride, raw + source_row * stride,
+                                stride);
+                }
+                ComPtr<IWICBitmap> bitmap;
+                if (SUCCEEDED(factory->CreateBitmapFromMemory(
+                        static_cast<UINT>(width), static_cast<UINT>(height),
+                        GUID_WICPixelFormat32bppBGRA, static_cast<UINT>(stride),
+                        static_cast<UINT>(pixels.size()), pixels.data(), &bitmap)))
+                    source = bitmap;
+            }
+        }
+    }
 
-    ComPtr<IWICBitmapDecoder> decoder;
-    if (FAILED(factory->CreateDecoderFromStream(input.Get(), nullptr,
-                                                WICDecodeMetadataCacheOnLoad, &decoder)))
-        return false;
-    ComPtr<IWICBitmapFrameDecode> frame;
-    if (FAILED(decoder->GetFrame(0, &frame)))
-        return false;
+    if (!source) {
+        BITMAPFILEHEADER file = {};
+        file.bfType = 0x4D42;
+        file.bfOffBits = static_cast<DWORD>(sizeof(BITMAPFILEHEADER) + info.biSize);
+        if (info.biBitCount <= 8) {
+            const DWORD colors = info.biClrUsed ? info.biClrUsed : (1u << info.biBitCount);
+            file.bfOffBits += colors * 4;
+        } else if (info.biCompression == BI_BITFIELDS) {
+            file.bfOffBits += 12;
+        }
+        file.bfSize = static_cast<DWORD>(sizeof(BITMAPFILEHEADER) + dib.size());
+
+        std::vector<std::uint8_t> bmp(file.bfSize);
+        std::memcpy(bmp.data(), &file, sizeof(file));
+        std::memcpy(bmp.data() + sizeof(file), dib.data(), dib.size());
+
+        ComPtr<IStream> input;
+        input.Attach(SHCreateMemStream(bmp.data(), static_cast<UINT>(bmp.size())));
+        if (!input)
+            return false;
+
+        ComPtr<IWICBitmapDecoder> decoder;
+        if (FAILED(factory->CreateDecoderFromStream(input.Get(), nullptr,
+                                                    WICDecodeMetadataCacheOnLoad,
+                                                    &decoder)))
+            return false;
+        ComPtr<IWICBitmapFrameDecode> frame;
+        if (FAILED(decoder->GetFrame(0, &frame)))
+            return false;
+        source = frame;
+    }
 
     ComPtr<IStream> output;
     output.Attach(SHCreateMemStream(nullptr, 0));
@@ -208,7 +250,7 @@ bool encode_dib_to_png(const std::vector<std::uint8_t> &dib, std::vector<std::ui
         return false;
     if (FAILED(encode_frame->Initialize(properties.Get())))
         return false;
-    if (FAILED(encode_frame->WriteSource(frame.Get(), nullptr)))
+    if (FAILED(encode_frame->WriteSource(source.Get(), nullptr)))
         return false;
     if (FAILED(encode_frame->Commit()) || FAILED(encoder->Commit()))
         return false;
@@ -224,6 +266,13 @@ bool encode_dib_to_png(const std::vector<std::uint8_t> &dib, std::vector<std::ui
         return false;
     png->resize(read);
     return !png->empty();
+}
+
+bool clipboard_has_image()
+{
+    if (!IsClipboardFormatAvailable(CF_DIB))
+        return IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG"));
+    return true;
 }
 
 void put_clipboard_bytes(UINT format, const std::string &bytes)
@@ -404,7 +453,8 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             [this](std::string_view json) {
                 if (controller_)
                     controller_->handleMessage(json);
-            });
+            },
+            [this] { return paste_clipboard_image(); });
         shell_ = std::make_unique<ShellHost>(*this);
         controller_ = std::make_unique<mote::EditorController>(*shell_);
         load_builtin_sample();
@@ -1001,6 +1051,16 @@ bool MoteMainWindow::clipboard_image(std::vector<std::uint8_t> *bytes, std::stri
 
     CloseClipboard();
     return found;
+}
+
+bool MoteMainWindow::paste_clipboard_image()
+{
+    if (!controller_ || source_on_)
+        return false;
+    if (!clipboard_has_image())
+        return false;
+    controller_->clipboardCommand("paste");
+    return true;
 }
 
 void MoteMainWindow::ensure_drop_target()

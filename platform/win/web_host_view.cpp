@@ -240,10 +240,12 @@ std::wstring font_face_css()
 } // namespace
 
 WebHostView::WebHostView(HWND parent, std::function<void()> on_page_loaded,
-                         std::function<void(std::string_view)> on_message)
+                         std::function<void(std::string_view)> on_message,
+                         std::function<bool()> on_image_paste)
     : parent_(parent)
     , page_loaded_(std::move(on_page_loaded))
     , message_(std::move(on_message))
+    , image_paste_(std::move(on_image_paste))
 {
     initialize();
 }
@@ -252,6 +254,8 @@ WebHostView::~WebHostView()
 {
     *alive_ = false;
     if (controller_) {
+        if (accelerator_token_.value)
+            controller_->remove_AcceleratorKeyPressed(accelerator_token_);
         controller_->Close();
         controller_.Reset();
     }
@@ -396,6 +400,33 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
             })
             .Get(),
         &navigation_token_);
+
+    // Ctrl+V 优先走外壳剪贴板：Chromium 把 CF_DIB 转成图片时会丢弃 alpha，
+    // 只有外壳自己解码才能保住透明通道。剪贴板里没有图片时交回 Chromium，
+    // 文本粘贴、源码模式 textarea 与页面内输入框的行为都不变。
+    if (image_paste_) {
+        controller_->add_AcceleratorKeyPressed(
+            Microsoft::WRL::Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
+                [this](ICoreWebView2Controller *,
+                       ICoreWebView2AcceleratorKeyPressedEventArgs *args) -> HRESULT {
+                    if (!*alive_ || !args || !image_paste_)
+                        return S_OK;
+                    COREWEBVIEW2_KEY_EVENT_KIND kind = COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN;
+                    args->get_KeyEventKind(&kind);
+                    if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN
+                        && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN)
+                        return S_OK;
+                    UINT key = 0;
+                    args->get_VirtualKey(&key);
+                    if (key != 'V' || GetKeyState(VK_CONTROL) >= 0)
+                        return S_OK;
+                    if (image_paste_())
+                        args->put_Handled(TRUE);
+                    return S_OK;
+                })
+                .Get(),
+            &accelerator_token_);
+    }
 
     if (page_pending_) {
         page_pending_ = false;
