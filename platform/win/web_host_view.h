@@ -26,6 +26,12 @@ public:
     void resize(int width, int height);
     void load_page(const std::string &base_dir);
     void evaluate_script(const std::string &script);
+    // 需要返回值的脚本（PDF 导出前量正文宽度），结果是页面的 JSON 文本
+    void evaluate_script_result(const std::string &script,
+                                std::function<void(bool, const std::string &)> callback);
+    // A4 纵向打印，边距与 mac 一致；scale 由调用方按正文宽度算好
+    void print_to_pdf(const std::string &path, double scale,
+                      std::function<void(bool)> callback);
     // 正文注入：小文档单条脚本，大文档走消息通道，再大则分片拼接
     void inject_markdown(const std::string &text);
     void focus();

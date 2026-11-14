@@ -92,6 +92,8 @@ if(WIN32)
     "${MOTE_PLATFORM_WIN}/menus.cpp"
     "${MOTE_PLATFORM_WIN}/drop_target.cpp"
     "${MOTE_PLATFORM_WIN}/dialogs.cpp"
+    "${MOTE_PLATFORM_WIN}/html_export.cpp"
+    "${MOTE_PLATFORM_WIN}/pdf_export.cpp"
     "${MOTE_PLATFORM_WIN}/web_host_view.cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
 

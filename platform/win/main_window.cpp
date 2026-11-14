@@ -2,7 +2,9 @@
 
 #include "dialogs.h"
 #include "drop_target.h"
+#include "html_export.h"
 #include "menus.h"
+#include "pdf_export.h"
 #include "web_host_view.h"
 
 #include "core/editor_controller.h"
@@ -324,13 +326,11 @@ public:
     }
     void exportHtmlReady(const std::string &html) override
     {
-        (void)html;
-        owner_.status_message("导出 HTML 将在 N4 实现");
+        owner_.export_html_ready(html);
     }
     void exportPdfRequested(const std::string &path) override
     {
-        (void)path;
-        owner_.status_message("导出 PDF 将在 N4 实现");
+        owner_.export_pdf_requested(path);
     }
     void exportPdfFailed(const std::string &message) override
     {
@@ -684,6 +684,118 @@ bool MoteMainWindow::write_text(const std::string &text, const std::string &path
     return false;
 }
 
+void MoteMainWindow::prompt_export_pdf()
+{
+    if (!controller_ || file_path_.empty())
+        return;
+    std::string base = file_name(file_path_);
+    const size_t dot = base.find_last_of('.');
+    if (dot != std::string::npos)
+        base = base.substr(0, dot);
+    const std::string suggested = parent_dir(file_path_) + "\\" + base + ".pdf";
+
+    if (const char *prompt_only = std::getenv("MOTE_PDF_PROMPT");
+        prompt_only && *prompt_only) {
+        log_line("NATIVE pdf suggested=" + suggested);
+        return;
+    }
+    std::string path;
+    if (const char *forced = std::getenv("MOTE_PDF_AS"); forced && *forced)
+        path = forced;
+    else
+        path = MoteSaveDialog(hwnd_, L"导出 PDF", suggested, L"pdf");
+    if (path.empty())
+        return;
+    path = with_extension(path, "pdf");
+
+    status_message("正在导出 PDF…");
+    controller_->requestExportPdf(path);
+}
+
+void MoteMainWindow::export_html_ready(const std::string &html)
+{
+    if (html.empty()) {
+        status_message("导出失败：页面没有返回内容");
+        return;
+    }
+
+    std::string suggested;
+    if (file_path_.empty()) {
+        const std::string dir = last_dir_.empty() ? documents_dir() : last_dir_;
+        suggested = dir + "\\未命名.html";
+    } else {
+        std::string base = file_name(file_path_);
+        const size_t dot = base.find_last_of('.');
+        if (dot != std::string::npos)
+            base = base.substr(0, dot);
+        suggested = parent_dir(file_path_) + "\\" + base + ".html";
+    }
+
+    if (const char *prompt_only = std::getenv("MOTE_EXPORT_PROMPT");
+        prompt_only && *prompt_only) {
+        log_line("NATIVE export suggested=" + suggested);
+        return;
+    }
+    std::string path;
+    if (const char *forced = std::getenv("MOTE_EXPORT_AS"); forced && *forced)
+        path = forced;
+    else
+        path = MoteSaveDialog(hwnd_, L"导出 HTML", suggested, L"html");
+    if (path.empty())
+        return;
+    path = with_extension(path, "html");
+
+    // 图片相对路径按 .md 所在目录解析；未命名文档退回上次目录
+    const std::string base_dir = file_path_.empty()
+        ? (last_dir_.empty() ? documents_dir() : last_dir_)
+        : parent_dir(file_path_);
+    int missing = 0;
+    const std::string filled = MoteInlineLocalImages(html, base_dir, &missing);
+    if (!write_text_file(path, filled)) {
+        MoteAlert(hwnd_, L"导出失败", "无法写入文件：\n" + path);
+        return;
+    }
+    log_line("NATIVE export path=" + path + " missing=" + std::to_string(missing));    if (missing > 0)
+        status_message("已导出到 " + path + "（" + std::to_string(missing) + " 张图片缺失）");
+    else
+        status_message("已导出到 " + path);
+}
+
+void MoteMainWindow::export_pdf_requested(const std::string &path)
+{
+    if (!host_ || path.empty())
+        return;
+
+    // 同名旧文件不能算本次成功：先删，成功与否由产物是否生成判定
+    std::error_code error;
+    std::filesystem::remove(std::filesystem::path(utf8_to_wide(path)), error);
+
+    PdfHost pdf;
+    pdf.evaluate = [this](const std::string &script,
+                          std::function<void(bool, const std::string &)> callback) {
+        host_->evaluate_script_result(script, std::move(callback));
+    };
+    pdf.print = [this](const std::string &target, double scale,
+                       std::function<void(bool)> callback) {
+        host_->print_to_pdf(target, scale, std::move(callback));
+    };
+
+    MoteExportPdf(pdf, path, [this, path](bool ok, const std::string &message) {
+        if (!ok) {
+            log_line("NATIVE pdf failed " + message);
+            status_message(message);
+            MoteAlert(hwnd_, L"导出失败", message);
+            return;
+        }
+        std::error_code error;
+        const auto size = std::filesystem::file_size(std::filesystem::path(utf8_to_wide(path)),
+                                                     error);
+        log_line("NATIVE pdf path=" + path + " size="
+                 + std::to_string(error ? 0 : size));
+        status_message("已导出到 " + path);
+    });
+}
+
 bool MoteMainWindow::prepare_for_replace(AfterSave after, const std::string &path)
 {
     if (!controller_ || !controller_->dirty())
@@ -724,7 +836,7 @@ void MoteMainWindow::run_after_save()
         DestroyWindow(hwnd_);
         break;
     case AfterSave::ExportPdf:
-        status_message("导出 PDF 将在 N4 实现");
+        prompt_export_pdf();
         break;
     case AfterSave::None:
         break;
@@ -841,8 +953,15 @@ void MoteMainWindow::perform_command(mote::CommandId command)
             status_message("源码模式下不能导出 PDF，先退出源码模式");
             return;
         }
-        // 原生 PDF 分页导出在 N4 接入
-        status_message("导出 PDF 将在 N4 实现");
+        // 未命名文档没有目录：先另存为，保存完成后再回到导出
+        if (file_path_.empty()) {
+            after_save_ = AfterSave::ExportPdf;
+            begin_save_as(true);
+            return;
+        }
+        if (!prepare_for_replace(AfterSave::ExportPdf, ""))
+            return;
+        prompt_export_pdf();
         return;
     case mote::CommandId::Undo:
         controller_->undo();

@@ -49,6 +49,9 @@ public:
     void dirty_changed();
     void status_message(const std::string &text);
     void error_message(const std::string &text);
+    // 导出（N4）
+    void export_html_ready(const std::string &html);
+    void export_pdf_requested(const std::string &path);
 
 private:
     friend class ShellHost;
@@ -72,6 +75,7 @@ private:
     void reset_after_save();
     bool confirm_close();
     void show_status(const std::string &text);
+    void prompt_export_pdf();
 
     void perform_command(mote::CommandId command);
     void apply_view_state(const mote::ViewState &state);
