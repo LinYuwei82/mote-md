@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 
 #import "main_window.h"
+#import "updater.h"
 
 @interface MoteAppDelegate : NSObject <NSApplicationDelegate>
 @property(nonatomic, strong) MoteMainWindow *mainWindow;
@@ -12,21 +13,12 @@
 {
     (void)notification;
 
-    // Sparkle 自动更新初始化：
-    // 纯 Sparkle 方案只需一行——SUUpdater 单例会读取 Info.plist 的 SUFeedURL，
-    // 按 SUScheduledCheckInterval 定时检查，用户点菜单「检查更新…」也走同一个单例。
-    // 用 NSClassFromString 动态获取类，没有 Sparkle.framework 时自动跳过（开发期友好）。
-    Class SUUpdaterClass = NSClassFromString(@"SUUpdater");
-    if (SUUpdaterClass) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-        // sharedUpdater 返回单例，不持有；Sparkle 自己管生命周期
-        [SUUpdaterClass performSelector:@selector(sharedUpdater)];
-#pragma clang diagnostic pop
-    }
-
     self.mainWindow = [[MoteMainWindow alloc] init];
     [self.mainWindow show];
+
+    // 在线更新：自研检查（OSS 上的 latest.json）负责「有没有新版本」，
+    // 用户确认后由 Sparkle 完成下载、验签与替换。启动后延迟一次 + 每 24 小时一次。
+    [[MoteUpdater sharedUpdater] start];
 
     // 与 Qt 构建一致：第一个命令行参数当作待打开文件
     NSArray<NSString *> *arguments = NSProcessInfo.processInfo.arguments;

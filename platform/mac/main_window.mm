@@ -3,6 +3,7 @@
 #import "dialogs.h"
 #import "html_export.h"
 #import "menus.h"
+#import "updater.h"
 #import "web_host_view.h"
 
 #include "core/command_table.h"
@@ -80,6 +81,7 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
 - (void)runStartupCommandIfNeeded;
 - (BOOL)performNativeDrop:(NSArray<NSString *> *)paths;
 - (void)exportPdf;
+- (void)checkForUpdatesFromMenu:(id)sender;
 @end
 
 static BOOL MoteKeyLogEnabled(void)
@@ -293,6 +295,11 @@ private:
 - (void)handleMenuCommand:(NSMenuItem *)item
 {
     [self performCommand:static_cast<mote::CommandId>(item.tag)];
+}
+
+- (void)checkForUpdatesFromMenu:(id)sender
+{
+    [[MoteUpdater sharedUpdater] checkForUpdatesFromMenu:sender];
 }
 
 - (NSEvent *)interceptKeyDown:(NSEvent *)event

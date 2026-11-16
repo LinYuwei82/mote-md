@@ -9,6 +9,7 @@
 #include "core/js_bridge.h"
 #include "core/json.h"
 #include "core/paths.h"
+#include "core/update.h"
 
 #include <chrono>
 #include <cstdio>
@@ -171,6 +172,67 @@ static void testJson()
     CHECK(!mote::parseJson("", broken));
 
     CHECK_EQ(mote::quoteJson("a\"b\nc\\d"), std::string(R"("a\"b\nc\\d")"));
+}
+
+static void testUpdate()
+{
+    using mote::UpdateDecision;
+    using mote::UpdateManifest;
+
+    // 完整清单
+    UpdateManifest manifest;
+    std::string error;
+    CHECK(mote::parseUpdateManifest(
+        R"({"version":"0.3.6","url":"https://dl.xiaotu.online/mote/Mote-0.3.6.dmg",
+            "size":1655459,"sha256":"abc","min_os":"14.0",
+            "published_at":"2026-11-16T08:00:00Z"})",
+        manifest, &error));
+    CHECK_EQ(manifest.version, std::string("0.3.6"));
+    CHECK_EQ(manifest.size, 1655459LL);
+    CHECK_EQ(manifest.sha256, std::string("abc"));
+    CHECK_EQ(manifest.min_os, std::string("14.0"));
+    CHECK_EQ(manifest.published_at, std::string("2026-11-16T08:00:00Z"));
+
+    // 可选字段缺席时保持空/0，不报错
+    CHECK(mote::parseUpdateManifest(R"({"version":"1.0.0","url":"https://x/y.dmg"})", manifest,
+                                    &error));
+    CHECK_EQ(manifest.size, 0LL);
+    CHECK(manifest.sha256.empty());
+
+    // 必填字段与类型校验
+    CHECK(!mote::parseUpdateManifest(R"({"url":"https://x/y.dmg"})", manifest, &error));
+    CHECK_EQ(error, std::string("更新清单缺少 version"));
+    CHECK(!mote::parseUpdateManifest(R"({"version":"1.0.0"})", manifest, &error));
+    CHECK_EQ(error, std::string("更新清单缺少 url"));
+    CHECK(!mote::parseUpdateManifest(R"({"version":1,"url":"https://x"})", manifest, &error));
+    CHECK(!mote::parseUpdateManifest(R"({"version":"1","url":"https://x","size":-1})", manifest,
+                                     &error));
+    CHECK(!mote::parseUpdateManifest("not json", manifest, &error));
+    CHECK_EQ(error, std::string("更新清单不是合法的 JSON 对象"));
+
+    // 版本比较：数字段比较、缺段补 0、忽略前缀 v 与后缀
+    CHECK_EQ(mote::compareVersions("0.3.5", "0.3.5"), 0);
+    CHECK_EQ(mote::compareVersions("0.3.10", "0.3.9"), 1);
+    CHECK_EQ(mote::compareVersions("1.0", "1.0.0"), 0);
+    CHECK_EQ(mote::compareVersions("v0.4", "0.3.9"), 1);
+    CHECK_EQ(mote::compareVersions("0.3.5-beta", "0.3.5"), 0);
+    CHECK_EQ(mote::compareVersions("0.3", "0.3.1"), -1);
+
+    // 判定
+    UpdateManifest available;
+    CHECK(mote::parseUpdateManifest(R"({"version":"0.3.6","url":"https://x/a.dmg","min_os":"14.0"})",
+                                    available, nullptr));
+    CHECK(mote::decideUpdate(available, "0.3.5", "14.0") == UpdateDecision::Available);
+    CHECK(mote::decideUpdate(available, "0.3.6", "14.0") == UpdateDecision::UpToDate);
+    CHECK(mote::decideUpdate(available, "0.3.7", "14.0") == UpdateDecision::UpToDate);
+    CHECK(mote::decideUpdate(available, "0.3.5", "13.6") == UpdateDecision::UnsupportedSystem);
+    CHECK(mote::decideUpdate(UpdateManifest{}, "0.3.5", "14.0") == UpdateDecision::Invalid);
+
+    // 没有 min_os 时不对系统版本设限
+    UpdateManifest anyOs;
+    CHECK(mote::parseUpdateManifest(R"({"version":"0.3.6","url":"https://x/a.dmg"})", anyOs,
+                                    nullptr));
+    CHECK(mote::decideUpdate(anyOs, "0.3.5", "10.15") == UpdateDecision::Available);
 }
 
 static void testBase64()
@@ -613,6 +675,7 @@ static void testCommandTable()
 int main()
 {
     testJson();
+    testUpdate();
     testBase64();
     testPaths();
     testImageStore();

@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
-# Mote · macOS 自动更新发布（Sparkle 2 链路）
+# Mote · macOS 在线更新发布（OSS 清单 + Sparkle 安装）
 #
 # 输入：已用 Developer ID 签名并通过公证的 DMG（packaging/package_macos.sh 产出）
-# 动作：EdDSA 签名 → 生成 appcast.xml → 上传 dl.xiaotu.online → 校验线上可读
+# 动作：EdDSA 签名 → 生成 appcast.xml 与 latest.json → 上传 dl.xiaotu.online → 校验线上可读
+#
+# 两个清单的分工：
+#   appcast.xml  给 Sparkle 用：下载地址 + EdDSA 签名，Sparkle 验签后才安装
+#   latest.json  给 Mote 自研检查用：版本号 + 大小 + SHA256，决定要不要提示用户
+# 两份必须同一次发布一起上传，避免用户看到「有新版」却装不上。
 #
 # 目录约定（与 index.html 现有下载路径同源）：
 #   oss://<bucket>/mote/<dmg 文件名>                     长缓存 immutable
 #   oss://<bucket>/mote/updates/stable/appcast.xml        5 分钟缓存
+#   oss://<bucket>/mote/updates/stable/latest.json        5 分钟缓存
 # 对外地址：
 #   https://dl.xiaotu.online/mote/updates/stable/appcast.xml   ← Info.plist SUFeedURL
+#   https://dl.xiaotu.online/mote/updates/stable/latest.json   ← 自研检查读取
 #
 # 依赖：Sparkle 发行包里的 bin/sign_update、python3 + oss2、spctl
 #
 # 用法：
 #   packaging/publish_macos.sh                    # 完整发布
-#   SKIP_UPLOAD=true packaging/publish_macos.sh   # 只本地生成 appcast，不碰 OSS
+#   SKIP_UPLOAD=true packaging/publish_macos.sh   # 只本地生成清单，不碰 OSS
 #   DMG_PATH=/path/to/x.dmg packaging/publish_macos.sh
 
 set -euo pipefail
@@ -63,7 +70,10 @@ DMG_SHA256="$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
 DMG_URL="$CDN_DOMAIN/$PRODUCT_DIR/$DMG_BASENAME"
 APPCAST_KEY="$PRODUCT_DIR/updates/$CHANNEL/appcast.xml"
 APPCAST_URL="$CDN_DOMAIN/$APPCAST_KEY"
+MANIFEST_KEY="$PRODUCT_DIR/updates/$CHANNEL/latest.json"
+MANIFEST_URL="$CDN_DOMAIN/$MANIFEST_KEY"
 PUB_DATE="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+PUB_ISO="$(LC_ALL=C date -u '+%Y-%m-%dT%H:%M:%SZ')"
 
 echo "===== Mote 发布 · $VERSION / $CHANNEL ====="
 echo "DMG：      $DMG_PATH"
@@ -71,6 +81,7 @@ echo "大小：     $DMG_SIZE 字节"
 echo "SHA256：   $DMG_SHA256"
 echo "下载地址： $DMG_URL"
 echo "appcast：  $APPCAST_URL"
+echo "latest.json：$MANIFEST_URL"
 
 # ---- ① 门禁：DMG 必须已公证，否则更新装上去会被 Gatekeeper 拦 ----
 echo ""
@@ -128,7 +139,23 @@ cat > "$APPCAST_LOCAL" <<EOF
 EOF
 echo "  已生成：$APPCAST_LOCAL"
 
-# ---- ④ 上传 OSS ----
+# ---- ④ 生成 latest.json（自研检查用）----
+echo ""
+echo "===== ④ 生成 latest.json"
+MANIFEST_LOCAL="$REPO_ROOT/dist/latest.json"
+cat > "$MANIFEST_LOCAL" <<EOF
+{
+  "version": "$VERSION",
+  "url": "$DMG_URL",
+  "size": $DMG_SIZE,
+  "sha256": "$DMG_SHA256",
+  "min_os": "$MIN_OS",
+  "published_at": "$PUB_ISO"
+}
+EOF
+echo "  已生成：$MANIFEST_LOCAL"
+
+# ---- ⑤ 上传 OSS ----
 oss_upload() {
   local LP="$1" OK="$2" CC="$3" CT="$4"
   "$OSS_PY" - "$OSS_BUCKET" "$OSS_REGION" "$OSS_ACCESS_KEY_ID" "$OSS_ACCESS_KEY_SECRET" \
@@ -145,10 +172,10 @@ PY_EOF
 
 if [ "$SKIP_UPLOAD" = "true" ]; then
   echo ""
-  echo "===== ④ [SKIP_UPLOAD] 跳过上传"
+  echo "===== ⑤ [SKIP_UPLOAD] 跳过上传"
 else
   echo ""
-  echo "===== ④ 上传"
+  echo "===== ⑤ 上传"
   [ -f "$OSS_ENV_FILE" ] || { echo "缺少 OSS 凭据文件：$OSS_ENV_FILE（或用环境变量传入）" >&2; exit 1; }
   # shellcheck disable=SC1090
   set -a; . "$OSS_ENV_FILE"; set +a
@@ -161,13 +188,16 @@ else
     "public, max-age=31536000, immutable" "application/octet-stream"
   oss_upload "$APPCAST_LOCAL" "$APPCAST_KEY" \
     "no-cache, max-age=300" "application/rss+xml"
+  oss_upload "$MANIFEST_LOCAL" "$MANIFEST_KEY" \
+    "no-cache, max-age=300" "application/json"
 fi
 
-# ---- ⑤ 线上校验 ----
+# ---- ⑥ 线上校验 ----
 echo ""
-echo "===== ⑤ 线上校验"
+echo "===== ⑥ 线上校验"
 if [ "$SKIP_UPLOAD" = "true" ]; then
   echo "  （跳过）本地 appcast：$APPCAST_LOCAL"
+  echo "  （跳过）本地清单：$MANIFEST_LOCAL"
 else
   CODE="$(curl -s -o /tmp/mote-appcast-check.xml -w '%{http_code}' "$APPCAST_URL")"
   echo "  GET $APPCAST_URL → HTTP $CODE"
@@ -175,6 +205,17 @@ else
     && echo "  ✓ 线上 appcast 含 edSignature" \
     || echo "  ✗ 线上 appcast 异常，请检查 CDN 缓存或上传结果"
   rm -f /tmp/mote-appcast-check.xml
+
+  CODE="$(curl -s -o /tmp/mote-manifest-check.json -w '%{http_code}' "$MANIFEST_URL")"
+  echo "  GET $MANIFEST_URL → HTTP $CODE"
+  if [ "$CODE" = "200" ] \
+    && grep -q "\"version\":[[:space:]]*\"$VERSION\"" /tmp/mote-manifest-check.json \
+    && grep -q "\"sha256\":[[:space:]]*\"$DMG_SHA256\"" /tmp/mote-manifest-check.json; then
+    echo "  ✓ 线上 latest.json 版本与 SHA256 均与产物一致"
+  else
+    echo "  ✗ 线上 latest.json 异常，请检查 CDN 缓存或上传结果"
+  fi
+  rm -f /tmp/mote-manifest-check.json
 fi
 
 echo ""
@@ -183,3 +224,4 @@ echo "版本：      $VERSION"
 echo "DMG：       $DMG_URL"
 echo "SHA256：    $DMG_SHA256"
 echo "appcast：   $APPCAST_URL"
+echo "latest.json：$MANIFEST_URL"

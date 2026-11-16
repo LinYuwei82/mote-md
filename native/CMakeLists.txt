@@ -40,7 +40,8 @@ add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/inject_chunks.cpp"
   "${MOTE_REPO_ROOT}/core/js_bridge.cpp"
   "${MOTE_REPO_ROOT}/core/json.cpp"
-  "${MOTE_REPO_ROOT}/core/paths.cpp")
+  "${MOTE_REPO_ROOT}/core/paths.cpp"
+  "${MOTE_REPO_ROOT}/core/update.cpp")
 target_include_directories(mote_core PUBLIC "${MOTE_REPO_ROOT}")
 
 if(MSVC)
@@ -197,6 +198,7 @@ else()
     ${MOTE_PLATFORM_MAC}/dialogs.mm
     ${MOTE_PLATFORM_MAC}/pdf_export.mm
     ${MOTE_PLATFORM_MAC}/html_export.mm
+    ${MOTE_PLATFORM_MAC}/updater.mm
     ${MOTE_PLATFORM_MAC}/web_host_view.mm
     ${MOTE_WEB_FILES}
     ${MOTE_FONT_FILES}
@@ -218,6 +220,10 @@ else()
     target_link_libraries(Mote PRIVATE
       "-F${MOTE_REPO_ROOT}/resources"
       "-framework Sparkle")
+    # Sparkle 的 install name 是 @rpath/Sparkle.framework/...，必须给出 rpath，
+    # 否则运行时 dyld 报 "no LC_RPATH's found" 直接起不来
+    target_link_options(Mote PRIVATE
+      "-Wl,-rpath,@executable_path/../Frameworks")
     # 让 Xcode/Ninja 找到 Sparkle.framework 的 Headers
     target_include_directories(Mote PRIVATE
       "${MOTE_SPARKLE_FRAMEWORK}/Headers")
