@@ -83,6 +83,13 @@ NSString *MoteString(const std::string &text)
     return [NSString stringWithUTF8String:text.c_str()] ?: @"";
 }
 
+// Gatekeeper 会把带 quarantine 的应用放到 AppTranslocation 只读路径运行，
+// 此时 Sparkle 无法替换 bundle。提前识别，给出可执行的指引。
+bool MoteIsTranslocated()
+{
+    return [NSBundle.mainBundle.bundlePath containsString:@"/AppTranslocation/"];
+}
+
 void MoteRunAlert(NSString *title, NSString *message)
 {
     NSAlert *alert = [[NSAlert alloc] init];
@@ -277,6 +284,17 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
 
 - (void)promptForManifest:(const mote::UpdateManifest &)manifest
 {
+    // 转译状态下交给 Sparkle 只会在安装阶段失败，先提示用户移动应用
+    if (MoteIsTranslocated()) {
+        MoteUpdateLog("translocated, cannot install version=%s", manifest.version.c_str());
+        MoteRunAlert(@"需要先移动到“应用程序”",
+                     [NSString stringWithFormat:
+                                   @"发现新版本 %@，但 Mote 正在从系统临时位置运行，无法自动安装。\n\n"
+                                    "请退出 Mote，把它拖到“应用程序”文件夹，重新打开后再检查更新。",
+                                   MoteString(manifest.version)]);
+        return;
+    }
+
     NSMutableArray<NSString *> *details = [NSMutableArray array];
     if (!manifest.published_at.empty())
         [details addObject:[NSString stringWithFormat:@"发布时间：%@", MoteString(manifest.published_at)]];
