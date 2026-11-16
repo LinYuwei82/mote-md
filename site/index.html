@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>产品下载 · 小兔在线</title>
+<meta name="description" content="小兔在线旗下三款产品的 macOS、Windows 安装包与绿色包下载，含 SHA256 校验与用户手册。">
+<style>
+  :root {
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+            "Liberation Mono", monospace;
+
+    --bg: #f5f6fa;
+    --glow-1: rgba(99, 102, 241, .10);
+    --glow-2: rgba(14, 165, 233, .10);
+    --card: #ffffff;
+    --card-border: #e5e7ef;
+    --text: #141821;
+    --text-muted: #5f6880;
+    --text-faint: #8b93a7;
+    --accent: #4f46e5;
+    --accent-strong: #4338ca;
+    --chip-bg: #f2f4f9;
+    --chip-border: #e3e6ef;
+    --code-bg: #f7f8fc;
+    --code-border: #e6e8f1;
+    --warn-text: #b45309;
+    --warn-bg: #fff8ed;
+    --warn-border: #fbe0b4;
+    --live-text: #047857;
+    --live-bg: rgba(4, 120, 87, .10);
+    --live-border: rgba(4, 120, 87, .26);
+    --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 14px 34px -16px rgba(16, 24, 40, .22);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d12;
+      --glow-1: rgba(99, 102, 241, .16);
+      --glow-2: rgba(34, 211, 238, .12);
+      --card: #12151d;
+      --card-border: #232838;
+      --text: #e8eaf1;
+      --text-muted: #9aa3b8;
+      --text-faint: #6f7889;
+      --accent: #6366f1;
+      --accent-strong: #7c7ff5;
+      --chip-bg: #1a1f2b;
+      --chip-border: #28303f;
+      --code-bg: #0e1118;
+      --code-border: #232a38;
+      --warn-text: #fbbf24;
+      --warn-bg: #2a2009;
+      --warn-border: #4a3410;
+      --live-text: #34d399;
+      --live-bg: rgba(52, 211, 153, .12);
+      --live-border: rgba(52, 211, 153, .28);
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 18px 44px -20px rgba(0, 0, 0, .8);
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--text);
+    background:
+      radial-gradient(900px 420px at 8% -10%, var(--glow-1), transparent 70%),
+      radial-gradient(780px 380px at 96% -4%, var(--glow-2), transparent 72%),
+      var(--bg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap {
+    width: min(1180px, 100% - 48px);
+    margin-inline: auto;
+  }
+
+  /* ---------- 顶部 ---------- */
+  .site-header { padding: 56px 0 32px; }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .01em;
+    color: var(--text-muted);
+  }
+
+  .brand-mark {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    color: #fff;
+    background: linear-gradient(135deg, #6366f1, #22d3ee);
+    box-shadow: 0 4px 12px -4px rgba(79, 70, 229, .6);
+  }
+
+  .brand-mark svg { width: 15px; height: 15px; }
+
+  h1 {
+    margin: 20px 0 10px;
+    font-size: clamp(28px, 4vw, 40px);
+    line-height: 1.2;
+    letter-spacing: -.02em;
+    font-weight: 700;
+  }
+
+  .tagline {
+    margin: 0;
+    max-width: 48em;
+    color: var(--text-muted);
+    font-size: 15px;
+  }
+
+  /* ---------- 卡片网格 ---------- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    align-items: stretch;
+    margin-bottom: 72px;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    padding: 22px;
+    border: 1px solid var(--card-border);
+    border-radius: 18px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--accent) 24%, var(--card-border));
+    box-shadow: 0 2px 4px rgba(16, 24, 40, .05), 0 22px 44px -20px rgba(16, 24, 40, .3);
+  }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .tile {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    color: var(--tile);
+    background: var(--tile-soft);
+    border: 1px solid color-mix(in srgb, var(--tile) 18%, transparent);
+  }
+
+  .tile svg { width: 23px; height: 23px; }
+
+  .titles { min-width: 0; }
+
+  .titles h2 {
+    margin: 0 0 3px;
+    font-size: 18px;
+    line-height: 1.35;
+    letter-spacing: -.01em;
+    font-weight: 650;
+  }
+
+  .oneliner {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .accent-amber  { --tile: #f59e0b; --tile-soft: rgba(245, 158, 11, .13); }
+  .accent-indigo { --tile: #6366f1; --tile-soft: rgba(99, 102, 241, .14); }
+  .accent-teal   { --tile: #14b8a6; --tile-soft: rgba(20, 184, 166, .14); }
+
+  /* ---------- 下载行 ---------- */
+  .rows {
+    margin-top: 18px;
+    border-top: 1px solid var(--card-border);
+  }
+
+  .dlrow { padding: 14px 0; }
+
+  .dlrow + .dlrow { border-top: 1px solid var(--card-border); }
+
+  .dlrow-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .dl-name {
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: -.005em;
+  }
+
+  .dl-sub {
+    margin: 1px 0 0;
+    color: var(--text-muted);
+    font-size: 11.5px;
+  }
+
+  .facts {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 9px 0 6px;
+    color: var(--text-muted);
+    font-size: 11.5px;
+  }
+
+  .facts .mono { color: var(--text); }
+
+  .tag {
+    flex: none;
+    padding: 1px 8px;
+    border: 1px solid var(--chip-border);
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1.7;
+    white-space: nowrap;
+  }
+
+  .tag-live {
+    color: var(--live-text);
+    background: var(--live-bg);
+    border-color: var(--live-border);
+  }
+
+  .tag-hold {
+    color: var(--warn-text);
+    background: var(--warn-bg);
+    border-color: var(--warn-border);
+  }
+
+  .tag-missing {
+    color: var(--text-faint);
+    background: var(--chip-bg);
+    border-color: var(--chip-border);
+  }
+
+  .mono {
+    font-family: var(--mono);
+    font-size: .94em;
+    font-variant-ligatures: none;
+  }
+
+  /* ---------- SHA256 ---------- */
+  .sha {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 8px;
+    border: 1px solid var(--code-border);
+    border-radius: 10px;
+    background: var(--code-bg);
+  }
+
+  .sha-label {
+    flex: none;
+    color: var(--text-faint);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .05em;
+  }
+
+  .sha-value {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .sha-value.is-empty { color: var(--text-faint); }
+
+  .copy {
+    flex: none;
+    padding: 2px 8px;
+    border: 1px solid var(--chip-border);
+    border-radius: 7px;
+    background: var(--card);
+    color: var(--text-muted);
+    font-family: var(--sans);
+    font-size: 11px;
+    line-height: 1.7;
+    cursor: pointer;
+    transition: color .15s ease, border-color .15s ease;
+  }
+
+  .copy:hover:not(:disabled) {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--chip-border));
+  }
+
+  .copy:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* ---------- 按钮 ---------- */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: 100%;
+    padding: 9px 14px;
+    border: 1px solid transparent;
+    border-radius: 11px;
+    font-family: var(--sans);
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.6;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+  }
+
+  .btn svg { width: 15px; height: 15px; }
+
+  .btn + .btn { margin-top: 8px; }
+
+  .btn-primary {
+    color: #fff;
+    background: var(--accent);
+    box-shadow: 0 1px 2px rgba(79, 70, 229, .25), 0 10px 20px -12px rgba(79, 70, 229, .8);
+  }
+
+  .btn-primary:hover { background: var(--accent-strong); }
+  .btn-primary:active { transform: translateY(1px); }
+
+  .btn-ghost {
+    color: var(--text);
+    background: transparent;
+    border-color: var(--chip-border);
+  }
+
+  .btn-ghost:hover {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--chip-border));
+  }
+
+  .btn.is-disabled,
+  .btn-ghost.is-disabled {
+    color: var(--text-faint);
+    background: var(--chip-bg);
+    border-color: var(--chip-border);
+    box-shadow: none;
+    pointer-events: none;
+  }
+
+  .url-hint {
+    margin: 7px 0 0;
+    color: var(--text-faint);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+
+  .row-btn { margin-top: 9px; }
+
+  /* ---------- 用户手册 ---------- */
+  .manual {
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid var(--card-border);
+  }
+
+  .manual-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  /* ---------- 底部 ---------- */
+  .site-footer {
+    border-top: 1px solid var(--card-border);
+    padding: 34px 0 56px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .site-footer p { margin: 0 0 10px; max-width: 66em; }
+
+  .oss { margin: 0 0 16px; }
+
+  .contact { margin: 0 0 16px; }
+
+  .contact-title {
+    margin: 0 0 8px;
+    color: var(--text-faint);
+    font-size: 12px;
+    letter-spacing: .05em;
+  }
+
+  .contact-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .contact-mail {
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 13.5px;
+    font-weight: 600;
+    text-decoration: none;
+    word-break: break-all;
+  }
+
+  .contact-mail:hover { text-decoration: underline; }
+
+  .contact-copy {
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+
+  .oss-title {
+    margin: 0 0 8px;
+    color: var(--text-faint);
+    font-size: 12px;
+    letter-spacing: .05em;
+  }
+
+  .oss-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .oss-list li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 11px;
+    border: 1px solid var(--chip-border);
+    border-radius: 999px;
+    background: var(--card);
+  }
+
+  .oss-list a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+    font-size: 12.5px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .oss-list a:hover { text-decoration: underline; }
+
+  .oss-list svg {
+    flex: none;
+    width: 13px;
+    height: 13px;
+    opacity: .8;
+  }
+
+  .oss-license {
+    padding-left: 7px;
+    border-left: 1px solid var(--chip-border);
+    color: var(--text-faint);
+    font-size: 11.5px;
+  }
+
+  .site-footer pre {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    border: 1px solid var(--code-border);
+    border-radius: 11px;
+    background: var(--code-bg);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-muted);
+  }
+
+  .site-footer pre code { font-family: inherit; }
+
+  .copyright {
+    margin-top: 22px !important;
+    color: var(--text-faint);
+    font-size: 12px;
+  }
+
+  @media (max-width: 1080px) {
+    .grid { grid-template-columns: 1fr; gap: 16px; }
+    .wrap { width: min(680px, 100% - 32px); }
+    .site-header { padding: 40px 0 26px; }
+    .grid { margin-bottom: 56px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg>
+      </span>
+      小兔在线
+    </div>
+    <h1>产品下载</h1>
+    <p class="tagline">三款产品的 macOS 安装包、Windows 安装包与 Windows 绿色包统一发布在这里，下载后可对照 SHA256 校验文件完整性。</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="grid" aria-label="产品下载">
+
+    <!-- ================= 小兔进销存 ================= -->
+    <article class="card accent-amber" id="product-xiaotu">
+      <div class="card-top">
+        <span class="tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3.5 8.5 12 4l8.5 4.5v7L12 20l-8.5-4.5z"/>
+            <path d="M3.5 8.5 12 13l8.5-4.5"/>
+            <path d="M12 13v7"/>
+          </svg>
+        </span>
+        <div class="titles">
+          <h2>小兔进销存</h2>
+          <p class="oneliner">面向小微门店的轻量进销存，库存、单据与报表开箱即用。</p>
+        </div>
+      </div>
+
+      <div class="rows">
+
+        <!-- macOS：已发布 -->
+        <section class="dlrow" aria-label="macOS 下载">
+          <div class="dlrow-head">
+            <span class="dl-name">macOS</span>
+            <span class="tag tag-live">可用</span>
+          </div>
+          <p class="dl-sub">Apple Silicon · .dmg</p>
+          <div class="facts">
+            <span class="mono">v0.9.0</span>
+            <span><span class="mono">6,632,022</span> 字节（约 6.3 MB）</span>
+          </div>
+          <div class="sha">
+            <span class="sha-label">SHA256</span>
+            <code class="sha-value" id="sha-xiaotu-mac" title="0965b6a7c21a760d5ebf890741578a9e1059a4c1dd450b6a5cf4106f9db66edf">0965b6a7c21a760d5ebf890741578a9e1059a4c1dd450b6a5cf4106f9db66edf</code>
+            <button class="copy" type="button" data-copy="sha-xiaotu-mac">复制</button>
+          </div>
+          <a class="btn btn-primary row-btn" href="https://dl.xiaotu.online/xiaotu/xiaotu-inventory-0.9.0.dmg" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+            下载 DMG
+          </a>
+        </section>
+
+        <!-- Windows 安装包：packaging/win/xiaotu-inventory.iss（Inno Setup 6）的产物，已上传 -->
+        <section class="dlrow" aria-label="Windows 安装包下载">
+          <div class="dlrow-head">
+            <span class="dl-name">Windows 安装包</span>
+            <span class="tag tag-live">可用</span>
+          </div>
+          <p class="dl-sub">x64 · .exe（Inno Setup）</p>
+          <div class="facts">
+            <span class="mono">v0.9.0</span>
+            <span><span class="mono">3,580,457</span> 字节（约 3.4 MB）</span>
+          </div>
+          <div class="sha">
+            <span class="sha-label">SHA256</span>
+            <code class="sha-value" id="sha-xiaotu-setup" title="fd8901171fc92b010ec0ba7d87c5ebe50d142d3e218ec52c3ec1a26c3a8ccad4">fd8901171fc92b010ec0ba7d87c5ebe50d142d3e218ec52c3ec1a26c3a8ccad4</code>
+            <button class="copy" type="button" data-copy="sha-xiaotu-setup">复制</button>
+          </div>
+          <a class="btn btn-primary row-btn" href="https://dl.xiaotu.online/xiaotu/xiaotu-inventory-0.9.0-win64-setup.exe" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+            下载 .exe
+          </a>
+        </section>
+
+        <!-- Windows 绿色包：packaging/win/make-zip.ps1 的产物，已上传 -->
+        <section class="dlrow" aria-label="Windows 绿色包下载">
+          <div class="dlrow-head">
+            <span class="dl-name">Windows 绿色包</span>
+            <span class="tag tag-live">可用</span>
+          </div>
+          <p class="dl-sub">x64 · .zip（免安装）</p>
+          <div class="facts">
+            <span class="mono">v0.9.0</span>
+            <span><span class="mono">2,137,094</span> 字节（约 2.0 MB）</span>
+          </div>
+          <div class="sha">
+            <span class="sha-label">SHA256</span>
+            <code class="sha-value" id="sha-xiaotu-win" title="aa31555c35b645e40f17442403a3da650884903f1c4587ec2ce964c27a1cd6e4">aa31555c35b645e40f17442403a3da650884903f1c4587ec2ce964c27a1cd6e4</code>
+            <button class="copy" type="button" data-copy="sha-xiaotu-win">复制</button>
+          </div>
+          <a class="btn btn-primary row-btn" href="https://dl.xiaotu.online/xiaotu/xiaotu-inventory-0.9.0-win64.zip" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+            下载 .zip
+          </a>
+        </section>
+
+      </div>
+
+      <!-- 手册：xiaotu/manual.pdf 已在 OSS 可下载 -->
+      <div class="manual">
+        <div class="manual-head">
+          <span>用户手册</span>
+          <span class="tag tag-live">可用</span>
+        </div>
+        <a class="btn btn-ghost" href="https://dl.xiaotu.online/xiaotu/manual.pdf" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>
+          下载 PDF
+        </a>
+        <p class="url-hint">https://dl.xiaotu.online/xiaotu/manual.pdf</p>
+      </div>
+    </article>
+
+    <!-- ================= DevCard ================= -->
+    <article class="card accent-indigo" id="product-devcard">
+      <div class="card-top">
+        <span class="tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2.5" y="5" width="19" height="14" rx="2.5"/>
+            <path d="M2.5 10h19"/>
+            <path d="M6.5 14.5h3"/>
+          </svg>
+        </span>
+        <div class="titles">
+          <h2>DevCard</h2>
+          <p class="oneliner">物业设备台账与设备管理卡打印工具，支持 Excel 导入与 A4 卡片导出。</p>
+        </div>
+      </div>
+
+      <div class="rows">
+
+        <!-- macOS：已在 OSS 可下载 -->
+        <section class="dlrow" aria-label="macOS 下载">
+          <div class="dlrow-head">
+            <span class="dl-name">macOS</span>
+            <span class="tag tag-live">可用</span>
+          </div>
+          <p class="dl-sub">Apple Silicon · .dmg</p>
+          <div class="facts">
+            <span class="mono">v1.2.1</span>
+            <span><span class="mono">5,924,494</span> 字节（约 5.6 MB）</span>
+          </div>
+          <div class="sha">
+            <span class="sha-label">SHA256</span>
+            <code class="sha-value" id="sha-devcard-mac" title="0be2a2e86bd429eaf1f8f65c4967be663fc84dfe42f55beaea71af8a7db189b2">0be2a2e86bd429eaf1f8f65c4967be663fc84dfe42f55beaea71af8a7db189b2</code>
+            <button class="copy" type="button" data-copy="sha-devcard-mac">复制</button>
+          </div>
+          <a class="btn btn-primary row-btn" href="https://dl.xiaotu.online/devcard/DevCard-1.2.1-macos-arm64.dmg" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+            下载 DMG
+          </a>
+        </section>
+
+        <!-- Windows 安装包：packaging/windows/DevCard.iss（Inno Setup 6）的产物，已上传 -->
+        <section class="dlrow" aria-label="Windows 安装包下载">
+          <div class="dlrow-head">
+            <span class="dl-name">Windows 安装包</span>
+            <span class="tag tag-live">可用</span>
+          </div>
+          <p class="dl-sub">x64 · .exe（Inno Setup）</p>
+          <div class="facts">
+            <span class="mono">v1.2.0</span>
+            <span><span class="mono">5,654,984</span> 字节（约 5.4 MB）</span>
+          </div>
+          <div class="sha">
+            <span class="sha-label">SHA256</span>
+            <code class="sha-value" id="sha-devcard-setup" title="a99fbd680b818de297ff4b918dff5f7a3542313e6d82abe8457f2606e8a0e238">a99fbd680b818de297ff4b918dff5f7a3542313e6d82abe8457f2606e8a0e238</code>
+            <button class="copy" type="button" data-copy="sha-devcard-setup">复制</button>
+          </div>
+          <a class="btn btn-primary row-btn" href="https://dl.xiaotu.online/devcard/DevCard-1.2.0-setup.exe" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+            下载 .exe
+          </a>
+        </section>
+
+        <!-- Windows 绿色包：仓库既有 dist 产物，已上传 -->
+        <section class="dlrow" aria-label="Windows 绿色包下载">
+          <div class="dlrow-head">
+            <span class="dl-name">Windows 绿色包</span>
+            <span class="tag tag-live">可用</span>
+          </div>
+          <p class="dl-sub">x64 · .zip（免安装）</p>
+          <div class="facts">
+            <span class="mono">v1.2.0</span>
+            <span><span class="mono">5,750,450</span> 字节（约 5.5 MB）</span>
+          </div>
+          <div class="sha">
+            <span class="sha-label">SHA256</span>
+            <code class="sha-value" id="sha-devcard-win" title="4f67ee04b7cd94794e79959192df6f09c7ad4e37a4cbd7850f515f436c42c0f8">4f67ee04b7cd94794e79959192df6f09c7ad4e37a4cbd7850f515f436c42c0f8</code>
+            <button class="copy" type="button" data-copy="sha-devcard-win">复制</button>
+          </div>
+          <a class="btn btn-primary row-btn" href="https://dl.xiaotu.online/devcard/DevCard-1.2.0-win64-portable.zip" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+            下载 .zip
+          </a>
+        </section>
+
+      </div>
+
+      <!-- 手册：已生成 manuals/devcard/manual.pdf（含 6 张 Mermaid 图），上传后删禁用属性即可 -->
+      <div class="manual">
+        <div class="manual-head">
+          <span>用户手册</span>
+          <span class="tag tag-live">可用</span>
+        </div>
+        <a class="btn btn-ghost" href="https://dl.xiaotu.online/devcard/manual.pdf" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>
+          下载 PDF
+        </a>
+        <p class="url-hint">https://dl.xiaotu.online/devcard/manual.pdf</p>
+      </div>
+    </article>
+
+    <!-- ================= Mote ================= -->
+    <article class="card accent-teal" id="product-mote">
+      <div class="card-top">
+        <span class="tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3.2"/>
+            <path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2"/>
+            <path d="M6.2 6.2 7.8 7.8M16.2 16.2l1.6 1.6M17.8 6.2l-1.6 1.6M7.8 16.2l-1.6 1.6"/>
+          </svg>
+        </span>
+        <div class="titles">
+          <h2>Mote</h2>
+          <p class="oneliner">原生薄外壳 + 系统 WebView 的 Markdown 查看 / 编辑器，所见即所得块编辑。</p>
+        </div>
+      </div>
+
+      <div class="rows">
+
+        <!-- macOS：mote/Mote-macOS-native-0.3.8.dmg 已在 OSS 可下载 -->
+        <section class="dlrow" aria-label="macOS 下载">
+          <div class="dlrow-head">
+            <span class="dl-name">macOS</span>
+            <span class="tag tag-live">可用</span>
+          </div>
+          <p class="dl-sub">macOS 14+ · Apple Silicon · .dmg</p>
+          <div class="facts">
+            <span class="mono">v0.3.8</span>
+            <span><span class="mono">1,666,137</span> 字节（约 1.6 MB）</span>
+          </div>
+          <div class="sha">
+            <span class="sha-label">SHA256</span>
+            <code class="sha-value" id="sha-mote-mac" title="159b2f4e0065e2860e05c79cf8c11969053a8c422e200374e784d36c796a008b">159b2f4e0065e2860e05c79cf8c11969053a8c422e200374e784d36c796a008b</code>
+            <button class="copy" type="button" data-copy="sha-mote-mac">复制</button>
+          </div>
+          <a class="btn btn-primary row-btn" href="https://dl.xiaotu.online/mote/Mote-macOS-native-0.3.8.dmg" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+            下载 DMG
+          </a>
+        </section>
+
+        <!-- Windows 安装包：packaging\build_installer.ps1（Inno Setup 6）的产物，已上传 -->
+        <section class="dlrow" aria-label="Windows 安装包下载">
+          <div class="dlrow-head">
+            <span class="dl-name">Windows 安装包</span>
+            <span class="tag tag-live">可用</span>
+          </div>
+          <p class="dl-sub">x64 · .exe（Inno Setup）</p>
+          <div class="facts">
+            <span class="mono">v0.3.10</span>
+            <span><span class="mono">2,645,107</span> 字节（约 2.5 MB）</span>
+          </div>
+          <div class="sha">
+            <span class="sha-label">SHA256</span>
+            <code class="sha-value" id="sha-mote-setup" title="58a3fbad4fcee13d796cd9f781403f8d2a55c964355c622b2e6fbc62d25da3db">58a3fbad4fcee13d796cd9f781403f8d2a55c964355c622b2e6fbc62d25da3db</code>
+            <button class="copy" type="button" data-copy="sha-mote-setup">复制</button>
+          </div>
+          <a class="btn btn-primary row-btn" href="https://dl.xiaotu.online/mote/Mote-Setup-0.3.10.exe" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+            下载 .exe
+          </a>
+        </section>
+
+        <!-- Windows 绿色包：packaging\package_windows_native.ps1 的产物，已上传 -->
+        <section class="dlrow" aria-label="Windows 绿色包下载">
+          <div class="dlrow-head">
+            <span class="dl-name">Windows 绿色包</span>
+            <span class="tag tag-live">可用</span>
+          </div>
+          <p class="dl-sub">x64 · .zip（免安装）</p>
+          <div class="facts">
+            <span class="mono">v0.3.10</span>
+            <span><span class="mono">669,542</span> 字节（约 0.6 MB）</span>
+          </div>
+          <div class="sha">
+            <span class="sha-label">SHA256</span>
+            <code class="sha-value" id="sha-mote-win" title="1f6f8c546f4ff4fa68be74b4aee22f226e9c55d716f79d4576dd41b511bd05a5">1f6f8c546f4ff4fa68be74b4aee22f226e9c55d716f79d4576dd41b511bd05a5</code>
+            <button class="copy" type="button" data-copy="sha-mote-win">复制</button>
+          </div>
+          <a class="btn btn-primary row-btn" href="https://dl.xiaotu.online/mote/Mote-0.3.10-win64-portable.zip" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+            下载 .zip
+          </a>
+        </section>
+
+      </div>
+
+      <!-- 手册：mote/manual.pdf 已在 OSS 可下载 -->
+      <div class="manual">
+        <div class="manual-head">
+          <span>用户手册</span>
+          <span class="tag tag-live">可用</span>
+        </div>
+        <a class="btn btn-ghost" href="https://dl.xiaotu.online/mote/manual.pdf" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>
+          下载 PDF
+        </a>
+        <p class="url-hint">https://dl.xiaotu.online/mote/manual.pdf</p>
+      </div>
+    </article>
+
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="contact">
+      <p class="contact-title">问题反馈 / 联系我们</p>
+      <div class="contact-row">
+        <a class="contact-mail" id="contact-email" href="mailto:458499311@qq.com">458499311@qq.com</a>
+        <button class="copy contact-copy" type="button" data-copy="contact-email">复制邮箱</button>
+      </div>
+    </div>
+    <div class="oss">
+      <p class="oss-title">开源仓库</p>
+      <ul class="oss-list">
+        <li>
+          <a href="https://gitee.com/lin-yuwei168/mote-md" target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 4.2h7.6a2.2 2.2 0 0 1 2.2 2.2V14H5.2A2.2 2.2 0 0 1 3 11.8z"/>
+              <path d="M3 11.8h9.8"/>
+            </svg>
+            Mote
+          </a>
+          <span class="oss-license">AGPL-3.0</span>
+        </li>
+        <li>
+          <a href="https://gitee.com/lin-yuwei168/dev_card_cpp" target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 4.2h7.6a2.2 2.2 0 0 1 2.2 2.2V14H5.2A2.2 2.2 0 0 1 3 11.8z"/>
+              <path d="M3 11.8h9.8"/>
+            </svg>
+            DevCard
+          </a>
+          <span class="oss-license">未声明许可证</span>
+        </li>
+      </ul>
+    </div>
+    <p>所有安装包与手册均由下载子域 <span class="mono">dl.xiaotu.online</span> 直接提供，与本站页面不同域名属于正常现象。Windows 绿色包为免安装压缩包，解压即可运行。</p>
+    <p>SHA256 用于确认文件完整、未被篡改。下载完成后可在终端校验：</p>
+<pre><code># macOS / Linux
+shasum -a 256 xiaotu-inventory-0.9.0.dmg
+
+# Windows
+certutil -hashfile xiaotu-inventory-0.9.0.dmg SHA256</code></pre>
+    <p>输出结果应与对应下载行标注的 SHA256 完全一致；不一致请不要安装。</p>
+    <p class="copyright">© 2026 小兔在线</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.top = '-1000px';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      area.setSelectionRange(0, area.value.length);
+      try {
+        document.execCommand('copy') ? resolve() : reject(new Error('copy failed'));
+      } catch (err) {
+        reject(err);
+      } finally {
+        document.body.removeChild(area);
+      }
+    });
+  }
+
+  document.querySelectorAll('[data-copy]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var target = document.getElementById(button.getAttribute('data-copy'));
+      if (!target) return;
+
+      var text = target.textContent.trim();
+      if (!text || text === '—' || text.indexOf('待补充') === 0) return;
+
+      var label = button.textContent;
+      copyText(text).then(function () {
+        button.textContent = '已复制';
+      }, function () {
+        button.textContent = '复制失败';
+      }).then(function () {
+        window.setTimeout(function () {
+          button.textContent = label;
+        }, 1600);
+      });
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
