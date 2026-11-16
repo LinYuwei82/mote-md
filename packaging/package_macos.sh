@@ -371,7 +371,10 @@ if [ "$DO_NOTARIZE" -eq 1 ]; then
         --wait --timeout 900 2>&1 | tee "$NOTARY_LOG"
     echo
 
-    NOTARY_STATUS="$(awk '/status:/{print $2; exit}' "$NOTARY_LOG")"
+    # notarytool 的进度行是 "Current status: In Progress..."，会淹没最终结论；
+    # 只取结尾那段 "  status: Accepted"，并把进度里的 \r 折成换行再匹配
+    NOTARY_STATUS="$(tr '\r' '\n' < "$NOTARY_LOG" \
+        | awk -F': *' '/^[[:space:]]*status: /{v=$2} END{print v}')"
     if [ "$NOTARY_STATUS" != "Accepted" ]; then
         echo "错误：公证状态为 '$NOTARY_STATUS'，请查看完整日志：$NOTARY_LOG"
         echo "       常见原因：缺少 --options runtime、签名时没有 Developer ID、Info.plist 问题"
