@@ -30,6 +30,10 @@ ui_*.h
 # ---- 第三方 vendored framework（打包时复制，不进仓库）----
 /resources/Sparkle.framework/
 
+# ---- 图标设计稿：字体与 Python 缓存不进仓库 ----
+/icon-design/fonts/
+/icon-design/__pycache__/
+
 # ---- 截图：仅保留文档引用的几张，其余为调试截图 ----
 /screenshots/*
 !/screenshots/imgB-package.png
