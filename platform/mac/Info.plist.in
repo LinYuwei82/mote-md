@@ -35,6 +35,8 @@
 	<!-- Sparkle 自动更新配置；SPARKLE_FEED_URL 由 CMake 在打包时注入 -->
 	<key>SUFeedURL</key>
 	<string>@SPARKLE_FEED_URL@</string>
+	<key>SUPublicEDKey</key>
+	<string>@MOTE_SPARKLE_PUBKEY@</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUAutomaticallyUpdate</key>

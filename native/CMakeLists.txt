@@ -173,9 +173,15 @@ else()
     set(MOTE_SPARKLE_ENABLED ON)
   endif()
 
-  # appcast 托管 URL；打包脚本可以通过 -DSPARKLE_FEED_URL=... 覆盖
+  # appcast 托管 URL；发布脚本可以通过 -DSPARKLE_FEED_URL=... 覆盖
   if(NOT SPARKLE_FEED_URL)
-    set(SPARKLE_FEED_URL "https://gitee.com/lin-yuwei168/mote-md/releases/latest/download/appcast.xml")
+    set(SPARKLE_FEED_URL "https://dl.xiaotu.online/mote/updates/stable/appcast.xml")
+  endif()
+
+  # 更新包 EdDSA 验签公钥（Sparkle 2 必填）。对应私钥在发布机
+  # ~/.config/mote-updates/，不随仓库分发。
+  if(NOT MOTE_SPARKLE_PUBKEY)
+    set(MOTE_SPARKLE_PUBKEY "HgCDvW0MQ32HFguQ/jW5fVtQh74lBsXMsyfo0sRLH1Y=")
   endif()
 
   set(MOTE_EXECUTABLE_NAME "Mote")
