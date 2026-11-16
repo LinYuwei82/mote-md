@@ -758,14 +758,25 @@ void MoteMainWindow::open_document()
 
 void MoteMainWindow::open_path(const std::string &path)
 {
+    // 命令行参数、拖放路径等可能是相对路径；统一转绝对，确保 file_path_ / last_dir_ /
+    // 页面加载（临时 HTML + base href）都基于真实磁盘位置。
+    std::string resolved = path;
+    try {
+        std::filesystem::path p(utf8_to_wide(path));
+        std::filesystem::path abs = std::filesystem::absolute(p);
+        resolved = wide_to_utf8(abs.wstring());
+    } catch (...) {
+        // 路径非法：保留原值，让后续 read_text_file 按失败处理并弹提示
+    }
+
     std::string text;
-    if (!read_text_file(path, &text)) {
+    if (!read_text_file(resolved, &text)) {
         MoteAlert(hwnd_, L"无法打开", "读取文件失败：\n" + path);
         return;
     }
 
-    file_path_ = path;
-    last_dir_ = parent_dir(path);
+    file_path_ = resolved;
+    last_dir_ = parent_dir(resolved);
     last_text_ = text;
     controller_->setMarkdown(text, last_dir_);
     update_title();
