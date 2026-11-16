@@ -23,6 +23,7 @@
 - **链接**：渲染态下 `[文字](地址)` 的文字显示为蓝色带下划线的链接（地址本身仍是零宽标记，不占位、不进入框选复制）；普通点击仍进入编辑态，`Cmd+Click` 才跳转——外部链接交给系统默认浏览器，相对路径的 `.md` 在应用内打开（走未保存确认），文件不存在时弹提示不崩。编辑态显示原始 `[文字](地址)`，复制出去是标准 Markdown。
 - **导出 HTML**：`Option+Cmd+E`（「文件 → 导出 HTML…」）导出单文件自包含 HTML——样式内联、图片转 base64 内嵌、代码高亮与任务复选框状态保留，导出过程不改动原文档与 `dataset.raw`。
 - **导出 PDF**：`Cmd+P`（「文件 → 导出 PDF…」）导出 A4 多页、无页眉页脚；源码模式下禁用。macOS 与 Windows 均已实现，两端分页切点由各自 WebView 引擎决定，未做逐页像素比对。
+- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。macOS 读 `latest.json`，用户确认后交给 Sparkle 下载 DMG、验证 EdDSA 签名并替换重启；Windows 读 `windows.json`，确认后打开浏览器下载免安装绿色包，解压覆盖即完成更新。
 - **页面内状态栏**：原生外壳把状态栏画在前端页面底部（`body.platform-mac` / `body.platform-win`），显示打开/保存/导出提示与字数统计；Qt 构建不启用，避免出现两条状态栏。
 - **目录手型光标**：鼠标移到目录栏（条目文字行、行间空隙、栏内空白）都是系统手型指针，避免移动时手型闪烁；折叠按钮与滚动条保留自身光标语义。
 
@@ -46,12 +47,12 @@ open build-native/Mote.app                       # 或直接运行
 ./build-native/Mote.app/Contents/MacOS/Mote 文档.md
 ```
 
-一键打包（构建 + Ad-hoc 签名 + zip/DMG + 依赖自检）：
+一键打包（构建 + Developer ID 签名 + 公证 + zip/DMG + 依赖自检）：
 
 ```bash
 bash packaging/package_macos.sh --native --dmg
 # 产物：dist/Mote-macOS-native.zip / dist/Mote-macOS-native-*.dmg
-# 当前体积：.app 约 1.2 MB，DMG 约 579 KB
+# 当前体积：.app 约 4.2 MB（含 Sparkle.framework），DMG 约 1.6 MB
 ```
 
 `tools/preflight.sh --native` 可在干净构建后跑一次启动冒烟。
@@ -90,6 +91,32 @@ qmake6 Mote.pro && make -j4
 
 Qt 构建与原生构建共用 `resources/web/` 与 `core/`；版本号仍以 `Mote.pro` 的 `VERSION` 为唯一来源。Qt 版 macOS 打包为 `bash packaging/package_macos.sh`（不带 `--native`）；Windows 的 Qt 打包保留为回退，步骤见 [packaging/WINDOWS-FROM-MACOS.md](packaging/WINDOWS-FROM-MACOS.md)。
 
+### 发布与在线更新
+
+产物托管在 `https://dl.xiaotu.online`（阿里云 OSS + CDN），key 固定：
+
+| 用途 | OSS key |
+| --- | --- |
+| macOS 安装包 | `mote/Mote-macOS-native-<version>.dmg` |
+| Sparkle feed（EdDSA 验签 + 下载） | `mote/updates/<channel>/appcast.xml` |
+| macOS 自研检查清单 | `mote/updates/<channel>/latest.json` |
+| Windows 绿色包与清单 | `mote/Mote-<version>-win64-portable.zip`、`mote/updates/<channel>/windows.json` |
+
+```bash
+bash packaging/package_macos.sh --native --dmg   # 签名 + 公证 + DMG
+bash packaging/publish_macos.sh                  # 公证门禁 → EdDSA 签名 → appcast + latest.json → 上传 → 线上校验
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1   # SHA256 → windows.json → 上传 → 线上校验
+```
+
+- 版本号只改 `Mote.pro` 的 `VERSION`，两个发布脚本都从那里读。
+- Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
+- 检查权在自研模块（`SUEnableAutomaticChecks=false`）：Sparkle 只负责下载、验签、替换、重启；Windows 没有安装器，提示后打开下载链接，用户解压覆盖。
+- 两份清单分开：macOS 只读 `latest.json`（指向 `.dmg`），Windows 只读 `windows.json`（指向 zip），避免把 `.dmg` 当成 Windows 包。
+
 ## 快捷键
 
 macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
@@ -117,16 +144,18 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 ## 已知限制
 
 - **仅 arm64**：macOS 包只含 arm64 切片，Intel Mac 需自行重新构建。
-- **Ad-hoc 签名、未公证**：从网络下载的 zip 首次打开可能被 Gatekeeper 拦截，需右键「打开」。
-- **macOS 包不含 Qt**：`.app` 约 1.2 MB，DMG 约 579 KB；主要体积来自应用自身与内联字体，WebKit 由系统提供。
+- **发布包需 Developer ID + 公证**：正式产物由 `package_macos.sh` 签名并公证；跳过公证（`--skip-notarize`）的包只适合本机验证，不适合分发。
+- **更新包强制 EdDSA 验签**：Sparkle 2 不接受只签 Developer ID 的更新包；签名私钥只在发布机上，丢失后无法为已发布版本续签。
+- **macOS 包不含 Qt**：`.app` 约 4.2 MB（含 Sparkle.framework），DMG 约 1.6 MB；WebKit 由系统提供。
 - **源码模式无语法高亮**：`Cmd+E` 下是纯文本编辑区。
 - **查找/替换不跨块**：可以在所有块之间跳转命中，但单个命中不会跨越块边界或行内标记。
 - **上下方向键不跨块**：跨块移动光标需鼠标点击。
 - **深色模式只覆盖正文区域**：网页侧（正文、标题、引用、表格、行内代码、代码块与语法高亮、目录、查找高亮、斜杠浮层）全部跟随主题；状态栏在深色下单独上色。菜单栏仍是系统原生外观，不随文档主题变化。
 - **链接只支持两种跳转**：`Cmd+Click` 外部链接（http/https/mailto）与相对路径的 `.md`；**锚点链接**（`#标题`）因为没有生成标题锚点，只在状态栏提示「暂不支持」；**图片**按 `img` 渲染，没有 `<a>` 包裹，`Cmd+Click` 不触发任何跳转（相对路径图片仍按文档目录正常显示与导出内嵌）。
 - **导出 HTML 是「网页快照」**：单文件、无外部依赖、无脚本；导出后不提供任何交互（链接仍可点，但任务复选框是静态图形）。
-- **导出能力按平台分阶段**：macOS 已支持 PDF（CGPDFContext 分段抓取 + A4 拼页）与 HTML；Windows 原生外壳的导出仍是占位，计划在 N4 实现。
-- **Windows 原生外壳未完成验收**：N0–N3 代码已入库，但尚未在真实 Windows 上编译/运行验证；验证清单见 [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)。
+- **导出能力两端已对齐**：macOS 与 Windows 的 PDF、HTML 导出均已实现并验收；分页切点由各自 WebView 引擎决定。
+- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；干净机首次升级、断网/下载中断尚无自动化覆盖；Windows 是无安装器的绿色包，更新需手动解压覆盖。
+- **OSS 在中国香港**：国内下载偏慢；备案完成后把回源迁到国内桶，`dl.xiaotu.online` 域名不变，已安装客户端无需改动。
 - **任务复选框的复制**：复制处理器剔除隐藏标记；脚本用 `DataTransfer` 走产品同一条 `copy` 处理逻辑验证，真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 - 目录在源码模式下隐藏；正在编辑的块在重排前标题高亮可能滞后一帧。
 
@@ -141,18 +170,20 @@ core/                    无 Qt、无平台 API 的共享核心
   image_store            assets/ 落盘与重名处理
   command_table          菜单唯一来源
   inject_chunks          大文档分片切分（UTF-8 安全）
-platform/mac/            AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放
-platform/win/            Win32 + WebView2：N0–N3，待实机验证
+  update                 更新清单解析、版本比较与升级判定（两端共用，不碰网络）
+platform/mac/            AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
+platform/win/            Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
 resources/
   web/                   前端编辑器（editor.html / editor.css / editor.js，唯一一份）
   fonts/                 JetBrains Mono（Light）与 OFL.txt
   icons/  styles/        应用图标与 Qt 样式表
   samples/               内置示例文档与示例图
   win/                   Windows 资源脚本（图标）
+  Sparkle.framework      macOS 更新框架（构建时拷进 bundle，已 gitignore）
   resources.qrc          Qt 构建的资源清单
 src/                     Qt 外壳（保留的对照/回退路径）
 Mote.pro                 qmake 工程；VERSION 是版本号唯一来源
-packaging/               打包脚本（原生 / Qt / Windows）与交付文档
+packaging/               打包与发布脚本（原生 / Qt / Windows / OSS 清单）与交付文档
 docs/                    架构、设计与验收文档
 screenshots/             文档引用的截图
 backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建）
@@ -160,9 +191,9 @@ backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建
 
 ## 文档
 
-- [docs/技术方案.md](docs/技术方案.md)：N3 后的实际架构、方案 A/B 取舍与实施状态
+- [docs/技术方案.md](docs/技术方案.md)：阶段 B 验收后的实际架构、在线更新方案、方案 A/B 取舍与实施状态
 - [docs/thin-shell-stage-a.md](docs/thin-shell-stage-a.md) / [docs/thin-shell-stage-b.md](docs/thin-shell-stage-b.md)：macOS / Windows 薄外壳设计与里程碑
-- [docs/thin-shell-stage-a-acceptance.md](docs/thin-shell-stage-a-acceptance.md)：macOS 原生外壳验收记录（体积、依赖、行为）
+- [docs/thin-shell-stage-a-acceptance.md](docs/thin-shell-stage-a-acceptance.md) / [docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)：macOS / Windows 原生外壳验收记录
 - [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)：Windows 实机验证交接单
 - [packaging/PACKAGING.md](packaging/PACKAGING.md)：打包、产物、干净环境验证与逐项验收记录
 - [docs/WEBVIEW-ARCHITECTURE.md](docs/WEBVIEW-ARCHITECTURE.md)：分层、消息协议、按键链路与前端块模型
@@ -177,6 +208,7 @@ backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建
 - **系统 WebKit**：macOS 自带框架，不随包分发。
 - **WebView2 Runtime**：Windows 由系统/用户安装的 Evergreen Runtime 提供，不随包分发。
 - **Qt 6**：仅用于保留的对照/回退构建，LGPLv3、动态链接；macOS 原生发布包不含 Qt。
+- **Sparkle 2**：macOS 自动更新框架，MIT 许可；`resources/Sparkle.framework`（不随仓库分发），构建时拷入 `.app/Contents/Frameworks/`。
 - **JetBrains Mono**：SIL Open Font License 1.1；仓库内 [resources/fonts/OFL.txt](resources/fonts/OFL.txt)，
   发布包内 `licenses/JetBrainsMono-OFL.txt`。
 
