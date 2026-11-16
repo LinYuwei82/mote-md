@@ -40,11 +40,28 @@
 
 @end
 
+// 应用界面只有中文：把应用级语言固定为中文，让 Sparkle 等第三方界面
+// 不跟随系统语言显示英文。系统语言已是中文时不做任何事。
+static void MoteForceChineseUI()
+{
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    id current = [defaults objectForKey:@"AppleLanguages"];
+    NSString *first = [current isKindOfClass:NSArray.class] && [current count] > 0
+        ? ((NSArray *)current)[0]
+        : nil;
+    if (first && [first isKindOfClass:NSString.class] && [first hasPrefix:@"zh"])
+        return;
+    [defaults setObject:@[ @"zh-Hans-CN", @"zh-Hans" ] forKey:@"AppleLanguages"];
+}
+
 int main(int argc, const char *argv[])
 {
     (void)argc;
     (void)argv;
     @autoreleasepool {
+        // 必须在任何 bundle 取本地化字符串之前执行
+        MoteForceChineseUI();
+
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
         // NSApplication.delegate 不持有对象，必须自己保住生命周期
