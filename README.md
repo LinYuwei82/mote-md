@@ -112,7 +112,10 @@ bash packaging/publish_macos.sh                  # 公证门禁 → EdDSA 签名
 ```powershell
 powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1   # 校验 → SHA256 → windows.json → 上传 zip/安装包/清单 → 线上校验
+powershell -ExecutionPolicy Bypass -File packaging\publish_site.ps1      # 下载页：链接门禁 → 上传 index.html → 线上内容比对
 ```
+
+- 下载页的唯一来源是仓库里的 `site/index.html`，`publish_site.ps1` 负责上传到 OSS 桶根目录；页面里的下载链接会先逐个 `HEAD` 校验，避免发布出死链。
 
 - 版本号只改 `Mote.pro` 的 `VERSION`，两个发布脚本都从那里读。
 - Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
