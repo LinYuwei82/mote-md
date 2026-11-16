@@ -77,7 +77,7 @@ $allowed = @(
     "USER32.dll", "ole32.dll", "OLEAUT32.dll", "ADVAPI32.dll", "SHLWAPI.dll",
     "SHELL32.dll", "COMCTL32.dll", "KERNEL32.dll", "GDI32.dll", "COMDLG32.dll",
     "VERSION.dll", "WINMM.dll", "WS2_32.dll", "DWMAPI.dll", "UXTHEME.dll",
-    "ntdll.dll", "WebView2Loader.dll"
+    "WINHTTP.dll", "ntdll.dll", "WebView2Loader.dll"
 )
 $unexpected = $deps | Where-Object { $allowed -notcontains $_ -and $_ -notlike "api-ms-*" }
 if ($unexpected) { Fail ("依赖里出现非系统/非 Loader DLL：" + ($unexpected -join ", ")) }

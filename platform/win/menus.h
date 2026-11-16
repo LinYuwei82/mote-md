@@ -10,6 +10,8 @@ namespace mote::win {
 
 // 文件菜单末尾的「退出」不属于 core 命令表（macOS 由应用菜单承担）
 constexpr UINT kExitCommandId = 40005;
+// 「检查更新…」同样只在平台层：macOS 放在应用菜单，Windows 放在文件菜单
+constexpr UINT kCheckUpdateCommandId = 40006;
 
 HMENU build_main_menu();
 HACCEL build_accelerators();

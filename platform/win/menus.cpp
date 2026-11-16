@@ -192,6 +192,8 @@ HMENU build_main_menu()
         }
         if (spec.id == MenuId::File) {
             AppendMenuW(popup, MF_SEPARATOR, 0, nullptr);
+            AppendMenuW(popup, MF_STRING, kCheckUpdateCommandId, L"检查更新(&U)...");
+            AppendMenuW(popup, MF_SEPARATOR, 0, nullptr);
             AppendMenuW(popup, MF_STRING, kExitCommandId, L"退出(&X)\tAlt+F4");
         }
         AppendMenuW(menubar, MF_POPUP, reinterpret_cast<UINT_PTR>(popup),

@@ -6,6 +6,7 @@
 #include "html_export.h"
 #include "menus.h"
 #include "pdf_export.h"
+#include "updater.h"
 #include "web_host_view.h"
 
 #include "core/editor_controller.h"
@@ -589,11 +590,16 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         accel_ = mote::win::build_accelerators();
         follow_system_ = true;
         apply_theme();
+        mote::win::start_update_checker(hwnd);
         return 0;
     case WM_COMMAND: {
         const UINT id = LOWORD(wparam);
         if (id == mote::win::kExitCommandId) {
             SendMessageW(hwnd, WM_CLOSE, 0, 0);
+            return 0;
+        }
+        if (id == mote::win::kCheckUpdateCommandId) {
+            mote::win::check_for_updates_now(hwnd);
             return 0;
         }
         // 菜单项 id 就是 CommandId；未知 id（控件通知等）直接忽略
@@ -605,10 +611,17 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
     case kShortcutMessage:
         perform_command(static_cast<mote::CommandId>(wparam));
         return 0;
+    case mote::win::kUpdateResultMessage:
+        mote::win::handle_update_message(hwnd, lparam);
+        return 0;
     case WM_TIMER:
         if (wparam == kStartupCommandTimer) {
             KillTimer(hwnd, kStartupCommandTimer);
             run_startup_command();
+            return 0;
+        }
+        if (wparam == mote::win::kUpdateTimer) {
+            mote::win::run_update_timer(hwnd);
             return 0;
         }
         if (wparam == kSnapshotTimer) {
@@ -674,6 +687,7 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         return 0;
     case WM_DESTROY:
         revoke_drop_target();
+        KillTimer(hwnd, mote::win::kUpdateTimer);
         host_.reset();
         controller_.reset();
         shell_.reset();

@@ -95,6 +95,7 @@ if(WIN32)
     "${MOTE_PLATFORM_WIN}/dialogs.cpp"
     "${MOTE_PLATFORM_WIN}/html_export.cpp"
     "${MOTE_PLATFORM_WIN}/pdf_export.cpp"
+    "${MOTE_PLATFORM_WIN}/updater.cpp"
     "${MOTE_PLATFORM_WIN}/web_host_view.cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
 
@@ -102,9 +103,10 @@ if(WIN32)
     "${MOTE_WEBVIEW2_SDK}/build/native/include")
   target_link_libraries(Mote PRIVATE
     mote_core user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32
-    urlmon windowscodecs)
+    urlmon windowscodecs winhttp)
   target_compile_definitions(Mote PRIVATE
-    UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00)
+    UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00
+    MOTE_VERSION="${MOTE_VERSION}")
   target_compile_options(Mote PRIVATE /utf-8 /W4 /permissive-)
   # 关闭链接器自动生成的 manifest，改用 app.manifest（Common Controls v6）
   target_link_options(Mote PRIVATE /MANIFEST:NO)
