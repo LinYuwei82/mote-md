@@ -111,13 +111,14 @@ bash packaging/publish_macos.sh                  # 公证门禁 → EdDSA 签名
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
-powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1   # SHA256 → windows.json → 上传 → 线上校验
+powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1   # 校验 → SHA256 → windows.json → 上传 zip/安装包/清单 → 线上校验
 ```
 
 - 版本号只改 `Mote.pro` 的 `VERSION`，两个发布脚本都从那里读。
 - Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
 - 检查权在自研模块（`SUEnableAutomaticChecks=false`）：Sparkle 只负责下载、验签、替换、重启。
 - Windows 按安装形态取包：exe 同级有 `unins000.exe` 判为安装版，优先用 `setup_url`；否则用 `url` 的 zip；清单没给 `setup_url` 时回落到 zip。下载交给系统浏览器，不静默安装。
+- `publish_windows.ps1` 会一并发布安装包（`dist\Mote-Setup-<version>.exe` 存在时），并逐项校验线上 zip、安装包与清单三者一致。
 - 两份清单分开：macOS 只读 `latest.json`（指向 `.dmg`），Windows 只读 `windows.json`（指向 zip），避免把 `.dmg` 当成 Windows 包。
 
 ## 快捷键
