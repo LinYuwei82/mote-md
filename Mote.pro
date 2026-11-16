@@ -2,7 +2,7 @@ QT += core gui widgets
 
 TEMPLATE = app
 TARGET = Mote
-VERSION = 0.3.5
+VERSION = 0.3.6
 
 CONFIG += c++20 warn_on
 CONFIG -= debug_and_release
