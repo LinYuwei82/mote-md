@@ -76,6 +76,16 @@ bool parseUpdateManifest(std::string_view text, UpdateManifest &out, std::string
         return false;
     }
     out.size = static_cast<long long>(size);
+
+    // 可选的安装版条目：老清单没有这些字段，解析后保持空/0
+    out.setup_url = root.stringAt("setup_url");
+    out.setup_sha256 = root.stringAt("setup_sha256");
+    const double setupSize = root.numberAt("setup_size", 0.0);
+    if (setupSize < 0.0) {
+        setError(error, "更新清单的 setup_size 不能为负数");
+        return false;
+    }
+    out.setup_size = static_cast<long long>(setupSize);
     return true;
 }
 

@@ -16,6 +16,12 @@ struct UpdateManifest
     std::string min_os;       // 可选，最低系统版本，形如 14.0
     std::string published_at; // 可选，发布时间（原样透传，仅用于展示）
     long long size = 0;       // 可选，安装包字节数；0 表示清单未提供
+
+    // 可选：安装版的安装包。Windows 客户端按自身安装形态二选一，
+    // 缺失时回落到 url，老清单仍然可用。
+    std::string setup_url;
+    std::string setup_sha256;
+    long long setup_size = 0;
 };
 
 // 解析 latest.json。缺少必填字段或类型不符返回 false，error 给出中文原因。

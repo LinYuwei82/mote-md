@@ -272,6 +272,40 @@ std::string current_os_version()
     return "10.0";
 }
 
+// 安装版与绿色版只差「更新包形态」：安装版目录里有卸载器 unins000.exe。
+// 按可执行文件同级是否存在卸载器判断，不依赖安装路径，绿色版解压到哪都成立。
+bool running_installed_copy()
+{
+    wchar_t path[MAX_PATH] = {};
+    const DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH)
+        return false;
+    const std::filesystem::path exe(path);
+    return std::filesystem::exists(exe.parent_path() / L"unins000.exe");
+}
+
+// 按安装形态挑更新包：安装版优先用清单里的 setup_url，
+// 清单没给（旧清单）时回落到 url，避免老清单直接失效。
+struct UpdateTarget {
+    std::string url;
+    long long size = 0;
+    bool installer = false;
+};
+
+UpdateTarget pick_target(const UpdateManifest &manifest)
+{
+    UpdateTarget target;
+    if (running_installed_copy() && !manifest.setup_url.empty()) {
+        target.url = manifest.setup_url;
+        target.size = manifest.setup_size;
+        target.installer = true;
+    } else {
+        target.url = manifest.url;
+        target.size = manifest.size;
+    }
+    return target;
+}
+
 std::wstring human_size(long long bytes)
 {
     if (bytes <= 0)
@@ -323,15 +357,17 @@ void check_in_background(HWND hwnd, bool interactive)
 }
 
 // 返回 true 表示用户选择「下载并安装」
-bool prompt_install(HWND hwnd, const UpdateManifest &manifest)
+bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarget &target)
 {
     std::wstring content = L"当前版本 " + utf8_to_wide(MOTE_VERSION) + L"。";
     if (!manifest.published_at.empty())
         content += L"\n发布时间：" + utf8_to_wide(manifest.published_at);
-    const std::wstring size = human_size(manifest.size);
+    const std::wstring size = human_size(target.size);
     if (!size.empty())
         content += L"\n安装包大小：" + size;
-    content += L"\n\nWindows 版是免安装绿色包：下载后解压覆盖即可完成更新。";
+    content += target.installer
+        ? L"\n\n当前是安装版：将下载安装包（.exe），运行后按向导覆盖安装。"
+        : L"\n\n当前是绿色版：将下载免安装包（.zip），解压覆盖即可完成更新。";
 
     const std::wstring title = L"发现新版本 " + utf8_to_wide(manifest.version);
 
@@ -395,6 +431,11 @@ void show_result(HWND hwnd, const CheckResult &result)
         break;
     }
 
+    const UpdateTarget target = pick_target(result.manifest);
+    if (log_enabled())
+        update_log("target=%s installed=%d", target.url.c_str(),
+                   target.installer ? 1 : 0);
+
     // 后台检查不打扰用户：同一版本点过「稍后」后，等下次发布再说
     const std::wstring skipped = reg_read_string(kSkippedValue);
     const std::wstring latest = utf8_to_wide(result.manifest.version);
@@ -404,13 +445,13 @@ void show_result(HWND hwnd, const CheckResult &result)
         return;
     }
 
-    if (!prompt_install(hwnd, result.manifest)) {
+    if (!prompt_install(hwnd, result.manifest, target)) {
         reg_write_string(kSkippedValue, latest);
         return;
     }
 
     reg_delete_value(kSkippedValue);
-    const std::wstring url = utf8_to_wide(result.manifest.url);
+    const std::wstring url = utf8_to_wide(target.url);
     ShellExecuteW(hwnd, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 

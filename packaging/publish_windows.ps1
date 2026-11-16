@@ -154,16 +154,21 @@ if ($SetupFull) {
 Write-Host ""
 Write-Host "[3/6] 生成 windows.json"
 $manifestPath = Join-Path $root "dist\windows.json"
-$manifest = @"
-{
-  "version": "$Version",
-  "url": "$DownloadUrl",
-  "size": $Size,
-  "sha256": "$Sha256",
-  "min_os": "$MinOs",
-  "published_at": "$PublishedAt"
+# 绿色包是默认更新包；安装版另给 setup_* 三字段，客户端按安装形态二选一。
+$manifestObject = [ordered]@{
+    version      = $Version
+    url          = $DownloadUrl
+    size         = $Size
+    sha256       = $Sha256
+    min_os       = $MinOs
+    published_at = $PublishedAt
 }
-"@
+if ($SetupFull) {
+    $manifestObject["setup_url"] = $SetupUrl
+    $manifestObject["setup_size"] = $SetupSize
+    $manifestObject["setup_sha256"] = $SetupSha256
+}
+$manifest = ($manifestObject | ConvertTo-Json) + "`n"
 [IO.File]::WriteAllText($manifestPath, $manifest, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "  已生成：$manifestPath"
 
@@ -241,8 +246,10 @@ if ($SkipUpload) {
         $live = Invoke-WebRequest -Uri $ManifestUrl -UseBasicParsing -TimeoutSec 30
         $shaPattern = [regex]::Escape($Sha256)
         $versionPattern = [regex]::Escape('"version": "' + $Version + '"')
+        $setupPattern = [regex]::Escape('"setup_url": "' + $SetupUrl + '"')
         if ($live.StatusCode -eq 200 -and $live.Content -match $shaPattern -and
-            $live.Content -match $versionPattern) {
+            $live.Content -match $versionPattern -and
+            (-not $SetupFull -or $live.Content -match $setupPattern)) {
             Write-Host "  ✓ windows.json 版本与 SHA256 均与产物一致"
         } else {
             Write-Host "  ✗ windows.json 内容异常：$($live.Content)"

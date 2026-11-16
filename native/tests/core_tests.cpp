@@ -185,19 +185,26 @@ static void testUpdate()
     CHECK(mote::parseUpdateManifest(
         R"({"version":"0.3.6","url":"https://dl.xiaotu.online/mote/Mote-0.3.6.dmg",
             "size":1655459,"sha256":"abc","min_os":"14.0",
-            "published_at":"2026-11-16T08:00:00Z"})",
+            "published_at":"2026-11-16T08:00:00Z",
+            "setup_url":"https://dl.xiaotu.online/mote/Mote-Setup-0.3.6.exe",
+            "setup_size":2561252,"setup_sha256":"def"})",
         manifest, &error));
     CHECK_EQ(manifest.version, std::string("0.3.6"));
     CHECK_EQ(manifest.size, 1655459LL);
     CHECK_EQ(manifest.sha256, std::string("abc"));
     CHECK_EQ(manifest.min_os, std::string("14.0"));
     CHECK_EQ(manifest.published_at, std::string("2026-11-16T08:00:00Z"));
+    CHECK_EQ(manifest.setup_url, std::string("https://dl.xiaotu.online/mote/Mote-Setup-0.3.6.exe"));
+    CHECK_EQ(manifest.setup_size, 2561252LL);
+    CHECK_EQ(manifest.setup_sha256, std::string("def"));
 
     // 可选字段缺席时保持空/0，不报错
     CHECK(mote::parseUpdateManifest(R"({"version":"1.0.0","url":"https://x/y.dmg"})", manifest,
                                     &error));
     CHECK_EQ(manifest.size, 0LL);
     CHECK(manifest.sha256.empty());
+    CHECK(manifest.setup_url.empty());
+    CHECK_EQ(manifest.setup_size, 0LL);
 
     // 必填字段与类型校验
     CHECK(!mote::parseUpdateManifest(R"({"url":"https://x/y.dmg"})", manifest, &error));
@@ -207,6 +214,8 @@ static void testUpdate()
     CHECK(!mote::parseUpdateManifest(R"({"version":1,"url":"https://x"})", manifest, &error));
     CHECK(!mote::parseUpdateManifest(R"({"version":"1","url":"https://x","size":-1})", manifest,
                                      &error));
+    CHECK(!mote::parseUpdateManifest(R"({"version":"1","url":"https://x","setup_size":-1})",
+                                     manifest, &error));
     CHECK(!mote::parseUpdateManifest("not json", manifest, &error));
     CHECK_EQ(error, std::string("更新清单不是合法的 JSON 对象"));
 
