@@ -1,5 +1,7 @@
 #include "dialogs.h"
 
+#include "env.h"
+
 #include <commctrl.h>
 #include <shobjidl.h>
 #include <wrl/client.h>
@@ -34,9 +36,9 @@ std::string wide_to_utf8(const std::wstring &text)
     return narrow;
 }
 
-void set_folder(Microsoft::WRL::ComPtr<IFileDialog> &dialog, const std::string &directory)
+void set_folder(IFileDialog *dialog, const std::string &directory)
 {
-    if (directory.empty())
+    if (!dialog || directory.empty())
         return;
     Microsoft::WRL::ComPtr<IShellItem> folder;
     const std::wstring wide = utf8_to_wide(directory);
@@ -90,7 +92,7 @@ std::string MoteOpenMarkdownDialog(HWND owner, const std::string &initial_dir)
     };
     dialog->SetFileTypes(ARRAYSIZE(types), types);
     dialog->SetFileTypeIndex(1);
-    set_folder(dialog, initial_dir);
+    set_folder(dialog.Get(), initial_dir);
 
     if (FAILED(dialog->Show(owner)))
         return std::string();
@@ -132,7 +134,7 @@ std::string MoteSaveDialog(HWND owner, const std::wstring &title,
             slash == std::string::npos ? suggested_path : suggested_path.substr(slash + 1);
         dialog->SetFileName(utf8_to_wide(name).c_str());
         if (slash != std::string::npos)
-            set_folder(dialog, suggested_path.substr(0, slash));
+            set_folder(dialog.Get(), suggested_path.substr(0, slash));
     }
 
     if (FAILED(dialog->Show(owner)))
@@ -147,13 +149,13 @@ std::string MoteSaveDialog(HWND owner, const std::wstring &title,
 MoteSaveChoice MoteConfirmUnsaved(HWND owner, const std::wstring &display_name)
 {
     // 诊断用（MOTE_ANSWER=cancel|discard|save）：跳过弹窗直接给出答案
-    if (const char *forced = std::getenv("MOTE_ANSWER")) {
-        const std::string value(forced);
-        if (value == "cancel")
+    const std::string forced = env_value("MOTE_ANSWER");
+    if (!forced.empty()) {
+        if (forced == "cancel")
             return MoteSaveChoice::Cancel;
-        if (value == "discard")
+        if (forced == "discard")
             return MoteSaveChoice::Discard;
-        if (value == "save")
+        if (forced == "save")
             return MoteSaveChoice::Save;
     }
 

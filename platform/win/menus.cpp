@@ -37,6 +37,12 @@ bool key_from_token(const std::string &token, UINT *key)
             *key = static_cast<UINT>(ch);
             return true;
         }
+        // 命令表里少数快捷键直接用单字符符号（如源码模式的 "cmd+/"），
+        // 与上面的单词形式等价处理，避免解析失败后被静默跳过。
+        if (ch == '/') {
+            *key = VK_OEM_2;
+            return true;
+        }
         return false;
     }
     // 符号键用词名表达，避免 "+" 既当分隔符又当键名
@@ -229,6 +235,29 @@ HACCEL build_accelerators()
     if (entries.empty())
         return nullptr;
     return CreateAcceleratorTableW(entries.data(), static_cast<int>(entries.size()));
+}
+
+bool command_for_shortcut(WORD modifiers, UINT key, CommandId *id)
+{
+    if (!id)
+        return false;
+    for (const MenuSpec &menu : menus()) {
+        for (const CommandId command_id : menu.items) {
+            const CommandSpec *command = findCommand(command_id);
+            if (!command || uses_webview_native_edit(command_id))
+                continue;
+            for (const std::string &shortcut : command->shortcuts) {
+                ParsedShortcut parsed;
+                if (!parse_shortcut(shortcut, &parsed))
+                    continue;
+                if (parsed.modifiers == modifiers && parsed.key == key) {
+                    *id = command_id;
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 void set_command_checked(HMENU menu, CommandId id, bool checked)

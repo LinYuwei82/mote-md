@@ -161,7 +161,7 @@ static void testJson()
 
     // \u 转义与代理对
     JsonValue unicode;
-    CHECK(mote::parseJson(R"("\u4e2d\ud83d\ude00")", unicode));
+    CHECK(mote::parseJson("\"\\u4e2d\\ud83d\\ude00\"", unicode));
     CHECK_EQ(unicode.asString(), std::string("中😀"));
 
     JsonValue broken;

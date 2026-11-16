@@ -28,6 +28,9 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# 静态链接 MSVC 运行库（/MT），避免目标机缺 MSVCP140/VCRUNTIME140
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+
 # 无 Qt、无平台 API 的核心：macOS 与 Windows 共用
 add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/base64.cpp"
@@ -77,6 +80,7 @@ if(WIN32)
   set(MOTE_WIN_ICON "${MOTE_REPO_ROOT}/resources/win/app.ico")
   # rc.exe 以 .rc 所在目录解析相对路径：把图标拷到生成目录，避免绝对路径转义
   configure_file("${MOTE_WIN_ICON}" "${CMAKE_CURRENT_BINARY_DIR}/app.ico" COPYONLY)
+  configure_file("${MOTE_PLATFORM_WIN}/app.manifest" "${CMAKE_CURRENT_BINARY_DIR}/app.manifest" COPYONLY)
   configure_file(
     "${MOTE_PLATFORM_WIN}/app.rc.in"
     "${CMAKE_CURRENT_BINARY_DIR}/app.rc"
@@ -88,6 +92,8 @@ if(WIN32)
     "${MOTE_PLATFORM_WIN}/menus.cpp"
     "${MOTE_PLATFORM_WIN}/drop_target.cpp"
     "${MOTE_PLATFORM_WIN}/dialogs.cpp"
+    "${MOTE_PLATFORM_WIN}/html_export.cpp"
+    "${MOTE_PLATFORM_WIN}/pdf_export.cpp"
     "${MOTE_PLATFORM_WIN}/web_host_view.cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
 
@@ -99,6 +105,8 @@ if(WIN32)
   target_compile_definitions(Mote PRIVATE
     UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00)
   target_compile_options(Mote PRIVATE /utf-8 /W4 /permissive-)
+  # 关闭链接器自动生成的 manifest，改用 app.manifest（Common Controls v6）
+  target_link_options(Mote PRIVATE /MANIFEST:NO)
 
   # 前端资源只有一份：构建时拷到 exe 同级，运行时按 exe 目录定位
   add_custom_command(TARGET Mote POST_BUILD

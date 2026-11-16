@@ -42,11 +42,18 @@ public:
     void inject_document(const std::string &text);
     void file_drop_requested(const std::string &path);
     bool clipboard_image(std::vector<std::uint8_t> *bytes, std::string *mime);
+    // Ctrl+V 钩子：剪贴板里是图片时由外壳粘贴（保留 alpha），否则交回 Chromium
+    bool paste_clipboard_image();
+    // 编辑区组合键：先给图片粘贴，再按命令表分发；返回 true 表示已处理
+    bool handle_accelerator(UINT key, WORD modifiers);
     void navigation_completed();
     void page_ready();
     void dirty_changed();
     void status_message(const std::string &text);
     void error_message(const std::string &text);
+    // 导出（N4）
+    void export_html_ready(const std::string &html);
+    void export_pdf_requested(const std::string &path);
 
 private:
     friend class ShellHost;
@@ -54,6 +61,10 @@ private:
     enum class AfterSave { None, OpenDialog, OpenPath, NewDocument, Close, ExportPdf };
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
+    // 低级键盘钩子：WebView2/Chromium 会先吃掉部分组合键（Ctrl+Shift+S、
+    // Ctrl+Alt+E），AcceleratorKeyPressed 收不到，只能在本进程内提前截获
+    static LRESULT CALLBACK keyboard_hook(int code, WPARAM wparam, LPARAM lparam);
+    static MoteMainWindow *hook_owner_;
     LRESULT handle_message(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
     void layout();
     void update_title();
@@ -70,6 +81,7 @@ private:
     void reset_after_save();
     bool confirm_close();
     void show_status(const std::string &text);
+    void prompt_export_pdf();
 
     void perform_command(mote::CommandId command);
     void apply_view_state(const mote::ViewState &state);
@@ -85,6 +97,12 @@ private:
     std::unique_ptr<WebHostView> host_;
     std::unique_ptr<ShellHost> shell_;
     std::unique_ptr<mote::EditorController> controller_;
+    HHOOK keyboard_hook_ = nullptr;
+    UINT last_shortcut_key_ = 0;
+    // 钩子里自己维护修饰键状态：真实键盘下 GetAsyncKeyState 可能与回调时序不同步
+    bool hook_ctrl_ = false;
+    bool hook_shift_ = false;
+    bool hook_alt_ = false;
     HACCEL accel_ = nullptr;
     HWND drop_hwnd_ = nullptr;
     void *drop_target_ = nullptr;
@@ -98,6 +116,9 @@ private:
     bool follow_system_ = true;
     bool dark_mode_ = false;
     bool startup_command_done_ = false;
+    bool diagnostics_started_ = false;
+    bool drop_probe_done_ = false;
+    std::vector<std::string> drop_probe_paths_;
     double last_zoom_ = 1.0;
     AfterSave after_save_ = AfterSave::None;
     std::string after_save_path_;

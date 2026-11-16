@@ -10,6 +10,8 @@
 
 > 本机为 macOS，Windows 的两个产物由 Windows 机器按第 2 节脚本构建并校验，
 > 校验值见 `docs/release-notes-0.3.0.md`；本机未重复执行该流程。
+>
+> 这两个是 Qt 路径的旧产物。Windows 当前默认发布包是原生薄外壳，见第 6 节。
 
 ---
 
@@ -793,3 +795,54 @@ copy LICENSE dist\Mote-Windows\licenses\LICENSE-AGPL-3.0.txt
 6. **链接的复制验证方式**：`Cmd+A`/`Cmd+C` 在 WKWebView + Qt 的外壳里不会产生选区（历史遗留），
    因此链接的「复制出标准 Markdown」走产品自身的 `copy` 处理器 + 合成 `DataTransfer` 读取
    `text/plain` 验证；真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
+
+---
+
+## 6. Windows 原生薄外壳（阶段 B）打包与基线
+
+**这一节是 Windows 的默认发布路径**：产物 `dist/Mote-Windows/` 与 `dist/Mote-Windows.zip`，
+不含 Qt。Qt 打包（`package_windows.bat` + `build_installer.ps1`/`mote.iss`）保留为
+回退与对照路径，两边不要同时打到同一个目录。
+
+### 6.1 打包
+
+在已加载 MSVC 2022 x64 环境的 PowerShell 中：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+```
+
+- 默认构建目录 `build-native-ninja`（可用 `-BuildDir` 覆盖），`-SkipBuild` 跳过编译。
+- 默认产物名 `Mote-Windows`（可用 `-OutName` 覆盖；与 Qt 包并存时传 `-OutName Mote-Windows-native`）。
+- 产物 `dist/Mote-Windows/`：`Mote.exe`、`WebView2Loader.dll`、`web/`、`fonts/`、
+  `samples/`、`licenses/`；同名 zip。
+- 自检：产物内不得出现 `Qt6*.dll` 与 `platforms/qwindows.dll`；`dumpbin /dependents`
+  只允许系统 DLL（`api-ms-*` 放行）。
+- 实测（2026-11-14，MSVC 14.44 / WebView2 Runtime 157.0.4341.46）：
+
+| 项 | 值 |
+|---|---|
+| Mote.exe | 632,832 字节（静态 CRT） |
+| WebView2Loader.dll | 165,968 字节 |
+| zip | 607,489 字节 |
+| 依赖 | USER32 / ole32 / ADVAPI32 / SHLWAPI / SHELL32 / COMCTL32 / KERNEL32 |
+| Qt 文件 | 0 |
+
+### 6.2 截图与页面基线
+
+`MOTE_EVAL`、`MOTE_SNAPSHOT`、`MOTE_SNAPSHOT_DELAY` 在 Windows 与 mac 同名同义；
+Windows 用 `CapturePreview` 直接渲染（不依赖截屏）。基线命令：
+
+```powershell
+$env:MOTE_LOG="$env:TEMP\mote-snap.log"; $env:MOTE_KEYLOG="1"
+$env:MOTE_EVAL="document.querySelectorAll('.block').length"
+$env:MOTE_SNAPSHOT="$env:TEMP\mote-snap.png"
+dist\Mote-Windows\Mote.exe dist\Mote-Windows\samples\welcome.md
+```
+
+实测：`JSLOG EVAL 44`（44 个 block），`NATIVE stats cjk=909 words=345`，
+PNG 1180×800 / 105,464 字节，页面正常渲染。
+
+mac 对照基线需在 mac 上以同一命令产出后比对（当前 Windows 机器无法运行 mac 版），
+比对时关注：正文排版、代码块高亮、状态栏样式（类名不同但样式应一致）。
+

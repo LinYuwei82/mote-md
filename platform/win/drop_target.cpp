@@ -1,5 +1,7 @@
 #include "drop_target.h"
 
+#include "env.h"
+
 #include <objbase.h>
 #include <shellapi.h>
 
@@ -151,8 +153,8 @@ public:
     HRESULT STDMETHODCALLTYPE Drop(IDataObject *data, DWORD, POINTL, DWORD *effect) override
     {
         const bool acceptable = accepts(data);
-        acceptable_ = false;
         apply_effect(effect);
+        acceptable_ = false;
         if (!acceptable)
             return S_OK;
 
@@ -210,29 +212,35 @@ void *register_drop_target(HWND hwnd, DropCallbacks callbacks, std::string *erro
         return nullptr;
     }
 
-    // OLE 拖放要求 STA；主线程由 main.cpp 的 CoInitializeEx(COINIT_APARTMENTTHREADED)
-    // 保证，这里只做校验，失败就退回页面内 drop 事件兜底。
+    // OLE 拖放要求本线程调用过 OleInitialize；仅 CoInitializeEx 不够，
+    // 否则 RegisterDragDrop 会返回 E_OUTOFMEMORY。已初始化时返回 S_FALSE，无副作用。
     APTTYPE type = APTTYPE_CURRENT;
     APTTYPEQUALIFIER qualifier = APTTYPEQUALIFIER_NONE;
     const HRESULT apartment = CoGetApartmentType(&type, &qualifier);
-    if (apartment == CO_E_NOTINITIALIZED) {
-        const HRESULT initialized = OleInitialize(nullptr);
-        if (FAILED(initialized)) {
-            if (error)
-                *error = "OleInitialize 失败 " + hr_string(initialized);
-            return nullptr;
-        }
-    } else if (apartment == S_OK && type != APTTYPE_STA && type != APTTYPE_MAINSTA) {
+    if (apartment == S_OK && type != APTTYPE_STA && type != APTTYPE_MAINSTA) {
         if (error)
             *error = "当前线程不是 STA 套间（类型 " + std::to_string(static_cast<int>(type))
                 + "）";
         return nullptr;
     }
+    const HRESULT initialized = OleInitialize(nullptr);
+    if (FAILED(initialized)) {
+        if (error)
+            *error = "OleInitialize 失败 " + hr_string(initialized);
+        return nullptr;
+    }
 
     auto *target = new DropTarget(hwnd, std::move(callbacks));
-    const HRESULT registered = RegisterDragDrop(hwnd, target);
+    HRESULT registered = RegisterDragDrop(hwnd, target);
+    if (registered == DRAGDROP_E_ALREADYREGISTERED) {
+        // Chromium 会先给渲染子窗口注册自己的 IDropTarget，把文件拖放吃掉
+        // （表现为拖进来毫无反应）。AllowExternalDrop=false 只能拦住它新建
+        // 目标，拦不住已经存在的；这里显式换成本进程的目标。
+        RevokeDragDrop(hwnd);
+        registered = RegisterDragDrop(hwnd, target);
+    }
     if (FAILED(registered)) {
-        if (std::getenv("MOTE_KEYLOG"))
+        if (!env_value("MOTE_KEYLOG").empty())
             std::fprintf(stderr, "WIN RegisterDragDrop failed %s\n",
                          hr_string(registered).c_str());
         if (error)

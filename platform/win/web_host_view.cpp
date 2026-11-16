@@ -1,10 +1,13 @@
 #include "web_host_view.h"
 
+#include "env.h"
+
 #include "core/inject_chunks.h"
 #include "core/js_bridge.h"
 #include "core/json.h"
 
 #include <shlobj.h>
+#include <shlwapi.h>
 #include <urlmon.h>
 #include <wrl/event.h>
 
@@ -46,6 +49,9 @@ const wchar_t kBridgeScript[] = LR"JS(
 })();
 )JS";
 
+std::wstring utf8_to_wide(const std::string &text);
+std::string wide_to_utf8(const std::wstring &text);
+
 // 单条脚本与单条消息的体积预算：WebView2 在 2MB 量级封顶，
 // 各留一半余量给 JSON 转义与 UTF-8 膨胀（中文每字符 3 字节）。
 constexpr std::size_t kScriptBudget = 512 * 1024;
@@ -55,6 +61,13 @@ void log_line(const wchar_t *text)
 {
     OutputDebugStringW(text);
     OutputDebugStringW(L"\n");
+    const std::string path = env_value("MOTE_LOG");
+    if (!path.empty()) {
+        std::ofstream file(std::filesystem::path(utf8_to_wide(path)),
+                           std::ios::app | std::ios::binary);
+        if (file)
+            file << wide_to_utf8(text) << "\n";
+    }
 }
 
 std::wstring exe_directory()
@@ -186,10 +199,7 @@ std::string base64_encode(const std::string &bytes)
 
 bool inline_proto_enabled()
 {
-    const char *value = std::getenv("MOTE_INLINE_PROTO");
-    if (!value)
-        return true;
-    const std::string text(value);
+    const std::string text = env_value("MOTE_INLINE_PROTO");
     return text != "0" && text != "false" && text != "off";
 }
 
@@ -230,10 +240,12 @@ std::wstring font_face_css()
 } // namespace
 
 WebHostView::WebHostView(HWND parent, std::function<void()> on_page_loaded,
-                         std::function<void(std::string_view)> on_message)
+                         std::function<void(std::string_view)> on_message,
+                         std::function<bool(UINT, WORD)> on_accelerator)
     : parent_(parent)
     , page_loaded_(std::move(on_page_loaded))
     , message_(std::move(on_message))
+    , accelerator_(std::move(on_accelerator))
 {
     initialize();
 }
@@ -242,6 +254,8 @@ WebHostView::~WebHostView()
 {
     *alive_ = false;
     if (controller_) {
+        if (accelerator_token_.value)
+            controller_->remove_AcceleratorKeyPressed(accelerator_token_);
         controller_->Close();
         controller_.Reset();
     }
@@ -262,15 +276,18 @@ void WebHostView::initialize()
     // 缺失时给出可操作的提示，而不是启动即崩。
     loader_ = LoadLibraryW(L"WebView2Loader.dll");
     if (!loader_) {
+        log_line(L"load WebView2Loader.dll failed");
         fail(L"缺少 WebView2Loader.dll。\n\n请重新解压完整压缩包，或重新安装 Mote。");
         return;
     }
+    log_line(L"WebView2Loader.dll loaded");
 
     auto get_version = reinterpret_cast<GetVersionFn>(
         GetProcAddress(loader_, "GetAvailableCoreWebView2BrowserVersionString"));
     auto create_environment = reinterpret_cast<CreateEnvironmentFn>(
         GetProcAddress(loader_, "CreateCoreWebView2EnvironmentWithOptions"));
     if (!get_version || !create_environment) {
+        log_line(L"GetProcAddress failed");
         fail(L"WebView2Loader.dll 版本不匹配（缺少环境创建接口）。");
         return;
     }
@@ -278,20 +295,25 @@ void WebHostView::initialize()
     LPWSTR version = nullptr;
     const HRESULT version_result = get_version(nullptr, &version);
     if (FAILED(version_result) || !version) {
+        log_line(L"GetAvailableCoreWebView2BrowserVersionString failed");
         fail(L"未检测到 Microsoft Edge WebView2 Runtime。\n\n"
              L"请安装运行时后重试：https://go.microsoft.com/fwlink/p/?LinkId=2124703");
         return;
     }
+    log_line((std::wstring(L"WebView2 runtime: ") + version).c_str());
     CoTaskMemFree(version);
 
     const std::wstring data_directory = user_data_directory();
+    log_line((std::wstring(L"data dir: ") + data_directory).c_str());
     const HRESULT created = create_environment(
         nullptr, data_directory.c_str(), nullptr,
         Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [this](HRESULT result, ICoreWebView2Environment *environment) -> HRESULT {
+                log_line(L"env callback fired");
                 if (!*alive_)
                     return S_OK;
                 if (FAILED(result) || !environment) {
+                    log_line(L"env creation failed");
                     fail(L"WebView2 环境创建失败。");
                     return S_OK;
                 }
@@ -302,6 +324,7 @@ void WebHostView::initialize()
                         ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
                         [this](HRESULT controller_result,
                                ICoreWebView2Controller *controller) -> HRESULT {
+                            log_line(L"controller callback fired");
                             if (*alive_)
                                 on_controller_created(controller_result, controller);
                             return S_OK;
@@ -310,8 +333,10 @@ void WebHostView::initialize()
                 return S_OK;
             })
             .Get());
-    if (FAILED(created))
+    if (FAILED(created)) {
+        log_line(L"CreateCoreWebView2EnvironmentWithOptions failed");
         fail(L"WebView2 环境创建失败。");
+    }
 }
 
 void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller *controller)
@@ -323,6 +348,22 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
     controller_ = controller;
     controller_->put_IsVisible(TRUE);
 
+    // 关掉 WebView2 自带的 HTML5 外部拖放：开着时 Chromium 会占用子窗口的
+    // IDropTarget，宿主注册的文件拖放收不到 Drop（拖进来毫无反应）。
+    // 编辑器页面本身不需要 HTML5 拖放，文件拖放统一走 platform/win/drop_target。
+    Microsoft::WRL::ComPtr<ICoreWebView2Controller4> controller4;
+    if (SUCCEEDED(controller_.As(&controller4)) && controller4)
+        controller4->put_AllowExternalDrop(FALSE);
+
+    // Chromium 自带的浏览器快捷键会先于 AcceleratorKeyPressed 吃掉部分组合键
+    // （典型是 Ctrl+Shift+S），让外壳的菜单快捷键无法触发。页面自己处理了
+    // Ctrl+S/O/Z/Y，查找条等也在页面里实现，关掉这批内部快捷键不会丢功能。
+    Microsoft::WRL::ComPtr<ICoreWebView2Settings> settings;
+    Microsoft::WRL::ComPtr<ICoreWebView2Settings3> settings3;
+    if (webview_ && SUCCEEDED(webview_->get_Settings(&settings)) && settings
+        && SUCCEEDED(settings.As(&settings3)) && settings3)
+        settings3->put_AreBrowserAcceleratorKeysEnabled(FALSE);
+
     RECT bounds = {};
     GetClientRect(parent_, &bounds);
     controller_->put_Bounds(bounds);
@@ -332,7 +373,7 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
         return;
     }
 
-    webview_->AddScriptToExecuteOnDocumentCreated(kBridgeScript, &bridge_token_);
+    webview_->AddScriptToExecuteOnDocumentCreated(kBridgeScript, nullptr);
 
     // 页面消息：先比对 URL fragment 的页面代次，丢掉上一个页面迟到的消息
     webview_->add_WebMessageReceived(
@@ -375,6 +416,37 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
             })
             .Get(),
         &navigation_token_);
+
+    // WebView2 在消息循环之前截获键盘，TranslateAccelerator 只对原生菜单生效；
+    // 编辑区里的组合键统一在这里交给外壳（Ctrl+V 的图片粘贴也走这条）。
+    if (accelerator_) {
+        controller_->add_AcceleratorKeyPressed(
+            Microsoft::WRL::Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
+                [this](ICoreWebView2Controller *,
+                       ICoreWebView2AcceleratorKeyPressedEventArgs *args) -> HRESULT {
+                    if (!*alive_ || !args || !accelerator_)
+                        return S_OK;
+                    COREWEBVIEW2_KEY_EVENT_KIND kind = COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN;
+                    args->get_KeyEventKind(&kind);
+                    if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN
+                        && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN)
+                        return S_OK;
+                    UINT key = 0;
+                    args->get_VirtualKey(&key);
+                    WORD modifiers = 0;
+                    if (GetKeyState(VK_CONTROL) < 0)
+                        modifiers |= FCONTROL;
+                    if (GetKeyState(VK_SHIFT) < 0)
+                        modifiers |= FSHIFT;
+                    if (GetKeyState(VK_MENU) < 0)
+                        modifiers |= FALT;
+                    if (accelerator_(key, modifiers))
+                        args->put_Handled(TRUE);
+                    return S_OK;
+                })
+                .Get(),
+            &accelerator_token_);
+    }
 
     if (page_pending_) {
         page_pending_ = false;
@@ -473,6 +545,98 @@ void WebHostView::evaluate_script(const std::string &script)
     if (!webview_ || script.empty())
         return;
     webview_->ExecuteScript(utf8_to_wide(script).c_str(), nullptr);
+}
+
+void WebHostView::evaluate_script_result(
+    const std::string &script, std::function<void(bool, const std::string &)> callback)
+{
+    if (!webview_ || script.empty())
+        return;
+    auto alive = alive_;
+    webview_->ExecuteScript(
+        utf8_to_wide(script).c_str(),
+        Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+            [alive, callback](HRESULT error, LPCWSTR result) -> HRESULT {
+                if (!*alive)
+                    return S_OK;
+                const std::string text = result ? wide_to_utf8(result) : std::string();
+                if (callback)
+                    callback(SUCCEEDED(error), text);
+                return S_OK;
+            })
+            .Get());
+}
+
+void WebHostView::capture_preview(const std::string &path, std::function<void(bool)> callback)
+{
+    if (!webview_ || path.empty()) {
+        if (callback)
+            callback(false);
+        return;
+    }
+    Microsoft::WRL::ComPtr<IStream> stream;
+    const std::wstring wide = utf8_to_wide(path);
+    if (FAILED(SHCreateStreamOnFileEx(wide.c_str(),
+                                      STGM_CREATE | STGM_WRITE | STGM_SHARE_DENY_WRITE,
+                                      FILE_ATTRIBUTE_NORMAL, TRUE, nullptr, &stream))) {
+        if (callback)
+            callback(false);
+        return;
+    }
+    auto alive = alive_;
+    webview_->CapturePreview(
+        COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, stream.Get(),
+        Microsoft::WRL::Callback<ICoreWebView2CapturePreviewCompletedHandler>(
+            [alive, callback](HRESULT error) -> HRESULT {
+                if (*alive && callback)
+                    callback(SUCCEEDED(error));
+                return S_OK;
+            })
+            .Get());
+}
+
+void WebHostView::print_to_pdf(const std::string &path, double scale,
+                               std::function<void(bool)> callback)
+{
+    if (!webview_ || path.empty()) {
+        if (callback)
+            callback(false);
+        return;
+    }
+    Microsoft::WRL::ComPtr<ICoreWebView2_7> web7;
+    if (FAILED(webview_.As(&web7)) || !web7) {
+        if (callback)
+            callback(false);
+        return;
+    }
+
+    // A4 纵向；边距沿用 mac 的 51pt / 56.7pt（换算成英寸）
+    Microsoft::WRL::ComPtr<ICoreWebView2Environment6> env6;
+    Microsoft::WRL::ComPtr<ICoreWebView2PrintSettings> settings;
+    if (SUCCEEDED(environment_.As(&env6))
+        && SUCCEEDED(env6->CreatePrintSettings(&settings)) && settings) {
+        settings->put_PageWidth(8.27);
+        settings->put_PageHeight(11.69);
+        settings->put_MarginLeft(51.0 / 72.0);
+        settings->put_MarginRight(51.0 / 72.0);
+        settings->put_MarginTop(56.7 / 72.0);
+        settings->put_MarginBottom(56.7 / 72.0);
+        settings->put_ShouldPrintBackgrounds(TRUE);
+        settings->put_ShouldPrintHeaderAndFooter(FALSE);
+        if (scale > 0.0)
+            settings->put_ScaleFactor(scale);
+    }
+
+    auto alive = alive_;
+    web7->PrintToPdf(
+        utf8_to_wide(path).c_str(), settings.Get(),
+        Microsoft::WRL::Callback<ICoreWebView2PrintToPdfCompletedHandler>(
+            [alive, callback](HRESULT error, BOOL success) -> HRESULT {
+                if (*alive && callback)
+                    callback(SUCCEEDED(error) && success);
+                return S_OK;
+            })
+            .Get());
 }
 
 void WebHostView::inject_markdown(const std::string &text)

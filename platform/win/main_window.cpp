@@ -2,7 +2,10 @@
 
 #include "dialogs.h"
 #include "drop_target.h"
+#include "env.h"
+#include "html_export.h"
 #include "menus.h"
+#include "pdf_export.h"
 #include "web_host_view.h"
 
 #include "core/editor_controller.h"
@@ -35,6 +38,10 @@ constexpr int kMinWidth = 760;
 constexpr int kMinHeight = 520;
 
 constexpr UINT_PTR kStartupCommandTimer = 1;
+constexpr UINT_PTR kSnapshotTimer = 2;
+constexpr UINT_PTR kDropProbeTimer = 3;
+// 键盘钩子截获的组合键回到窗口线程后，再用这条消息统一走 perform_command
+constexpr UINT kShortcutMessage = WM_APP + 7;
 
 std::wstring utf8_to_wide(const std::string &text)
 {
@@ -66,7 +73,8 @@ void log_line(const std::string &text)
     const std::wstring wide = utf8_to_wide(text);
     OutputDebugStringW(wide.c_str());
     OutputDebugStringW(L"\n");
-    if (const char *path = std::getenv("MOTE_LOG"); path && *path) {
+    const std::string path = env_value("MOTE_LOG");
+    if (!path.empty()) {
         std::ofstream file(std::filesystem::path(utf8_to_wide(path)),
                            std::ios::app | std::ios::binary);
         if (file)
@@ -131,12 +139,41 @@ bool read_text_file(const std::string &path, std::string *text)
 
 bool write_text_file(const std::string &path, const std::string &text)
 {
-    std::ofstream file(std::filesystem::path(utf8_to_wide(path)),
-                       std::ios::binary | std::ios::trunc);
-    if (!file)
-        return false;
-    file.write(text.data(), static_cast<std::streamsize>(text.size()));
-    return file.good();
+    // 先写同目录临时文件再换名：写到一半崩溃或断电时，原文档仍是完整的一份。
+    const std::filesystem::path target(utf8_to_wide(path));
+    std::filesystem::path temp = target;
+    temp += L".tmp-" + std::to_wstring(GetCurrentProcessId());
+    {
+        std::ofstream file(temp, std::ios::binary | std::ios::trunc);
+        if (!file)
+            return false;
+        file.write(text.data(), static_cast<std::streamsize>(text.size()));
+        file.flush();
+        if (!file.good()) {
+            file.close();
+            std::error_code ignored;
+            std::filesystem::remove(temp, ignored);
+            return false;
+        }
+    }
+
+    if (!ReplaceFileW(target.c_str(), temp.c_str(), nullptr,
+                      REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr)) {
+        const DWORD error = GetLastError();
+        // 首次保存时目标还不存在，ReplaceFile 报 ERROR_FILE_NOT_FOUND；
+        // 其它错误（被占用、无权限、目录不存在）保留原文件，清掉临时文件。
+        if (error != ERROR_FILE_NOT_FOUND) {
+            std::error_code ignored;
+            std::filesystem::remove(temp, ignored);
+            return false;
+        }
+        if (!MoveFileExW(temp.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+            std::error_code ignored;
+            std::filesystem::remove(temp, ignored);
+            return false;
+        }
+    }
+    return true;
 }
 
 std::string with_extension(std::string path, const char *extension)
@@ -158,39 +195,81 @@ bool encode_dib_to_png(const std::vector<std::uint8_t> &dib, std::vector<std::ui
     BITMAPINFOHEADER info = {};
     std::memcpy(&info, dib.data(), sizeof(info));
 
-    BITMAPFILEHEADER file = {};
-    file.bfType = 0x4D42;
-    file.bfOffBits = static_cast<DWORD>(sizeof(BITMAPFILEHEADER) + info.biSize);
-    if (info.biBitCount <= 8) {
-        const DWORD colors = info.biClrUsed ? info.biClrUsed : (1u << info.biBitCount);
-        file.bfOffBits += colors * 4;
-    } else if (info.biCompression == BI_BITFIELDS) {
-        file.bfOffBits += 12;
-    }
-    file.bfSize = static_cast<DWORD>(sizeof(BITMAPFILEHEADER) + dib.size());
-
-    std::vector<std::uint8_t> bmp(file.bfSize);
-    std::memcpy(bmp.data(), &file, sizeof(file));
-    std::memcpy(bmp.data() + sizeof(file), dib.data(), dib.size());
-
     using Microsoft::WRL::ComPtr;
     ComPtr<IWICImagingFactory> factory;
     if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
                                 IID_PPV_ARGS(&factory))))
         return false;
 
-    ComPtr<IStream> input;
-    input.Attach(SHCreateMemStream(bmp.data(), static_cast<UINT>(bmp.size())));
-    if (!input)
-        return false;
+    // 32bpp BI_RGB 的 alpha 字节在 BMP 规范里未定义，WIC 解码时会直接丢掉；
+    // 浏览器和截图工具却常在这里写真实 alpha。只要这些字节既非全 0（视为
+    // 未定义）也非全 255（不透明），就按 BGRA 原样送进 PNG 编码器。
+    ComPtr<IWICBitmapSource> source;
+    if (info.biBitCount == 32 && info.biCompression == BI_RGB && info.biWidth > 0
+        && info.biHeight != 0) {
+        const size_t width = static_cast<size_t>(info.biWidth);
+        const size_t height = static_cast<size_t>(info.biHeight < 0 ? -info.biHeight
+                                                                     : info.biHeight);
+        const size_t stride = width * 4;
+        const size_t offset = static_cast<size_t>(info.biSize);
+        if (offset >= sizeof(BITMAPINFOHEADER) && dib.size() >= offset + stride * height) {
+            const std::uint8_t *raw = dib.data() + offset;
+            bool any_alpha = false;
+            bool any_translucent = false;
+            for (size_t pixel = 0; pixel < width * height; ++pixel) {
+                const std::uint8_t alpha = raw[pixel * 4 + 3];
+                any_alpha = any_alpha || alpha != 0;
+                any_translucent = any_translucent || alpha != 255;
+            }
+            if (any_alpha && any_translucent) {
+                std::vector<std::uint8_t> pixels(stride * height);
+                const bool top_down = info.biHeight < 0;
+                for (size_t row = 0; row < height; ++row) {
+                    const size_t source_row = top_down ? row : height - 1 - row;
+                    std::memcpy(pixels.data() + row * stride, raw + source_row * stride,
+                                stride);
+                }
+                ComPtr<IWICBitmap> bitmap;
+                if (SUCCEEDED(factory->CreateBitmapFromMemory(
+                        static_cast<UINT>(width), static_cast<UINT>(height),
+                        GUID_WICPixelFormat32bppBGRA, static_cast<UINT>(stride),
+                        static_cast<UINT>(pixels.size()), pixels.data(), &bitmap)))
+                    source = bitmap;
+            }
+        }
+    }
 
-    ComPtr<IWICBitmapDecoder> decoder;
-    if (FAILED(factory->CreateDecoderFromStream(input.Get(), nullptr,
-                                                WICDecodeMetadataCacheOnLoad, &decoder)))
-        return false;
-    ComPtr<IWICBitmapFrameDecode> frame;
-    if (FAILED(decoder->GetFrame(0, &frame)))
-        return false;
+    if (!source) {
+        BITMAPFILEHEADER file = {};
+        file.bfType = 0x4D42;
+        file.bfOffBits = static_cast<DWORD>(sizeof(BITMAPFILEHEADER) + info.biSize);
+        if (info.biBitCount <= 8) {
+            const DWORD colors = info.biClrUsed ? info.biClrUsed : (1u << info.biBitCount);
+            file.bfOffBits += colors * 4;
+        } else if (info.biCompression == BI_BITFIELDS) {
+            file.bfOffBits += 12;
+        }
+        file.bfSize = static_cast<DWORD>(sizeof(BITMAPFILEHEADER) + dib.size());
+
+        std::vector<std::uint8_t> bmp(file.bfSize);
+        std::memcpy(bmp.data(), &file, sizeof(file));
+        std::memcpy(bmp.data() + sizeof(file), dib.data(), dib.size());
+
+        ComPtr<IStream> input;
+        input.Attach(SHCreateMemStream(bmp.data(), static_cast<UINT>(bmp.size())));
+        if (!input)
+            return false;
+
+        ComPtr<IWICBitmapDecoder> decoder;
+        if (FAILED(factory->CreateDecoderFromStream(input.Get(), nullptr,
+                                                    WICDecodeMetadataCacheOnLoad,
+                                                    &decoder)))
+            return false;
+        ComPtr<IWICBitmapFrameDecode> frame;
+        if (FAILED(decoder->GetFrame(0, &frame)))
+            return false;
+        source = frame;
+    }
 
     ComPtr<IStream> output;
     output.Attach(SHCreateMemStream(nullptr, 0));
@@ -208,7 +287,7 @@ bool encode_dib_to_png(const std::vector<std::uint8_t> &dib, std::vector<std::ui
         return false;
     if (FAILED(encode_frame->Initialize(properties.Get())))
         return false;
-    if (FAILED(encode_frame->WriteSource(frame.Get(), nullptr)))
+    if (FAILED(encode_frame->WriteSource(source.Get(), nullptr)))
         return false;
     if (FAILED(encode_frame->Commit()) || FAILED(encoder->Commit()))
         return false;
@@ -224,6 +303,13 @@ bool encode_dib_to_png(const std::vector<std::uint8_t> &dib, std::vector<std::ui
         return false;
     png->resize(read);
     return !png->empty();
+}
+
+bool clipboard_has_image()
+{
+    if (!IsClipboardFormatAvailable(CF_DIB))
+        return IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG"));
+    return true;
 }
 
 void put_clipboard_bytes(UINT format, const std::string &bytes)
@@ -275,13 +361,11 @@ public:
     }
     void exportHtmlReady(const std::string &html) override
     {
-        (void)html;
-        owner_.status_message("导出 HTML 将在 N4 实现");
+        owner_.export_html_ready(html);
     }
     void exportPdfRequested(const std::string &path) override
     {
-        (void)path;
-        owner_.status_message("导出 PDF 将在 N4 实现");
+        owner_.export_pdf_requested(path);
     }
     void exportPdfFailed(const std::string &message) override
     {
@@ -311,13 +395,13 @@ public:
     }
     void statsChanged(int cjk, int words) override
     {
-        if (std::getenv("MOTE_KEYLOG"))
+        if (!env_value("MOTE_KEYLOG").empty())
             log_line("NATIVE stats cjk=" + std::to_string(cjk)
                      + " words=" + std::to_string(words));
     }
     void logMessage(const std::string &message) override
     {
-        if (std::getenv("MOTE_KEYLOG"))
+        if (!env_value("MOTE_KEYLOG").empty())
             log_line("JSLOG " + message);
     }
 
@@ -332,8 +416,84 @@ MoteMainWindow::MoteMainWindow(HINSTANCE instance)
 
 MoteMainWindow::~MoteMainWindow()
 {
+    if (keyboard_hook_) {
+        UnhookWindowsHookEx(keyboard_hook_);
+        keyboard_hook_ = nullptr;
+    }
+    if (hook_owner_ == this)
+        hook_owner_ = nullptr;
     if (hwnd_ && IsWindow(hwnd_))
         DestroyWindow(hwnd_);
+}
+
+MoteMainWindow *MoteMainWindow::hook_owner_ = nullptr;
+
+LRESULT CALLBACK MoteMainWindow::keyboard_hook(int code, WPARAM wparam, LPARAM lparam)
+{
+    if (code != HC_ACTION)
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+    MoteMainWindow *self = hook_owner_;
+    if (!self || !self->hwnd_)
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+
+    const UINT key = reinterpret_cast<KBDLLHOOKSTRUCT *>(lparam)->vkCode;
+    const bool down = wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN;
+    const bool up = wparam == WM_KEYUP || wparam == WM_SYSKEYUP;
+
+    // 钩子按队列顺序收到所有按键，在这里维护修饰键状态比查全局键状态更可靠
+    switch (key) {
+    case VK_CONTROL:
+    case VK_LCONTROL:
+    case VK_RCONTROL:
+        self->hook_ctrl_ = down;
+        break;
+    case VK_SHIFT:
+    case VK_LSHIFT:
+    case VK_RSHIFT:
+        self->hook_shift_ = down;
+        break;
+    case VK_MENU:
+    case VK_LMENU:
+    case VK_RMENU:
+        self->hook_alt_ = down;
+        break;
+    default:
+        break;
+    }
+
+    if (up) {
+        self->last_shortcut_key_ = 0;
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+    }
+    if (!down)
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+
+    // 只管本窗口在前台时的按键，别影响其它程序
+    const HWND foreground = GetForegroundWindow();
+    if (!foreground || GetAncestor(foreground, GA_ROOT) != self->hwnd_)
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+
+    if (key == self->last_shortcut_key_)
+        return 1;  // 长按的自动重复只触发一次
+
+    WORD modifiers = 0;
+    if (self->hook_ctrl_ || (GetAsyncKeyState(VK_CONTROL) & 0x8000))
+        modifiers |= FCONTROL;
+    if (self->hook_shift_ || (GetAsyncKeyState(VK_SHIFT) & 0x8000))
+        modifiers |= FSHIFT;
+    if (self->hook_alt_ || (GetAsyncKeyState(VK_MENU) & 0x8000))
+        modifiers |= FALT;
+
+    mote::CommandId command = mote::CommandId::New;
+    if (!mote::win::command_for_shortcut(modifiers, key, &command))
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+
+    self->last_shortcut_key_ = key;
+    if (!env_value("MOTE_KEYLOG").empty())
+        log_line("NATIVE key vk=" + std::to_string(key)
+                 + " mods=" + std::to_string(modifiers));
+    PostMessageW(self->hwnd_, kShortcutMessage, static_cast<WPARAM>(command), 0);
+    return 1;  // 已由外壳处理，Chromium 不再执行默认行为
 }
 
 bool MoteMainWindow::create()
@@ -356,7 +516,19 @@ bool MoteMainWindow::create()
     hwnd_ = CreateWindowExW(0, kWindowClass, L"Mote", WS_OVERLAPPEDWINDOW,
                             CW_USEDEFAULT, CW_USEDEFAULT, frame.right - frame.left,
                             frame.bottom - frame.top, nullptr, nullptr, instance_, this);
-    return hwnd_ != nullptr;
+    if (!hwnd_)
+        return false;
+
+    // Chromium 在编辑区会先消费 Ctrl+Shift+S / Ctrl+Alt+E，连 AcceleratorKeyPressed
+    // 都收不到；用进程内低级键盘钩子提前截获，键位与命令表保持一致。
+    hook_owner_ = this;
+    hook_ctrl_ = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    hook_shift_ = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    hook_alt_ = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    keyboard_hook_ = SetWindowsHookExW(WH_KEYBOARD_LL, &MoteMainWindow::keyboard_hook,
+                                       GetModuleHandleW(nullptr), 0);
+    log_line(std::string("NATIVE keyboard hook ") + (keyboard_hook_ ? "on" : "failed"));
+    return true;
 }
 
 void MoteMainWindow::show(int show_command)
@@ -404,6 +576,9 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             [this](std::string_view json) {
                 if (controller_)
                     controller_->handleMessage(json);
+            },
+            [this](UINT key, WORD modifiers) {
+                return handle_accelerator(key, modifiers);
             });
         shell_ = std::make_unique<ShellHost>(*this);
         controller_ = std::make_unique<mote::EditorController>(*shell_);
@@ -427,10 +602,32 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             perform_command(spec->id);
         return 0;
     }
+    case kShortcutMessage:
+        perform_command(static_cast<mote::CommandId>(wparam));
+        return 0;
     case WM_TIMER:
         if (wparam == kStartupCommandTimer) {
             KillTimer(hwnd, kStartupCommandTimer);
             run_startup_command();
+            return 0;
+        }
+        if (wparam == kSnapshotTimer) {
+            KillTimer(hwnd, kSnapshotTimer);
+            const std::string snapshot = env_value("MOTE_SNAPSHOT");
+            if (!snapshot.empty() && host_) {
+                const std::string path = snapshot;
+                host_->capture_preview(path, [this, path](bool ok) {
+                    log_line(std::string("SNAPSHOT ") + (ok ? "OK " : "ERR ") + path);
+                });
+            }
+            return 0;
+        }
+        if (wparam == kDropProbeTimer) {
+            KillTimer(hwnd, kDropProbeTimer);
+            log_line("NATIVE drop probe paths="
+                     + std::to_string(drop_probe_paths_.size()));
+            if (controller_ && !drop_probe_paths_.empty())
+                controller_->handleNativeFileDrop(drop_probe_paths_);
             return 0;
         }
         break;
@@ -445,6 +642,7 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
     case mote::win::kDropMessage: {
         std::unique_ptr<std::vector<std::string>> paths(
             reinterpret_cast<std::vector<std::string> *>(lparam));
+        log_line("NATIVE drop paths=" + std::to_string(paths ? paths->size() : 0));
         if (paths && controller_)
             controller_->handleNativeFileDrop(*paths);
         return 0;
@@ -452,6 +650,24 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
     case WM_SIZE:
         layout();
         return 0;
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN: {
+        // 焦点在窗口框架/菜单（还没进 WebView）时的兜底，和键盘钩子同一张命令表
+        WORD modifiers = 0;
+        if (GetKeyState(VK_CONTROL) < 0)
+            modifiers |= FCONTROL;
+        if (GetKeyState(VK_SHIFT) < 0)
+            modifiers |= FSHIFT;
+        if (GetKeyState(VK_MENU) < 0)
+            modifiers |= FALT;
+        mote::CommandId command = mote::CommandId::New;
+        if (mote::win::command_for_shortcut(modifiers, static_cast<UINT>(wparam),
+                                            &command)) {
+            perform_command(command);
+            return 0;
+        }
+        break;
+    }
     case WM_CLOSE:
         if (confirm_close())
             DestroyWindow(hwnd);
@@ -484,6 +700,8 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
     default:
         return DefWindowProcW(hwnd, message, wparam, lparam);
     }
+    // WM_TIMER / WM_SETTINGCHANGE 未命中的分支落到这里，与 default 一样交默认窗口过程
+    return DefWindowProcW(hwnd, message, wparam, lparam);
 }
 
 void MoteMainWindow::layout()
@@ -540,14 +758,25 @@ void MoteMainWindow::open_document()
 
 void MoteMainWindow::open_path(const std::string &path)
 {
+    // 命令行参数、拖放路径等可能是相对路径；统一转绝对，确保 file_path_ / last_dir_ /
+    // 页面加载（临时 HTML + base href）都基于真实磁盘位置。
+    std::string resolved = path;
+    try {
+        std::filesystem::path p(utf8_to_wide(path));
+        std::filesystem::path abs = std::filesystem::absolute(p);
+        resolved = wide_to_utf8(abs.wstring());
+    } catch (...) {
+        // 路径非法：保留原值，让后续 read_text_file 按失败处理并弹提示
+    }
+
     std::string text;
-    if (!read_text_file(path, &text)) {
+    if (!read_text_file(resolved, &text)) {
         MoteAlert(hwnd_, L"无法打开", "读取文件失败：\n" + path);
         return;
     }
 
-    file_path_ = path;
-    last_dir_ = parent_dir(path);
+    file_path_ = resolved;
+    last_dir_ = parent_dir(resolved);
     last_text_ = text;
     controller_->setMarkdown(text, last_dir_);
     update_title();
@@ -595,7 +824,7 @@ void MoteMainWindow::save_text(const std::string &text)
         std::string suggested = path;
         if (suggested.empty())
             suggested = dir + "\\未命名.md";
-        if (const char *forced = std::getenv("MOTE_SAVE_AS"); forced && *forced)
+        if (const std::string forced = env_value("MOTE_SAVE_AS"); !forced.empty())
             path = forced;
         else
             path = MoteSaveDialog(hwnd_, L"另存为", suggested, L"md");
@@ -629,6 +858,116 @@ bool MoteMainWindow::write_text(const std::string &text, const std::string &path
         return true;
     MoteAlert(hwnd_, L"保存失败", "无法写入文件：\n" + path);
     return false;
+}
+
+void MoteMainWindow::prompt_export_pdf()
+{
+    if (!controller_ || file_path_.empty())
+        return;
+    std::string base = file_name(file_path_);
+    const size_t dot = base.find_last_of('.');
+    if (dot != std::string::npos)
+        base = base.substr(0, dot);
+    const std::string suggested = parent_dir(file_path_) + "\\" + base + ".pdf";
+
+    if (!env_value("MOTE_PDF_PROMPT").empty()) {
+        log_line("NATIVE pdf suggested=" + suggested);
+        return;
+    }
+    std::string path;
+    if (const std::string forced = env_value("MOTE_PDF_AS"); !forced.empty())
+        path = forced;
+    else
+        path = MoteSaveDialog(hwnd_, L"导出 PDF", suggested, L"pdf");
+    if (path.empty())
+        return;
+    path = with_extension(path, "pdf");
+
+    status_message("正在导出 PDF…");
+    controller_->requestExportPdf(path);
+}
+
+void MoteMainWindow::export_html_ready(const std::string &html)
+{
+    if (html.empty()) {
+        status_message("导出失败：页面没有返回内容");
+        return;
+    }
+
+    std::string suggested;
+    if (file_path_.empty()) {
+        const std::string dir = last_dir_.empty() ? documents_dir() : last_dir_;
+        suggested = dir + "\\未命名.html";
+    } else {
+        std::string base = file_name(file_path_);
+        const size_t dot = base.find_last_of('.');
+        if (dot != std::string::npos)
+            base = base.substr(0, dot);
+        suggested = parent_dir(file_path_) + "\\" + base + ".html";
+    }
+
+    if (!env_value("MOTE_EXPORT_PROMPT").empty()) {
+        log_line("NATIVE export suggested=" + suggested);
+        return;
+    }
+    std::string path;
+    if (const std::string forced = env_value("MOTE_EXPORT_AS"); !forced.empty())
+        path = forced;
+    else
+        path = MoteSaveDialog(hwnd_, L"导出 HTML", suggested, L"html");
+    if (path.empty())
+        return;
+    path = with_extension(path, "html");
+
+    // 图片相对路径按 .md 所在目录解析；未命名文档退回上次目录
+    const std::string base_dir = file_path_.empty()
+        ? (last_dir_.empty() ? documents_dir() : last_dir_)
+        : parent_dir(file_path_);
+    int missing = 0;
+    const std::string filled = MoteInlineLocalImages(html, base_dir, &missing);
+    if (!write_text_file(path, filled)) {
+        MoteAlert(hwnd_, L"导出失败", "无法写入文件：\n" + path);
+        return;
+    }
+    log_line("NATIVE export path=" + path + " missing=" + std::to_string(missing));    if (missing > 0)
+        status_message("已导出到 " + path + "（" + std::to_string(missing) + " 张图片缺失）");
+    else
+        status_message("已导出到 " + path);
+}
+
+void MoteMainWindow::export_pdf_requested(const std::string &path)
+{
+    if (!host_ || path.empty())
+        return;
+
+    // 同名旧文件不能算本次成功：先删，成功与否由产物是否生成判定
+    std::error_code error;
+    std::filesystem::remove(std::filesystem::path(utf8_to_wide(path)), error);
+
+    PdfHost pdf;
+    pdf.evaluate = [this](const std::string &script,
+                          std::function<void(bool, const std::string &)> callback) {
+        host_->evaluate_script_result(script, std::move(callback));
+    };
+    pdf.print = [this](const std::string &target, double scale,
+                       std::function<void(bool)> callback) {
+        host_->print_to_pdf(target, scale, std::move(callback));
+    };
+
+    MoteExportPdf(pdf, path, [this, path](bool ok, const std::string &message) {
+        if (!ok) {
+            log_line("NATIVE pdf failed " + message);
+            status_message(message);
+            MoteAlert(hwnd_, L"导出失败", message);
+            return;
+        }
+        std::error_code error;
+        const auto size = std::filesystem::file_size(std::filesystem::path(utf8_to_wide(path)),
+                                                     error);
+        log_line("NATIVE pdf path=" + path + " size="
+                 + std::to_string(error ? 0 : size));
+        status_message("已导出到 " + path);
+    });
 }
 
 bool MoteMainWindow::prepare_for_replace(AfterSave after, const std::string &path)
@@ -671,7 +1010,7 @@ void MoteMainWindow::run_after_save()
         DestroyWindow(hwnd_);
         break;
     case AfterSave::ExportPdf:
-        status_message("导出 PDF 将在 N4 实现");
+        prompt_export_pdf();
         break;
     case AfterSave::None:
         break;
@@ -733,8 +1072,53 @@ void MoteMainWindow::page_ready()
     update_title();
     update_menu_state();
     // MOTE_COMMAND 诊断钩子：页面就绪后再等 700ms，避开首帧布局
-    if (!startup_command_done_ && std::getenv("MOTE_COMMAND"))
+    if (!startup_command_done_ && !env_value("MOTE_COMMAND").empty())
         SetTimer(hwnd_, kStartupCommandTimer, 700, nullptr);
+
+    // 与 mac 同名的诊断钩子：MOTE_EVAL 打一条 JSLOG，MOTE_SNAPSHOT 出 PNG
+    if (!diagnostics_started_) {
+        diagnostics_started_ = true;
+        const std::string expression = env_value("MOTE_EVAL");
+        if (!expression.empty()) {
+            const std::string probe =
+                "(function(){try{var r=(" + expression
+                + ");window.chrome.webview.postMessage({type:'log',message:'EVAL '+String(r)});}"
+                  "catch(e){window.chrome.webview.postMessage({type:'log',message:'EVALERR '+e});}})();";
+            host_->evaluate_script(probe);
+            log_line("NATIVE eval scheduled");
+        }
+        const std::string snapshot = env_value("MOTE_SNAPSHOT");
+        if (!snapshot.empty()) {
+            const std::string raw = env_value("MOTE_SNAPSHOT_DELAY");
+            const double delay = !raw.empty() ? std::atof(raw.c_str()) : 2000.0;
+            SetTimer(hwnd_, kSnapshotTimer, static_cast<UINT>(delay < 0 ? 0 : delay), nullptr);
+        }
+        // 与 mac 同名同义：页面就绪 900ms 后把指定路径当成一次真实拖放。
+        // mac 用 ':' 分隔；Windows 盘符本身带 ':'，这里改成分号。
+        if (!drop_probe_done_) {
+            const std::string paths = env_value("MOTE_DROP");
+            if (!paths.empty()) {
+                drop_probe_done_ = true;
+                const std::string list = paths;
+                size_t start = 0;
+                while (start <= list.size()) {
+                    const size_t end = list.find(';', start);
+                    const std::string item = list.substr(
+                        start, end == std::string::npos ? std::string::npos : end - start);
+                    if (!item.empty())
+                        drop_probe_paths_.push_back(item);
+                    if (end == std::string::npos)
+                        break;
+                    start = end + 1;
+                }
+                if (!drop_probe_paths_.empty()) {
+                    log_line("NATIVE drop probe scheduled paths="
+                             + std::to_string(drop_probe_paths_.size()));
+                    SetTimer(hwnd_, kDropProbeTimer, 900, nullptr);
+                }
+            }
+        }
+    }
 }
 
 void MoteMainWindow::dirty_changed()
@@ -764,7 +1148,7 @@ void MoteMainWindow::show_status(const std::string &text)
 void MoteMainWindow::perform_command(mote::CommandId command)
 {
     const mote::CommandSpec *spec = mote::findCommand(command);
-    if (std::getenv("MOTE_KEYLOG") && spec)
+    if (!env_value("MOTE_KEYLOG").empty() && spec)
         log_line("NATIVE command " + spec->title);
 
     switch (command) {
@@ -788,8 +1172,15 @@ void MoteMainWindow::perform_command(mote::CommandId command)
             status_message("源码模式下不能导出 PDF，先退出源码模式");
             return;
         }
-        // 原生 PDF 分页导出在 N4 接入
-        status_message("导出 PDF 将在 N4 实现");
+        // 未命名文档没有目录：先另存为，保存完成后再回到导出
+        if (file_path_.empty()) {
+            after_save_ = AfterSave::ExportPdf;
+            begin_save_as(true);
+            return;
+        }
+        if (!prepare_for_replace(AfterSave::ExportPdf, ""))
+            return;
+        prompt_export_pdf();
         return;
     case mote::CommandId::Undo:
         controller_->undo();
@@ -848,7 +1239,7 @@ void MoteMainWindow::apply_view_state(const mote::ViewState &state)
     toc_on_ = state.toc;
     source_on_ = state.source;
     update_menu_state();
-    if (std::getenv("MOTE_KEYLOG"))
+    if (!env_value("MOTE_KEYLOG").empty())
         log_line("NATIVE view toc=" + std::to_string(state.toc ? 1 : 0)
                  + " source=" + std::to_string(state.source ? 1 : 0)
                  + " zoom=" + std::to_string(state.zoom));
@@ -908,13 +1299,13 @@ void MoteMainWindow::run_startup_command()
 {
     if (startup_command_done_)
         return;
-    const char *raw = std::getenv("MOTE_COMMAND");
-    if (!raw || !*raw)
+    const std::string raw = env_value("MOTE_COMMAND");
+    if (raw.empty())
         return;
     startup_command_done_ = true;
 
     std::string name;
-    for (const char *item = raw; *item; ++item) {
+    for (const char *item = raw.c_str(); *item; ++item) {
         const unsigned char ch = static_cast<unsigned char>(*item);
         if (!std::isspace(ch))
             name += static_cast<char>(std::tolower(ch));
@@ -1001,6 +1392,34 @@ bool MoteMainWindow::clipboard_image(std::vector<std::uint8_t> *bytes, std::stri
     return found;
 }
 
+bool MoteMainWindow::paste_clipboard_image()
+{
+    if (!controller_ || source_on_)
+        return false;
+    if (!clipboard_has_image())
+        return false;
+    controller_->clipboardCommand("paste");
+    return true;
+}
+
+bool MoteMainWindow::handle_accelerator(UINT key, WORD modifiers)
+{
+    mote::CommandId command = mote::CommandId::New;
+    const bool matched = mote::win::command_for_shortcut(modifiers, key, &command);
+    if (!env_value("MOTE_KEYLOG").empty())
+        log_line("NATIVE key vk=" + std::to_string(key)
+                 + " mods=" + std::to_string(modifiers)
+                 + (matched ? " cmd=" + std::to_string(static_cast<int>(command)) : ""));
+    // Ctrl+V 先问剪贴板是不是图片：Chromium 转码会丢 alpha，外壳自己走图片管线
+    if (key == 'V' && modifiers == FCONTROL)
+        return paste_clipboard_image();
+    if (!matched)
+        return false;
+    // 编辑类命令（撤销/剪切/复制/粘贴）留给 WebView2 原生处理
+    perform_command(command);
+    return true;
+}
+
 void MoteMainWindow::ensure_drop_target()
 {
     if (!hwnd_ || !controller_)
@@ -1032,8 +1451,14 @@ void MoteMainWindow::ensure_drop_target()
     }
     drop_target_ = target;
     drop_hwnd_ = target ? target_hwnd : nullptr;
-    if (!target)
+    if (!target) {
         log_line("NATIVE drop target unavailable: " + error);
+    } else {
+        wchar_t name[64] = {};
+        GetClassNameW(drop_hwnd_, name, 64);
+        log_line("NATIVE drop target on " + wide_to_utf8(name) + " "
+                 + std::to_string(reinterpret_cast<size_t>(drop_hwnd_)));
+    }
 }
 
 void MoteMainWindow::revoke_drop_target()

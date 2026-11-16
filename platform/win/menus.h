@@ -14,6 +14,11 @@ constexpr UINT kExitCommandId = 40005;
 HMENU build_main_menu();
 HACCEL build_accelerators();
 
+// WebView2 在消息循环之前截获键盘，TranslateAccelerator 收不到编辑区的按键；
+// 外壳在 AcceleratorKeyPressed 里用它把「修饰键 + 虚拟键」映射回命令表。
+// 与加速键表同源同义：跳过交给 WebView2 原生编辑的命令，重复项取先出现的。
+bool command_for_shortcut(WORD modifiers, UINT key, CommandId *id);
+
 void set_command_checked(HMENU menu, CommandId id, bool checked);
 void set_command_enabled(HMENU menu, CommandId id, bool enabled);
 
