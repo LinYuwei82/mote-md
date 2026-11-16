@@ -75,6 +75,8 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
+; 应用内更新：/RELAUNCH=1 时静默安装完成后自动启动新版本
+Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait; Check: ShouldRelaunch
 
 [Registry]
 ; ---- 独立 ProgID：Mote.md ----
@@ -114,6 +116,12 @@ procedure SHChangeNotify(wEventId: Integer; uFlags: Cardinal; dwItem1, dwItem2: 
 
 var
   BackupDone: Boolean;
+
+// 应用内更新时由 updater 传入 /RELAUNCH=1：静默安装结束后重新启动 Mote
+function ShouldRelaunch(): Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;
 
 function IsSilentMode(): Boolean;
 var

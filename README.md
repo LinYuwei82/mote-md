@@ -23,7 +23,7 @@
 - **链接**：渲染态下 `[文字](地址)` 的文字显示为蓝色带下划线的链接（地址本身仍是零宽标记，不占位、不进入框选复制）；普通点击仍进入编辑态，`Cmd+Click` 才跳转——外部链接交给系统默认浏览器，相对路径的 `.md` 在应用内打开（走未保存确认），文件不存在时弹提示不崩。编辑态显示原始 `[文字](地址)`，复制出去是标准 Markdown。
 - **导出 HTML**：`Option+Cmd+E`（「文件 → 导出 HTML…」）导出单文件自包含 HTML——样式内联、图片转 base64 内嵌、代码高亮与任务复选框状态保留，导出过程不改动原文档与 `dataset.raw`。
 - **导出 PDF**：`Cmd+P`（「文件 → 导出 PDF…」）导出 A4 多页、无页眉页脚；源码模式下禁用。macOS 与 Windows 均已实现，两端分页切点由各自 WebView 引擎决定，未做逐页像素比对。
-- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。macOS 读 `latest.json`，用户确认后交给 Sparkle 下载 DMG、验证 EdDSA 签名并替换重启；Windows 读 `windows.json`，确认后打开浏览器下载——安装版取 `setup_url`（安装包 exe，按向导覆盖），绿色版取 `url`（zip，解压覆盖）。
+- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。macOS 读 `latest.json`，用户确认后交给 Sparkle 下载 DMG、验证 EdDSA 签名并替换重启；Windows 读 `windows.json`，确认后应用内下载更新包并用 SHA256 校验——安装版取 `setup_url`（静默安装后自动重启），绿色版取 `url`（校验通过后打开所在文件夹，解压覆盖）。
 - **页面内状态栏**：原生外壳把状态栏画在前端页面底部（`body.platform-mac` / `body.platform-win`），显示打开/保存/导出提示与字数统计；Qt 构建不启用，避免出现两条状态栏。
 - **目录手型光标**：鼠标移到目录栏（条目文字行、行间空隙、栏内空白）都是系统手型指针，避免移动时手型闪烁；折叠按钮与滚动条保留自身光标语义。
 
@@ -117,7 +117,7 @@ powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1   # 校�
 - 版本号只改 `Mote.pro` 的 `VERSION`，两个发布脚本都从那里读。
 - Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
 - 检查权在自研模块（`SUEnableAutomaticChecks=false`）：Sparkle 只负责下载、验签、替换、重启。
-- Windows 按安装形态取包：exe 同级有 `unins000.exe` 判为安装版，优先用 `setup_url`；否则用 `url` 的 zip；清单没给 `setup_url` 时回落到 zip。下载交给系统浏览器，不静默安装。
+- Windows 按安装形态取包：exe 同级有 `unins000.exe` 判为安装版，优先用 `setup_url`；否则用 `url` 的 zip；清单没给 `setup_url` 时回落到 zip。下载在应用内完成并校验 SHA256：安装版静默安装后自动重启，绿色版下载后打开所在文件夹由用户解压覆盖。
 - `publish_windows.ps1` 会一并发布安装包（`dist\Mote-Setup-<version>.exe` 存在时），并逐项校验线上 zip、安装包与清单三者一致。
 - 两份清单分开：macOS 只读 `latest.json`（指向 `.dmg`），Windows 只读 `windows.json`（指向 zip），避免把 `.dmg` 当成 Windows 包。
 

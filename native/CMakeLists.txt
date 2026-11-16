@@ -103,7 +103,7 @@ if(WIN32)
     "${MOTE_WEBVIEW2_SDK}/build/native/include")
   target_link_libraries(Mote PRIVATE
     mote_core user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32
-    urlmon windowscodecs winhttp)
+    urlmon windowscodecs winhttp bcrypt)
   target_compile_definitions(Mote PRIVATE
     UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00
     MOTE_VERSION="${MOTE_VERSION}")

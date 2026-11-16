@@ -590,6 +590,10 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         accel_ = mote::win::build_accelerators();
         follow_system_ = true;
         apply_theme();
+        // 更新模块不直接依赖 EditorController：脏标记与退出都由这里注入
+        mote::win::set_update_hooks(
+            [this] { return controller_ && controller_->dirty(); },
+            [hwnd] { PostMessageW(hwnd, WM_CLOSE, 0, 0); });
         mote::win::start_update_checker(hwnd);
         return 0;
     case WM_COMMAND: {

@@ -4,16 +4,20 @@
 #include "dialogs.h"
 #include "env.h"
 
+#include <bcrypt.h>
 #include <commctrl.h>
 #include <shellapi.h>
 #include <winhttp.h>
 
+#include <atomic>
+#include <cctype>
 #include <cstdarg>
 #include <cstdio>
 #include <ctime>
 #include <cwchar>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <string>
 #include <thread>
@@ -288,6 +292,7 @@ bool running_installed_copy()
 // 清单没给（旧清单）时回落到 url，避免老清单直接失效。
 struct UpdateTarget {
     std::string url;
+    std::string sha256;
     long long size = 0;
     bool installer = false;
 };
@@ -297,10 +302,12 @@ UpdateTarget pick_target(const UpdateManifest &manifest)
     UpdateTarget target;
     if (running_installed_copy() && !manifest.setup_url.empty()) {
         target.url = manifest.setup_url;
+        target.sha256 = manifest.setup_sha256;
         target.size = manifest.setup_size;
         target.installer = true;
     } else {
         target.url = manifest.url;
+        target.sha256 = manifest.sha256;
         target.size = manifest.size;
     }
     return target;
@@ -314,6 +321,348 @@ std::wstring human_size(long long bytes)
     std::swprintf(buffer, sizeof(buffer) / sizeof(buffer[0]), L"%.1f MB",
                   static_cast<double>(bytes) / (1024.0 * 1024.0));
     return buffer;
+}
+
+// 由主窗口注入：判断未保存修改、以及在安装程序拉起后正常退出
+std::function<bool()> g_is_dirty;
+std::function<void()> g_quit;
+
+// ---- 下载与校验 ----
+
+std::wstring url_file_name(const std::wstring &url)
+{
+    std::wstring path = url;
+    const size_t query = path.find(L'?');
+    if (query != std::wstring::npos)
+        path.resize(query);
+    const size_t slash = path.find_last_of(L'/');
+    std::wstring name = slash == std::wstring::npos ? path : path.substr(slash + 1);
+    if (name.empty())
+        name = L"Mote-update.bin";
+    return name;
+}
+
+std::string to_hex(const std::vector<UCHAR> &bytes)
+{
+    static const char digits[] = "0123456789abcdef";
+    std::string hex;
+    hex.reserve(bytes.size() * 2);
+    for (UCHAR byte : bytes) {
+        hex.push_back(digits[byte >> 4]);
+        hex.push_back(digits[byte & 0x0F]);
+    }
+    return hex;
+}
+
+bool sha256_file(const std::filesystem::path &path, std::string *hex)
+{
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE)
+        return false;
+
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    DWORD object_size = 0;
+    DWORD digest_size = 0;
+    DWORD produced = 0;
+    bool ok = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0
+        && BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH,
+                             reinterpret_cast<PUCHAR>(&object_size), sizeof(object_size),
+                             &produced, 0) == 0
+        && BCryptGetProperty(algorithm, BCRYPT_HASH_LENGTH,
+                             reinterpret_cast<PUCHAR>(&digest_size), sizeof(digest_size),
+                             &produced, 0) == 0;
+
+    std::vector<UCHAR> object;
+    std::vector<UCHAR> digest;
+    if (ok) {
+        object.resize(object_size);
+        digest.resize(digest_size);
+        ok = BCryptCreateHash(algorithm, &hash, object.data(), object_size, nullptr, 0, 0) == 0;
+    }
+
+    std::vector<UCHAR> buffer(64 * 1024);
+    while (ok) {
+        DWORD read = 0;
+        if (!ReadFile(file, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)) {
+            ok = false;
+            break;
+        }
+        if (read == 0)
+            break;
+        ok = BCryptHashData(hash, buffer.data(), read, 0) == 0;
+    }
+    if (ok)
+        ok = BCryptFinishHash(hash, digest.data(), digest_size, 0) == 0;
+    if (ok)
+        *hex = to_hex(digest);
+
+    if (hash)
+        BCryptDestroyHash(hash);
+    if (algorithm)
+        BCryptCloseAlgorithmProvider(algorithm, 0);
+    CloseHandle(file);
+    return ok;
+}
+
+bool equals_ignore_case(const std::string &left, const std::string &right)
+{
+    if (left.size() != right.size())
+        return false;
+    for (size_t i = 0; i < left.size(); ++i) {
+        const char a = static_cast<char>(std::tolower(static_cast<unsigned char>(left[i])));
+        const char b = static_cast<char>(std::tolower(static_cast<unsigned char>(right[i])));
+        if (a != b)
+            return false;
+    }
+    return true;
+}
+
+struct DownloadState {
+    std::atomic<bool> finished{false};
+    std::atomic<bool> cancel{false};
+    std::atomic<long long> written{0};
+    std::string expected_sha256; // 只读，线程启动前赋值
+    bool ok = false;
+    std::wstring error;
+    std::filesystem::path path;
+};
+
+// 流式下载到本地文件；只在后台线程调用
+bool download_file(const std::wstring &url, const std::filesystem::path &dest,
+                   DownloadState *state)
+{
+    URL_COMPONENTS parts = {};
+    parts.dwStructSize = sizeof(parts);
+    parts.dwHostNameLength = static_cast<DWORD>(-1);
+    parts.dwUrlPathLength = static_cast<DWORD>(-1);
+    parts.dwExtraInfoLength = static_cast<DWORD>(-1);
+    if (!WinHttpCrackUrl(url.c_str(), static_cast<DWORD>(url.size()), 0, &parts)) {
+        state->error = L"更新地址不合法";
+        return false;
+    }
+
+    const std::wstring host(parts.lpszHostName, parts.dwHostNameLength);
+    std::wstring path(parts.lpszUrlPath, parts.dwUrlPathLength);
+    if (parts.dwExtraInfoLength > 0)
+        path.append(parts.lpszExtraInfo, parts.dwExtraInfoLength);
+
+    const InternetHandle session(
+        WinHttpOpen(L"Mote/" MOTE_VERSION, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+                    WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0));
+    if (!session.get()) {
+        state->error = L"无法初始化网络会话";
+        return false;
+    }
+    // 下载可能较慢：连接/发送用短超时，接收放宽到 60 秒
+    WinHttpSetTimeouts(session.get(), kRequestTimeoutMs, kRequestTimeoutMs, 60 * 1000,
+                       kRequestTimeoutMs);
+
+    const InternetHandle connection(WinHttpConnect(session.get(), host.c_str(), parts.nPort, 0));
+    if (!connection.get()) {
+        state->error = L"无法连接更新服务器";
+        return false;
+    }
+
+    const DWORD flags = parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0;
+    const InternetHandle request(WinHttpOpenRequest(connection.get(), L"GET", path.c_str(),
+                                                    nullptr, WINHTTP_NO_REFERER,
+                                                    WINHTTP_DEFAULT_ACCEPT_TYPES, flags));
+    if (!request.get()) {
+        state->error = L"无法创建下载请求";
+        return false;
+    }
+    if (!WinHttpSendRequest(request.get(), WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                            WINHTTP_NO_REQUEST_DATA, 0, 0, 0)
+        || !WinHttpReceiveResponse(request.get(), nullptr)) {
+        state->error = L"下载请求失败";
+        return false;
+    }
+
+    DWORD status = 0;
+    DWORD status_size = sizeof(status);
+    if (!WinHttpQueryHeaders(request.get(),
+                             WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                             WINHTTP_HEADER_NAME_BY_INDEX, &status, &status_size,
+                             WINHTTP_NO_HEADER_INDEX)) {
+        state->error = L"无法读取服务器响应";
+        return false;
+    }
+    if (status != 200) {
+        state->error = L"服务器返回 HTTP " + std::to_wstring(status);
+        return false;
+    }
+
+    HANDLE file = CreateFileW(dest.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                              FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        state->error = L"无法写入临时文件";
+        return false;
+    }
+
+    bool ok = true;
+    std::vector<char> buffer(64 * 1024);
+    for (;;) {
+        if (state->cancel.load()) {
+            ok = false;
+            break;
+        }
+        DWORD read = 0;
+        if (!WinHttpReadData(request.get(), buffer.data(), static_cast<DWORD>(buffer.size()),
+                             &read)) {
+            state->error = L"下载中断";
+            ok = false;
+            break;
+        }
+        if (read == 0)
+            break;
+        DWORD written = 0;
+        if (!WriteFile(file, buffer.data(), read, &written, nullptr) || written != read) {
+            state->error = L"写入更新包失败";
+            ok = false;
+            break;
+        }
+        state->written += written;
+    }
+    CloseHandle(file);
+    return ok;
+}
+
+HRESULT CALLBACK download_dialog_callback(HWND hwnd, UINT msg, WPARAM, LPARAM, LONG_PTR data)
+{
+    auto *state = reinterpret_cast<DownloadState *>(data);
+    switch (msg) {
+    case TDN_TIMER:
+        if (state->finished.load()) {
+            SendMessageW(hwnd, TDM_CLICK_BUTTON, IDOK, 0);
+        } else {
+            const std::wstring text = L"已下载 "
+                + (state->written.load() > 0 ? human_size(state->written.load()) : L"0 MB");
+            SendMessageW(hwnd, TDM_SET_ELEMENT_TEXT, TDE_CONTENT,
+                         reinterpret_cast<LPARAM>(text.c_str()));
+        }
+        return S_OK;
+    case TDN_BUTTON_CLICKED:
+        if (!state->finished.load())
+            state->cancel = true;
+        return S_OK;
+    }
+    return S_OK;
+}
+
+// 阻塞展示下载对话框，工作线程由调用方负责 join
+void run_download_dialog(HWND hwnd, DownloadState *state, std::thread *worker)
+{
+    TASKDIALOGCONFIG config = {};
+    config.cbSize = sizeof(config);
+    config.hwndParent = hwnd;
+    config.dwFlags =
+        TDF_ALLOW_DIALOG_CANCELLATION | TDF_CALLBACK_TIMER | TDF_POSITION_RELATIVE_TO_WINDOW;
+    config.pszWindowTitle = L"Mote";
+    config.pszMainIcon = TD_INFORMATION_ICON;
+    config.pszMainInstruction = L"正在下载更新…";
+    config.pszContent = L"正在连接更新服务器。";
+    config.pfCallback = download_dialog_callback;
+    config.lpCallbackData = reinterpret_cast<LONG_PTR>(state);
+    TaskDialogIndirect(&config, nullptr, nullptr, nullptr);
+
+    if (!state->finished.load())
+        state->cancel = true;
+    if (worker->joinable())
+        worker->join();
+}
+
+// 用户确认后：下载 → 校验 SHA256 → 安装版静默升级并重启 / 绿色版交给用户解压
+void begin_download(HWND hwnd, const UpdateTarget &target)
+{
+    if (target.installer && g_is_dirty && g_is_dirty()) {
+        MoteAlert(hwnd, L"请先保存", "文档有未保存的修改，保存后再更新。");
+        return;
+    }
+    if (target.sha256.empty()) {
+        MoteAlert(hwnd, L"无法校验更新包", "更新清单缺少 SHA256，已取消下载。");
+        return;
+    }
+
+    wchar_t temp[MAX_PATH] = {};
+    if (GetTempPathW(MAX_PATH, temp) == 0) {
+        MoteAlert(hwnd, L"下载失败", "无法定位临时目录。");
+        return;
+    }
+    std::error_code ec;
+    const std::filesystem::path dir = std::filesystem::path(temp) / L"Mote-update";
+    std::filesystem::create_directories(dir, ec);
+    const std::filesystem::path dest = dir / url_file_name(utf8_to_wide(target.url));
+    std::filesystem::remove(dest, ec);
+
+    DownloadState state;
+    state.expected_sha256 = target.sha256;
+    state.path = dest;
+    DownloadState *raw = &state;
+
+    if (log_enabled())
+        update_log("download %s -> %s", target.url.c_str(),
+                   wide_to_utf8(dest.wstring()).c_str());
+
+    std::thread worker([url = utf8_to_wide(target.url), dest, raw] {
+        bool ok = download_file(url, dest, raw);
+        if (ok) {
+            std::string actual;
+            if (!sha256_file(dest, &actual)) {
+                ok = false;
+                raw->error = L"无法计算下载文件的哈希";
+            } else if (!equals_ignore_case(actual, raw->expected_sha256)) {
+                ok = false;
+                raw->error = L"更新包校验失败（SHA256 不一致），已删除下载内容。";
+            }
+        }
+        raw->ok = ok;
+        raw->finished = true;
+    });
+
+    run_download_dialog(hwnd, raw, &worker);
+
+    if (!raw->ok) {
+        std::filesystem::remove(dest, ec);
+        if (raw->cancel && raw->error.empty()) {
+            if (log_enabled())
+                update_log("download cancelled");
+            return;
+        }
+        if (log_enabled())
+            update_log("download failed: %s", wide_to_utf8(raw->error).c_str());
+        MoteAlert(hwnd, L"更新失败",
+                  raw->error.empty() ? "下载更新包失败。" : wide_to_utf8(raw->error));
+        return;
+    }
+
+    if (log_enabled())
+        update_log("download ok bytes=%lld", raw->written.load());
+
+    if (target.installer) {
+        // /RELAUNCH=1 由 mote.iss 的 [Run] 识别，安装完成后自动启动新版本
+        const std::wstring params =
+            L"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /RELAUNCH=1";
+        const HINSTANCE launched =
+            ShellExecuteW(hwnd, L"open", dest.c_str(), params.c_str(), nullptr, SW_SHOWNORMAL);
+        if (reinterpret_cast<INT_PTR>(launched) <= 32) {
+            MoteAlert(hwnd, L"无法启动安装程序",
+                      "更新包已下载，请手动运行：\n" + wide_to_utf8(dest.wstring()));
+            return;
+        }
+        if (log_enabled())
+            update_log("installer launched, quitting");
+        if (g_quit)
+            g_quit();
+        return;
+    }
+
+    MoteAlert(hwnd, L"更新包已下载",
+              "已通过 SHA256 校验：\n" + wide_to_utf8(dest.wstring())
+                  + "\n\n解压后覆盖 Mote 目录即可完成更新。");
+    const std::wstring args = L"/select,\"" + dest.wstring() + L"\"";
+    ShellExecuteW(hwnd, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
 }
 
 struct CheckResult {
@@ -366,8 +715,8 @@ bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarge
     if (!size.empty())
         content += L"\n安装包大小：" + size;
     content += target.installer
-        ? L"\n\n当前是安装版：将下载安装包（.exe），运行后按向导覆盖安装。"
-        : L"\n\n当前是绿色版：将下载免安装包（.zip），解压覆盖即可完成更新。";
+        ? L"\n\n当前是安装版：将下载安装包、校验 SHA256 后静默安装并重启。"
+        : L"\n\n当前是绿色版：将下载并校验更新包，随后打开所在文件夹，解压覆盖即可。";
 
     const std::wstring title = L"发现新版本 " + utf8_to_wide(manifest.version);
 
@@ -380,7 +729,7 @@ bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarge
     config.pszMainInstruction = title.c_str();
     config.pszContent = content.c_str();
     const TASKDIALOG_BUTTON buttons[] = {
-        {1001, L"下载并安装"},
+        {1001, L"下载更新"},
         {1002, L"稍后"},
     };
     config.pButtons = buttons;
@@ -451,11 +800,16 @@ void show_result(HWND hwnd, const CheckResult &result)
     }
 
     reg_delete_value(kSkippedValue);
-    const std::wstring url = utf8_to_wide(target.url);
-    ShellExecuteW(hwnd, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    begin_download(hwnd, target);
 }
 
 } // namespace
+
+void set_update_hooks(std::function<bool()> is_dirty, std::function<void()> quit)
+{
+    g_is_dirty = std::move(is_dirty);
+    g_quit = std::move(quit);
+}
 
 void start_update_checker(HWND hwnd)
 {
