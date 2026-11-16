@@ -1,0 +1,220 @@
+﻿# Mote · Windows 在线更新发布（OSS 清单 + 绿色包 zip）
+#
+# 输入：packaging/package_windows_native.ps1 产出的 dist\Mote-Windows.zip
+# 动作：门禁校验 → 算 SHA256 → 生成 windows.json → 上传 OSS → 线上校验
+#
+# 与 macOS 的 publish_macos.sh 对齐：
+#   macOS   appcast.xml（Sparkle 验签）+ latest.json（自研检查）→ .dmg
+#   Windows 没有签名/安装器机制，只发 windows.json（自研检查）→ 绿色包 zip
+# 两份清单分开存放：latest.json 指向 .dmg，Windows 客户端只读 windows.json，
+# 避免把 .dmg 当成 Windows 安装包。
+#
+# 目录约定：
+#   oss://<bucket>/mote/Mote-<version>-win64-portable.zip   长缓存 immutable
+#   oss://<bucket>/mote/updates/<channel>/windows.json      5 分钟缓存
+# 对外地址：
+#   https://dl.xiaotu.online/mote/updates/stable/windows.json   ← 客户端读取
+#
+# 依赖：python + oss2（python -m pip install oss2），凭据用环境变量或凭据文件
+#
+# 用法：
+#   powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1
+#   powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1 -SkipUpload
+#   powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1 -ZipPath dist\x.zip
+
+param(
+    [string]$ZipPath = "",
+    [ValidateSet("stable", "beta")][string]$Channel = "stable",
+    [string]$CdnDomain = "https://dl.xiaotu.online",
+    [string]$ProductDir = "mote",
+    [string]$MinOs = "10.0",
+    [string]$EnvFile = "",
+    [switch]$SkipUpload
+)
+
+$ErrorActionPreference = "Stop"
+$root = Split-Path -Parent $PSScriptRoot
+
+function Fail([string]$message) {
+    Write-Host "[失败] $message"
+    exit 1
+}
+
+# 凭据：环境变量优先，其次读 %USERPROFILE%\.config\xiaotu-updates\.env（与 macOS 同路径风格）
+function Import-EnvFile([string]$path) {
+    if (-not (Test-Path $path)) { return }
+    Get-Content $path | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line.StartsWith("#")) { return }
+        $pair = $line -split "=", 2
+        if ($pair.Count -ne 2) { return }
+        $name = $pair[0].Trim()
+        $value = $pair[1].Trim().Trim('"').Trim("'")
+        if ($name) { Set-Item -Path "Env:$name" -Value $value }
+    }
+}
+
+if (-not $EnvFile) { $EnvFile = Join-Path $env:USERPROFILE ".config\xiaotu-updates\.env" }
+Import-EnvFile $EnvFile
+
+Write-Host "===== Mote 发布 · Windows ====="
+
+Write-Host "[1/6] 读取版本与产物"
+$proLine = Select-String -Path (Join-Path $root "Mote.pro") -Pattern "^VERSION\s*=\s*([0-9.]+)" |
+    Select-Object -First 1
+if (-not $proLine) { Fail "无法从 Mote.pro 读取 VERSION" }
+$Version = $proLine.Matches[0].Groups[1].Value
+
+if (-not $ZipPath) { $ZipPath = Join-Path $root "dist\Mote-Windows.zip" }
+if (-not (Test-Path $ZipPath)) {
+    Fail "zip 不存在：$ZipPath（先跑 packaging\package_windows_native.ps1）"
+}
+$ZipFull = (Resolve-Path $ZipPath).Path
+
+Write-Host "[2/6] 门禁：zip 内容与版本必须自洽"
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [IO.Compression.ZipFile]::OpenRead($ZipFull)
+try {
+    # Compress-Archive 写的是反斜杠分隔，统一成正斜杠再比对
+    $names = $archive.Entries | ForEach-Object { $_.FullName -replace '\\', '/' }
+    foreach ($required in @("Mote.exe", "WebView2Loader.dll", "web/editor.html",
+                            "fonts/JetBrainsMono-Light.ttf")) {
+        $hit = $names | Where-Object { $_.EndsWith($required, [StringComparison]::OrdinalIgnoreCase) }
+        if (-not $hit) { Fail "zip 缺少 $required" }
+    }
+    $qt = $names | Where-Object { $_ -match "(^|/)Qt6.*\.dll$" -or $_ -match "(^|/)platforms/qwindows\.dll$" }
+    if ($qt) { Fail ("zip 里出现 Qt 产物：" + ($qt -join ", ")) }
+
+    # 从 zip 里取 Mote.exe 的版本号：以产物为准，避免目录里留着旧 exe 时误判
+    $entry = $archive.Entries | Where-Object {
+        $_.FullName.EndsWith("Mote.exe", [StringComparison]::OrdinalIgnoreCase)
+    } | Select-Object -First 1
+    $tempExe = Join-Path $env:TEMP ("mote-publish-" + [guid]::NewGuid().ToString("N") + ".exe")
+    [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $tempExe)
+    try {
+        $exeVersion = (Get-Item $tempExe).VersionInfo.FileVersion
+    } finally {
+        Remove-Item $tempExe -Force -ErrorAction SilentlyContinue
+    }
+} finally {
+    $archive.Dispose()
+}
+
+Write-Host "  Mote.pro VERSION : $Version"
+Write-Host "  zip 内 exe 版本   : $exeVersion"
+if ($exeVersion -ne $Version) {
+    Fail "zip 内 exe 版本 $exeVersion 与 Mote.pro VERSION $Version 不一致，先重新构建打包"
+}
+
+$Size = (Get-Item $ZipFull).Length
+$Sha256 = (Get-FileHash $ZipFull -Algorithm SHA256).Hash.ToLower()
+$PublishedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+# 远端文件名固定按版本命名：index.html 与客户端清单都以它为准，不跟随本地 zip 名
+$RemoteName = "Mote-$Version-win64-portable.zip"
+$DownloadUrl = "$CdnDomain/$ProductDir/$RemoteName"
+$ManifestKey = "$ProductDir/updates/$Channel/windows.json"
+$ManifestUrl = "$CdnDomain/$ManifestKey"
+
+Write-Host ""
+Write-Host "  zip          : $ZipFull"
+Write-Host "  大小         : $Size 字节"
+Write-Host "  SHA256       : $Sha256"
+Write-Host "  下载地址     : $DownloadUrl"
+Write-Host "  windows.json : $ManifestUrl"
+
+Write-Host ""
+Write-Host "[3/6] 生成 windows.json"
+$manifestPath = Join-Path $root "dist\windows.json"
+$manifest = @"
+{
+  "version": "$Version",
+  "url": "$DownloadUrl",
+  "size": $Size,
+  "sha256": "$Sha256",
+  "min_os": "$MinOs",
+  "published_at": "$PublishedAt"
+}
+"@
+[IO.File]::WriteAllText($manifestPath, $manifest, (New-Object System.Text.UTF8Encoding($false)))
+Write-Host "  已生成：$manifestPath"
+
+Write-Host ""
+if ($SkipUpload) {
+    Write-Host "[4/6] [SkipUpload] 跳过上传"
+} else {
+    Write-Host "[4/6] 上传"
+    foreach ($name in @("OSS_ACCESS_KEY_ID", "OSS_ACCESS_KEY_SECRET", "OSS_BUCKET", "OSS_REGION")) {
+        if (-not (Get-Item -Path "Env:$name" -ErrorAction SilentlyContinue)) {
+            Fail "缺少环境变量 $name（或写进 $EnvFile）"
+        }
+    }
+    $python = (Get-Command python -ErrorAction SilentlyContinue).Source
+    if (-not $python) { Fail "找不到 python（上传依赖 oss2）" }
+
+    $uploadScript = Join-Path $env:TEMP "mote-publish-upload.py"
+    $pythonCode = @'
+import os, oss2
+bucket, region = os.environ["OSS_BUCKET"], os.environ["OSS_REGION"]
+endpoint = f"https://oss-{region}.aliyuncs.com"
+bkt = oss2.Bucket(oss2.Auth(os.environ["OSS_ACCESS_KEY_ID"],
+                            os.environ["OSS_ACCESS_KEY_SECRET"]), endpoint, bucket)
+bkt.put_object_from_file(os.environ["UPLOAD_ZIP_KEY"], os.environ["UPLOAD_ZIP_PATH"],
+                         headers={"Cache-Control": "public, max-age=31536000, immutable",
+                                  "Content-Type": "application/zip"})
+bkt.put_object_from_file(os.environ["UPLOAD_MANIFEST_KEY"], os.environ["UPLOAD_MANIFEST_PATH"],
+                         headers={"Cache-Control": "no-cache, max-age=300",
+                                  "Content-Type": "application/json"})
+print("  zip          -> " + os.environ["UPLOAD_ZIP_KEY"])
+print("  windows.json -> " + os.environ["UPLOAD_MANIFEST_KEY"])
+'@
+    [IO.File]::WriteAllText($uploadScript, $pythonCode, (New-Object System.Text.UTF8Encoding($false)))
+
+    $env:UPLOAD_ZIP_PATH = $ZipFull
+    $env:UPLOAD_ZIP_KEY = "$ProductDir/$RemoteName"
+    $env:UPLOAD_MANIFEST_PATH = $manifestPath
+    $env:UPLOAD_MANIFEST_KEY = $ManifestKey
+    & $python $uploadScript
+    if ($LASTEXITCODE -ne 0) { Fail "上传失败（python 退出码 $LASTEXITCODE）" }
+}
+
+Write-Host ""
+Write-Host "[5/6] 线上校验"
+if ($SkipUpload) {
+    Write-Host "  （跳过）本地清单：$manifestPath"
+} else {
+    $ProgressPreference = "SilentlyContinue"
+    try {
+        $head = Invoke-WebRequest -Uri $DownloadUrl -Method Head -UseBasicParsing -TimeoutSec 30
+        if ($head.StatusCode -eq 200 -and [int64]$head.Headers["Content-Length"] -eq $Size) {
+            Write-Host "  ✓ zip 可下载，长度与本地一致（$Size 字节）"
+        } else {
+            Write-Host "  ✗ zip 校验异常：HTTP $($head.StatusCode) 长度 $($head.Headers['Content-Length'])"
+        }
+    } catch {
+        Write-Host "  ✗ zip 不可访问：$($_.Exception.Message)（检查 CDN 缓存或 bucket 权限）"
+    }
+
+    try {
+        $live = Invoke-WebRequest -Uri $ManifestUrl -UseBasicParsing -TimeoutSec 30
+        $shaPattern = [regex]::Escape($Sha256)
+        $versionPattern = [regex]::Escape('"version": "' + $Version + '"')
+        if ($live.StatusCode -eq 200 -and $live.Content -match $shaPattern -and
+            $live.Content -match $versionPattern) {
+            Write-Host "  ✓ windows.json 版本与 SHA256 均与产物一致"
+        } else {
+            Write-Host "  ✗ windows.json 内容异常：$($live.Content)"
+        }
+    } catch {
+        Write-Host "  ✗ windows.json 不可访问：$($_.Exception.Message)"
+    }
+}
+
+Write-Host ""
+Write-Host "[6/6] index.html 需要同步的值（只改 Mote 的 Windows 绿色包行）"
+Write-Host ("  版本   : v{0}" -f $Version)
+Write-Host ("  大小   : {0:N0} 字节（约 {1:N1} MB）" -f $Size, ($Size / 1MB))
+Write-Host ("  SHA256 : {0}" -f $Sha256)
+Write-Host ("  下载   : {0}" -f $DownloadUrl)
+Write-Host ""
+Write-Host "================ 完成 ================"
