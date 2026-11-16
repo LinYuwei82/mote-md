@@ -24,6 +24,7 @@
 
 param(
     [string]$ZipPath = "",
+    [string]$SetupPath = "",
     [ValidateSet("stable", "beta")][string]$Channel = "stable",
     [string]$CdnDomain = "https://dl.xiaotu.online",
     [string]$ProductDir = "mote",
@@ -71,6 +72,18 @@ if (-not (Test-Path $ZipPath)) {
 }
 $ZipFull = (Resolve-Path $ZipPath).Path
 
+# 安装包可选：存在就一起发（dist\Mote-Setup-<version>.exe，由 build_installer.ps1 生成）
+if (-not $SetupPath) { $SetupPath = Join-Path $root "dist\Mote-Setup-$Version.exe" }
+$SetupFull = ""
+if (Test-Path $SetupPath) {
+    $SetupFull = (Resolve-Path $SetupPath).Path
+    # Inno 写出的 FileVersion 会补空格（"0.3.7               "），先 Trim 再比
+    $setupVersion = (Get-Item $SetupFull).VersionInfo.FileVersion.Trim()
+    if ($setupVersion -ne $Version) {
+        Fail "安装包版本 $setupVersion 与 Mote.pro VERSION $Version 不一致，先重新打包"
+    }
+}
+
 Write-Host "[2/6] 门禁：zip 内容与版本必须自洽"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [IO.Compression.ZipFile]::OpenRead($ZipFull)
@@ -110,6 +123,15 @@ $Size = (Get-Item $ZipFull).Length
 $Sha256 = (Get-FileHash $ZipFull -Algorithm SHA256).Hash.ToLower()
 $PublishedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
+$SetupSize = 0
+$SetupSha256 = ""
+$SetupUrl = ""
+if ($SetupFull) {
+    $SetupSize = (Get-Item $SetupFull).Length
+    $SetupSha256 = (Get-FileHash $SetupFull -Algorithm SHA256).Hash.ToLower()
+    $SetupUrl = "$CdnDomain/$ProductDir/Mote-Setup-$Version.exe"
+}
+
 # 远端文件名固定按版本命名：index.html 与客户端清单都以它为准，不跟随本地 zip 名
 $RemoteName = "Mote-$Version-win64-portable.zip"
 $DownloadUrl = "$CdnDomain/$ProductDir/$RemoteName"
@@ -122,6 +144,12 @@ Write-Host "  大小         : $Size 字节"
 Write-Host "  SHA256       : $Sha256"
 Write-Host "  下载地址     : $DownloadUrl"
 Write-Host "  windows.json : $ManifestUrl"
+if ($SetupFull) {
+    Write-Host "  setup        : $SetupUrl（$SetupSize 字节）"
+    Write-Host "  setup SHA256 : $SetupSha256"
+} else {
+    Write-Host "  setup        : 未找到 $SetupPath，跳过安装包"
+}
 
 Write-Host ""
 Write-Host "[3/6] 生成 windows.json"
@@ -165,8 +193,15 @@ bkt.put_object_from_file(os.environ["UPLOAD_ZIP_KEY"], os.environ["UPLOAD_ZIP_PA
 bkt.put_object_from_file(os.environ["UPLOAD_MANIFEST_KEY"], os.environ["UPLOAD_MANIFEST_PATH"],
                          headers={"Cache-Control": "no-cache, max-age=300",
                                   "Content-Type": "application/json"})
+setup_key = os.environ.get("UPLOAD_SETUP_KEY")
+if setup_key:
+    bkt.put_object_from_file(setup_key, os.environ["UPLOAD_SETUP_PATH"],
+                             headers={"Cache-Control": "public, max-age=31536000, immutable",
+                                      "Content-Type": "application/octet-stream"})
 print("  zip          -> " + os.environ["UPLOAD_ZIP_KEY"])
 print("  windows.json -> " + os.environ["UPLOAD_MANIFEST_KEY"])
+if setup_key:
+    print("  setup        -> " + setup_key)
 '@
     [IO.File]::WriteAllText($uploadScript, $pythonCode, (New-Object System.Text.UTF8Encoding($false)))
 
@@ -174,6 +209,13 @@ print("  windows.json -> " + os.environ["UPLOAD_MANIFEST_KEY"])
     $env:UPLOAD_ZIP_KEY = "$ProductDir/$RemoteName"
     $env:UPLOAD_MANIFEST_PATH = $manifestPath
     $env:UPLOAD_MANIFEST_KEY = $ManifestKey
+    if ($SetupFull) {
+        $env:UPLOAD_SETUP_PATH = $SetupFull
+        $env:UPLOAD_SETUP_KEY = "$ProductDir/Mote-Setup-$Version.exe"
+    } else {
+        Remove-Item Env:UPLOAD_SETUP_PATH -ErrorAction SilentlyContinue
+        Remove-Item Env:UPLOAD_SETUP_KEY -ErrorAction SilentlyContinue
+    }
     & $python $uploadScript
     if ($LASTEXITCODE -ne 0) { Fail "上传失败（python 退出码 $LASTEXITCODE）" }
 }
@@ -208,13 +250,30 @@ if ($SkipUpload) {
     } catch {
         Write-Host "  ✗ windows.json 不可访问：$($_.Exception.Message)"
     }
+
+    if ($SetupFull) {
+        try {
+            $head = Invoke-WebRequest -Uri $SetupUrl -Method Head -UseBasicParsing -TimeoutSec 30
+            if ($head.StatusCode -eq 200 -and [int64]$head.Headers["Content-Length"] -eq $SetupSize) {
+                Write-Host "  ✓ 安装包可下载，长度与本地一致（$SetupSize 字节）"
+            } else {
+                Write-Host "  ✗ 安装包校验异常：HTTP $($head.StatusCode) 长度 $($head.Headers['Content-Length'])"
+            }
+        } catch {
+            Write-Host "  ✗ 安装包不可访问：$($_.Exception.Message)"
+        }
+    }
 }
 
 Write-Host ""
-Write-Host "[6/6] index.html 需要同步的值（只改 Mote 的 Windows 绿色包行）"
+Write-Host "[6/6] index.html 需要同步的值（Mote 的 Windows 两行）"
 Write-Host ("  版本   : v{0}" -f $Version)
 Write-Host ("  大小   : {0:N0} 字节（约 {1:N1} MB）" -f $Size, ($Size / 1MB))
 Write-Host ("  SHA256 : {0}" -f $Sha256)
 Write-Host ("  下载   : {0}" -f $DownloadUrl)
-Write-Host ""
+if ($SetupFull) {
+    Write-Host ("  setup  : {0:N0} 字节（约 {1:N1} MB）" -f $SetupSize, ($SetupSize / 1MB))
+    Write-Host ("  setup SHA256 : {0}" -f $SetupSha256)
+    Write-Host ("  setup 下载   : {0}" -f $SetupUrl)
+}
 Write-Host "================ 完成 ================"

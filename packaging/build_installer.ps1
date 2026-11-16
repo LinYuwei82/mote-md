@@ -1,5 +1,5 @@
 ﻿# 构建 Windows 安装包（Inno Setup 6）
-# 前置：先运行 packaging\package_windows.bat 生成 dist\Mote-Windows
+# 前置：先运行 packaging\package_windows_native.ps1 生成 dist\Mote-Windows（原生外壳绿色版）
 # 用法：powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 
 $ErrorActionPreference = "Stop"
@@ -18,25 +18,29 @@ $version = $Matches[1]
 
 $greenDir = Join-Path $root "dist\Mote-Windows"
 if (-not (Test-Path $greenDir)) {
-    throw "缺少绿色版目录 dist\Mote-Windows，请先运行 packaging\package_windows.bat"
+    throw "缺少绿色版目录 dist\Mote-Windows，请先运行 packaging\package_windows_native.ps1"
 }
 
-# 「装得上、跑不起来」是这里代价最高的错误：Qt 运行时或 WebView2Loader 缺任何一个，
+# 「装得上、跑不起来」是这里代价最高的错误：WebView2Loader 或页面资源缺任何一个，
 # 安装包照样能生成、能安装，但双击后只会闪退或弹系统缺 DLL 对话框。
 # 所以把运行必需的文件逐个断言，缺一项就在这里失败。
 $requiredFiles = @(
     "Mote.exe",
     "WebView2Loader.dll",
-    "Qt6Core.dll",
-    "Qt6Gui.dll",
-    "Qt6Widgets.dll",
-    "platforms\qwindows.dll"
+    "web\editor.html",
+    "fonts\JetBrainsMono-Light.ttf"
 )
 foreach ($rel in $requiredFiles) {
     $full = Join-Path $greenDir $rel
     if (-not (Test-Path -LiteralPath $full -PathType Leaf)) {
-        throw "绿色版缺少运行必需文件：$rel（$full）。请重新运行 packaging\package_windows.bat"
+        throw "绿色版缺少运行必需文件：$rel（$full）。请重新运行 packaging\package_windows_native.ps1"
     }
+}
+
+# 原生外壳不应携带 Qt 运行时；混进来通常是用了旧的 Qt 打包目录
+$qt = Get-ChildItem -LiteralPath $greenDir -Filter "Qt6*.dll" -File -ErrorAction SilentlyContinue
+if ($qt -or (Test-Path (Join-Path $greenDir "platforms\qwindows.dll"))) {
+    throw "绿色版里出现 Qt 产物，dist\Mote-Windows 不是原生外壳的产物"
 }
 
 $candidates = @(
