@@ -32,5 +32,16 @@
 	<true/>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
+	<!-- Sparkle 自动更新配置；SPARKLE_FEED_URL 由 CMake 在打包时注入 -->
+	<key>SUFeedURL</key>
+	<string>@SPARKLE_FEED_URL@</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>

@@ -153,6 +153,23 @@ else()
   set_source_files_properties(${MOTE_ICON_FILES} PROPERTIES
     MACOSX_PACKAGE_LOCATION "Resources")
 
+  # Sparkle 自动更新（纯 Sparkle 方案：Info.plist 键 + framework 拷贝 + 一行初始化）
+  set(MOTE_SPARKLE_FRAMEWORK "${MOTE_REPO_ROOT}/resources/Sparkle.framework")
+  if(NOT EXISTS "${MOTE_SPARKLE_FRAMEWORK}/Sparkle")
+    message(WARNING
+      "未找到 Sparkle.framework（期望在 ${MOTE_SPARKLE_FRAMEWORK}），"
+      "自动更新将被禁用。下载地址："
+      "https://github.com/sparkle-project/Sparkle/releases")
+    set(MOTE_SPARKLE_ENABLED OFF)
+  else()
+    set(MOTE_SPARKLE_ENABLED ON)
+  endif()
+
+  # appcast 托管 URL；打包脚本可以通过 -DSPARKLE_FEED_URL=... 覆盖
+  if(NOT SPARKLE_FEED_URL)
+    set(SPARKLE_FEED_URL "https://gitee.com/lin-yuwei168/mote-md/releases/latest/download/appcast.xml")
+  endif()
+
   set(MOTE_EXECUTABLE_NAME "Mote")
   configure_file(
     "${MOTE_PLATFORM_MAC}/Info.plist.in"
@@ -183,10 +200,31 @@ else()
     "-framework WebKit"
     "-framework UniformTypeIdentifiers")
 
+  if(MOTE_SPARKLE_ENABLED)
+    target_link_libraries(Mote PRIVATE
+      "-F${MOTE_REPO_ROOT}/resources"
+      "-framework Sparkle")
+    # 让 Xcode/Ninja 找到 Sparkle.framework 的 Headers
+    target_include_directories(Mote PRIVATE
+      "${MOTE_SPARKLE_FRAMEWORK}/Headers")
+  endif()
+
   set_target_properties(Mote PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "Mote"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.mote.Mote"
     MACOSX_BUNDLE_BUNDLE_VERSION "${MOTE_VERSION}"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${MOTE_VERSION}"
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+
+  if(MOTE_SPARKLE_ENABLED)
+    # 构建后把 Sparkle.framework 拷进 .app/Contents/Frameworks/
+    # 必须用 ditto 解开 symlink（codesign --deep 遇到 framework 根目录的 symlink
+    # 指向 .app bundle 时会报 "bundle format is ambiguous"）
+    add_custom_command(TARGET Mote POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_BUNDLE_CONTENT_DIR:Mote>/Frameworks"
+      COMMAND ditto "${MOTE_SPARKLE_FRAMEWORK}"
+        "$<TARGET_BUNDLE_CONTENT_DIR:Mote>/Frameworks/Sparkle.framework"
+      COMMENT "Copy Sparkle.framework into .app bundle (symlinks resolved)")
+  endif()
 endif()

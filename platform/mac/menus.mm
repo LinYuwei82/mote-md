@@ -134,6 +134,15 @@ NSMenu *MoteBuildMainMenu(id commandTarget, SEL commandAction)
                                                 action:@selector(unhideAllApplications:)
                                          keyEquivalent:@""]];
     [appMenu addItem:[NSMenuItem separatorItem]];
+    // Sparkle 自动更新菜单项；target 运行时绑定，避免没有 Sparkle 时链接失败
+    NSMenuItem *checkUpdate = [[NSMenuItem alloc] initWithTitle:@"检查更新…"
+                                                          action:NSSelectorFromString(@"checkForUpdates:")
+                                                   keyEquivalent:@""];
+    checkUpdate.target = NSClassFromString(@"SUUpdater");
+    if (checkUpdate.target) {
+      [appMenu addItem:checkUpdate];
+      [appMenu addItem:[NSMenuItem separatorItem]];
+    }
     [appMenu addItem:[[NSMenuItem alloc] initWithTitle:@"退出 Mote"
                                                 action:@selector(terminate:)
                                          keyEquivalent:@"q"]];

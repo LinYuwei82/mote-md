@@ -27,6 +27,9 @@ ui_*.h
 # ---- macOS ----
 .DS_Store
 
+# ---- 第三方 vendored framework（打包时复制，不进仓库）----
+/resources/Sparkle.framework/
+
 # ---- 截图：仅保留文档引用的几张，其余为调试截图 ----
 /screenshots/*
 !/screenshots/imgB-package.png

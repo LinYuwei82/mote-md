@@ -325,8 +325,8 @@ if [ "$SKIP_SIGN" -eq 1 ]; then
     echo "==> 6/${TOTAL} 跳过签名（--skip-sign）"
 elif [ -n "$SIGN_IDENTITY" ]; then
     echo "==> 6/${TOTAL} Developer ID 签名：${SIGN_IDENTITY}"
-    # --options runtime 是 macOS 10.15+ 公证的硬要求；
-    # 不传 --entitlements（本应用没有 sandbox / 特殊权限需求，用默认 entitlement）
+    # Sparkle.framework 通过 ditto 拷进 bundle（已解开 symlink），
+    # 可以用 --deep 一次签完整个 .app（codesign 不会再报 bundle format ambiguous）
     codesign --force --deep \
         --sign "Developer ID Application: ${SIGN_IDENTITY}" \
         --options runtime \
