@@ -23,7 +23,7 @@
 - **链接**：渲染态下 `[文字](地址)` 的文字显示为蓝色带下划线的链接（地址本身仍是零宽标记，不占位、不进入框选复制）；普通点击仍进入编辑态，`Cmd+Click` 才跳转——外部链接交给系统默认浏览器，相对路径的 `.md` 在应用内打开（走未保存确认），文件不存在时弹提示不崩。编辑态显示原始 `[文字](地址)`，复制出去是标准 Markdown。
 - **导出 HTML**：`Option+Cmd+E`（「文件 → 导出 HTML…」）导出单文件自包含 HTML——样式内联、图片转 base64 内嵌、代码高亮与任务复选框状态保留，导出过程不改动原文档与 `dataset.raw`。
 - **导出 PDF**：`Cmd+P`（「文件 → 导出 PDF…」）导出 A4 多页、无页眉页脚；源码模式下禁用。macOS 与 Windows 均已实现，两端分页切点由各自 WebView 引擎决定，未做逐页像素比对。
-- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。macOS 读 `latest.json`，用户确认后交给 Sparkle 下载 DMG、验证 EdDSA 签名并替换重启；Windows 读 `windows.json`，确认后打开浏览器下载免安装绿色包，解压覆盖即完成更新。
+- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。macOS 读 `latest.json`，用户确认后交给 Sparkle 下载 DMG、验证 EdDSA 签名并替换重启；Windows 读 `windows.json`，确认后打开浏览器下载——安装版取 `setup_url`（安装包 exe，按向导覆盖），绿色版取 `url`（zip，解压覆盖）。
 - **页面内状态栏**：原生外壳把状态栏画在前端页面底部（`body.platform-mac` / `body.platform-win`），显示打开/保存/导出提示与字数统计；Qt 构建不启用，避免出现两条状态栏。
 - **目录手型光标**：鼠标移到目录栏（条目文字行、行间空隙、栏内空白）都是系统手型指针，避免移动时手型闪烁；折叠按钮与滚动条保留自身光标语义。
 
@@ -100,7 +100,9 @@ Qt 构建与原生构建共用 `resources/web/` 与 `core/`；版本号仍以 `M
 | macOS 安装包 | `mote/Mote-macOS-native-<version>.dmg` |
 | Sparkle feed（EdDSA 验签 + 下载） | `mote/updates/<channel>/appcast.xml` |
 | macOS 自研检查清单 | `mote/updates/<channel>/latest.json` |
-| Windows 绿色包与清单 | `mote/Mote-<version>-win64-portable.zip`、`mote/updates/<channel>/windows.json` |
+| Windows 绿色包（zip） | `mote/Mote-<version>-win64-portable.zip` |
+| Windows 安装包（exe，可选） | `mote/Mote-Setup-<version>.exe` |
+| Windows 自研检查清单 | `mote/updates/<channel>/windows.json` |
 
 ```bash
 bash packaging/package_macos.sh --native --dmg   # 签名 + 公证 + DMG
@@ -114,7 +116,8 @@ powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1   # SHA25
 
 - 版本号只改 `Mote.pro` 的 `VERSION`，两个发布脚本都从那里读。
 - Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
-- 检查权在自研模块（`SUEnableAutomaticChecks=false`）：Sparkle 只负责下载、验签、替换、重启；Windows 没有安装器，提示后打开下载链接，用户解压覆盖。
+- 检查权在自研模块（`SUEnableAutomaticChecks=false`）：Sparkle 只负责下载、验签、替换、重启。
+- Windows 按安装形态取包：exe 同级有 `unins000.exe` 判为安装版，优先用 `setup_url`；否则用 `url` 的 zip；清单没给 `setup_url` 时回落到 zip。下载交给系统浏览器，不静默安装。
 - 两份清单分开：macOS 只读 `latest.json`（指向 `.dmg`），Windows 只读 `windows.json`（指向 zip），避免把 `.dmg` 当成 Windows 包。
 
 ## 快捷键
@@ -154,7 +157,7 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 - **链接只支持两种跳转**：`Cmd+Click` 外部链接（http/https/mailto）与相对路径的 `.md`；**锚点链接**（`#标题`）因为没有生成标题锚点，只在状态栏提示「暂不支持」；**图片**按 `img` 渲染，没有 `<a>` 包裹，`Cmd+Click` 不触发任何跳转（相对路径图片仍按文档目录正常显示与导出内嵌）。
 - **导出 HTML 是「网页快照」**：单文件、无外部依赖、无脚本；导出后不提供任何交互（链接仍可点，但任务复选框是静态图形）。
 - **导出能力两端已对齐**：macOS 与 Windows 的 PDF、HTML 导出均已实现并验收；分页切点由各自 WebView 引擎决定。
-- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；干净机首次升级、断网/下载中断尚无自动化覆盖；Windows 是无安装器的绿色包，更新需手动解压覆盖。
+- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；干净机首次升级、断网/下载中断尚无自动化覆盖；Windows 下载后仍需用户执行安装向导或解压覆盖，没有静默升级。
 - **OSS 在中国香港**：国内下载偏慢；备案完成后把回源迁到国内桶，`dl.xiaotu.online` 域名不变，已安装客户端无需改动。
 - **任务复选框的复制**：复制处理器剔除隐藏标记；脚本用 `DataTransfer` 走产品同一条 `copy` 处理逻辑验证，真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 - 目录在源码模式下隐藏；正在编辑的块在重排前标题高亮可能滞后一帧。
