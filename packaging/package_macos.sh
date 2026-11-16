@@ -1,29 +1,47 @@
 #!/bin/bash
-# macOS 打包脚本：编译 -> 部署 -> 清理冗余依赖 -> 清理扩展属性 -> 临时签名 -> 打 zip
+# macOS 打包脚本：编译 -> 部署 -> 清理冗余依赖 -> 清理扩展属性 -> Developer ID 签名 -> 公证 -> 打 zip/DMG
 # 用法：
-#   bash packaging/package_macos.sh           # Qt 构建（Windows 继续用 Qt，macOS 旧流程）
-#   bash packaging/package_macos.sh --native  # 原生 AppKit + CMake 构建（无 Qt）
-#   bash packaging/package_macos.sh --dmg     # 额外出 dist/Mote-macOS-<版本>.dmg（拖拽安装）
+#   bash packaging/package_macos.sh           # Qt 构建 + Developer ID 签名 + 公证
+#   bash packaging/package_macos.sh --native  # 原生 AppKit + CMake 构建（无 Qt）+ 签名 + 公证
+#   bash packaging/package_macos.sh --dmg     # 额外出 dist/Mote-macOS-<版本>.dmg（拖拽安装）+ DMG 公证
 #   bash packaging/package_macos.sh --clean-dist   # 先清空 dist/（默认保留其它旧产物）
+#   bash packaging/package_macos.sh --skip-sign    # 跳过签名（调试用）
+#   bash packaging/package_macos.sh --skip-notarize # 跳过公证（仍做签名）
+#
+# 签名证书：自动从钥匙串查找 "Developer ID Application: ..."；找不到则 fallback 到 ad-hoc。
+# 公证凭据：xcrun notarytool store-credentials "mote-notary" --apple-id <id> --team-id <team> --password <app-specific>
 set -euo pipefail
 
 WITH_DMG=0
 CLEAN_DIST=0
 NATIVE=0
+SKIP_SIGN=0
+SKIP_NOTARIZE=0
 for arg in "$@"; do
     case "$arg" in
         --dmg) WITH_DMG=1 ;;
         --clean-dist) CLEAN_DIST=1 ;;
         --native) NATIVE=1 ;;
+        --skip-sign) SKIP_SIGN=1 ;;
+        --skip-notarize) SKIP_NOTARIZE=1 ;;
         -h|--help)
-            echo "用法: bash packaging/package_macos.sh [--native] [--dmg] [--clean-dist]"
-            echo "  --native      用 native/ 的 CMake 工程构建（AppKit + WKWebView，无 Qt）"
-            echo "  --dmg         在 zip 之外再产出一个拖拽安装式 DMG（卷标 Mote，UDZO 压缩）"
-            echo "  --clean-dist  先清空 dist/（默认只覆盖同名产物，保留 dist 里的其它文件）"
+            echo "用法: bash packaging/package_macos.sh [--native] [--dmg] [--clean-dist] [--skip-sign] [--skip-notarize]"
+            echo "  --native         用 native/ 的 CMake 工程构建（AppKit + WKWebView，无 Qt）"
+            echo "  --dmg            在 zip 之外再产出一个拖拽安装式 DMG（卷标 Mote，UDZO 压缩）"
+            echo "  --clean-dist     先清空 dist/（默认只覆盖同名产物，保留 dist 里的其它文件）"
+            echo "  --skip-sign      跳过签名（调试用；公证也会被跳过）"
+            echo "  --skip-notarize  跳过公证（仍做 Developer ID 签名）"
             exit 0 ;;
-        *) echo "未知参数：${arg}（可用：--native, --dmg, --clean-dist）"; exit 2 ;;
+        *) echo "未知参数：${arg}（可用：--native, --dmg, --clean-dist, --skip-sign, --skip-notarize）"; exit 2 ;;
     esac
 done
+
+# 自动发现 Developer ID Application 证书
+find_developer_id_sign() {
+    security find-identity -v -p codesigning 2>&1 \
+        | sed -n 's/.*"Developer ID Application: \(.*\)".*/\1/p' | head -1
+}
+SIGN_IDENTITY="$(find_developer_id_sign)"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="Mote"
@@ -42,9 +60,19 @@ else
     PKG_NAME="${APP_NAME}-macOS"
 fi
 ZIP_PATH="$DIST_DIR/${PKG_NAME}.zip"
-# 进度编号随是否产出 DMG 变化
-TOTAL=7
-[ "$WITH_DMG" -eq 1 ] && TOTAL=8
+
+# 进度总数：
+# 基础 7 步：清理 → 构建 → 部署 → 清理 → 签名前处理 → 签名 → 公证前做 DMG
+# 然后：组装 zip（固定）+ 拷 DMG（固定，如果 DO_NOTARIZE 或 WITH_DMG）= +2
+# 如果 DO_NOTARIZE：还多 提交公证 + stapler/spctl + 最终 zip 验证 = +3
+TOTAL=9   # 基础 7 + 组装 zip + 拷 DMG
+DO_NOTARIZE=0
+if [ "$SKIP_SIGN" -ne 1 ] && [ "$SKIP_NOTARIZE" -ne 1 ] && [ -n "$SIGN_IDENTITY" ]; then
+    DO_NOTARIZE=1
+    TOTAL=$((TOTAL + 3))   # 提交公证 + stapler/spctl + 最终 zip 验证
+elif [ "$WITH_DMG" -eq 0 ]; then
+    TOTAL=$((TOTAL - 1))   # 没 --dmg 也没公证，省掉拷 DMG 那一步
+fi
 
 if [ "$NATIVE" -eq 0 ]; then
     # Qt 来源可用 QMAKE 指定。Homebrew 的 Qt 链接 ICU，会多带约 37MB（DMG 因此约 34MB）；
@@ -293,14 +321,95 @@ scan_external_paths() {
     fi
 }
 
-echo "==> 6/${TOTAL} Ad-hoc 签名"
-codesign --force --deep --sign - "$APP_PATH"
+if [ "$SKIP_SIGN" -eq 1 ]; then
+    echo "==> 6/${TOTAL} 跳过签名（--skip-sign）"
+elif [ -n "$SIGN_IDENTITY" ]; then
+    echo "==> 6/${TOTAL} Developer ID 签名：${SIGN_IDENTITY}"
+    # --options runtime 是 macOS 10.15+ 公证的硬要求；
+    # 不传 --entitlements（本应用没有 sandbox / 特殊权限需求，用默认 entitlement）
+    codesign --force --deep \
+        --sign "Developer ID Application: ${SIGN_IDENTITY}" \
+        --options runtime \
+        "$APP_PATH"
+else
+    echo "==> 6/${TOTAL} Developer ID 证书未找到，fallback 到 ad-hoc 签名"
+    echo "    提示：钥匙串里需要有 'Developer ID Application: ...' 证书才能通过公证"
+    codesign --force --deep --sign - "$APP_PATH"
+fi
 codesign --verify --deep --strict "$APP_PATH"
+
+# 签名后检查 Gatekeeper 兼容性（runtime + 证书）
+if [ "$SKIP_SIGN" -ne 1 ] && [ -n "$SIGN_IDENTITY" ]; then
+    codesign -dvv "$APP_PATH" 2>&1 | grep -E "Authority|flags=" | head -5
+fi
+
 # install_name_tool 会破坏签名，这里重签后立刻全包扫描；有残留就停，不出包
 scan_external_paths fail
 
-echo "==> 7/${TOTAL} 组装发布目录并压缩"
-# 暂存目录同样放在非同步目录，避免 FinderInfo 被写进 zip 导致解压后签名校验失败
+echo "==> 7/${TOTAL} 公证流程前：先做 DMG（提交 DMG 给 Apple，最终分发也是 DMG）"
+NOTARY_STAGE="${TMPDIR:-/tmp}/mote-notary"
+rm -rf "$NOTARY_STAGE"
+mkdir -p "$NOTARY_STAGE"
+NOTARY_DMG="$NOTARY_STAGE/${PKG_NAME}-${APP_VERSION}.dmg"
+NOTARY_DMG_STAGE="$NOTARY_STAGE/dmg-build"
+rm -rf "$NOTARY_DMG_STAGE"
+mkdir -p "$NOTARY_DMG_STAGE"
+ditto "$APP_PATH" "$NOTARY_DMG_STAGE/${APP_NAME}.app"
+ln -s /Applications "$NOTARY_DMG_STAGE/Applications"
+find "$NOTARY_DMG_STAGE" -name ".DS_Store" -delete 2>/dev/null || true
+hdiutil create -volname "$APP_NAME" -srcfolder "$NOTARY_DMG_STAGE" \
+    -ov -format UDZO -fs HFS+ "$NOTARY_DMG" >/dev/null
+hdiutil verify "$NOTARY_DMG" >/dev/null
+
+if [ "$DO_NOTARIZE" -eq 1 ]; then
+    echo "==> 8/${TOTAL} 提交 DMG 公证（xcrun notarytool submit --wait）..."
+    echo "    凭据钥匙串配置：mote-notary"
+    echo "    提交文件：$NOTARY_DMG"
+    NOTARY_LOG="$NOTARY_STAGE/notary.log"
+    xcrun notarytool submit "$NOTARY_DMG" \
+        --keychain-profile "mote-notary" \
+        --wait --timeout 900 2>&1 | tee "$NOTARY_LOG"
+    echo
+
+    NOTARY_STATUS="$(awk '/status:/{print $2; exit}' "$NOTARY_LOG")"
+    if [ "$NOTARY_STATUS" != "Accepted" ]; then
+        echo "错误：公证状态为 '$NOTARY_STATUS'，请查看完整日志：$NOTARY_LOG"
+        echo "       常见原因：缺少 --options runtime、签名时没有 Developer ID、Info.plist 问题"
+        exit 1
+    fi
+    echo "    公证通过 ✓"
+
+    echo "==> 9/${TOTAL} stapler staple DMG + spctl 验证"
+    xcrun stapler staple "$NOTARY_DMG"
+    xcrun stapler validate "$NOTARY_DMG"
+    echo "    DMG stapled ✓"
+
+    # stapler 也 staple 一下 .app，这样 zip 里的 .app 也自带 ticket
+    xcrun stapler staple "$APP_PATH"
+    xcrun stapler validate "$APP_PATH"
+    echo "    .app 也 stapled ✓"
+
+    # mount DMG → spctl 评估里面的 .app（模拟用户挂载 DMG 后的 Gatekeeper 检查）
+    echo "    mount DMG → spctl 验证..."
+    MOUNT_POINT="/Volumes/${APP_NAME}"
+    [ -d "$MOUNT_POINT" ] && hdiutil detach "$MOUNT_POINT" 2>/dev/null || true
+    hdiutil attach "$NOTARY_DMG" -nobrowse -mountpoint "$MOUNT_POINT" >/dev/null 2>&1 || true
+    DMG_APP="$MOUNT_POINT/${APP_NAME}.app"
+    DMG_SPCTL="$(spctl --assess --type execute -vv "$DMG_APP" 2>&1 || true)"
+    hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true
+    echo "    $DMG_SPCTL"
+    echo "$DMG_SPCTL" | grep -q "accepted" || {
+        echo "错误：DMG 内 .app 未通过 spctl"
+        exit 1
+    }
+    echo "    DMG 内 .app 通过 spctl ✓"
+else
+    echo "==> 8/${TOTAL} 跳过公证（--skip-notarize 或无 Developer ID 证书）"
+    echo "    提示：未公证的 .app 会被 Gatekeeper 拦截，首次打开需要右键 → 打开"
+fi
+
+echo
+echo "==> $((DO_NOTARIZE ? 10 : 8))/${TOTAL} 组装最终发布目录（zip）"
 STAGE="${TMPDIR:-/tmp}/mote-stage"
 rm -rf "$STAGE"
 PKG_DIR="$STAGE/$PKG_NAME"
@@ -311,10 +420,8 @@ xattr -d com.apple.FinderInfo "$PKG_DIR/${APP_NAME}.app" 2>/dev/null || true
 mkdir -p "$PKG_DIR/samples"
 cp "$ROOT/resources/samples/welcome.md" "$PKG_DIR/samples/"
 cp "$ROOT/resources/samples/sample-diagram.png" "$PKG_DIR/samples/"
-# 随包附带内嵌代码字体的 OFL 授权文件（SIL Open Font License 要求随分发提供）
 mkdir -p "$PKG_DIR/licenses"
 cp "$ROOT/resources/fonts/OFL.txt" "$PKG_DIR/licenses/JetBrainsMono-OFL.txt"
-# 项目自身的 AGPL-3.0 全文本同样随包分发
 cp "$ROOT/LICENSE" "$PKG_DIR/licenses/LICENSE-AGPL-3.0.txt"
 mkdir -p "$DIST_DIR"
 
@@ -322,25 +429,46 @@ ditto -c -k --sequesterRsrc --keepParent "$PKG_DIR" "$STAGE/${PKG_NAME}.zip"
 mv -f "$STAGE/${PKG_NAME}.zip" "$ZIP_PATH"
 rm -rf "$STAGE"
 
-if [ "$WITH_DMG" -eq 1 ]; then
-    echo "==> 8/${TOTAL} 制作 DMG（拖拽安装）"
-    # 卷内只放两个可见项：Mote.app 与指向 /Applications 的符号链接。
-    # 不跑 Finder AppleScript 摆图标：那需要 GUI 会话与自动化授权，换台机器就不可复现；
-    # 图标位置交给 Finder 默认网格，脚本本身完全可重复执行。
+echo "==> $((DO_NOTARIZE ? 11 : 9))/${TOTAL} 拷贝最终 DMG"
+if [ "$DO_NOTARIZE" -eq 1 ]; then
+    # 直接用已 stapled 的 DMG
+    cp "$NOTARY_DMG" "$DMG_PATH"
+    hdiutil verify "$DMG_PATH"
+    rm -rf "$NOTARY_STAGE"
+elif [ "$WITH_DMG" -eq 1 ]; then
+    # 无公证时仍做 DMG（无 ticket，Gatekeeper 会拦截）
     DMG_STAGE="${TMPDIR:-/tmp}/mote-dmg"
     rm -rf "$DMG_STAGE"
     mkdir -p "$DMG_STAGE"
     ditto "$APP_PATH" "$DMG_STAGE/${APP_NAME}.app"
-    xattr -cr "$DMG_STAGE/${APP_NAME}.app"
-    xattr -d com.apple.FinderInfo "$DMG_STAGE/${APP_NAME}.app" 2>/dev/null || true
     ln -s /Applications "$DMG_STAGE/Applications"
     find "$DMG_STAGE" -name ".DS_Store" -delete 2>/dev/null || true
-
     rm -f "$DMG_PATH"
     hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_STAGE" \
         -ov -format UDZO -fs HFS+ "$DMG_PATH"
     hdiutil verify "$DMG_PATH"
     rm -rf "$DMG_STAGE"
+else
+    # 既无公证也没 --dmg 参数：什么都不做
+    true
+fi
+
+# 最终验证：解压 zip → spctl 确认
+if [ "$DO_NOTARIZE" -eq 1 ]; then
+    echo
+    echo "==> 12/${TOTAL} 最终 zip 解压 spctl 验证"
+    FINAL_CHECK="/tmp/mote-final-check"
+    rm -rf "$FINAL_CHECK"
+    mkdir -p "$FINAL_CHECK"
+    cd "$FINAL_CHECK" && ditto -x -k "$ZIP_PATH" .
+    FINAL_APP="$FINAL_CHECK/$PKG_NAME/${APP_NAME}.app"
+    FINAL_SPCTL="$(spctl --assess --type execute -vv "$FINAL_APP" 2>&1 || true)"
+    echo "    $FINAL_SPCTL"
+    echo "$FINAL_SPCTL" | grep -q "accepted" || {
+        echo "错误：zip 解压后的 app 未通过 spctl"
+        exit 1
+    }
+    echo "    zip 解压后 .app 通过 spctl ✓"
 fi
 
 echo
