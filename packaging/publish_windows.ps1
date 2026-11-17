@@ -244,9 +244,10 @@ if ($SkipUpload) {
 
     try {
         $live = Invoke-WebRequest -Uri $ManifestUrl -UseBasicParsing -TimeoutSec 30
+        # PowerShell 5.1 的 ConvertTo-Json 会在冒号后补两个空格，正则不能写死一个空格
         $shaPattern = [regex]::Escape($Sha256)
-        $versionPattern = [regex]::Escape('"version": "' + $Version + '"')
-        $setupPattern = [regex]::Escape('"setup_url": "' + $SetupUrl + '"')
+        $versionPattern = '"version":\s*"' + [regex]::Escape($Version) + '"'
+        $setupPattern = '"setup_url":\s*"' + [regex]::Escape($SetupUrl) + '"'
         if ($live.StatusCode -eq 200 -and $live.Content -match $shaPattern -and
             $live.Content -match $versionPattern -and
             (-not $SetupFull -or $live.Content -match $setupPattern)) {
