@@ -23,7 +23,7 @@
 - **链接**：渲染态下 `[文字](地址)` 的文字显示为蓝色带下划线的链接（地址本身仍是零宽标记，不占位、不进入框选复制）；普通点击仍进入编辑态，`Cmd+Click` 才跳转——外部链接交给系统默认浏览器，相对路径的 `.md` 在应用内打开（走未保存确认），文件不存在时弹提示不崩。编辑态显示原始 `[文字](地址)`，复制出去是标准 Markdown。
 - **导出 HTML**：`Option+Cmd+E`（「文件 → 导出 HTML…」）导出单文件自包含 HTML——样式内联、图片转 base64 内嵌、代码高亮与任务复选框状态保留，导出过程不改动原文档与 `dataset.raw`。
 - **导出 PDF**：`Cmd+P`（「文件 → 导出 PDF…」）导出 A4 多页、无页眉页脚；源码模式下禁用。macOS 与 Windows 均已实现，两端分页切点由各自 WebView 引擎决定，未做逐页像素比对。
-- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。macOS 读 `latest.json`，用户确认后交给 Sparkle 下载 DMG、验证 EdDSA 签名并替换重启；Windows 读 `windows.json`，确认后应用内下载更新包并用 SHA256 校验——安装版取 `setup_url`（静默安装后自动重启），绿色版取 `url`（校验通过后打开所在文件夹，解压覆盖）。
+- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。macOS 读 `latest.json`，用户确认后交给 Sparkle 下载 DMG、验证 EdDSA 签名并替换重启；若处于 Gatekeeper 转译（AppTranslocation）只读路径，先提示把 Mote 移到「应用程序」再更新。Windows 读 `windows.json`，确认后应用内下载更新包并用 SHA256 校验——安装版取 `setup_url`（静默安装后自动重启），绿色版取 `url`（校验通过后打开所在文件夹，解压覆盖）。
 - **页面内状态栏**：原生外壳把状态栏画在前端页面底部（`body.platform-mac` / `body.platform-win`），显示打开/保存/导出提示与字数统计；Qt 构建不启用，避免出现两条状态栏。
 - **目录手型光标**：鼠标移到目录栏（条目文字行、行间空隙、栏内空白）都是系统手型指针，避免移动时手型闪烁；折叠按钮与滚动条保留自身光标语义。
 
@@ -161,7 +161,7 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 - **链接跳转**：`Cmd+Click` 外部链接（http/https/mailto）与相对路径的 `.md`；**锚点链接**（`#标题`）按 GitHub 风格的 slug 在文档内跳转（中文保留、去标点、空格转 `-`，重名标题依次加 `-1`、`-2`），未命中时状态栏提示「未找到对应标题」；**图片**按 `img` 渲染，没有 `<a>` 包裹，`Cmd+Click` 不触发任何跳转（相对路径图片仍按文档目录正常显示与导出内嵌）。
 - **导出 HTML 是「网页快照」**：单文件、无外部依赖、无脚本；导出后不提供任何交互（链接仍可点，但任务复选框是静态图形）。
 - **导出能力两端已对齐**：macOS 与 Windows 的 PDF、HTML 导出均已实现并验收；分页切点由各自 WebView 引擎决定。
-- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；干净机首次升级、断网/下载中断尚无自动化覆盖；Windows 安装版已支持静默安装并自动重启，绿色版仍需手动解压覆盖。
+- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证；Windows 安装版已支持静默安装并自动重启，绿色版仍需手动解压覆盖。
 - **OSS 在中国香港**：国内下载偏慢；备案完成后把回源迁到国内桶，`dl.xiaotu.online` 域名不变，已安装客户端无需改动。
 - **任务复选框的复制**：复制处理器剔除隐藏标记；脚本用 `DataTransfer` 走产品同一条 `copy` 处理逻辑验证，真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 - 目录在源码模式下隐藏；正在编辑的块在重排前标题高亮可能滞后一帧。
@@ -190,7 +190,9 @@ resources/
   resources.qrc          Qt 构建的资源清单
 src/                     Qt 外壳（保留的对照/回退路径）
 Mote.pro                 qmake 工程；VERSION 是版本号唯一来源
-packaging/               打包与发布脚本（原生 / Qt / Windows / OSS 清单）与交付文档
+packaging/               打包与发布脚本（原生 / Qt / Windows / OSS 清单 / 下载页）与交付文档
+site/                    下载页 index.html（OSS 桶根目录的唯一来源）
+icon-design/             应用图标设计稿与导出脚本（fonts/ 与 __pycache__/ 不入库）
 docs/                    架构、设计与验收文档
 screenshots/             文档引用的截图
 backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建）
@@ -199,6 +201,7 @@ backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建
 ## 文档
 
 - [docs/技术方案.md](docs/技术方案.md)：阶段 B 验收后的实际架构、在线更新方案、方案 A/B 取舍与实施状态
+- [docs/release-notes-0.3.9.md](docs/release-notes-0.3.9.md) / [docs/release-notes-0.3.10.md](docs/release-notes-0.3.10.md)：近期版本发行说明（Windows 应用内更新、新图标）
 - [docs/thin-shell-stage-a.md](docs/thin-shell-stage-a.md) / [docs/thin-shell-stage-b.md](docs/thin-shell-stage-b.md)：macOS / Windows 薄外壳设计与里程碑
 - [docs/thin-shell-stage-a-acceptance.md](docs/thin-shell-stage-a-acceptance.md) / [docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)：macOS / Windows 原生外壳验收记录
 - [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)：Windows 实机验证交接单
