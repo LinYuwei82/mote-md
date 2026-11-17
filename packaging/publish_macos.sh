@@ -46,6 +46,7 @@ PRODUCT_DIR="${PRODUCT_DIR:-mote}"
 MIN_OS="${MIN_OS:-14.0}"
 SKIP_UPLOAD="${SKIP_UPLOAD:-false}"
 OSS_ENV_FILE="${OSS_ENV_FILE:-$HOME/.config/xiaotu-updates/.env}"
+NOTES_URL="${NOTES_URL:-}"
 
 # ---- 定位 sign_update ----
 find_sign_update() {
@@ -143,7 +144,21 @@ echo "  已生成：$APPCAST_LOCAL"
 echo ""
 echo "===== ④ 生成 latest.json"
 MANIFEST_LOCAL="$REPO_ROOT/dist/latest.json"
-cat > "$MANIFEST_LOCAL" <<EOF
+# NOTES_URL 可选：非空才写 notes_url 字段，客户端两端都按是否为空决定要不要显示链接
+if [ -n "$NOTES_URL" ]; then
+  cat > "$MANIFEST_LOCAL" <<EOF
+{
+  "version": "$VERSION",
+  "url": "$DMG_URL",
+  "size": $DMG_SIZE,
+  "sha256": "$DMG_SHA256",
+  "min_os": "$MIN_OS",
+  "published_at": "$PUB_ISO",
+  "notes_url": "$NOTES_URL"
+}
+EOF
+else
+  cat > "$MANIFEST_LOCAL" <<EOF
 {
   "version": "$VERSION",
   "url": "$DMG_URL",
@@ -153,7 +168,9 @@ cat > "$MANIFEST_LOCAL" <<EOF
   "published_at": "$PUB_ISO"
 }
 EOF
+fi
 echo "  已生成：$MANIFEST_LOCAL"
+[ -n "$NOTES_URL" ] && echo "  notes_url: $NOTES_URL" || echo "  notes_url: (未设置)"
 
 # ---- ⑤ 上传 OSS ----
 oss_upload() {
