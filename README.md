@@ -114,7 +114,6 @@ NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
 ```powershell
 powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1   # 校验 → SHA256 → windows.json → 上传 zip/安装包/清单 → 线上校验
-powershell -ExecutionPolicy Bypass -File packaging\publish_site.ps1      # 下载页：链接门禁 → 上传 index.html → 线上内容比对
 ```
 
 在 macOS 上发布 Windows 包时用等价的 bash 脚本（读同一份 `~/.config/xiaotu-updates/.env`）：
@@ -126,7 +125,7 @@ NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
   bash packaging/publish_windows.sh              # windows.json → 上传 zip/安装包/清单 → 线上校验
 ```
 
-- 下载页的唯一来源是仓库里的 `site/index.html`，`publish_site.ps1` 负责上传到 OSS 桶根目录；页面里的下载链接会先逐个 `HEAD` 校验，避免发布出死链。
+- 官网与下载页统一由 `web/` 维护：ECS 用 `deploy_site.sh` 发布，备案前的 OSS 镜像用 `publish_site_oss.sh` 发布。旧的单页 `site/index.html` 与 `publish_site.ps1` 已退役，`dl.xiaotu.online` 根路径只做跳转，不再承载页面。
 - 版本号只改 `Mote.pro` 的 `VERSION`，各发布脚本都从那里读。
 - `NOTES_URL` 是可选环境变量，macOS 与 Windows 的发布脚本都支持：非空时写进清单的 `notes_url`，客户端弹窗显示「查看完整更新说明…」；不设置则不写该字段，老清单与老客户端都不受影响。
 - Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
@@ -137,10 +136,12 @@ NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
 
 ### 官网（xiaotu.online）
 
-官网是 `web/` 下的多页静态站（首页、三款产品页、下载页、文档页、隐私页、404、sitemap 与 robots），托管在 ECS 的 nginx 上，**不走 OSS**：
+官网是 `web/` 下的多页静态站（首页、三款产品页、下载页、文档页、隐私页、404、sitemap 与 robots）。正式站托管在 ECS 的 nginx 上；备案未通过期间用独立的 OSS 桶 `xiaotu-site` 做镜像，走 `pre.xiaotu.online`：
 
 ```bash
-bash packaging/deploy_site.sh                    # rsync web/ → /var/www/xiaotu
+bash packaging/deploy_site.sh                    # rsync web/ → ECS:/var/www/xiaotu
+bash packaging/publish_site_oss.sh               # 同步 web/ → OSS 桶 xiaotu-site（pre 镜像）
+bash packaging/renew_site_cert.sh                # 续期 pre 域名证书并更新到 OSS
 SKIP_LINK_CHECK=1 bash packaging/deploy_site.sh  # 跳过死链门禁（不推荐）
 DEPLOY_HOST=user@host bash packaging/deploy_site.sh
 ```
@@ -149,6 +150,8 @@ DEPLOY_HOST=user@host bash packaging/deploy_site.sh
 - 同步用 `rsync -az --delete`，远端站点目录与 `web/` 完全一致；发布后校验入口页、下载页与静态资源都在。
 - 服务器侧只需一次配置：deploy 用户公钥、`/var/www/xiaotu` 属主、nginx 站点（[packaging/nginx-xiaotu.conf](packaging/nginx-xiaotu.conf)）。
 - 两个域名分工：`xiaotu.online` 放官网页面（`web/`），`dl.xiaotu.online` 放安装包、手册与更新清单（OSS），页面里的下载链接直接指向后者。
+- OSS 镜像依赖桶级 `SupportSubDir=true`，否则 `/xiaotu/`、`/download/` 会回落到首页；`publish_site_oss.sh` 会自动写入该配置。
+- `pre` 的证书由 `renew_site_cert.sh` 走 HTTP-01 续期（挑战文件写入 OSS 桶），本机由 `~/Library/LaunchAgents/online.xiaotu.site-cert.plist` 每月 1 日 04:17 触发。
 
 ## 快捷键
 
