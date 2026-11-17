@@ -187,7 +187,8 @@ static void testUpdate()
             "size":1655459,"sha256":"abc","min_os":"14.0",
             "published_at":"2026-11-16T08:00:00Z",
             "setup_url":"https://dl.xiaotu.online/mote/Mote-Setup-0.3.6.exe",
-            "setup_size":2561252,"setup_sha256":"def"})",
+            "setup_size":2561252,"setup_sha256":"def",
+            "notes_url":"https://dl.xiaotu.online/mote/release-notes-0.3.6.html"})",
         manifest, &error));
     CHECK_EQ(manifest.version, std::string("0.3.6"));
     CHECK_EQ(manifest.size, 1655459LL);
@@ -197,6 +198,8 @@ static void testUpdate()
     CHECK_EQ(manifest.setup_url, std::string("https://dl.xiaotu.online/mote/Mote-Setup-0.3.6.exe"));
     CHECK_EQ(manifest.setup_size, 2561252LL);
     CHECK_EQ(manifest.setup_sha256, std::string("def"));
+    CHECK_EQ(manifest.notes_url,
+             std::string("https://dl.xiaotu.online/mote/release-notes-0.3.6.html"));
 
     // 可选字段缺席时保持空/0，不报错
     CHECK(mote::parseUpdateManifest(R"({"version":"1.0.0","url":"https://x/y.dmg"})", manifest,
@@ -205,6 +208,7 @@ static void testUpdate()
     CHECK(manifest.sha256.empty());
     CHECK(manifest.setup_url.empty());
     CHECK_EQ(manifest.setup_size, 0LL);
+    CHECK(manifest.notes_url.empty());
 
     // 必填字段与类型校验
     CHECK(!mote::parseUpdateManifest(R"({"url":"https://x/y.dmg"})", manifest, &error));
