@@ -315,6 +315,30 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
     [alert addButtonWithTitle:@"下载并安装"];
     [alert addButtonWithTitle:@"稍后"];
 
+    // notes_url 非空时加一行可点击的「查看完整更新说明…」链接
+    if (!manifest.notes_url.empty()) {
+        NSURL *notesUrl = [NSURL URLWithString:MoteString(manifest.notes_url)];
+        if (notesUrl) {
+            NSString *linkText = @"查看完整更新说明…";
+            NSMutableAttributedString *attr =
+                [[NSMutableAttributedString alloc] initWithString:linkText];
+            [attr addAttribute:NSLinkAttributeName value:notesUrl
+                        range:NSMakeRange(0, linkText.length)];
+            [attr addAttribute:NSFontAttributeName value:[NSFont systemFontOfSize:[NSFont smallSystemFontSize]]
+                        range:NSMakeRange(0, linkText.length)];
+
+            NSTextField *link = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 16)];
+            link.isEditable = NO;
+            link.isSelectable = YES;
+            link.allowsEditingTextAttributes = YES;
+            link.selectable = YES;
+            link.drawsBackground = NO;
+            link.bordered = NO;
+            link.attributedStringValue = attr;
+            alert.accessoryView = link;
+        }
+    }
+
     [NSApp activateIgnoringOtherApps:YES];
     const NSModalResponse choice = [alert runModal];
     if (choice != NSAlertFirstButtonReturn) {
