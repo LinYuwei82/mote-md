@@ -11,6 +11,7 @@
 
 #include "core/editor_controller.h"
 #include "core/js_bridge.h"
+#include "core/paths.h"
 
 #include <shlobj.h>
 #include <shellapi.h>
@@ -184,6 +185,37 @@ std::string with_extension(std::string path, const char *extension)
     if (dot == std::string::npos || (slash != std::string::npos && dot < slash))
         path += std::string(".") + extension;
     return path;
+}
+
+int hex_value(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+// 解 %XX 并把 URL 路径里的 / 换成 Windows 的 \，结果可直接交给文件 API
+std::string url_to_local_path(const std::string &text)
+{
+    std::string out;
+    out.reserve(text.size());
+    for (size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '%' && i + 2 < text.size()) {
+            const int hi = hex_value(text[i + 1]);
+            const int lo = hex_value(text[i + 2]);
+            if (hi >= 0 && lo >= 0) {
+                out.push_back(static_cast<char>(hi * 16 + lo));
+                i += 2;
+                continue;
+            }
+        }
+        out.push_back(text[i] == '/' ? '\\' : text[i]);
+    }
+    return out;
 }
 
 // 剪贴板里的 CF_DIB 是裸 BITMAPINFOHEADER + 像素；补 14 字节文件头后用
@@ -1576,21 +1608,83 @@ std::string MoteMainWindow::clipboard_text()
     return result;
 }
 
-void MoteMainWindow::open_external(const std::string &url)
+void MoteMainWindow::open_external(const std::string &raw_url)
 {
-    // 与 macOS 端一致：只放行常规外链。文档里的链接是任意文本，直接交给
-    // ShellExecuteW 会让 javascript:/file:/ms-* 等 scheme 执行本地内容。
+    // 链接文本直接来自文档，可以是任意内容。规则与 macOS 端一致：
+    //   http/https/mailto            → 交给系统默认程序
+    //   file: / 无 scheme 的相对路径  → 本地文件；.md 在应用内打开，其余交系统
+    //   其它 scheme（javascript:/ms-*/vbscript: 等）→ 一律拒绝
+    std::string url = raw_url;
+    // 去掉首尾空白与控制字符，否则 " javascript:..." 这类可以绕过 scheme 判断
+    while (!url.empty() && static_cast<unsigned char>(url.front()) <= 0x20)
+        url.erase(url.begin());
+    while (!url.empty() && static_cast<unsigned char>(url.back()) <= 0x20)
+        url.pop_back();
+    if (url.empty())
+        return;
+    // 文档内锚点由页面自己滚动，不走外壳
+    if (url.front() == '#')
+        return;
+
     std::string scheme;
     const size_t colon = url.find(':');
-    if (colon != std::string::npos) {
+    // 冒号前出现 / ? # 说明不是 scheme（如 "./a.md"），按相对路径处理
+    if (colon != std::string::npos && url.find_first_of("/?#") >= colon) {
         scheme = url.substr(0, colon);
-        for (char &c : scheme)
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        for (char &c : scheme) {
+            if (c >= 'A' && c <= 'Z') {
+                c = static_cast<char>(c - 'A' + 'a');
+            } else if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+                         || c == '+' || c == '-' || c == '.')) {
+                // 非法 scheme 字符：不当作外链，落到本地路径分支由存在性检查兜底
+                scheme.clear();
+                break;
+            }
+        }
     }
-    if (scheme != "http" && scheme != "https" && scheme != "mailto") {
-        status_message("已忽略不支持的链接：" + url);
+
+    if (scheme == "http" || scheme == "https" || scheme == "mailto") {
+        ShellExecuteW(hwnd_, L"open", utf8_to_wide(url).c_str(), nullptr, nullptr,
+                      SW_SHOWNORMAL);
         return;
     }
-    const std::wstring wide = utf8_to_wide(url);
-    ShellExecuteW(hwnd_, L"open", wide.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+
+    std::string local;
+    if (scheme == "file") {
+        std::string rest = url.substr(5);
+        if (rest.rfind("///", 0) == 0)
+            rest.erase(0, 3);            // file:///C:/x → C:/x
+        else if (rest.rfind("//", 0) == 0)
+            rest = "\\\\" + rest.substr(2); // UNC：//server/share → \\server\share
+        local = url_to_local_path(rest);
+    } else if (scheme.empty()) {
+        // 去掉 ?query / #fragment 后再当文件路径用
+        std::string bare = url;
+        const size_t cut = bare.find_first_of("?#");
+        if (cut != std::string::npos)
+            bare.erase(cut);
+        if (bare.empty())
+            return;
+        bare = url_to_local_path(bare);
+        const bool rooted = bare.front() == '\\';
+        local = (rooted || last_dir_.empty()) ? bare : last_dir_ + "\\" + bare;
+    } else {
+        status_message("不支持打开的链接类型：" + raw_url);
+        return;
+    }
+
+    // 路径是 UTF-8，必须经 utf8_to_wide 构造 path，否则中文名按 ANSI 解释
+    const std::filesystem::path target(utf8_to_wide(local));
+    std::error_code error;
+    if (local.empty() || !std::filesystem::exists(target, error)) {
+        MoteAlert(hwnd_, L"链接目标不存在", "找不到链接指向的文件：\n" + raw_url);
+        return;
+    }
+    if (mote::isMarkdownPath(local)) {
+        if (prepare_for_replace(AfterSave::OpenPath, local))
+            open_path(local);
+        return;
+    }
+    ShellExecuteW(hwnd_, L"open", utf8_to_wide(local).c_str(), nullptr, nullptr,
+                  SW_SHOWNORMAL);
 }
