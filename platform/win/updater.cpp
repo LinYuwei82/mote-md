@@ -10,6 +10,7 @@
 #include <winhttp.h>
 
 #include <atomic>
+#include <chrono>
 #include <cctype>
 #include <cstdarg>
 #include <cstdio>
@@ -431,9 +432,13 @@ struct DownloadState {
 };
 
 // 流式下载到本地文件；只在后台线程调用
+// retryable（输出）：失败时置 true 表示网络/服务器临时问题，调用方可重试；
+//                   false 表示地址非法 / 磁盘权限 / 4xx 等不可恢复错误。
 bool download_file(const std::wstring &url, const std::filesystem::path &dest,
-                   DownloadState *state)
+                   DownloadState *state, bool *retryable)
 {
+    if (retryable) *retryable = false;
+
     URL_COMPONENTS parts = {};
     parts.dwStructSize = sizeof(parts);
     parts.dwHostNameLength = static_cast<DWORD>(-1);
@@ -454,6 +459,7 @@ bool download_file(const std::wstring &url, const std::filesystem::path &dest,
                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0));
     if (!session.get()) {
         state->error = L"无法初始化网络会话";
+        if (retryable) *retryable = true;
         return false;
     }
     // 下载可能较慢：连接/发送用短超时，接收放宽到 60 秒
@@ -463,6 +469,7 @@ bool download_file(const std::wstring &url, const std::filesystem::path &dest,
     const InternetHandle connection(WinHttpConnect(session.get(), host.c_str(), parts.nPort, 0));
     if (!connection.get()) {
         state->error = L"无法连接更新服务器";
+        if (retryable) *retryable = true;
         return false;
     }
 
@@ -472,12 +479,14 @@ bool download_file(const std::wstring &url, const std::filesystem::path &dest,
                                                     WINHTTP_DEFAULT_ACCEPT_TYPES, flags));
     if (!request.get()) {
         state->error = L"无法创建下载请求";
+        if (retryable) *retryable = true;
         return false;
     }
     if (!WinHttpSendRequest(request.get(), WINHTTP_NO_ADDITIONAL_HEADERS, 0,
                             WINHTTP_NO_REQUEST_DATA, 0, 0, 0)
         || !WinHttpReceiveResponse(request.get(), nullptr)) {
         state->error = L"下载请求失败";
+        if (retryable) *retryable = true;
         return false;
     }
 
@@ -488,10 +497,13 @@ bool download_file(const std::wstring &url, const std::filesystem::path &dest,
                              WINHTTP_HEADER_NAME_BY_INDEX, &status, &status_size,
                              WINHTTP_NO_HEADER_INDEX)) {
         state->error = L"无法读取服务器响应";
+        if (retryable) *retryable = true;
         return false;
     }
     if (status != 200) {
         state->error = L"服务器返回 HTTP " + std::to_wstring(status);
+        // 5xx 服务器临时错误可重试；4xx（404/403/401 等）直接放弃
+        if (retryable) *retryable = status >= 500 && status < 600;
         return false;
     }
 
@@ -524,6 +536,7 @@ bool download_file(const std::wstring &url, const std::filesystem::path &dest,
                              &read)) {
             state->error = L"下载中断";
             ok = false;
+            if (retryable) *retryable = true;
             break;
         }
         if (read == 0)
@@ -632,7 +645,39 @@ void begin_download(HWND hwnd, const UpdateTarget &target)
                    wide_to_utf8(dest.wstring()).c_str());
 
     std::thread worker([url = utf8_to_wide(target.url), dest, raw] {
-        bool ok = download_file(url, dest, raw);
+        constexpr int kMaxAttempts = 3;
+        constexpr int kRetryIntervalMs = 2000;
+
+        bool ok = false;
+        for (int attempt = 1; attempt <= kMaxAttempts; ++attempt) {
+            bool retryable = false;
+            if (log_enabled())
+                update_log("download attempt %d/%d", attempt, kMaxAttempts);
+            ok = download_file(url, dest, raw, &retryable);
+            if (ok)
+                break;
+            // 用户点了取消：不再重试
+            if (raw->cancel.load())
+                break;
+            // 不可重试（地址非法 / 磁盘权限 / 4xx）：直接放弃
+            if (!retryable) {
+                if (log_enabled())
+                    update_log("download failed (non-retryable): %s",
+                               wide_to_utf8(raw->error).c_str());
+                break;
+            }
+            if (attempt < kMaxAttempts) {
+                if (log_enabled())
+                    update_log("download failed (retryable), sleep %d ms before retry",
+                               kRetryIntervalMs);
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(kRetryIntervalMs));
+                // 重置进度条，让 UI 重新从 0 开始
+                raw->written.store(0);
+                raw->expected_size.store(0);
+            }
+        }
+
         if (ok) {
             std::string actual;
             if (!sha256_file(dest, &actual)) {
