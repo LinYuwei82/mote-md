@@ -127,7 +127,6 @@ NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
 ```
 
 - 下载页的唯一来源是仓库里的 `site/index.html`，`publish_site.ps1` 负责上传到 OSS 桶根目录；页面里的下载链接会先逐个 `HEAD` 校验，避免发布出死链。
-
 - 版本号只改 `Mote.pro` 的 `VERSION`，各发布脚本都从那里读。
 - `NOTES_URL` 是可选环境变量，macOS 与 Windows 的发布脚本都支持：非空时写进清单的 `notes_url`，客户端弹窗显示「查看完整更新说明…」；不设置则不写该字段，老清单与老客户端都不受影响。
 - Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
@@ -135,6 +134,21 @@ NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
 - Windows 按安装形态取包：exe 同级有 `unins000.exe` 判为安装版，优先用 `setup_url`；否则用 `url` 的 zip；清单没给 `setup_url` 时回落到 zip。下载在应用内完成并校验 SHA256：安装版静默安装后自动重启，绿色版下载校验后提示、自动退出并打开所在文件夹，由用户解压覆盖。两条路径都会先检查未保存文档。
 - `publish_windows.ps1` 会一并发布安装包（`dist\Mote-Setup-<version>.exe` 存在时），并逐项校验线上 zip、安装包与清单三者一致。
 - 两份清单分开：macOS 只读 `latest.json`（指向 `.dmg`），Windows 只读 `windows.json`（指向 zip），避免把 `.dmg` 当成 Windows 包。
+
+### 官网（xiaotu.online）
+
+官网是 `web/` 下的多页静态站（首页、三款产品页、下载页、文档页、隐私页、404、sitemap 与 robots），托管在 ECS 的 nginx 上，**不走 OSS**：
+
+```bash
+bash packaging/deploy_site.sh                    # rsync web/ → /var/www/xiaotu
+SKIP_LINK_CHECK=1 bash packaging/deploy_site.sh  # 跳过死链门禁（不推荐）
+DEPLOY_HOST=user@host bash packaging/deploy_site.sh
+```
+
+- 发布前做本地完整性检查（入口页、下载页、样式、脚本、图标）与死链门禁：页面里指向 `dl.xiaotu.online` 的下载链接必须全部 200，否则直接失败。
+- 同步用 `rsync -az --delete`，远端站点目录与 `web/` 完全一致；发布后校验入口页、下载页与静态资源都在。
+- 服务器侧只需一次配置：deploy 用户公钥、`/var/www/xiaotu` 属主、nginx 站点（[packaging/nginx-xiaotu.conf](packaging/nginx-xiaotu.conf)）。
+- 两个域名分工：`xiaotu.online` 放官网页面（`web/`），`dl.xiaotu.online` 放安装包、手册与更新清单（OSS），页面里的下载链接直接指向后者。
 
 ## 快捷键
 
@@ -202,8 +216,9 @@ resources/
   resources.qrc          Qt 构建的资源清单
 src/                     Qt 外壳（保留的对照/回退路径）
 Mote.pro                 qmake 工程；VERSION 是版本号唯一来源
-packaging/               打包与发布脚本（原生 / Qt / Windows / OSS 清单 / 下载页）与交付文档
-site/                    下载页 index.html（OSS 桶根目录的唯一来源）
+packaging/               打包与发布脚本（原生 / Qt / Windows / OSS 清单 / 官网同步）与交付文档
+web/                     官网静态站（xiaotu.online 的唯一来源，deploy_site.sh 同步到 ECS）
+site/                    下载页 index.html（dl.xiaotu.online 桶根目录的来源，旧单页）
 icon-design/             应用图标设计稿与导出脚本（fonts/ 与 __pycache__/ 不入库）
 docs/                    架构、设计与验收文档
 screenshots/             文档引用的截图
