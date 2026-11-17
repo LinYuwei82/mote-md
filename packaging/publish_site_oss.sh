@@ -180,6 +180,6 @@ done
 [ "$fail" = 0 ] || { echo "线上校验失败" >&2; exit 1; }
 
 echo
-echo "发布完成：oss://$SITE_BUCKET（默认域名仅用于 curl 校验，浏览器会强制下载 HTML）"
+echo "发布完成：oss://${SITE_BUCKET}（默认域名仅用于 curl 校验，浏览器会强制下载 HTML）"
 echo "绑定自定义域名后可访问：https://pre.xiaotu.online/"
 echo "备案通过后主站切到 https://xiaotu.online/（ECS），此桶可作为预发布镜像保留或下线。"

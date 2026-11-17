@@ -85,9 +85,13 @@
   /* ---------- 版本校准 ----------
      页面里的版本号、大小、SHA256、下载地址以 OSS 上的更新清单为准；
      清单取不到（离线、CORS、未发布）时保留页面内置的兜底值，不显示错误。
-     小兔进销存只有 macOS 清单，DevCard 目前没有清单，这两处为静态值。 */
+     小兔进销存的 Windows 绿色包没有进清单，这一行仍为静态值；DevCard 的
+     清单是 latest + assets[]，按扩展名从 assets 里挑对应产物。 */
 
   var MOTEWIN = 'https://dl.xiaotu.online/mote/updates/stable/windows.json';
+  var XIAOTUWIN = 'https://dl.xiaotu.online/xiaotu/updates/stable/windows.json';
+  var DEVCARD_MAC = 'https://dl.xiaotu.online/devcard/updates/stable/latest.json';
+  var DEVCARD_WIN = 'https://dl.xiaotu.online/devcard/updates/stable/windows.json';
   var SOURCES = {
     'mote-mac': {
       url: 'https://dl.xiaotu.online/mote/updates/stable/latest.json',
@@ -104,7 +108,14 @@
     'xiaotu-mac': {
       url: 'https://dl.xiaotu.online/xiaotu/updates/stable/latest.json',
       version: 'version', size: 'size', sha: 'sha256', href: 'url'
-    }
+    },
+    'xiaotu-win-setup': {
+      url: XIAOTUWIN,
+      version: 'version', size: 'size', sha: 'sha256', href: 'url'
+    },
+    'devcard-mac': { url: DEVCARD_MAC, version: 'latest', asset: '.dmg' },
+    'devcard-win-setup': { url: DEVCARD_WIN, version: 'latest', asset: '.exe' },
+    'devcard-win-zip': { url: DEVCARD_WIN, version: 'latest', asset: '.zip' }
   };
 
   var cache = {};
@@ -126,6 +137,21 @@
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
+  /* DevCard 清单把产物放在 assets[] 里，按文件名后缀挑；digest 带 sha256: 前缀。 */
+  function pickAsset(data, suffix) {
+    var list = data && Array.isArray(data.assets) ? data.assets : [];
+    for (var i = 0; i < list.length; i++) {
+      var name = String((list[i] && list[i].name) || '').toLowerCase();
+      if (name.slice(-suffix.length) === suffix) return list[i];
+    }
+    return null;
+  }
+
+  function shaHex(digest) {
+    var match = /^sha256:([0-9a-f]{64})$/i.exec(String(digest || ''));
+    return match ? match[1].toLowerCase() : '';
+  }
+
   function setField(row, name, value) {
     if (!value) return;
     var el = row.querySelector('[data-field="' + name + '"]');
@@ -144,19 +170,24 @@
     var source = SOURCES[row.getAttribute('data-manifest')];
     if (!source) return;
     loadManifest(source.url).then(function (data) {
+      var asset = null;
+      if (source.asset) {
+        asset = pickAsset(data, source.asset);
+        if (!asset) throw new Error('no ' + source.asset + ' asset');
+      }
       row.setAttribute('data-synced', 'ok');
-      var version = data[source.version];
+      var version = (asset && asset.version) || data[source.version];
       if (version) {
         setField(row, 'version', 'v' + version);
         setField(row, 'version-plain', version);
       }
-      var size = data[source.size];
+      var size = asset ? asset.size : data[source.size];
       if (size) {
         setField(row, 'size', Number(size).toLocaleString('en-US'));
         setField(row, 'size-human', '约 ' + humanSize(size));
       }
-      setField(row, 'sha', data[source.sha]);
-      setField(row, 'href', data[source.href]);
+      setField(row, 'sha', asset ? shaHex(asset.digest) : data[source.sha]);
+      setField(row, 'href', asset ? asset.download_url : data[source.href]);
     }).catch(function () {
       row.setAttribute('data-synced', 'fallback');
     });
