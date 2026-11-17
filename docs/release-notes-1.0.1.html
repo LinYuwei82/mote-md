@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mote v1.0.1 · 发布说明</title>
+<style>
+  :root {
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --text: #141821;
+    --muted: #5f6880;
+    --accent: #4f46e5;
+    --border: #e5e7ef;
+    --warn-text: #b45309;
+    --warn-bg: #fff8ed;
+    --warn-border: #fbe0b4;
+    --link: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d12; --card: #12151d; --text: #e8eaf1; --muted: #9aa3b8;
+      --accent: #6366f1; --border: #232838; --warn-text: #fbbf24;
+      --warn-bg: #2a2009; --warn-border: #4a3410; --link: #60a5fa;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--sans); background: var(--bg); color: var(--text);
+    line-height: 1.7; margin: 0; padding: 0;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 28px 80px; }
+  header { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+  .label {
+    display: inline-block; padding: 4px 12px; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: rgba(79,70,229,.10); border-radius: 999px;
+    letter-spacing: .04em;
+  }
+  h1 { font-size: 34px; margin: 18px 0 8px; letter-spacing: -.01em; }
+  .tagline { color: var(--muted); font-size: 15px; }
+  h2 {
+    font-size: 20px; margin: 40px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); letter-spacing: -.005em;
+  }
+  h3 { font-size: 16px; margin: 22px 0 8px; }
+  p, li { font-size: 15px; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono); background: rgba(79,70,229,.08); padding: 2px 6px;
+    border-radius: 4px; font-size: 13px;
+  }
+  pre {
+    font-family: var(--mono); background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 13px;
+    line-height: 1.65;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .warn {
+    background: var(--warn-bg); border: 1px solid var(--warn-border);
+    color: var(--warn-text); border-radius: 8px; padding: 14px 18px; margin: 18px 0;
+    font-size: 14px;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0 24px; font-size: 14px;
+  }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  .check { font-family: var(--mono); font-size: 13px; }
+  .download-btn {
+    display: inline-block; margin-top: 10px; margin-right: 10px;
+    background: var(--accent); color: #fff !important; padding: 10px 20px;
+    border-radius: 8px; font-weight: 500;
+  }
+  .download-btn:hover { opacity: .9; text-decoration: none; }
+  footer {
+    margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="label">RELEASE NOTES</span>
+  <h1>Mote v1.0.1</h1>
+  <p class="tagline">Windows 外壳缺陷修复 · 2026-11-17</p>
+</header>
+
+<h2>本版重点</h2>
+<p>这一版没有新增功能，全部是 Windows 外壳的缺陷修复，集中在快捷键、链接打开和文件保存三块。之前反馈的部分「奇怪问题」都能对应到下面的条目。</p>
+
+<h2>修复内容</h2>
+<table>
+  <tr><th>问题</th><th>表现</th><th>修复</th></tr>
+  <tr>
+    <td>浏览器快捷键开关从未生效</td>
+    <td><code>Ctrl+Shift+S</code>、<code>Ctrl+F</code> 等被 WebView2 内部吃掉，外壳菜单收不到</td>
+    <td>调整初始化顺序，快捷键开关在 WebView 创建之后再设置</td>
+  </tr>
+  <tr>
+    <td>文档内链接打开规则不完整</td>
+    <td>链接到另一个 <code>.md</code> 打不开；<code>file:</code> 与相对路径不支持</td>
+    <td>与 macOS 端对齐：<code>http/https/mailto</code> 交系统；<code>file:</code> 与相对路径解析成本地文件，<code>.md</code> 应用内打开；其余 scheme 拒绝</td>
+  </tr>
+  <tr>
+    <td>链接白名单可被绕过</td>
+    <td>带前导空格的 <code>javascript:</code> 仍会进入 ShellExecute</td>
+    <td>先剔除首尾空白与控制字符再解析 scheme，非法字符按本地路径处理并由存在性检查兜底</td>
+  </tr>
+  <tr>
+    <td>保存改动文件行尾</td>
+    <td>打开 CRLF 文档后保存，整篇变成 LF，Git 里表现为全文件 diff</td>
+    <td>记录原文件行尾风格，写回时按原样还原</td>
+  </tr>
+  <tr>
+    <td>状态栏消息重放</td>
+    <td>页面重载后再次弹出上一条旧提示</td>
+    <td>消息送达即清空缓存</td>
+  </tr>
+  <tr>
+    <td>文件对话框内存泄漏</td>
+    <td>每次打开/保存泄漏一块 COM 内存</td>
+    <td>释放 <code>GetDisplayName</code> 返回的字符串</td>
+  </tr>
+  <tr>
+    <td>更新下载界面信息不足</td>
+    <td>进度只显示已下载 MB，没有百分比</td>
+    <td>读取 <code>Content-Length</code>，进度条与百分比同步显示</td>
+  </tr>
+  <tr>
+    <td>更新弹窗缺少说明入口</td>
+    <td>看不到这一版改了什么</td>
+    <td>清单新增 <code>notes_url</code>，弹窗里出现「查看完整更新说明」链接</td>
+  </tr>
+</table>
+
+<h2>下载</h2>
+<p><strong>Windows 安装版</strong>（推荐）：按用户安装，无需管理员权限，更新时静默覆盖并自动重启。</p>
+<a class="download-btn" href="https://dl.xiaotu.online/mote/Mote-Setup-1.0.1.exe">下载 Mote-Setup-1.0.1.exe</a>
+<p style="margin-top:22px"><strong>Windows 绿色版</strong>：解压即用；应用内更新会在校验通过后退出并打开所在目录，由你解压覆盖。</p>
+<a class="download-btn" href="https://dl.xiaotu.online/mote/Mote-1.0.1-win64-portable.zip">下载 Mote-1.0.1-win64-portable.zip</a>
+
+<div class="warn">
+  安装包未做代码签名。首次运行时 Windows 可能提示「未知发布者」，点「更多信息 → 仍要运行」即可。应用内更新走 HTTPS + SHA256 校验，不经过浏览器，不会触发该提示。
+</div>
+
+<h2>升级方式</h2>
+<h3>安装版</h3>
+<p>打开 Mote → 菜单「检查更新...」→ 下载并安装，程序会自动退出、静默安装并重新启动。</p>
+<h3>绿色版</h3>
+<p>菜单「检查更新...」→ 下载完成后 Mote 会退出并打开所在文件夹，把 zip 里的文件解压覆盖到原目录即可。</p>
+
+<h2>系统要求</h2>
+<ul>
+  <li>Windows 10 或更高版本（x64）</li>
+  <li>WebView2 运行时（Windows 11 自带；Windows 10 如缺失，安装包会引导安装）</li>
+</ul>
+
+<h2>完整性校验</h2>
+<p>各安装包的 <code>size</code> 与 <code>sha256</code> 以更新清单为准：
+<a href="https://dl.xiaotu.online/mote/updates/stable/windows.json">updates/stable/windows.json</a>。
+下载后可用 <code>Get-FileHash -Algorithm SHA256</code> 比对。</p>
+
+<footer>
+  Mote · AGPL-3.0 · <a href="https://gitee.com/lin-yuwei168/mote-md">Gitee</a> ·
+  <a href="https://github.com/LinYuwei82/mote-md">GitHub</a>
+</footer>
+
+</div>
+</body>
+</html>

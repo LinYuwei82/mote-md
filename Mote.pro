@@ -2,7 +2,7 @@
 
 TEMPLATE = app
 TARGET = Mote
-VERSION = 1.0.0
+VERSION = 1.0.1
 
 CONFIG += c++20 warn_on
 CONFIG -= debug_and_release
