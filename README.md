@@ -173,7 +173,7 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 - **链接跳转**：`Cmd+Click` 外部链接（http/https/mailto）与相对路径的 `.md`；**锚点链接**（`#标题`）按 GitHub 风格的 slug 在文档内跳转（中文保留、去标点、空格转 `-`，重名标题依次加 `-1`、`-2`），未命中时状态栏提示「未找到对应标题」；**图片**按 `img` 渲染，没有 `<a>` 包裹，`Cmd+Click` 不触发任何跳转（相对路径图片仍按文档目录正常显示与导出内嵌）。
 - **导出 HTML 是「网页快照」**：单文件、无外部依赖、无脚本；导出后不提供任何交互（链接仍可点，但任务复选框是静态图形）。
 - **导出能力两端已对齐**：macOS 与 Windows 的 PDF、HTML 导出均已实现并验收；分页切点由各自 WebView 引擎决定。
-- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；1.0.0 已在 macOS 与 Windows 两端发布，但 `0.3.10 → 1.0.0` 的真实 Sparkle 升级路径尚未冒烟验证；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证（Windows 现在会对可重试错误自动重试 3 次）；Windows 安装版静默安装并自动重启，绿色版下载校验后提示、自动退出并打开所在目录，由用户解压覆盖。
+- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；Windows 已发布 1.0.1（外壳修复包），macOS 仍为 1.0.0，`0.3.10 → 1.0.0` 的真实 Sparkle 升级路径尚未冒烟验证；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证（Windows 现在会对可重试错误自动重试 3 次）；Windows 安装版静默安装并自动重启，绿色版下载校验后提示、自动退出并打开所在目录，由用户解压覆盖。
 - **OSS 在中国香港**：国内下载偏慢；备案完成后把回源迁到国内桶，`dl.xiaotu.online` 域名不变，已安装客户端无需改动。
 - **任务复选框的复制**：复制处理器剔除隐藏标记；脚本用 `DataTransfer` 走产品同一条 `copy` 处理逻辑验证，真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 - 目录在源码模式下隐藏；正在编辑的块在重排前标题高亮可能滞后一帧。
@@ -213,7 +213,8 @@ backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建
 ## 文档
 
 - [docs/技术方案.md](docs/技术方案.md)：阶段 B 验收后的实际架构、在线更新方案、方案 A/B 取舍与实施状态
-- [docs/release-notes-1.0.0.html](docs/release-notes-1.0.0.html)：1.0.0 发布说明（在线更新正式版，也是清单 `notes_url` 指向的页面）
+- [docs/release-notes-1.0.1.html](docs/release-notes-1.0.1.html)：1.0.1 发布说明（Windows 外壳修复包，线上清单 `notes_url` 指向此页）
+- [docs/release-notes-1.0.0.html](docs/release-notes-1.0.0.html)：1.0.0 发布说明（在线更新正式版）
 - [docs/release-notes-0.3.9.md](docs/release-notes-0.3.9.md) / [docs/release-notes-0.3.10.md](docs/release-notes-0.3.10.md)：0.3.x 近期版本发行说明（Windows 应用内更新、新图标）
 - [docs/thin-shell-stage-a.md](docs/thin-shell-stage-a.md) / [docs/thin-shell-stage-b.md](docs/thin-shell-stage-b.md)：macOS / Windows 薄外壳设计与里程碑
 - [docs/thin-shell-stage-a-acceptance.md](docs/thin-shell-stage-a-acceptance.md) / [docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)：macOS / Windows 原生外壳验收记录
