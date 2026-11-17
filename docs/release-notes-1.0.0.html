@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mote v1.0.0 · 发布说明</title>
+<style>
+  :root {
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --text: #141821;
+    --muted: #5f6880;
+    --accent: #4f46e5;
+    --border: #e5e7ef;
+    --warn-text: #b45309;
+    --warn-bg: #fff8ed;
+    --warn-border: #fbe0b4;
+    --link: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d12; --card: #12151d; --text: #e8eaf1; --muted: #9aa3b8;
+      --accent: #6366f1; --border: #232838; --warn-text: #fbbf24;
+      --warn-bg: #2a2009; --warn-border: #4a3410; --link: #60a5fa;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--sans); background: var(--bg); color: var(--text);
+    line-height: 1.7; margin: 0; padding: 0;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 28px 80px; }
+  header { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+  .label {
+    display: inline-block; padding: 4px 12px; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: rgba(79,70,229,.10); border-radius: 999px;
+    letter-spacing: .04em;
+  }
+  h1 { font-size: 34px; margin: 18px 0 8px; letter-spacing: -.01em; }
+  .tagline { color: var(--muted); font-size: 15px; }
+  h2 {
+    font-size: 20px; margin: 40px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); letter-spacing: -.005em;
+  }
+  h3 { font-size: 16px; margin: 22px 0 8px; }
+  p, li { font-size: 15px; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono); background: rgba(79,70,229,.08); padding: 2px 6px;
+    border-radius: 4px; font-size: 13px;
+  }
+  pre {
+    font-family: var(--mono); background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 13px;
+    line-height: 1.65;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .warn {
+    background: var(--warn-bg); border: 1px solid var(--warn-border);
+    color: var(--warn-text); border-radius: 8px; padding: 14px 18px; margin: 18px 0;
+    font-size: 14px;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0 24px; font-size: 14px;
+  }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  .check { font-family: var(--mono); font-size: 13px; }
+  .download-btn {
+    display: inline-block; margin-top: 10px; margin-right: 10px;
+    background: var(--accent); color: #fff !important; padding: 10px 20px;
+    border-radius: 8px; font-weight: 500;
+  }
+  .download-btn:hover { opacity: .9; text-decoration: none; }
+  footer {
+    margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="label">RELEASE NOTES</span>
+  <h1>Mote v1.0.0</h1>
+  <p class="tagline">2026-11-17 · 首个稳定版，两端在线更新模块完成</p>
+</header>
+
+<p>
+Mote 是一个 C++20 写的 Markdown 编辑/查看工具。原生 Win32 / AppKit 外壳 + 系统 WebView2 / WKWebView，
+没有左右分栏，编辑时即时渲染，进出编辑块光标不位移。
+</p>
+
+<p>
+从 0.3.10 到 1.0.0，历经两个迭代（0.3.11、1.0.0），两端原生外壳稳定，在线更新模块完整落地。
+</p>
+
+<h2>本版亮点</h2>
+
+<ul>
+  <li><strong>两端在线更新完整落地</strong> — Windows 自研 WinHTTP + CNG SHA256 + Inno Setup 静默安装；macOS Sparkle + EdDSA 验签。手动检查、启动自动检查、后台每 24 小时检查齐全。</li>
+  <li><strong>Windows 更新弹窗 UI</strong> — 进度条 + 实时百分比（<code>67% — 450 KB / 670 KB</code>）、取消按钮、跳过此版本记忆、发布说明超链接、安装包与绿色版分别走不同安装路径。</li>
+  <li><strong>锚点链接修复</strong> — 文档内 <code>#标题</code> 跳转、重名 <code>-1 / -2</code> 后缀、导出 HTML 自动补 <code>id="安装步骤"</code> 等 GitHub 风格锚点。</li>
+  <li><strong>绿色版更新路径</strong> — 下载校验后应用自动退出并打开所在文件夹，用户手动解压覆盖；安装版则 <code>/RELAUNCH=1</code> 静默安装自动重启。</li>
+  <li><strong>0.3.11 修复</strong> — <code>versionSegments</code> 数字溢出保护、绿色版更新路径统一 dirty 检查、发布脚本校验正则兼容 PowerShell 5.1。</li>
+  <li><strong>下载页发布脚本自动化</strong> — <code>publish_windows.ps1</code> 自动读版本号、算 SHA256、生成 <code>windows.json</code>、上传 OSS、线上回读校验；<code>publish_site.ps1</code> 校验 12 个下载链接 200 后上传。</li>
+</ul>
+
+<h2>Windows 端功能完整清单</h2>
+
+<table>
+  <thead><tr><th>项</th><th>状态</th></tr></thead>
+  <tbody>
+    <tr><td>JSON 清单解析（含 <code>setup_*</code> 与 <code>notes_url</code>）</td><td class="check">✅ 17 条单测</td></tr>
+    <tr><td>版本比较（缺段补 0、忽略 v 前缀、18 位饱和）</td><td class="check">✅ 6 条单测</td></tr>
+    <tr><td>WinHTTP 后台下载 + Content-Length 百分比</td><td class="check">✅ 实现</td></tr>
+    <tr><td>CNG BCrypt SHA256 校验，失败删临时文件</td><td class="check">✅ 实现</td></tr>
+    <tr><td>启动 10s 延迟 + 每 24h 周期检查（注册表节流）</td><td class="check">✅ 实现</td></tr>
+    <tr><td>菜单「文件 → 检查更新…」（Alt+U）</td><td class="check">✅ 实现</td></tr>
+    <tr><td>安装版 / 绿色版自动识别（卸载器探针）</td><td class="check">✅ 实现</td></tr>
+    <tr><td>安装版 <code>ShellExecuteW</code> + Inno Setup <code>/VERYSILENT /RELAUNCH=1</code></td><td class="check">✅ 端到端实测</td></tr>
+    <tr><td>绿色版下载校验后退出 + <code>explorer /select</code> 打开目录</td><td class="check">✅ 端到端实测</td></tr>
+    <tr><td>dirty 检查（安装版 + 绿色版两条路径）</td><td class="check">✅ 实现</td></tr>
+    <tr><td>TaskDialog 进度条 + 百分比 + 取消按钮</td><td class="check">✅ 实现</td></tr>
+    <tr><td>跳过此版本（SkippedUpdateVersion 注册表）</td><td class="check">✅ 实现</td></tr>
+    <tr><td>发布说明链接（<code>notes_url</code>）</td><td class="check">✅ 实现</td></tr>
+  </tbody>
+</table>
+
+<h2>系统要求</h2>
+
+<ul>
+  <li><strong>Windows</strong>：Windows 10 / 11，x64。需要 WebView2 Evergreen Runtime（Windows 11 自带；Windows 10 若缺失，安装程序会提示）。运行库静态链接 <code>/MT</code>，目标机无需安装 VC++ 可再发行包。</li>
+  <li><strong>macOS</strong>：macOS 11（Big Sur）或更高。</li>
+</ul>
+
+<h2>下载</h2>
+
+<p>所有安装包由下载子域 <code>dl.xiaotu.online</code> 提供。</p>
+
+<p>
+  <a class="download-btn" href="https://dl.xiaotu.online/mote/Mote-Setup-1.0.0.exe">Windows 安装版</a>
+  <a class="download-btn" href="https://dl.xiaotu.online/mote/Mote-1.0.0-win64-portable.zip">Windows 绿色包</a>
+  <a class="download-btn" href="https://dl.xiaotu.online/mote/Mote-macOS-native-0.3.11.dmg">macOS DMG</a>
+</p>
+
+<h2>校验</h2>
+
+<pre><code>SHA256  af940728244b207a1b7065e82de2500d0d5eecf5078eeafbd6393a296fd45d8b
+大小    2,645,781 字节
+文件    Mote-Setup-1.0.0.exe
+
+SHA256  5d71ecee6dc70bc2c211f134d425b552952ea99ff1535d974cde5cabb6a8a154
+大小    670,738 字节
+文件    Mote-1.0.0-win64-portable.zip</code></pre>
+
+<div class="warn">
+  也可以在 PowerShell 里执行 <code>certutil -hashfile Mote-Setup-1.0.0.exe SHA256</code> 自行核对。
+</div>
+
+<h2>从旧版本升级</h2>
+
+<ul>
+  <li><strong>安装版</strong>：文件菜单 → 检查更新…，确认后自动下载、校验 SHA256、静默安装并重启。</li>
+  <li><strong>绿色版</strong>：下载校验后会自动退出 Mote 并打开所在文件夹，手动解压覆盖即可。</li>
+</ul>
+
+<h2>已知限制</h2>
+
+<ul>
+  <li>Windows 安装包未做代码签名，首次运行可能出现 SmartScreen 提示，选「更多信息 → 仍要运行」即可。</li>
+  <li>绿色版无法自我替换（Mote.exe 被占用），更新后需手动解压覆盖。</li>
+  <li>断网 / 下载中断没有自动化覆盖，异常路径靠手动验证。</li>
+  <li>真实干净环境（全新 Windows / Mac 账户）的首次安装没有自动化覆盖。</li>
+</ul>
+
+<h2>许可证</h2>
+
+<p>本版以 <strong>GNU Affero General Public License v3.0（AGPL-3.0）</strong> 发布，完整条文见仓库根目录的 <code>LICENSE</code>。</p>
+
+<footer>
+  <a href="https://dl.xiaotu.online/">下载主页</a> ·
+  <a href="https://gitee.com/lin-yuwei168/mote-md">Gitee</a> ·
+  <a href="https://github.com/LinYuwei82/mote-md">GitHub</a>
+</footer>
+
+</div>
+</body>
+</html>
