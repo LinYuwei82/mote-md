@@ -12,6 +12,11 @@
 #   powershell -ExecutionPolicy Bypass -File packaging\publish_site.ps1
 #   powershell -ExecutionPolicy Bypass -File packaging\publish_site.ps1 -SkipUpload
 #   powershell -ExecutionPolicy Bypass -File packaging\publish_site.ps1 -SkipLinkCheck
+#   powershell -ExecutionPolicy Bypass -File packaging\publish_site.ps1 -RefreshCdn
+#
+# 依赖：python + oss2（python -m pip install oss2）
+#       -RefreshCdn 额外需要 aliyun-python-sdk-cdn（python -m pip install aliyun-python-sdk-cdn）
+#       且当前 OSS AccessKey 必须被授予阿里云 CDN 的 RefreshObjectCaches 接口权限
 
 param(
     [string]$PagePath = "",
@@ -19,7 +24,8 @@ param(
     [string]$CdnDomain = "https://dl.xiaotu.online",
     [string]$EnvFile = "",
     [switch]$SkipUpload,
-    [switch]$SkipLinkCheck
+    [switch]$SkipLinkCheck,
+    [switch]$RefreshCdn
 )
 
 $ErrorActionPreference = "Stop"
@@ -128,6 +134,43 @@ print("uploaded %s -> %s" % (path, key))
     Remove-Item $uploadScript -ErrorAction SilentlyContinue
 }
 
+# ---------- [3.5/4] CDN 主动刷新（可选，-RefreshCdn） ----------
+# 注意：当前 OSS AccessKey 必须被授予阿里云 CDN 的 RefreshObjectCaches 权限
+# （RAM 里挂 AliyunCDNFullAccess 或自定义策略只放行该接口），否则会报 InvalidDomain.NotFound。
+# 权限到位后加 -RefreshCdn 即可跳过 CDN 缓存等待。
+if ($RefreshCdn -and -not $SkipUpload) {
+    Write-Host "[3.5/4] CDN 主动刷新"
+    $python = (Get-Command python -ErrorAction SilentlyContinue).Source
+    if (-not $python) { Fail "找不到 python（CDN 刷新依赖 aliyun-python-sdk-cdn）" }
+    try { & $python -c "import aliyunsdkcdn" 2>$null; if ($LASTEXITCODE -ne 0) { throw "missing" } }
+    catch { Fail "缺少 aliyun-python-sdk-cdn，先执行：python -m pip install aliyun-python-sdk-cdn" }
+
+    $refreshScript = Join-Path $env:TEMP "mote-cdn-refresh.py"
+    $cdnFullUrl = "$CdnDomain/$ObjectKey"
+    $pythonCode = @'
+import os, sys
+from aliyunsdkcore.client import AcsClient
+from aliyunsdkcdn.request.v20180510.RefreshObjectCachesRequest import RefreshObjectCachesRequest
+
+client = AcsClient(os.environ["OSS_ACCESS_KEY_ID"], os.environ["OSS_ACCESS_KEY_SECRET"], "cn-hangzhou")
+req = RefreshObjectCachesRequest()
+req.set_accept_format("json")
+req.set_ObjectPath(sys.argv[1])
+req.set_ObjectType("File")
+resp = client.do_action_with_exception(req)
+import json
+try:
+    data = json.loads(resp.decode())
+    print("RefreshTaskId:", data.get("RefreshTaskId", "?"))
+except Exception:
+    print(resp.decode()[:400])
+'@
+    [IO.File]::WriteAllText($refreshScript, $pythonCode, (New-Object System.Text.UTF8Encoding($false)))
+    & $python $refreshScript $cdnFullUrl
+    if ($LASTEXITCODE -ne 0) { Fail "CDN 刷新失败（AccessKey 可能没有 CDN 权限）" }
+    Remove-Item $refreshScript -ErrorAction SilentlyContinue
+}
+
 # ---------- [4/4] 线上校验 ----------
 Write-Host "[4/4] 线上校验"
 if ($SkipUpload) {
@@ -136,7 +179,7 @@ if ($SkipUpload) {
     $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $live = (Invoke-WebRequest -Uri "$CdnDomain/$ObjectKey`?t=$stamp" -UseBasicParsing).Content
     if ($live -ne $pageText) {
-        Fail "线上内容与本地不一致（可能被 CDN 缓存，稍后重试）"
+        Fail "线上内容与本地不一致（CDN 仍在缓存，等一分钟或用 -RefreshCdn 主动刷新）"
     }
     Write-Host "    ✓ 线上内容与本地一致"
 }
