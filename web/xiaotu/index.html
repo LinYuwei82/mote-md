@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>小兔进销存 · 小微门店的轻量进销存</title>
+<meta name="description" content="小兔进销存：面向小微门店的轻量进销存软件，覆盖商品档案、采购入库、销售出库、库存、报表与打印，支持单机与内网多人使用。">
+<link rel="canonical" href="https://xiaotu.online/xiaotu/">
+<link rel="icon" type="image/png" href="/assets/img/favicon.png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+<meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0d13" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="/assets/css/site.css">
+</head>
+<body data-page="xiaotu" class="accent-amber">
+
+<a class="skip-link" href="#main">跳到正文</a>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg>
+      </span>
+      小兔在线
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="/xiaotu/" aria-current="page">小兔进销存</a>
+      <a href="/devcard/">DevCard</a>
+      <a href="/mote/">Mote</a>
+      <a href="/docs/">文档</a>
+      <a href="/about/">关于</a>
+      <a class="nav-cta" href="/download/">下载</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="product-hero">
+    <div class="wrap">
+      <nav class="breadcrumb" aria-label="面包屑">
+        <a href="/">首页</a>
+        <span aria-hidden="true">/</span>
+        <span>小兔进销存</span>
+      </nav>
+
+      <div class="product-hero-inner">
+        <img class="app-icon" src="/assets/img/icons/xiaotu.png" alt="小兔进销存图标" width="84" height="84">
+        <div>
+          <h1>小兔进销存</h1>
+          <p class="tagline">面向小微门店的轻量进销存。一套代码两种用法：双击就是单机版，加参数启动就是内网多人共用的网络版。</p>
+          <div class="chips">
+            <span class="tag">进销存</span>
+            <span class="tag">单机 / 网络版</span>
+            <span class="tag">macOS</span>
+            <span class="tag">Windows</span>
+          </div>
+          <div class="product-hero-actions">
+            <a class="btn btn-primary" href="#download">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载
+            </a>
+            <a class="btn btn-ghost" href="https://dl.xiaotu.online/xiaotu/manual.pdf" target="_blank" rel="noopener">
+              用户手册（PDF）
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <dl class="meta-strip">
+        <div><dt>当前版本</dt><dd><span data-field="version">v1.0.0</span>（macOS）</dd></div>
+        <div><dt>运行方式</dt><dd>单机 / 网络版</dd></div>
+        <div><dt>平台</dt><dd>macOS · Windows</dd></div>
+        <div><dt>数据存储</dt><dd>本机数据目录</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">功能</span>
+        <h2>从建档、开单到报表打印</h2>
+        <p class="lead">按门店实际流程排列：先把商品和仓库建好，再开单、看库存、出报表。</p>
+      </div>
+
+      <ul class="feature-list">
+        <li><strong>商品与库存</strong>：商品档案、计量单位、仓库；成本按移动加权平均计算，库存余额与逐笔流水随时可查。</li>
+        <li><strong>单据全流程</strong>：采购入库、销售出库、采购/销售退货、采购/销售订单、调拨、盘点、其他出入库、成本调整；草稿可改、审核生效、可反审核。</li>
+        <li><strong>订单转单据</strong>：销售订单可部分转出库，剩余数量留在订单上；订单本身不占库存。</li>
+        <li><strong>收付款与对账</strong>：客户回款、供应商付款按整单或部分核销，自动更新资金账户余额；可按客户或供应商导出往来明细。</li>
+        <li><strong>报表</strong>：库存余额表、库存流水明细、收发明细、进销存汇总、销售毛利、应收应付余额与账龄；每个区块可导出 CSV / Excel 或打印。</li>
+        <li><strong>打印</strong>：单据与报表先预览再打印，抬头取「系统参数」里的公司名称、电话、地址；没有打印机可以保存为 PDF。</li>
+        <li><strong>备份与恢复</strong>：每次启动、升级和数据库结构变更前自动备份；恢复前先预检查，并再留一份安全备份。</li>
+        <li><strong>升级可回退</strong>：新版本连续 3 次启动不稳定会自动进入恢复模式，可一键回退到安装前的旧版本。</li>
+        <li><strong>网络版</strong>：一台电脑当服务器，其他电脑不用装软件，用浏览器访问；数据只放服务器本机磁盘。</li>
+        <li><strong>数据口令</strong>：可给数据目录设口令；macOS 支持钥匙串记住 30 天，忘记口令时可按手册处理。</li>
+      </ul>
+
+      <div class="callout">
+        <strong>关于数据目录：</strong>所有数据都在本机目录里（macOS 为 <code>~/Library/Application Support/com.simem.xiaotu/</code>，其中 <code>app.db</code> 是数据库，<code>backups/</code> 是自动备份）。不要把数据目录放进 iCloud Drive、OneDrive 之类的同步盘，多人同时写或同步冲突可能损坏数据库。
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">适用场景</span>
+        <h2>谁适合用它</h2>
+      </div>
+      <div class="feature-grid accent-amber">
+        <div class="feature">
+          <h3>小微门店</h3>
+          <p>商品数量不多、流程简单，需要管住进货、出货和库存，不想上一整套 ERP。</p>
+        </div>
+        <div class="feature">
+          <h3>一个店里多个人录单</h3>
+          <p>用网络版把数据放在收银台或办公室的电脑上，其他人用浏览器访问同一份数据。</p>
+        </div>
+        <div class="feature">
+          <h3>需要纸质单据</h3>
+          <p>采购入库单、销售出库单要打印出来签字留存，报表也要能导出给会计。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="split">
+        <div>
+          <div class="section-head">
+            <span class="eyebrow">系统要求</span>
+            <h2>安装前确认</h2>
+          </div>
+          <div class="panel" style="margin-top:22px;">
+            <dl>
+              <dt>macOS</dt>
+              <dd>macOS 14 及以上 · Apple Silicon</dd>
+              <dt>Windows</dt>
+              <dd>Windows x64 · 提供安装包与免安装 zip</dd>
+              <dt>网络版</dt>
+              <dd>同一局域网内一台电脑做服务器，其他电脑用浏览器访问</dd>
+              <dt>安装包</dt>
+              <dd>DMG / .exe / .zip，下载后可用 SHA256 校验</dd>
+            </dl>
+          </div>
+        </div>
+        <div>
+          <div class="section-head">
+            <span class="eyebrow">提示</span>
+            <h2>首次打开被 macOS 拦下？</h2>
+          </div>
+          <div class="panel" style="margin-top:22px;">
+            <p style="color:var(--text-muted);font-size:14.5px;">如果提示「无法打开，因为 Apple 无法检查其是否包含恶意软件」，这是 Gatekeeper 的常规拦截，不是文件损坏。打开「系统设置 → 隐私与安全性」，在页面底部点「仍要打开」即可。</p>
+            <p style="margin-top:12px;"><a href="/docs/">查看用户手册与安装说明</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="download">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">下载</span>
+        <h2>小兔进销存 下载</h2>
+        <p class="lead">文件由下载子域 <span class="mono">dl.xiaotu.online</span> 直接提供，下载后可对照 SHA256 校验完整性。</p>
+      </div>
+
+      <div class="dl-list">
+
+        <div class="dl-row" data-manifest="xiaotu-mac">
+          <div class="dl-main">
+            <div class="dl-head">
+              <span class="dl-name">macOS</span>
+              <span class="tag tag-live">可用</span>
+            </div>
+            <p class="dl-sub">macOS 14+ · Apple Silicon · .dmg</p>
+            <div class="facts">
+              <span class="mono" data-field="version">v1.0.0</span>
+              <span><span class="mono" data-field="size">6,378,546</span> 字节（<span data-field="size-human">约 6.1 MB</span>）</span>
+            </div>
+            <div class="sha">
+              <span class="sha-label">SHA256</span>
+              <code class="sha-value" data-field="sha" title="fd1dfdc6d39f4d6137c9708959a85828683902f6a3cc9e6d41e54b176449bd5d">fd1dfdc6d39f4d6137c9708959a85828683902f6a3cc9e6d41e54b176449bd5d</code>
+              <button class="copy" type="button" data-copy-sha>复制</button>
+            </div>
+          </div>
+          <div class="dl-action">
+            <a class="btn btn-primary" data-field="href" href="https://dl.xiaotu.online/xiaotu/xiaotu-inventory-1.0.0.dmg">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载 DMG
+            </a>
+          </div>
+        </div>
+
+        <div class="dl-row">
+          <div class="dl-main">
+            <div class="dl-head">
+              <span class="dl-name">Windows 安装包</span>
+              <span class="tag tag-live">可用</span>
+            </div>
+            <p class="dl-sub">x64 · .exe（Inno Setup）</p>
+            <div class="facts">
+              <span class="mono">v1.0.0</span>
+              <span><span class="mono">3,768,031</span> 字节（约 3.6 MB）</span>
+            </div>
+            <div class="sha">
+              <span class="sha-label">SHA256</span>
+              <code class="sha-value" title="e3a7c9374695daec21cc19713e1dbaf9605148ae7bd7e393a01bea504da26c1e">e3a7c9374695daec21cc19713e1dbaf9605148ae7bd7e393a01bea504da26c1e</code>
+              <button class="copy" type="button" data-copy-sha>复制</button>
+            </div>
+          </div>
+          <div class="dl-action">
+            <a class="btn btn-primary" href="https://dl.xiaotu.online/xiaotu/xiaotu-inventory-1.0.0-win64-setup.exe">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载 .exe
+            </a>
+          </div>
+        </div>
+
+        <div class="dl-row">
+          <div class="dl-main">
+            <div class="dl-head">
+              <span class="dl-name">Windows 绿色包</span>
+              <span class="tag tag-live">可用</span>
+            </div>
+            <p class="dl-sub">x64 · .zip（免安装）</p>
+            <div class="facts">
+              <span class="mono">v1.0.0</span>
+              <span><span class="mono">2,372,656</span> 字节（约 2.3 MB）</span>
+            </div>
+            <div class="sha">
+              <span class="sha-label">SHA256</span>
+              <code class="sha-value" title="d69f79191f39f314971367bf716f61f7a34796edeb6f92c4995abd8b62a000f8">d69f79191f39f314971367bf716f61f7a34796edeb6f92c4995abd8b62a000f8</code>
+              <button class="copy" type="button" data-copy-sha>复制</button>
+            </div>
+          </div>
+          <div class="dl-action">
+            <a class="btn btn-primary" href="https://dl.xiaotu.online/xiaotu/xiaotu-inventory-1.0.0-win64.zip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载 .zip
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="manual-row">
+        <span class="manual-label">用户手册</span>
+        <span class="url-hint">dl.xiaotu.online/xiaotu/manual.pdf</span>
+        <a class="btn btn-ghost btn-sm" href="https://dl.xiaotu.online/xiaotu/manual.pdf" target="_blank" rel="noopener">下载 PDF</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg>
+          </span>
+          小兔在线
+        </a>
+        <p>三款自研桌面软件：小兔进销存、DevCard、Mote。本地优先，macOS 与 Windows 双平台。</p>
+      </div>
+      <div class="footer-col">
+        <h3>产品</h3>
+        <ul>
+          <li><a href="/xiaotu/">小兔进销存</a></li>
+          <li><a href="/devcard/">DevCard</a></li>
+          <li><a href="/mote/">Mote</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>资源</h3>
+        <ul>
+          <li><a href="/download/">软件下载</a></li>
+          <li><a href="/docs/">用户手册</a></li>
+          <li><a href="/about/">关于本站</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>联系</h3>
+        <ul>
+          <li><span class="contact-line"><a class="contact-mail" id="footer-email" href="mailto:458499311@qq.com">458499311@qq.com</a><button class="copy" type="button" data-copy="footer-email">复制</button></span></li>
+          <li><a href="https://gitee.com/lin-yuwei168/mote-md" target="_blank" rel="noopener noreferrer">Mote 源码</a></li>
+          <li><a href="https://gitee.com/lin-yuwei168/dev_card_cpp" target="_blank" rel="noopener noreferrer">DevCard 源码</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 小兔在线</span>
+      <span>安装包与手册由 <span class="mono">dl.xiaotu.online</span> 提供</span>
+      <a class="spacer" href="/privacy/">隐私说明</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/js/site.js" defer></script>
+</body>
+</html>

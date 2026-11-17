@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Mote · 原生薄外壳的 Markdown 查看器与编辑器</title>
+<meta name="description" content="Mote：C++20 原生薄外壳 + 系统 WebView 的 Markdown 查看 / 编辑器，所见即所得块编辑、代码高亮、导出 HTML 与 PDF，无 Electron。">
+<link rel="canonical" href="https://xiaotu.online/mote/">
+<link rel="icon" type="image/png" href="/assets/img/favicon.png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+<meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0d13" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="/assets/css/site.css">
+</head>
+<body data-page="mote" class="accent-teal">
+
+<a class="skip-link" href="#main">跳到正文</a>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg>
+      </span>
+      小兔在线
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="/xiaotu/">小兔进销存</a>
+      <a href="/devcard/">DevCard</a>
+      <a href="/mote/" aria-current="page">Mote</a>
+      <a href="/docs/">文档</a>
+      <a href="/about/">关于</a>
+      <a class="nav-cta" href="/download/">下载</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="product-hero">
+    <div class="wrap">
+      <nav class="breadcrumb" aria-label="面包屑">
+        <a href="/">首页</a>
+        <span aria-hidden="true">/</span>
+        <span>Mote</span>
+      </nav>
+
+      <div class="product-hero-inner">
+        <img class="app-icon" src="/assets/img/icons/mote.png" alt="Mote 图标" width="84" height="84">
+        <div>
+          <h1>Mote</h1>
+          <p class="tagline">原生薄外壳 + 系统 WebView 的 Markdown 查看 / 编辑器。正文按块编辑，渲染交给系统 WebView，不引入 Electron 一类运行时。</p>
+          <div class="chips">
+            <span class="tag">Markdown</span>
+            <span class="tag">块编辑</span>
+            <span class="tag">macOS</span>
+            <span class="tag">Windows</span>
+            <span class="tag">AGPL-3.0</span>
+          </div>
+          <div class="product-hero-actions">
+            <a class="btn btn-primary" href="#download">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载
+            </a>
+            <a class="btn btn-ghost" href="https://gitee.com/lin-yuwei168/mote-md" target="_blank" rel="noopener noreferrer">
+              查看源码（Gitee）
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <dl class="meta-strip">
+        <div><dt>当前版本</dt><dd><span data-field="version">v1.0.0</span>（macOS）· v1.0.1（Windows）</dd></div>
+        <div><dt>安装包</dt><dd>DMG 约 1.7 MB</dd></div>
+        <div><dt>平台</dt><dd>macOS · Windows</dd></div>
+        <div><dt>许可证</dt><dd>AGPL-3.0</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">功能</span>
+        <h2>像看文档一样看，像改文字一样改</h2>
+        <p class="lead">正文按空行切块。平时保持排版效果，点中哪块就改哪块，离开后按 Markdown 原文重新渲染。</p>
+      </div>
+
+      <ul class="feature-list">
+        <li><strong>所见即所得块编辑</strong>：点中某块就地显示该块原文，其余块保持排版；离开后重新渲染。</li>
+        <li><strong>代码块</strong>：语法高亮（内置轻量实现）、左侧行号与语言徽标；点击徽标即可改语言。</li>
+        <li><strong>表格与分隔线</strong>：表格就地编辑单元格、分隔行与对齐；分隔线可直接选中修改。</li>
+        <li><strong>目录</strong>：由标题自动生成，点击跳转，<span class="mono">Cmd/Ctrl+Shift+L</span> 开关。</li>
+        <li><strong>查找替换</strong>：<span class="mono">Cmd/Ctrl+F</span> 跨块跳转；会破坏标记结构的替换会被拒绝并说明原因。</li>
+        <li><strong>源码模式</strong>：<span class="mono">Cmd/Ctrl+E</span> 在渲染态与纯文本 Markdown 之间切换。</li>
+        <li><strong>图片</strong>：粘贴或拖入图片自动落盘到文档同目录的 <span class="mono">assets/</span>，插入相对路径。</li>
+        <li><strong>任务列表</strong>：<span class="mono">- [ ]</span> 渲染成可点击复选框，点击即改写原文，一次撤销可还原。</li>
+        <li><strong>字数统计</strong>：状态栏显示「中文 N 字 · 英文 M 词」，中文按字符、英文按词计数。</li>
+        <li><strong>深色模式</strong>：默认跟随系统，也可手动切换；切换只换配色，不动文档与编辑状态。</li>
+        <li><strong>导出</strong>：单文件自包含 HTML（样式内联、图片内嵌），或 A4 多页 PDF。</li>
+        <li><strong>在线更新</strong>：启动后自动检查，也可手动触发；macOS 走 Sparkle 验签，Windows 应用内下载并校验 SHA256。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">技术取向</span>
+        <h2>薄外壳，不背运行时</h2>
+      </div>
+      <div class="split">
+        <div class="panel">
+          <dl>
+            <dt>macOS 外壳</dt>
+            <dd>C++20 + AppKit + WKWebView，发布包不含 Qt</dd>
+            <dt>Windows 外壳</dt>
+            <dd>C++20 + Win32 + WebView2</dd>
+            <dt>前端</dt>
+            <dd>零框架、零构建，两端共用同一份渲染与编辑资源</dd>
+            <dt>安装包</dt>
+            <dd>DMG 约 1.7 MB，.app 约 4.1 MB（含 Sparkle.framework）</dd>
+            <dt>许可证</dt>
+            <dd>AGPL-3.0，源码在 Gitee 公开</dd>
+          </dl>
+        </div>
+        <div class="panel">
+          <h3>已知限制</h3>
+          <ul style="margin-top:14px;color:var(--text-muted);font-size:14.5px;">
+            <li>macOS 包只含 arm64 切片，Intel Mac 需自行构建。</li>
+            <li>源码模式是纯文本编辑，没有语法高亮。</li>
+            <li>查找替换的单个命中不会跨块边界或行内标记。</li>
+            <li>深色模式覆盖正文区域，菜单栏仍是系统原生外观。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="download">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">下载</span>
+        <h2>Mote 下载</h2>
+        <p class="lead">文件由下载子域 <span class="mono">dl.xiaotu.online</span> 直接提供，下载后可对照 SHA256 校验完整性。</p>
+      </div>
+
+      <div class="dl-list">
+
+        <div class="dl-row" data-manifest="mote-mac">
+          <div class="dl-main">
+            <div class="dl-head">
+              <span class="dl-name">macOS</span>
+              <span class="tag tag-live">可用</span>
+            </div>
+            <p class="dl-sub">macOS 14+ · Apple Silicon · .dmg</p>
+            <div class="facts">
+              <span class="mono" data-field="version">v1.0.0</span>
+              <span><span class="mono" data-field="size">1,794,731</span> 字节（<span data-field="size-human">约 1.7 MB</span>）</span>
+            </div>
+            <div class="sha">
+              <span class="sha-label">SHA256</span>
+              <code class="sha-value" data-field="sha" title="d5394ab857e67d02ddd96b994fb51434c4fb9b04ed19883d731a27bd5d2d3e02">d5394ab857e67d02ddd96b994fb51434c4fb9b04ed19883d731a27bd5d2d3e02</code>
+              <button class="copy" type="button" data-copy-sha>复制</button>
+            </div>
+          </div>
+          <div class="dl-action">
+            <a class="btn btn-primary" data-field="href" href="https://dl.xiaotu.online/mote/Mote-macOS-native-1.0.0.dmg">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载 DMG
+            </a>
+          </div>
+        </div>
+
+        <div class="dl-row" data-manifest="mote-win-setup">
+          <div class="dl-main">
+            <div class="dl-head">
+              <span class="dl-name">Windows 安装包</span>
+              <span class="tag tag-live">可用</span>
+            </div>
+            <p class="dl-sub">x64 · .exe（Inno Setup）</p>
+            <div class="facts">
+              <span class="mono" data-field="version">v1.0.1</span>
+              <span><span class="mono" data-field="size">2,650,735</span> 字节（<span data-field="size-human">约 2.5 MB</span>）</span>
+            </div>
+            <div class="sha">
+              <span class="sha-label">SHA256</span>
+              <code class="sha-value" data-field="sha" title="1496830c208c89f9d462a0d59dfde7c61824ee1bc9be1c3195158e98aecd480d">1496830c208c89f9d462a0d59dfde7c61824ee1bc9be1c3195158e98aecd480d</code>
+              <button class="copy" type="button" data-copy-sha>复制</button>
+            </div>
+          </div>
+          <div class="dl-action">
+            <a class="btn btn-primary" data-field="href" href="https://dl.xiaotu.online/mote/Mote-Setup-1.0.1.exe">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载 .exe
+            </a>
+          </div>
+        </div>
+
+        <div class="dl-row" data-manifest="mote-win-zip">
+          <div class="dl-main">
+            <div class="dl-head">
+              <span class="dl-name">Windows 绿色包</span>
+              <span class="tag tag-live">可用</span>
+            </div>
+            <p class="dl-sub">x64 · .zip（免安装）</p>
+            <div class="facts">
+              <span class="mono" data-field="version">v1.0.1</span>
+              <span><span class="mono" data-field="size">677,418</span> 字节（<span data-field="size-human">约 0.6 MB</span>）</span>
+            </div>
+            <div class="sha">
+              <span class="sha-label">SHA256</span>
+              <code class="sha-value" data-field="sha" title="d3fe2b13fc3c826ee892bbbe160d88fd2da4a60eb07ff934b94245c921f61823">d3fe2b13fc3c826ee892bbbe160d88fd2da4a60eb07ff934b94245c921f61823</code>
+              <button class="copy" type="button" data-copy-sha>复制</button>
+            </div>
+          </div>
+          <div class="dl-action">
+            <a class="btn btn-primary" data-field="href" href="https://dl.xiaotu.online/mote/Mote-1.0.1-win64-portable.zip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载 .zip
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="manual-row">
+        <span class="manual-label">用户手册</span>
+        <span class="url-hint">dl.xiaotu.online/mote/manual.pdf</span>
+        <a class="btn btn-ghost btn-sm" href="https://dl.xiaotu.online/mote/manual.pdf" target="_blank" rel="noopener">下载 PDF</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg>
+          </span>
+          小兔在线
+        </a>
+        <p>三款自研桌面软件：小兔进销存、DevCard、Mote。本地优先，macOS 与 Windows 双平台。</p>
+      </div>
+      <div class="footer-col">
+        <h3>产品</h3>
+        <ul>
+          <li><a href="/xiaotu/">小兔进销存</a></li>
+          <li><a href="/devcard/">DevCard</a></li>
+          <li><a href="/mote/">Mote</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>资源</h3>
+        <ul>
+          <li><a href="/download/">软件下载</a></li>
+          <li><a href="/docs/">用户手册</a></li>
+          <li><a href="/about/">关于本站</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>联系</h3>
+        <ul>
+          <li><span class="contact-line"><a class="contact-mail" id="footer-email" href="mailto:458499311@qq.com">458499311@qq.com</a><button class="copy" type="button" data-copy="footer-email">复制</button></span></li>
+          <li><a href="https://gitee.com/lin-yuwei168/mote-md" target="_blank" rel="noopener noreferrer">Mote 源码</a></li>
+          <li><a href="https://gitee.com/lin-yuwei168/dev_card_cpp" target="_blank" rel="noopener noreferrer">DevCard 源码</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 小兔在线</span>
+      <span>安装包与手册由 <span class="mono">dl.xiaotu.online</span> 提供</span>
+      <a class="spacer" href="/privacy/">隐私说明</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/js/site.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>DevCard · 物业设备台账与设备管理卡打印</title>
+<meta name="description" content="DevCard：物业设备台账与设备管理卡打印工具。台账增删改查、Excel 导入导出、A4 卡片打印与 PDF 导出，支持角色权限与本地备份。">
+<link rel="canonical" href="https://xiaotu.online/devcard/">
+<link rel="icon" type="image/png" href="/assets/img/favicon.png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+<meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0d13" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="/assets/css/site.css">
+</head>
+<body data-page="devcard" class="accent-indigo">
+
+<a class="skip-link" href="#main">跳到正文</a>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg>
+      </span>
+      小兔在线
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="/xiaotu/">小兔进销存</a>
+      <a href="/devcard/" aria-current="page">DevCard</a>
+      <a href="/mote/">Mote</a>
+      <a href="/docs/">文档</a>
+      <a href="/about/">关于</a>
+      <a class="nav-cta" href="/download/">下载</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="product-hero">
+    <div class="wrap">
+      <nav class="breadcrumb" aria-label="面包屑">
+        <a href="/">首页</a>
+        <span aria-hidden="true">/</span>
+        <span>DevCard</span>
+      </nav>
+
+      <div class="product-hero-inner">
+        <img class="app-icon" src="/assets/img/icons/devcard.png" alt="DevCard 图标" width="84" height="84">
+        <div>
+          <h1>DevCard</h1>
+          <p class="tagline">物业设备台账与设备管理卡打印工具。把设备名称、位置、控制范围、维护电话记在本地数据库，按筛选结果排成 A4 卡片，导出 PDF 或直接打印。</p>
+          <div class="chips">
+            <span class="tag">设备台账</span>
+            <span class="tag">卡片打印</span>
+            <span class="tag">macOS</span>
+            <span class="tag">Windows</span>
+          </div>
+          <div class="product-hero-actions">
+            <a class="btn btn-primary" href="#download">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载
+            </a>
+            <a class="btn btn-ghost" href="https://dl.xiaotu.online/devcard/manual.pdf" target="_blank" rel="noopener">
+              用户手册（PDF）
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <dl class="meta-strip">
+        <div><dt>当前版本</dt><dd>v1.2.2（macOS）· v1.2.1（Windows）</dd></div>
+        <div><dt>运行方式</dt><dd>单机 / 网络版</dd></div>
+        <div><dt>平台</dt><dd>macOS · Windows</dd></div>
+        <div><dt>数据存储</dt><dd>本地 SQLite</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">功能</span>
+        <h2>台账管得住，卡片贴得上墙</h2>
+        <p class="lead">从录入、导入、筛选，到版式预览、PDF 导出与打印，整条链路在一个窗口里完成。</p>
+      </div>
+
+      <ul class="feature-list">
+        <li><strong>设备台账</strong>：新增、修改、删除设备；记录设备名称、位置、控制范围、维护电话四类信息，每页 20 条分页。</li>
+        <li><strong>查询筛选</strong>：按名称、位置下拉组合筛选，也能按关键字模糊查询；筛选结果直接进入打印页。</li>
+        <li><strong>Excel 导入导出</strong>：下载导入模板后导入 <span class="mono">.xlsx</span>，也可以把全部台账导出为 <span class="mono">.xlsx</span>。</li>
+        <li><strong>卡片打印</strong>：A4 版式提供每页 12 张（3 × 4）、6 张（3 × 2）、1 张三种排布，单张卡片约 62 × 65 mm。</li>
+        <li><strong>导出 PDF 或直接打印</strong>：预览随窗口缩放，打印与导出按 1:1 的 A4 输出；17 条记录即 2 页（12 + 5）。</li>
+        <li><strong>卡片抬头</strong>：修改卡片头部的公司名称与图标，默认内置一套物业公司样式。</li>
+        <li><strong>账号与权限</strong>：管理员与普通用户两种角色；首次登录强制改密，管理员可新增账号、改角色、重置密码、删除账号。</li>
+        <li><strong>备份与恢复</strong>：手动备份生成 SQLite 一致性快照，可从备份恢复，换电脑时直接带走数据文件。</li>
+        <li><strong>版本提示</strong>：发现新版本时顶栏提示，应用内下载并校验更新包；Windows 安装版支持安装并重启。</li>
+        <li><strong>浏览器也能用</strong>：以服务方式启动时，同一套界面可通过浏览器访问，状态栏显示「单机版 / 网络版」。</li>
+      </ul>
+
+      <div class="callout">
+        <strong>版式说明：</strong>卡片版式固定为每页 12 / 6 / 1 张，不提供模板编辑器；可改的是卡片头部的公司名与图标。这一取舍是为了保证每批卡片的尺寸和排版完全一致。
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">适用场景</span>
+        <h2>谁适合用它</h2>
+      </div>
+      <div class="feature-grid accent-indigo">
+        <div class="feature">
+          <h3>物业设备管理员</h3>
+          <p>设备分散在楼栋、机房、配电间，需要一份能查、能打印、能贴到设备上的台账。</p>
+        </div>
+        <div class="feature">
+          <h3>要批量上墙</h3>
+          <p>几十上百台设备要统一卡片样式，手工排版太慢，需要一次生成多页 PDF 去打印塑封。</p>
+        </div>
+        <div class="feature">
+          <h3>班组分工维护</h3>
+          <p>管理员管账号与备份，普通同事只负责录台账、打卡片，权限边界清楚。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="split">
+        <div>
+          <div class="section-head">
+            <span class="eyebrow">系统要求</span>
+            <h2>安装前确认</h2>
+          </div>
+          <div class="panel" style="margin-top:22px;">
+            <dl>
+              <dt>macOS</dt>
+              <dd>macOS 15 及以上 · Apple Silicon</dd>
+              <dt>Windows</dt>
+              <dd>Windows 10 1809 及以上 · x64</dd>
+              <dt>网络版</dt>
+              <dd>以服务方式启动，同一网络内用浏览器访问</dd>
+              <dt>安装包</dt>
+              <dd>DMG / .exe / .zip，下载后可用 SHA256 校验</dd>
+            </dl>
+          </div>
+        </div>
+        <div>
+          <div class="section-head">
+            <span class="eyebrow">提示</span>
+            <h2>首次打开被 macOS 拦下？</h2>
+          </div>
+          <div class="panel" style="margin-top:22px;">
+            <p style="color:var(--text-muted);font-size:14.5px;">首次启动可能提示「无法打开，因为 Apple 无法检查其是否包含恶意软件」或「无法验证开发者」。在 Finder 里右键 DevCard 选「打开」，或在「系统设置 → 隐私与安全性」底部点「仍要打开」即可。</p>
+            <p style="margin-top:12px;"><a href="/docs/">查看用户手册与安装说明</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="download">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">下载</span>
+        <h2>DevCard 下载</h2>
+        <p class="lead">文件由下载子域 <span class="mono">dl.xiaotu.online</span> 直接提供，下载后可对照 SHA256 校验完整性。</p>
+      </div>
+
+      <div class="dl-list">
+
+        <div class="dl-row">
+          <div class="dl-main">
+            <div class="dl-head">
+              <span class="dl-name">macOS</span>
+              <span class="tag tag-live">可用</span>
+            </div>
+            <p class="dl-sub">macOS 15+ · Apple Silicon · .dmg</p>
+            <div class="facts">
+              <span class="mono">v1.2.2</span>
+              <span><span class="mono">5,968,008</span> 字节（约 5.7 MB）</span>
+            </div>
+            <div class="sha">
+              <span class="sha-label">SHA256</span>
+              <code class="sha-value" title="8e51a830d5a30ae5e68b4dd71ef1cfd205ac56785a2bcba4eca5146298af0a48">8e51a830d5a30ae5e68b4dd71ef1cfd205ac56785a2bcba4eca5146298af0a48</code>
+              <button class="copy" type="button" data-copy-sha>复制</button>
+            </div>
+          </div>
+          <div class="dl-action">
+            <a class="btn btn-primary" href="https://dl.xiaotu.online/devcard/DevCard-1.2.2-macos-arm64.dmg">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载 DMG
+            </a>
+          </div>
+        </div>
+
+        <div class="dl-row">
+          <div class="dl-main">
+            <div class="dl-head">
+              <span class="dl-name">Windows 安装包</span>
+              <span class="tag tag-live">可用</span>
+            </div>
+            <p class="dl-sub">x64 · .exe（Inno Setup）</p>
+            <div class="facts">
+              <span class="mono">v1.2.1</span>
+              <span><span class="mono">5,818,875</span> 字节（约 5.5 MB）</span>
+            </div>
+            <div class="sha">
+              <span class="sha-label">SHA256</span>
+              <code class="sha-value" title="0b855120c55045358e9b7b9ea90c7fbe7c0e22f91a0e278b3b03a1245a583cb6">0b855120c55045358e9b7b9ea90c7fbe7c0e22f91a0e278b3b03a1245a583cb6</code>
+              <button class="copy" type="button" data-copy-sha>复制</button>
+            </div>
+          </div>
+          <div class="dl-action">
+            <a class="btn btn-primary" href="https://dl.xiaotu.online/devcard/DevCard-1.2.1-setup.exe">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载 .exe
+            </a>
+          </div>
+        </div>
+
+        <div class="dl-row">
+          <div class="dl-main">
+            <div class="dl-head">
+              <span class="dl-name">Windows 绿色包</span>
+              <span class="tag tag-live">可用</span>
+            </div>
+            <p class="dl-sub">x64 · .zip（免安装）</p>
+            <div class="facts">
+              <span class="mono">v1.2.1</span>
+              <span><span class="mono">6,033,802</span> 字节（约 5.8 MB）</span>
+            </div>
+            <div class="sha">
+              <span class="sha-label">SHA256</span>
+              <code class="sha-value" title="f3fb24c62bdc7eed86c57278651a979d80f72f1becf37002df2a4f8d2d8933ee">f3fb24c62bdc7eed86c57278651a979d80f72f1becf37002df2a4f8d2d8933ee</code>
+              <button class="copy" type="button" data-copy-sha>复制</button>
+            </div>
+          </div>
+          <div class="dl-action">
+            <a class="btn btn-primary" href="https://dl.xiaotu.online/devcard/DevCard-1.2.1-win64-portable.zip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              下载 .zip
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="manual-row">
+        <span class="manual-label">用户手册</span>
+        <span class="url-hint">dl.xiaotu.online/devcard/manual.pdf</span>
+        <a class="btn btn-ghost btn-sm" href="https://dl.xiaotu.online/devcard/manual.pdf" target="_blank" rel="noopener">下载 PDF</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg>
+          </span>
+          小兔在线
+        </a>
+        <p>三款自研桌面软件：小兔进销存、DevCard、Mote。本地优先，macOS 与 Windows 双平台。</p>
+      </div>
+      <div class="footer-col">
+        <h3>产品</h3>
+        <ul>
+          <li><a href="/xiaotu/">小兔进销存</a></li>
+          <li><a href="/devcard/">DevCard</a></li>
+          <li><a href="/mote/">Mote</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>资源</h3>
+        <ul>
+          <li><a href="/download/">软件下载</a></li>
+          <li><a href="/docs/">用户手册</a></li>
+          <li><a href="/about/">关于本站</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>联系</h3>
+        <ul>
+          <li><span class="contact-line"><a class="contact-mail" id="footer-email" href="mailto:458499311@qq.com">458499311@qq.com</a><button class="copy" type="button" data-copy="footer-email">复制</button></span></li>
+          <li><a href="https://gitee.com/lin-yuwei168/mote-md" target="_blank" rel="noopener noreferrer">Mote 源码</a></li>
+          <li><a href="https://gitee.com/lin-yuwei168/dev_card_cpp" target="_blank" rel="noopener noreferrer">DevCard 源码</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 小兔在线</span>
+      <span>安装包与手册由 <span class="mono">dl.xiaotu.online</span> 提供</span>
+      <a class="spacer" href="/privacy/">隐私说明</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/js/site.js" defer></script>
+</body>
+</html>

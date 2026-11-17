@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>关于 · 小兔在线</title>
+<meta name="description" content="小兔在线：维护小兔进销存、DevCard、Mote 三款桌面软件。本地优先、安装即用，macOS 与 Windows 双平台。">
+<link rel="canonical" href="https://xiaotu.online/about/">
+<link rel="icon" type="image/png" href="/assets/img/favicon.png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+<meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0d13" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="/assets/css/site.css">
+</head>
+<body data-page="about">
+
+<a class="skip-link" href="#main">跳到正文</a>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg>
+      </span>
+      小兔在线
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">菜单</button>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="/xiaotu/">小兔进销存</a>
+      <a href="/devcard/">DevCard</a>
+      <a href="/mote/">Mote</a>
+      <a href="/docs/">文档</a>
+      <a href="/about/" aria-current="page">关于</a>
+      <a class="nav-cta" href="/download/">下载</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-inner">
+        <span class="eyebrow">关于</span>
+        <h1>小兔在线</h1>
+        <p class="lead">我们做三款自研桌面软件：小兔进销存、DevCard、Mote。它们有一个共同点——数据留在使用者的电脑上，装完就能用。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="prose">
+        <h2>三款产品</h2>
+        <p><strong>小兔进销存</strong>面向小微门店，管商品、开单据、看库存、出报表；一套程序既能单机使用，也能在一台电脑上做服务器、让局域网内其他人用浏览器访问。</p>
+        <p><strong>DevCard</strong>面向物业设备管理，把设备台账整理成 A4 设备管理卡，导出 PDF 或直接打印，方便塑封后贴到设备上。</p>
+        <p><strong>Mote</strong>是一款 Markdown 查看器与编辑器，用原生薄外壳加系统 WebView，不打包 Electron 一类运行时，安装包只有 1.7 MB 左右，源码以 AGPL-3.0 公开。</p>
+
+        <h2>技术取向</h2>
+        <ul>
+          <li>核心逻辑用 C++20 编写，桌面外壳尽量薄，渲染交给系统 WebView（macOS WKWebView、Windows WebView2）。</li>
+          <li>不依赖外部数据库服务：小兔进销存与 DevCard 用本地文件 / SQLite 保存数据，备份就是复制目录或文件。</li>
+          <li>前端零框架、零构建，减少打包体积和长期维护成本。</li>
+          <li>发布包提供 SHA256，下载后可以自行核对完整性。</li>
+        </ul>
+
+        <h2>关于这个网站</h2>
+        <ul>
+          <li>页面本身是静态 HTML / CSS，不使用第三方统计脚本，也不要求注册账号。</li>
+          <li>安装包、用户手册和更新清单放在下载子域 <span class="mono">dl.xiaotu.online</span>，本站只负责页面展示。</li>
+          <li>软件的「检查更新」只请求更新清单（版本号、大小、SHA256、下载地址），不上传文档内容或使用记录。</li>
+        </ul>
+
+        <h2>联系</h2>
+        <p>问题反馈、合作或授权咨询，可以写信到 <a href="mailto:458499311@qq.com">458499311@qq.com</a>。反馈问题时附上产品名称、版本号和操作步骤，会更快定位。</p>
+        <p>开源仓库：<a href="https://gitee.com/lin-yuwei168/mote-md" target="_blank" rel="noopener noreferrer">Mote（Gitee）</a> · <a href="https://gitee.com/lin-yuwei168/dev_card_cpp" target="_blank" rel="noopener noreferrer">DevCard（Gitee）</a></p>
+
+        <!-- 备案号待备案通过后补充 -->
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg>
+          </span>
+          小兔在线
+        </a>
+        <p>三款自研桌面软件：小兔进销存、DevCard、Mote。本地优先，macOS 与 Windows 双平台。</p>
+      </div>
+      <div class="footer-col">
+        <h3>产品</h3>
+        <ul>
+          <li><a href="/xiaotu/">小兔进销存</a></li>
+          <li><a href="/devcard/">DevCard</a></li>
+          <li><a href="/mote/">Mote</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>资源</h3>
+        <ul>
+          <li><a href="/download/">软件下载</a></li>
+          <li><a href="/docs/">用户手册</a></li>
+          <li><a href="/about/">关于本站</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>联系</h3>
+        <ul>
+          <li><span class="contact-line"><a class="contact-mail" id="footer-email" href="mailto:458499311@qq.com">458499311@qq.com</a><button class="copy" type="button" data-copy="footer-email">复制</button></span></li>
+          <li><a href="https://gitee.com/lin-yuwei168/mote-md" target="_blank" rel="noopener noreferrer">Mote 源码</a></li>
+          <li><a href="https://gitee.com/lin-yuwei168/dev_card_cpp" target="_blank" rel="noopener noreferrer">DevCard 源码</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 小兔在线</span>
+      <span>安装包与手册由 <span class="mono">dl.xiaotu.online</span> 提供</span>
+      <a class="spacer" href="/privacy/">隐私说明</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/js/site.js" defer></script>
+</body>
+</html>
