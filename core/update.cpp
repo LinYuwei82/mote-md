@@ -3,6 +3,7 @@
 #include "core/json.h"
 
 #include <cctype>
+#include <limits>
 #include <vector>
 
 namespace mote {
@@ -10,6 +11,7 @@ namespace mote {
 namespace {
 
 // 只取每段前导数字：0.3.5-beta 里的 5-beta 视为 5，缺失段补 0。
+// 每段超过 18 位就按饱和值处理，避免 long long 溢出（有符号整数溢出是 UB）。
 std::vector<long long> versionSegments(std::string_view text)
 {
     if (!text.empty() && (text.front() == 'v' || text.front() == 'V'))
@@ -23,11 +25,21 @@ std::vector<long long> versionSegments(std::string_view text)
             text.substr(pos, dot == std::string_view::npos ? std::string_view::npos : dot - pos);
         long long value = 0;
         bool hasDigit = false;
+        bool saturated = false;
         for (const char c : segment) {
             if (!std::isdigit(static_cast<unsigned char>(c)))
                 break;
             hasDigit = true;
-            value = value * 10 + (c - '0');
+            if (saturated)
+                continue;
+            constexpr long long kMaxDiv10 = std::numeric_limits<long long>::max() / 10;
+            const int digit = c - '0';
+            if (value > kMaxDiv10 || (value == kMaxDiv10 && digit > 7)) {
+                value = std::numeric_limits<long long>::max();
+                saturated = true;
+                continue;
+            }
+            value = value * 10 + digit;
         }
         segments.push_back(hasDigit ? value : 0);
         if (dot == std::string_view::npos)

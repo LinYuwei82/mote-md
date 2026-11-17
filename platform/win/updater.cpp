@@ -576,7 +576,9 @@ void run_download_dialog(HWND hwnd, DownloadState *state, std::thread *worker)
 // 用户确认后：下载 → 校验 SHA256 → 安装版静默升级并重启 / 绿色版交给用户解压
 void begin_download(HWND hwnd, const UpdateTarget &target)
 {
-    if (target.installer && g_is_dirty && g_is_dirty()) {
+    // 安装版会覆盖当前目录的可执行文件，绿色版要求用户解压覆盖也得先退出；
+    // 两条路径都要先保存，否则 quit 流程可能因保存确认而被用户取消，更新包已下载却退出不了
+    if (g_is_dirty && g_is_dirty()) {
         MoteAlert(hwnd, L"请先保存", "文档有未保存的修改，保存后再更新。");
         return;
     }
