@@ -284,7 +284,7 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
 
 - (void)promptForManifest:(const mote::UpdateManifest &)manifest
 {
-    // 转译状态下交给 Sparkle 只会在安装阶段失败，先提示用户移动应用
+    // App Translocation 隔离路径下交给 Sparkle 只会在安装阶段失败，先提示用户移动应用
     if (MoteIsTranslocated()) {
         MoteUpdateLog("translocated, cannot install version=%s", manifest.version.c_str());
         MoteRunAlert(@"需要先移动到“应用程序”",
