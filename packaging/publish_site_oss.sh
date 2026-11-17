@@ -74,7 +74,44 @@ except Exception as exc:  # 权限不足时给出明确提示，而不是静默 
     sys.exit(f"关闭「阻止公共访问」失败，请在 OSS 控制台手动关闭：{exc}")
 
 bucket.put_bucket_acl(oss2.BUCKET_ACL_PUBLIC_READ)
-bucket.put_bucket_website(oss2.models.BucketWebsite("index.html", "404.html"))
+
+# 必须打开 SupportSubDir，否则 /xiaotu/、/download/ 这类子目录都会返回根
+# index.html（oss2 的 put_bucket_website 不会带这个字段，只能直接发 XML）
+def put_website_config():
+    import base64
+    import email.utils
+    import hashlib
+    import hmac
+    import urllib.request
+
+    host = endpoint.split("://", 1)[-1].rstrip("/")
+    url = f"https://{bucket_name}.{host}/?website"
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<WebsiteConfiguration>"
+        "<IndexDocument><Suffix>index.html</Suffix>"
+        "<SupportSubDir>true</SupportSubDir><Type>0</Type></IndexDocument>"
+        "<ErrorDocument><Key>404.html</Key><HttpStatus>404</HttpStatus></ErrorDocument>"
+        "</WebsiteConfiguration>"
+    ).encode()
+    date = email.utils.formatdate(usegmt=True)
+    string_to_sign = f"PUT\n\napplication/xml\n{date}\n/{bucket_name}/?website"
+    signature = base64.b64encode(
+        hmac.new(
+            env["OSS_ACCESS_KEY_SECRET"].encode(),
+            string_to_sign.encode(),
+            hashlib.sha1,
+        ).digest()
+    ).decode()
+    request = urllib.request.Request(url, data=body, method="PUT")
+    request.add_header("Date", date)
+    request.add_header("Content-Type", "application/xml")
+    request.add_header(
+        "Authorization", f"OSS {env['OSS_ACCESS_KEY_ID']}:{signature}"
+    )
+    urllib.request.urlopen(request, timeout=15).read()
+
+put_website_config()
 
 TYPES = {
     ".html": "text/html; charset=utf-8",
