@@ -23,7 +23,7 @@
 - **链接**：渲染态下 `[文字](地址)` 的文字显示为蓝色带下划线的链接（地址本身仍是零宽标记，不占位、不进入框选复制）；普通点击仍进入编辑态，`Cmd+Click` 才跳转——外部链接交给系统默认浏览器，相对路径的 `.md` 在应用内打开（走未保存确认），文件不存在时弹提示不崩。编辑态显示原始 `[文字](地址)`，复制出去是标准 Markdown。
 - **导出 HTML**：`Option+Cmd+E`（「文件 → 导出 HTML…」）导出单文件自包含 HTML——样式内联、图片转 base64 内嵌、代码高亮与任务复选框状态保留，导出过程不改动原文档与 `dataset.raw`。
 - **导出 PDF**：`Cmd+P`（「文件 → 导出 PDF…」）导出 A4 多页、无页眉页脚；源码模式下禁用。macOS 与 Windows 均已实现，两端分页切点由各自 WebView 引擎决定，未做逐页像素比对。
-- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。macOS 读 `latest.json`，用户确认后交给 Sparkle 下载 DMG、验证 EdDSA 签名并替换重启；若处于 Gatekeeper App Translocation（隔离路径）只读路径，先提示把 Mote 移到「应用程序」再更新。Windows 读 `windows.json`，确认后应用内下载更新包并用 SHA256 校验——安装版取 `setup_url`（静默安装后自动重启），绿色版取 `url`（校验通过后打开所在文件夹，解压覆盖）。
+- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。「发现新版本」弹窗显示版本号、发布时间、包大小，清单带可选 `notes_url` 时追加一行可点击的「查看完整更新说明…」。macOS 读 `latest.json`，用户确认后交给 Sparkle 下载 DMG、验证 EdDSA 签名并替换重启；若处于 Gatekeeper App Translocation（隔离路径）只读路径，先提示把 Mote 移到「应用程序」再更新。Windows 读 `windows.json`，确认后应用内下载更新包，弹窗内显示百分比与「已下载 / 总大小」并可取消，失败自动重试最多 3 次（间隔 2 秒；4xx 与非法地址不重试），下载完用 SHA256 校验——安装版取 `setup_url`（静默安装后自动重启），绿色版取 `url`（校验通过后打开所在文件夹，解压覆盖）。
 - **页面内状态栏**：原生外壳把状态栏画在前端页面底部（`body.platform-mac` / `body.platform-win`），显示打开/保存/导出提示与字数统计；Qt 构建不启用，避免出现两条状态栏。
 - **目录手型光标**：鼠标移到目录栏（条目文字行、行间空隙、栏内空白）都是系统手型指针，避免移动时手型闪烁；折叠按钮与滚动条保留自身光标语义。
 
@@ -52,7 +52,7 @@ open build-native/Mote.app                       # 或直接运行
 ```bash
 bash packaging/package_macos.sh --native --dmg
 # 产物：dist/Mote-macOS-native.zip / dist/Mote-macOS-native-*.dmg
-# 当前体积：.app 约 4.2 MB（含 Sparkle.framework），DMG 约 1.6 MB
+# 当前体积：.app 约 4.1 MB（含 Sparkle.framework），DMG 约 1.7 MB
 ```
 
 `tools/preflight.sh --native` 可在干净构建后跑一次启动冒烟。
@@ -107,6 +107,8 @@ Qt 构建与原生构建共用 `resources/web/` 与 `core/`；版本号仍以 `M
 ```bash
 bash packaging/package_macos.sh --native --dmg   # 签名 + 公证 + DMG
 bash packaging/publish_macos.sh                  # 公证门禁 → EdDSA 签名 → appcast + latest.json → 上传 → 线上校验
+NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
+  bash packaging/publish_macos.sh                # 同上，并在 latest.json 写入 notes_url
 ```
 
 ```powershell
@@ -115,9 +117,19 @@ powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1   # 校�
 powershell -ExecutionPolicy Bypass -File packaging\publish_site.ps1      # 下载页：链接门禁 → 上传 index.html → 线上内容比对
 ```
 
+在 macOS 上发布 Windows 包时用等价的 bash 脚本（读同一份 `~/.config/xiaotu-updates/.env`）：
+
+```bash
+ZIP_PATH=dist/Mote-1.0.0-win64-portable.zip \
+SETUP_PATH=dist/Mote-Setup-1.0.0.exe \
+NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
+  bash packaging/publish_windows.sh              # windows.json → 上传 zip/安装包/清单 → 线上校验
+```
+
 - 下载页的唯一来源是仓库里的 `site/index.html`，`publish_site.ps1` 负责上传到 OSS 桶根目录；页面里的下载链接会先逐个 `HEAD` 校验，避免发布出死链。
 
-- 版本号只改 `Mote.pro` 的 `VERSION`，两个发布脚本都从那里读。
+- 版本号只改 `Mote.pro` 的 `VERSION`，各发布脚本都从那里读。
+- `NOTES_URL` 是可选环境变量，macOS 与 Windows 的发布脚本都支持：非空时写进清单的 `notes_url`，客户端弹窗显示「查看完整更新说明…」；不设置则不写该字段，老清单与老客户端都不受影响。
 - Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
 - 检查权在自研模块（`SUEnableAutomaticChecks=false`）：Sparkle 只负责下载、验签、替换、重启。
 - Windows 按安装形态取包：exe 同级有 `unins000.exe` 判为安装版，优先用 `setup_url`；否则用 `url` 的 zip；清单没给 `setup_url` 时回落到 zip。下载在应用内完成并校验 SHA256：安装版静默安装后自动重启，绿色版下载校验后提示、自动退出并打开所在文件夹，由用户解压覆盖。两条路径都会先检查未保存文档。
@@ -153,7 +165,7 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 - **仅 arm64**：macOS 包只含 arm64 切片，Intel Mac 需自行重新构建。
 - **发布包需 Developer ID + 公证**：正式产物由 `package_macos.sh` 签名并公证；跳过公证（`--skip-notarize`）的包只适合本机验证，不适合分发。
 - **更新包强制 EdDSA 验签**：Sparkle 2 不接受只签 Developer ID 的更新包；签名私钥只在发布机上，丢失后无法为已发布版本续签。
-- **macOS 包不含 Qt**：`.app` 约 4.2 MB（含 Sparkle.framework），DMG 约 1.6 MB；WebKit 由系统提供。
+- **macOS 包不含 Qt**：`.app` 约 4.1 MB（含 Sparkle.framework），DMG 约 1.7 MB；WebKit 由系统提供。
 - **源码模式无语法高亮**：`Cmd+E` 下是纯文本编辑区。
 - **查找/替换不跨块**：可以在所有块之间跳转命中，但单个命中不会跨越块边界或行内标记。
 - **上下方向键不跨块**：跨块移动光标需鼠标点击。
@@ -161,7 +173,7 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 - **链接跳转**：`Cmd+Click` 外部链接（http/https/mailto）与相对路径的 `.md`；**锚点链接**（`#标题`）按 GitHub 风格的 slug 在文档内跳转（中文保留、去标点、空格转 `-`，重名标题依次加 `-1`、`-2`），未命中时状态栏提示「未找到对应标题」；**图片**按 `img` 渲染，没有 `<a>` 包裹，`Cmd+Click` 不触发任何跳转（相对路径图片仍按文档目录正常显示与导出内嵌）。
 - **导出 HTML 是「网页快照」**：单文件、无外部依赖、无脚本；导出后不提供任何交互（链接仍可点，但任务复选框是静态图形）。
 - **导出能力两端已对齐**：macOS 与 Windows 的 PDF、HTML 导出均已实现并验收；分页切点由各自 WebView 引擎决定。
-- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证；Windows 安装版静默安装并自动重启，绿色版下载校验后提示、自动退出并打开所在目录，由用户解压覆盖。
+- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；1.0.0 已在 macOS 与 Windows 两端发布，但 `0.3.10 → 1.0.0` 的真实 Sparkle 升级路径尚未冒烟验证；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证（Windows 现在会对可重试错误自动重试 3 次）；Windows 安装版静默安装并自动重启，绿色版下载校验后提示、自动退出并打开所在目录，由用户解压覆盖。
 - **OSS 在中国香港**：国内下载偏慢；备案完成后把回源迁到国内桶，`dl.xiaotu.online` 域名不变，已安装客户端无需改动。
 - **任务复选框的复制**：复制处理器剔除隐藏标记；脚本用 `DataTransfer` 走产品同一条 `copy` 处理逻辑验证，真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 - 目录在源码模式下隐藏；正在编辑的块在重排前标题高亮可能滞后一帧。
@@ -201,7 +213,8 @@ backup/                  迁移前的旧 Qt 文本引擎快照（不参与构建
 ## 文档
 
 - [docs/技术方案.md](docs/技术方案.md)：阶段 B 验收后的实际架构、在线更新方案、方案 A/B 取舍与实施状态
-- [docs/release-notes-0.3.9.md](docs/release-notes-0.3.9.md) / [docs/release-notes-0.3.10.md](docs/release-notes-0.3.10.md)：近期版本发行说明（Windows 应用内更新、新图标）
+- [docs/release-notes-1.0.0.html](docs/release-notes-1.0.0.html)：1.0.0 发布说明（在线更新正式版，也是清单 `notes_url` 指向的页面）
+- [docs/release-notes-0.3.9.md](docs/release-notes-0.3.9.md) / [docs/release-notes-0.3.10.md](docs/release-notes-0.3.10.md)：0.3.x 近期版本发行说明（Windows 应用内更新、新图标）
 - [docs/thin-shell-stage-a.md](docs/thin-shell-stage-a.md) / [docs/thin-shell-stage-b.md](docs/thin-shell-stage-b.md)：macOS / Windows 薄外壳设计与里程碑
 - [docs/thin-shell-stage-a-acceptance.md](docs/thin-shell-stage-a-acceptance.md) / [docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)：macOS / Windows 原生外壳验收记录
 - [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)：Windows 实机验证交接单
