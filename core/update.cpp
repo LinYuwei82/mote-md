@@ -98,6 +98,9 @@ bool parseUpdateManifest(std::string_view text, UpdateManifest &out, std::string
         return false;
     }
     out.setup_size = static_cast<long long>(setupSize);
+
+    // 可选：发布说明 URL（release notes）
+    out.notes_url = root.stringAt("notes_url");
     return true;
 }
 

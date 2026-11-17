@@ -423,6 +423,7 @@ struct DownloadState {
     std::atomic<bool> finished{false};
     std::atomic<bool> cancel{false};
     std::atomic<long long> written{0};
+    std::atomic<long long> expected_size{0}; // 只读，Content-Length 读到后赋值
     std::string expected_sha256; // 只读，线程启动前赋值
     bool ok = false;
     std::wstring error;
@@ -494,6 +495,16 @@ bool download_file(const std::wstring &url, const std::filesystem::path &dest,
         return false;
     }
 
+    // 读 Content-Length：有了才启用百分比进度条
+    ULONGLONG content_len = 0;
+    DWORD cl_size = sizeof(content_len);
+    if (WinHttpQueryHeaders(request.get(),
+                            WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER64,
+                            WINHTTP_HEADER_NAME_BY_INDEX, &content_len, &cl_size,
+                            WINHTTP_NO_HEADER_INDEX)) {
+        state->expected_size.store(static_cast<long long>(content_len));
+    }
+
     HANDLE file = CreateFileW(dest.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                               FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE) {
@@ -537,8 +548,20 @@ HRESULT CALLBACK download_dialog_callback(HWND hwnd, UINT msg, WPARAM, LPARAM, L
         if (state->finished.load()) {
             SendMessageW(hwnd, TDM_CLICK_BUTTON, IDOK, 0);
         } else {
-            const std::wstring text = L"已下载 "
-                + (state->written.load() > 0 ? human_size(state->written.load()) : L"0 MB");
+            const long long written = state->written.load();
+            const long long expected = state->expected_size.load();
+            std::wstring text;
+            if (expected > 0) {
+                const int pct = static_cast<int>(written * 100 / expected);
+                text = std::to_wstring(pct) + L"% — "
+                    + (written > 0 ? human_size(written) : L"0 MB")
+                    + L" / " + human_size(expected);
+                SendMessageW(hwnd, TDM_SET_PROGRESS_BAR_POS, pct, 0);
+            } else {
+                // 服务器没给 Content-Length，保持 MB 口径
+                text = L"已下载 "
+                    + (written > 0 ? human_size(written) : L"0 MB");
+            }
             SendMessageW(hwnd, TDM_SET_ELEMENT_TEXT, TDE_CONTENT,
                          reinterpret_cast<LPARAM>(text.c_str()));
         }
@@ -558,7 +581,8 @@ void run_download_dialog(HWND hwnd, DownloadState *state, std::thread *worker)
     config.cbSize = sizeof(config);
     config.hwndParent = hwnd;
     config.dwFlags =
-        TDF_ALLOW_DIALOG_CANCELLATION | TDF_CALLBACK_TIMER | TDF_POSITION_RELATIVE_TO_WINDOW;
+        TDF_ALLOW_DIALOG_CANCELLATION | TDF_CALLBACK_TIMER | TDF_POSITION_RELATIVE_TO_WINDOW
+        | TDF_SHOW_PROGRESS_BAR;
     config.pszWindowTitle = L"Mote";
     config.pszMainIcon = TD_INFORMATION_ICON;
     config.pszMainInstruction = L"正在下载更新…";
@@ -723,12 +747,20 @@ bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarge
         ? L"\n\n当前是安装版：将下载安装包、校验 SHA256 后静默安装并重启。"
         : L"\n\n当前是绿色版：将下载并校验更新包，随后打开所在文件夹，解压覆盖即可。";
 
+    bool has_notes = false;
+    if (!manifest.notes_url.empty()) {
+        content += L"\n\n<a href=\"" + utf8_to_wide(manifest.notes_url)
+            + L"\">查看完整更新说明…</a>";
+        has_notes = true;
+    }
+
     const std::wstring title = L"发现新版本 " + utf8_to_wide(manifest.version);
 
     TASKDIALOGCONFIG config = {};
     config.cbSize = sizeof(config);
     config.hwndParent = hwnd;
-    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW;
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW
+        | (has_notes ? TDF_ENABLE_HYPERLINKS : 0);
     config.pszWindowTitle = L"Mote";
     config.pszMainIcon = TD_INFORMATION_ICON;
     config.pszMainInstruction = title.c_str();

@@ -22,6 +22,9 @@ struct UpdateManifest
     std::string setup_url;
     std::string setup_sha256;
     long long setup_size = 0;
+
+    // 可选：本次更新的发布说明 URL（release notes 页面）。
+    std::string notes_url;
 };
 
 // 解析 latest.json。缺少必填字段或类型不符返回 false，error 给出中文原因。
