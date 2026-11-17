@@ -157,7 +157,7 @@ $manifestPath = Join-Path $root "dist\windows.json"
 # 绿色包是默认更新包；安装版另给 setup_* 三字段，客户端按安装形态二选一。
 # notes_url 指向 OSS 上对应的发布说明页面（由发布者另行上传），可选；
 # 客户端弹窗里 notes_url 非空时会出现「查看完整更新说明…」超链接。
-$NotesUrl = "$DownloadRoot/mote/release-notes-$Version.html"
+$NotesUrl = "$CdnDomain/$ProductDir/release-notes-$Version.html"
 $manifestObject = [ordered]@{
     version      = $Version
     url          = $DownloadUrl
