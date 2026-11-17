@@ -2348,7 +2348,8 @@
     return true;
   }
 
-  function tocData() {    var items = [];
+  function tocData() {
+    var items = [];
     if (mode !== 'wysiwyg')
       return items;
     for (var i = 0; i < root.children.length; i++) {

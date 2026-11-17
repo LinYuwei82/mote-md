@@ -658,11 +658,14 @@ void begin_download(HWND hwnd, const UpdateTarget &target)
         return;
     }
 
+    // 绿色版：Mote.exe 正在运行，覆盖前必须先退出，否则解压会被「文件被占用」挡住
     MoteAlert(hwnd, L"更新包已下载",
               "已通过 SHA256 校验：\n" + wide_to_utf8(dest.wstring())
-                  + "\n\n解压后覆盖 Mote 目录即可完成更新。");
+                  + "\n\n将打开所在文件夹并退出 Mote，解压覆盖后重新打开即可。");
     const std::wstring args = L"/select,\"" + dest.wstring() + L"\"";
     ShellExecuteW(hwnd, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+    if (g_quit)
+        g_quit();
 }
 
 struct CheckResult {
