@@ -2294,8 +2294,61 @@
       .trim();
   }
 
-  function tocData() {
-    var items = [];
+  // 标题锚点：按 GitHub 风格从标题文本生成 slug（保留中文，去标点，空格转 -），
+  // 同名标题依次追加 -1、-2，这样 `#标题` 链接才能找到目标。
+  function headingSlug(raw) {
+    var text = plainLabel(raw).toLowerCase();
+    text = text.replace(/[!"#$%&'()*+,.\/:;<=>?@\[\\\]^`{|}~]/g, '');
+    text = text.replace(/[，。、：；！？（）【】《》「」『』—…·]/g, '');
+    text = text.replace(/[\s\u3000]+/g, '-');
+    return text.replace(/^-+|-+$/g, '');
+  }
+
+  function headingAnchors() {
+    var map = {};
+    var seen = {};
+    if (mode !== 'wysiwyg')
+      return map;
+    for (var i = 0; i < root.children.length; i++) {
+      var el = root.children[i];
+      if (!el.classList || !el.classList.contains('block'))
+        continue;
+      if (!headingLevel(el))
+        continue;
+      // 锚点用渲染态原文算 slug：正在编辑的块 textContent 会带上零宽标记，
+      // 直接取会把标记也算进 slug，导致跳转失灵
+      var raw = el.dataset.raw || el.textContent;
+      var slug = headingSlug(raw);
+      if (!slug)
+        continue;
+      var count = seen[slug] || 0;
+      seen[slug] = count + 1;
+      var key = count ? slug + '-' + count : slug;
+      if (!map[key])
+        map[key] = el;
+    }
+    return map;
+  }
+
+  // 文档内锚点：命中就滚到对应标题，返回是否找到
+  function scrollToAnchor(href) {
+    var id = String(href || '').replace(/^#/, '');
+    try {
+      id = decodeURIComponent(id);
+    } catch (e) {
+      // 非法的百分号编码：按字面值匹配
+    }
+    if (!id)
+      return false;
+    var map = headingAnchors();
+    var target = map[id] || map[id.toLowerCase()];
+    if (!target)
+      return false;
+    target.scrollIntoView({ block: 'start' });
+    return true;
+  }
+
+  function tocData() {    var items = [];
     if (mode !== 'wysiwyg')
       return items;
     for (var i = 0; i < root.children.length; i++) {
@@ -2730,9 +2783,15 @@
       // 链接永远不让 WebView 自己导航：普通点击只落到「进入编辑」，
       // Cmd/Ctrl+Click 交给外壳决定（浏览器 / 应用内打开 .md）。
       event.preventDefault();
+      var href = anchor.getAttribute('data-href') || anchor.getAttribute('href') || '';
+      // 文档内锚点自己跳，不交给外壳：外壳没有标题锚点，只会提示「暂不支持」
+      if (href.charAt(0) === '#') {
+        if (!scrollToAnchor(href))
+          post({ type: 'status', message: '锚点链接 ' + href + ' 未找到对应标题' });
+        return;
+      }
       if (event.metaKey || event.ctrlKey) {
-        post({ type: 'openLink', href: anchor.getAttribute('data-href')
-          || anchor.getAttribute('href') || '' });
+        post({ type: 'openLink', href: href });
       }
       return;
     }
@@ -5536,6 +5595,19 @@
     var blocks = body.querySelectorAll('.block');
     for (var m = 0; m < blocks.length; m++)
       blocks[m].classList.remove('editing', 'selected', 'focus');
+    // 导出件同样生成标题锚点：文档里的 #标题 链接在导出 HTML 中也能跳
+    var seen = {};
+    for (var n = 0; n < blocks.length; n++) {
+      var heading = blocks[n];
+      if (!headingLevel(heading))
+        continue;
+      var slug = headingSlug(heading.dataset.raw || heading.textContent);
+      if (!slug)
+        continue;
+      var count = seen[slug] || 0;
+      seen[slug] = count + 1;
+      heading.id = count ? slug + '-' + count : slug;
+    }
     return body.innerHTML;
   }
 
