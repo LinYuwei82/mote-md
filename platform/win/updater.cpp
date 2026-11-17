@@ -779,6 +779,18 @@ void check_in_background(HWND hwnd, bool interactive)
     }).detach();
 }
 
+// 「发现新版本」弹窗里的超链接：TDF_ENABLE_HYPERLINKS 只负责渲染，
+// 点击后必须自己处理 TDN_HYPERLINK_CLICKED，否则点了没有任何反应
+HRESULT CALLBACK install_dialog_callback(HWND hwnd, UINT message, WPARAM, LPARAM lparam,
+                                         LONG_PTR)
+{
+    if (message == TDN_HYPERLINK_CLICKED && lparam) {
+        const wchar_t *link = reinterpret_cast<const wchar_t *>(lparam);
+        ShellExecuteW(hwnd, L"open", link, nullptr, nullptr, SW_SHOWNORMAL);
+    }
+    return S_OK;
+}
+
 // 返回 true 表示用户选择「下载并安装」
 bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarget &target)
 {
@@ -792,6 +804,7 @@ bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarge
         ? L"\n\n当前是安装版：将下载安装包、校验 SHA256 后静默安装并重启。"
         : L"\n\n当前是绿色版：将下载并校验更新包，随后打开所在文件夹，解压覆盖即可。";
 
+    const std::wstring plain_content = content;
     bool has_notes = false;
     if (!manifest.notes_url.empty()) {
         content += L"\n\n<a href=\"" + utf8_to_wide(manifest.notes_url)
@@ -810,6 +823,7 @@ bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarge
     config.pszMainIcon = TD_INFORMATION_ICON;
     config.pszMainInstruction = title.c_str();
     config.pszContent = content.c_str();
+    config.pfCallback = install_dialog_callback;
     const TASKDIALOG_BUTTON buttons[] = {
         {1001, L"下载更新"},
         {1002, L"稍后"},
@@ -818,10 +832,15 @@ bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarge
     config.cButtons = ARRAYSIZE(buttons);
 
     int pressed = 0;
-    if (FAILED(TaskDialogIndirect(&config, &pressed, nullptr, nullptr)))
-        return MessageBoxW(hwnd, content.c_str(), title.c_str(),
+    if (FAILED(TaskDialogIndirect(&config, &pressed, nullptr, nullptr))) {
+        // 退回 MessageBox 时不能带 <a> 标记，否则会原样显示成尖括号文本
+        std::wstring plain = plain_content;
+        if (!manifest.notes_url.empty())
+            plain += L"\n\n更新说明：" + utf8_to_wide(manifest.notes_url);
+        return MessageBoxW(hwnd, plain.c_str(), title.c_str(),
                            MB_YESNO | MB_ICONINFORMATION | MB_DEFBUTTON1)
             == IDYES;
+    }
     return pressed == 1001;
 }
 

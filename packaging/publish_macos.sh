@@ -47,6 +47,14 @@ MIN_OS="${MIN_OS:-14.0}"
 SKIP_UPLOAD="${SKIP_UPLOAD:-false}"
 OSS_ENV_FILE="${OSS_ENV_FILE:-$HOME/.config/xiaotu-updates/.env}"
 NOTES_URL="${NOTES_URL:-}"
+# notes_url 会原样写进清单并被客户端打开，必须是绝对 http(s) 地址；
+# 相对路径（如 /mote/release-notes-x.html）会让「查看完整更新说明…」打不开
+if [ -n "$NOTES_URL" ]; then
+  case "$NOTES_URL" in
+    http://*|https://*) ;;
+    *) echo "NOTES_URL 必须是绝对 http(s) 地址：$NOTES_URL" >&2; exit 2 ;;
+  esac
+fi
 
 # ---- 定位 sign_update ----
 find_sign_update() {

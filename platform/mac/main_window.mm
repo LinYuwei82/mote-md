@@ -943,7 +943,12 @@ private:
         target = url.path;
     } else if (scheme.length == 0) {
         NSString *decoded = href.stringByRemovingPercentEncoding ?: href;
-        target = [self.lastDir stringByAppendingPathComponent:decoded];
+        // 绝对路径（/Users/x.md）不能拼到 lastDir 后面，否则会变成 <lastDir>/Users/x.md
+        if ([decoded hasPrefix:@"/"]) {
+            target = decoded;
+        } else {
+            target = [self.lastDir stringByAppendingPathComponent:decoded];
+        }
     } else {
         [self showStatus:[NSString stringWithFormat:@"不支持打开的链接类型：%@", href]];
         return;

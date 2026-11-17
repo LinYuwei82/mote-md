@@ -1649,6 +1649,10 @@ void MoteMainWindow::open_external(const std::string &raw_url)
         return;
     }
 
+    // 盘符（C:/x.md、C:\x.md）不是 scheme：单字母当本地绝对路径，交给下面的路径分支
+    if (scheme.size() == 1 && scheme[0] >= 'a' && scheme[0] <= 'z')
+        scheme.clear();
+
     std::string local;
     if (scheme == "file") {
         std::string rest = url.substr(5);
@@ -1666,7 +1670,9 @@ void MoteMainWindow::open_external(const std::string &raw_url)
         if (bare.empty())
             return;
         bare = url_to_local_path(bare);
-        const bool rooted = bare.front() == '\\';
+        // 根路径（\server\share）与盘符路径（C:\docs\x.md）都不拼 last_dir_
+        const bool rooted = (!bare.empty() && bare.front() == '\\')
+            || (bare.size() >= 2 && bare[1] == ':');
         local = (rooted || last_dir_.empty()) ? bare : last_dir_ + "\\" + bare;
     } else {
         status_message("不支持打开的链接类型：" + raw_url);
