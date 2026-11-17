@@ -641,6 +641,24 @@ main { display: block; padding-bottom: 88px; }
   white-space: pre;
 }
 
+/* ---------- 界面截图 ---------- */
+
+.shot { margin: 30px 0 0; }
+.shot img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.shot figcaption {
+  margin-top: 12px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  text-align: center;
+}
+
 /* ---------- 文档页 ---------- */
 .doc-grid {
   display: grid;
