@@ -113,6 +113,10 @@
       url: XIAOTUWIN,
       version: 'version', size: 'size', sha: 'sha256', href: 'url'
     },
+    'xiaotu-win-zip': {
+      url: XIAOTUWIN,
+      version: 'version', size: 'portable_size', sha: 'portable_sha256', href: 'portable_url'
+    },
     'devcard-mac': { url: DEVCARD_MAC, version: 'latest', asset: '.dmg' },
     'devcard-win-setup': { url: DEVCARD_WIN, version: 'latest', asset: '.exe' },
     'devcard-win-zip': { url: DEVCARD_WIN, version: 'latest', asset: '.zip' }
