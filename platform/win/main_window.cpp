@@ -796,6 +796,8 @@ void MoteMainWindow::open_path(const std::string &path)
     file_path_ = resolved;
     last_dir_ = parent_dir(resolved);
     last_text_ = text;
+    // 记录原文件行尾风格，保存时原样写回（编辑器内部按 LF 工作）
+    crlf_ = text.find("\r\n") != std::string::npos;
     controller_->setMarkdown(text, last_dir_);
     update_title();
     log_line("NATIVE open " + path);
@@ -813,6 +815,7 @@ void MoteMainWindow::start_new_document()
 {
     file_path_.clear();
     last_text_.clear();
+    crlf_ = false; // 新文档用 LF，和编辑器内部表示一致
     save_as_requested_ = false;
     controller_->newDocument();
     update_title();
@@ -872,7 +875,19 @@ void MoteMainWindow::save_text(const std::string &text)
 
 bool MoteMainWindow::write_text(const std::string &text, const std::string &path)
 {
-    if (write_text_file(path, text))
+    // 编辑器内部统一 LF；原文件是 CRLF 时还原，避免「打开再保存」把整篇行尾改掉
+    std::string payload = text;
+    if (crlf_) {
+        payload.clear();
+        payload.reserve(text.size() + text.size() / 16);
+        for (const char c : text) {
+            if (c == '\n')
+                payload += "\r\n";
+            else
+                payload.push_back(c);
+        }
+    }
+    if (write_text_file(path, payload))
         return true;
     MoteAlert(hwnd_, L"保存失败", "无法写入文件：\n" + path);
     return false;
@@ -947,7 +962,8 @@ void MoteMainWindow::export_html_ready(const std::string &html)
         MoteAlert(hwnd_, L"导出失败", "无法写入文件：\n" + path);
         return;
     }
-    log_line("NATIVE export path=" + path + " missing=" + std::to_string(missing));    if (missing > 0)
+    log_line("NATIVE export path=" + path + " missing=" + std::to_string(missing));
+    if (missing > 0)
         status_message("已导出到 " + path + "（" + std::to_string(missing) + " 张图片缺失）");
     else
         status_message("已导出到 " + path);
@@ -1158,9 +1174,15 @@ void MoteMainWindow::show_status(const std::string &text)
 {
     if (text.empty())
         return;
-    pending_status_ = text;
-    if (controller_ && controller_->pageReady())
-        host_->evaluate_script(mote::js::statusMessage(text));
+    // 先拷一份：调用方可能直接传 pending_status_ 本身，下面 clear() 会让引用变空
+    const std::string message = text;
+    // 已送达就清掉缓存：否则每次页面重载后的 ready 都会重放上一条旧状态
+    if (controller_ && controller_->pageReady()) {
+        pending_status_.clear();
+        host_->evaluate_script(mote::js::statusMessage(message));
+        return;
+    }
+    pending_status_ = message;
 }
 
 void MoteMainWindow::perform_command(mote::CommandId command)
@@ -1556,6 +1578,19 @@ std::string MoteMainWindow::clipboard_text()
 
 void MoteMainWindow::open_external(const std::string &url)
 {
+    // 与 macOS 端一致：只放行常规外链。文档里的链接是任意文本，直接交给
+    // ShellExecuteW 会让 javascript:/file:/ms-* 等 scheme 执行本地内容。
+    std::string scheme;
+    const size_t colon = url.find(':');
+    if (colon != std::string::npos) {
+        scheme = url.substr(0, colon);
+        for (char &c : scheme)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    if (scheme != "http" && scheme != "https" && scheme != "mailto") {
+        status_message("已忽略不支持的链接：" + url);
+        return;
+    }
     const std::wstring wide = utf8_to_wide(url);
     ShellExecuteW(hwnd_, L"open", wide.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }

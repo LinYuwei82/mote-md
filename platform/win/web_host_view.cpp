@@ -355,15 +355,6 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
     if (SUCCEEDED(controller_.As(&controller4)) && controller4)
         controller4->put_AllowExternalDrop(FALSE);
 
-    // Chromium 自带的浏览器快捷键会先于 AcceleratorKeyPressed 吃掉部分组合键
-    // （典型是 Ctrl+Shift+S），让外壳的菜单快捷键无法触发。页面自己处理了
-    // Ctrl+S/O/Z/Y，查找条等也在页面里实现，关掉这批内部快捷键不会丢功能。
-    Microsoft::WRL::ComPtr<ICoreWebView2Settings> settings;
-    Microsoft::WRL::ComPtr<ICoreWebView2Settings3> settings3;
-    if (webview_ && SUCCEEDED(webview_->get_Settings(&settings)) && settings
-        && SUCCEEDED(settings.As(&settings3)) && settings3)
-        settings3->put_AreBrowserAcceleratorKeysEnabled(FALSE);
-
     RECT bounds = {};
     GetClientRect(parent_, &bounds);
     controller_->put_Bounds(bounds);
@@ -372,6 +363,16 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
         fail(L"WebView2 初始化失败。");
         return;
     }
+
+    // Chromium 自带的浏览器快捷键会先于 AcceleratorKeyPressed 吃掉部分组合键
+    // （典型是 Ctrl+Shift+S），让外壳的菜单快捷键无法触发。页面自己处理了
+    // Ctrl+S/O/Z/Y，查找条等也在页面里实现，关掉这批内部快捷键不会丢功能。
+    // 必须在 get_CoreWebView2 之后设置：此前 webview_ 还是空的，条件会直接短路。
+    Microsoft::WRL::ComPtr<ICoreWebView2Settings> settings;
+    Microsoft::WRL::ComPtr<ICoreWebView2Settings3> settings3;
+    if (SUCCEEDED(webview_->get_Settings(&settings)) && settings
+        && SUCCEEDED(settings.As(&settings3)) && settings3)
+        settings3->put_AreBrowserAcceleratorKeysEnabled(FALSE);
 
     webview_->AddScriptToExecuteOnDocumentCreated(kBridgeScript, nullptr);
 

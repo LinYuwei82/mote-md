@@ -111,6 +111,9 @@ private:
     std::string last_text_;
     std::string pending_status_;
     bool save_as_requested_ = false;
+    // 当前文档原始换行风格：编辑器内部统一 LF，写回时按此还原 CRLF，
+    // 否则打开一个 CRLF 文件再保存会把整篇改成 LF（Git 里表现为全文件 diff）
+    bool crlf_ = false;
     bool toc_on_ = false;
     bool source_on_ = false;
     bool follow_system_ = true;

@@ -56,7 +56,10 @@ std::string item_path(IShellItem *item)
     PWSTR raw = nullptr;
     if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &raw)) || !raw)
         return std::string();
-    return wide_to_utf8(raw);
+    // GetDisplayName 分配的内存由调用方用 CoTaskMemFree 释放，漏掉会每次打开/保存泄漏一块
+    std::string path = wide_to_utf8(raw);
+    CoTaskMemFree(raw);
+    return path;
 }
 
 std::string ensure_extension(std::string path, const std::wstring &extension)
