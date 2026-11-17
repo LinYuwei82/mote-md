@@ -328,10 +328,9 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
                         range:NSMakeRange(0, linkText.length)];
 
             NSTextField *link = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 16)];
-            link.isEditable = NO;
-            link.isSelectable = YES;
+            [link setEditable:NO];
+            [link setSelectable:YES];
             link.allowsEditingTextAttributes = YES;
-            link.selectable = YES;
             link.drawsBackground = NO;
             link.bordered = NO;
             link.attributedStringValue = attr;
