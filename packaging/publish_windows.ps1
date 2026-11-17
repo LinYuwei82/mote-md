@@ -11,7 +11,7 @@
 #
 # 目录约定：
 #   oss://<bucket>/mote/Mote-<version>-win64-portable.zip   长缓存 immutable
-#   oss://<bucket>/mote/updates/<channel>/windows.json      5 分钟缓存
+#   oss://<bucket>/mote/updates/<channel>/windows.json      60 秒缓存
 # 对外地址：
 #   https://dl.xiaotu.online/mote/updates/stable/windows.json   ← 客户端读取
 #
@@ -200,7 +200,7 @@ bkt.put_object_from_file(os.environ["UPLOAD_ZIP_KEY"], os.environ["UPLOAD_ZIP_PA
                          headers={"Cache-Control": "public, max-age=31536000, immutable",
                                   "Content-Type": "application/zip"})
 bkt.put_object_from_file(os.environ["UPLOAD_MANIFEST_KEY"], os.environ["UPLOAD_MANIFEST_PATH"],
-                         headers={"Cache-Control": "no-cache, max-age=300",
+                         headers={"Cache-Control": "no-cache, max-age=60",
                                   "Content-Type": "application/json"})
 setup_key = os.environ.get("UPLOAD_SETUP_KEY")
 if setup_key:

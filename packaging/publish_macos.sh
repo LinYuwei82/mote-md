@@ -11,8 +11,8 @@
 #
 # 目录约定（与 index.html 现有下载路径同源）：
 #   oss://<bucket>/mote/<dmg 文件名>                     长缓存 immutable
-#   oss://<bucket>/mote/updates/stable/appcast.xml        5 分钟缓存
-#   oss://<bucket>/mote/updates/stable/latest.json        5 分钟缓存
+#   oss://<bucket>/mote/updates/stable/appcast.xml        60 秒缓存
+#   oss://<bucket>/mote/updates/stable/latest.json        60 秒缓存
 # 对外地址：
 #   https://dl.xiaotu.online/mote/updates/stable/appcast.xml   ← Info.plist SUFeedURL
 #   https://dl.xiaotu.online/mote/updates/stable/latest.json   ← 自研检查读取
@@ -212,9 +212,9 @@ else
   oss_upload "$DMG_PATH" "$PRODUCT_DIR/$DMG_BASENAME" \
     "public, max-age=31536000, immutable" "application/octet-stream"
   oss_upload "$APPCAST_LOCAL" "$APPCAST_KEY" \
-    "no-cache, max-age=300" "application/rss+xml"
+    "no-cache, max-age=60" "application/rss+xml"
   oss_upload "$MANIFEST_LOCAL" "$MANIFEST_KEY" \
-    "no-cache, max-age=300" "application/json"
+    "no-cache, max-age=60" "application/json"
 fi
 
 # ---- ⑥ 线上校验 ----

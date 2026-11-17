@@ -166,7 +166,7 @@ else
       "public, max-age=31536000, immutable" "application/octet-stream"
   fi
   oss_upload "$MANIFEST_LOCAL" "$MANIFEST_KEY" \
-    "no-cache, max-age=300" "application/json"
+    "no-cache, max-age=60" "application/json"
 fi
 
 # ---- ③ 线上校验 ----
