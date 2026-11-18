@@ -1,0 +1,61 @@
+name: CI
+
+# 每次 push / PR 都跑一遍 Windows 构建与单元测试。
+# 发布走 release-windows.yml（手动触发，含打包与上传），这里只做回归验证。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows 构建与测试
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # guard 是三仓库共用的单一规则源（见 docs/OSS-发布布局.md）
+      # Windows 检出可能把哈希文件转成 CRLF，先去掉 \r 再校验
+      - name: 校验 guard / manifest_v2 未被单独改动
+        shell: bash
+        run: |
+          tr -d '\r' < tools/release/guard.sha256 | sha256sum -c -
+          tr -d '\r' < tools/release/manifest_v2.sha256 | sha256sum -c -
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # 原生外壳链接 WebView2LoaderStatic.lib：按固定版本取 nuget 包，
+      # 解出 build/native/include 与 x64 静态库，路径通过 WEBVIEW2_SDK 传给 CMake。
+      - name: 取 WebView2 SDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $v = '1.0.4314.35'
+          $url = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$v/microsoft.web.webview2.$v.nupkg"
+          $nupkg = Join-Path $env:RUNNER_TEMP "webview2.$v.nupkg"
+          $dest = Join-Path $env:RUNNER_TEMP "webview2sdk\pkg"
+          Invoke-WebRequest -Uri $url -OutFile $nupkg -UseBasicParsing
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          Expand-Archive -LiteralPath $nupkg -DestinationPath $dest -Force
+          if (-not (Test-Path (Join-Path $dest 'build\native\include\WebView2.h'))) {
+            throw 'WebView2 SDK 解压后缺少 WebView2.h'
+          }
+          "WEBVIEW2_SDK=$dest" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: 构建
+        run: |
+          $build = (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmm')
+          cmake -S native -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DMOTE_BUILD=$build
+          cmake --build build-native
+
+      - name: 单元测试
+        run: ctest --test-dir build-native --output-on-failure
