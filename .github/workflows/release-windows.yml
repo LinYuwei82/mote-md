@@ -1,0 +1,108 @@
+name: Windows 发布
+
+# 手动触发的 Windows 发布流水线：构建原生外壳 → 绿色包/安装包 → guard 门禁
+# → 生成 windows.json → 上传 OSS → 线上校验。
+#
+# 前置 secrets：OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET（仅授予 PutObject）。
+# 注意：发布前先改 Mote.pro 的 VERSION（必须大于线上版本）；guard 会拒绝版本回退，
+# 安装包 immutable 长缓存，同名覆盖不会生效。
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 发布通道
+        type: choice
+        options: [stable, beta]
+        default: stable
+      skip_setup:
+        description: 只发绿色包（跳过安装包）
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: 构建 → 门禁 → 上传
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      # guard 是三仓库共用的单一规则源（见 mote/docs/OSS-发布布局.md）
+      - name: 校验 guard 未被单独改动
+        run: sha256sum -c tools/release/guard.sha256
+      - name: guard selftest
+        shell: pwsh
+        run: python tools/release/guard.py selftest
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # 原生外壳链接 WebView2LoaderStatic.lib：按固定版本取 nuget 包，
+      # 解出 build/native/include 与 x64 静态库，路径通过 WEBVIEW2_SDK 传给 CMake。
+      - name: 取 WebView2 SDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $v = '1.0.4314.35'
+          $url = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$v/microsoft.web.webview2.$v.nupkg"
+          $nupkg = Join-Path $env:RUNNER_TEMP "webview2.$v.nupkg"
+          $dest = Join-Path $env:RUNNER_TEMP "webview2sdk\pkg"
+          Invoke-WebRequest -Uri $url -OutFile $nupkg -UseBasicParsing
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          Expand-Archive -LiteralPath $nupkg -DestinationPath $dest -Force
+          if (-not (Test-Path (Join-Path $dest 'build\native\include\WebView2.h'))) {
+            throw 'WebView2 SDK 解压后缺少 WebView2.h'
+          }
+          "WEBVIEW2_SDK=$dest" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "WebView2 SDK $v → $dest"
+
+      - name: 构建原生外壳
+        run: |
+          cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native-ninja
+
+      - name: 打绿色包
+        shell: pwsh
+        run: ./packaging/package_windows_native.ps1 -SkipBuild
+
+      - name: 打安装包
+        if: ${{ inputs.skip_setup != true }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install innosetup --yes --no-progress
+          ./packaging/build_installer.ps1
+
+      # publish_windows.ps1 内置 guard preflight / verify-live（3.5/6 与 5.5/6）
+      - name: 发布（清单 → guard → 上传）
+        shell: pwsh
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_BUCKET: xiaotu-update
+          OSS_REGION: cn-hongkong
+        run: |
+          python -m pip install --quiet oss2
+          if ('${{ inputs.skip_setup }}' -eq 'true') {
+            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }} -SetupPath '不存在.exe'
+          } else {
+            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }}
+          }
+
+      - name: 上传构建产物（留档）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mote-windows-release
+          path: |
+            dist/Mote-Windows.zip
+            dist/Mote-Setup-*.exe
+            dist/windows.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -178,6 +178,20 @@ $manifest = ($manifestObject | ConvertTo-Json) + "`n"
 Write-Host "  已生成：$manifestPath"
 
 Write-Host ""
+Write-Host "[3.5/6] 发布门禁（guard）"
+$python = (Get-Command python -ErrorAction SilentlyContinue).Source
+if (-not $python) { Fail "找不到 python（guard 需要）" }
+$guardArgs = @("--product", "mote", "--kind", "win", "--channel", $Channel)
+if ($SetupFull) {
+    $guardArgs += @("--file", $SetupFull, "--zip", $ZipFull, "--zip-name", $RemoteName)
+} else {
+    $guardArgs += @("--file", $ZipFull, "--name", $RemoteName)
+}
+if ($SkipUpload) { $guardArgs += "--offline" }
+& $python (Join-Path $root "tools\release\guard.py") preflight @guardArgs
+if ($LASTEXITCODE -ne 0) { Fail "guard preflight 未通过（命名/版本/覆盖/内嵌地址）" }
+
+Write-Host ""
 if ($SkipUpload) {
     Write-Host "[4/6] [SkipUpload] 跳过上传"
 } else {
@@ -279,6 +293,13 @@ if ($SkipUpload) {
 }
 
 Write-Host ""
+if (-not $SkipUpload) {
+    Write-Host ""
+    Write-Host "[5.5/6] 线上门禁（guard）"
+    & $python (Join-Path $root "tools\release\guard.py") verify-live @guardArgs
+    if ($LASTEXITCODE -ne 0) { Fail "guard verify-live 未通过（清单/大小/SHA/Content-Type）" }
+}
+
 Write-Host "[6/6] 本次发布摘要（下载页由 site.js 读取 windows.json 自动同步，无需手改 index.html）"
 Write-Host ("  版本   : v{0}" -f $Version)
 Write-Host ("  大小   : {0:N0} 字节（约 {1:N1} MB）" -f $Size, ($Size / 1MB))

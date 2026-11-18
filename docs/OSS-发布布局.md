@@ -237,6 +237,11 @@ mote/tools/release/publish_windows.ps1                 # Windows 机器上执行
 # 官网
 bash mote/tools/release/publish_site_oss.sh            # → pre.xiaotu.online
 bash mote/tools/release/deploy_site.sh                 # → xiaotu.online（ECS）
+
+# Windows 也可走 GitHub Actions 发布（三仓库均有 release-windows.yml，手动触发）：
+#   Actions → Windows 发布 → Run workflow（可选 dry_run 只出包不上传）
+#   前置 secrets：OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET；
+#   小兔另需 XIAOTU_UPDATE_SIGNING_KEY（Ed25519 私钥 PEM）。
 ```
 
 ### 统一门禁 `guard.py`
