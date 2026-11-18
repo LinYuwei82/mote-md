@@ -336,7 +336,10 @@ else
     echo "    提示：钥匙串里需要有 'Developer ID Application: ...' 证书才能通过公证"
     codesign --force --deep --sign - "$APP_PATH"
 fi
-codesign --verify --deep --strict "$APP_PATH"
+# --skip-sign 时 .app 未签名，verify 必然返回非 0，会直接打断 set -e 的打包流程
+if [ "$SKIP_SIGN" -ne 1 ]; then
+    codesign --verify --deep --strict "$APP_PATH"
+fi
 
 # 签名后检查 Gatekeeper 兼容性（runtime + 证书）
 if [ "$SKIP_SIGN" -ne 1 ] && [ -n "$SIGN_IDENTITY" ]; then
