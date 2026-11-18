@@ -94,19 +94,22 @@ https://dl.xiaotu.online/mote/updates/stable/windows.json
 > 1.2.4 只发过 macOS（修复 Sparkle feed 地址）；Windows 侧 1.2.4 的两个包曾被 CI 误覆盖，
 > 现以 **1.2.5** 为 Windows 最新版，清单已指向 1.2.5。
 
-### 3.2 小兔进销存（macOS / Windows 当前均为 1.0.0）
+### 3.2 小兔进销存（macOS 当前 1.0.0，Windows 当前 1.0.1）
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
 | DMG | `xiaotu/xiaotu-inventory-1.0.0.dmg` | 6,378,546 | `application/octet-stream` |
 | DMG | `xiaotu/xiaotu-inventory-0.9.0.dmg` | 6,633,958 | `application/octet-stream` |
-| EXE | `xiaotu/xiaotu-inventory-1.0.0-win64-setup.exe` | 3,690,759 | `application/octet-stream` |
+| EXE | `xiaotu/xiaotu-inventory-1.0.1-win64-setup.exe` | 3,692,653 | `application/octet-stream` |
+| ZIP | `xiaotu/xiaotu-inventory-1.0.1-win64.zip` | 2,434,029 | `application/zip` |
 | EXE | `xiaotu/xiaotu-inventory-0.9.0-win64-setup.exe` | 3,580,457 | `application/octet-stream` |
-| ZIP | `xiaotu/xiaotu-inventory-1.0.0-win64.zip` | 2,433,248 | `application/zip` |
 | ZIP | `xiaotu/xiaotu-inventory-0.9.0-win64.zip` | 2,137,094 | `application/zip` |
 
-> 现有 1.0.0 Windows 包的壳内清单地址仍是旧路径（发布后永远检查不到更新）。
-> 仓库 `VERSION` 已升到 **1.0.1**，待重打并通过 `release-windows.yml` 发布。
+> Windows 1.0.1（build `202611180530`）已在本地 Windows 构建、Mac 发布，
+> 壳内地址为 `https://dl.xiaotu.online/xiaotu/updates/stable/windows.json`，
+> `windows.json` 已指向该版本。规则名 1.0.0 的 Windows 包（setup + zip）已删除；
+> 1.0.0 的 **dmg 保留**，因为 macOS `latest.json` 仍指向它。
+> macOS 尚未发 1.0.1，升版时请一并重打 dmg 并保留旧 dmg 直到清单切换。
 
 ### 3.3 Mote（macOS 当前 1.0.1，Windows 当前 1.0.2）
 
