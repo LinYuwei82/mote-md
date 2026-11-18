@@ -43,6 +43,8 @@ constexpr int kMinHeight = 520;
 constexpr UINT_PTR kStartupCommandTimer = 1;
 constexpr UINT_PTR kSnapshotTimer = 2;
 constexpr UINT_PTR kDropProbeTimer = 3;
+// 5 起避开 updater.cpp 的 kUpdateTimer（4），否则 WM_TIMER 会被先匹配走
+constexpr UINT_PTR kEvalTimer = 5;
 // 键盘钩子截获的组合键回到窗口线程后，再用这条消息统一走 perform_command
 constexpr UINT kShortcutMessage = WM_APP + 7;
 
@@ -442,7 +444,8 @@ public:
     }
     void logMessage(const std::string &message) override
     {
-        if (!env_value("MOTE_KEYLOG").empty())
+        // MOTE_EVAL 是显式诊断请求，结果不应再被 MOTE_KEYLOG 门槛吞掉
+        if (!env_value("MOTE_KEYLOG").empty() || !env_value("MOTE_EVAL").empty())
             log_line("JSLOG " + message);
     }
 
@@ -666,6 +669,19 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         }
         if (wparam == mote::win::kUpdateTimer) {
             mote::win::run_update_timer(hwnd);
+            return 0;
+        }
+        if (wparam == kEvalTimer) {
+            KillTimer(hwnd, kEvalTimer);
+            const std::string expression = env_value("MOTE_EVAL");
+            if (!expression.empty() && host_) {
+                const std::string probe =
+                    "(function(){try{var r=(" + expression
+                    + ");window.chrome.webview.postMessage({type:'log',message:'EVAL '+String(r)});}"
+                      "catch(e){window.chrome.webview.postMessage({type:'log',message:'EVALERR '+e});}})();";
+                host_->evaluate_script(probe);
+                log_line("NATIVE eval dispatched");
+            }
             return 0;
         }
         if (wparam == kSnapshotTimer) {
@@ -1159,13 +1175,10 @@ void MoteMainWindow::page_ready()
     // 与 mac 同名的诊断钩子：MOTE_EVAL 打一条 JSLOG，MOTE_SNAPSHOT 出 PNG
     if (!diagnostics_started_) {
         diagnostics_started_ = true;
-        const std::string expression = env_value("MOTE_EVAL");
-        if (!expression.empty()) {
-            const std::string probe =
-                "(function(){try{var r=(" + expression
-                + ");window.chrome.webview.postMessage({type:'log',message:'EVAL '+String(r)});}"
-                  "catch(e){window.chrome.webview.postMessage({type:'log',message:'EVALERR '+e});}})();";
-            host_->evaluate_script(probe);
+        // 等导航完成后再取页面状态：ready 消息到达时 WebView2 仍在导航，
+        // 此刻调用 ExecuteScript 会被静默丢弃（只剩 scheduled、没有结果）
+        if (!env_value("MOTE_EVAL").empty()) {
+            SetTimer(hwnd_, kEvalTimer, 700, nullptr);
             log_line("NATIVE eval scheduled");
         }
         const std::string snapshot = env_value("MOTE_SNAPSHOT");
