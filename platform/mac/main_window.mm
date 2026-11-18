@@ -27,6 +27,7 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
     MoteAfterSaveClose,
     MoteAfterSaveTerminate,
     MoteAfterSaveExportPdf,
+    MoteAfterSaveDropText,
 };
 
 @interface MoteMainWindow () <NSWindowDelegate>
@@ -37,6 +38,7 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
 @property(nonatomic, copy) NSString *lastDir;
 @property(nonatomic, copy) NSString *lastText;
 @property(nonatomic, copy) NSString *afterSavePath;
+@property(nonatomic, copy) NSString *afterSaveText;
 @property(nonatomic) MoteAfterSave afterSave;
 @property(nonatomic) BOOL saveAsRequested;
 @property(nonatomic) BOOL followSystem;
@@ -74,6 +76,8 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
 - (void)beginSaveAs:(BOOL)saveAs;
 - (BOOL)writeText:(NSString *)text toPath:(NSString *)path;
 - (BOOL)prepareForReplace:(MoteAfterSave)after path:(NSString *)path;
+- (BOOL)prepareForReplace:(MoteAfterSave)after path:(NSString *)path text:(NSString *)text;
+- (void)loadDroppedText:(const std::string &)text;
 - (void)runAfterSave;
 - (void)resetAfterSave;
 - (void)setupDropHandlers;
@@ -564,6 +568,15 @@ private:
 - (void)acceptDroppedName:(const std::string &)name text:(const std::string &)text
 {
     (void)name;
+    // 拖入等同「打开另一份文档」：有未保存修改时先问，不能在用户不知情时覆盖。
+    NSString *dropped = [NSString stringWithUTF8String:text.c_str()] ?: @"";
+    if (![self prepareForReplace:MoteAfterSaveDropText path:nil text:dropped])
+        return;
+    [self loadDroppedText:text];
+}
+
+- (void)loadDroppedText:(const std::string &)text
+{
     // WebKit 出于安全不暴露拖入文件的真实路径，只能作为「未命名」文档载入
     self.filePath = nil;
     NSString *content = [NSString stringWithUTF8String:text.c_str()] ?: @"";
@@ -670,6 +683,11 @@ private:
 
 - (BOOL)prepareForReplace:(MoteAfterSave)after path:(NSString *)path
 {
+    return [self prepareForReplace:after path:path text:nil];
+}
+
+- (BOOL)prepareForReplace:(MoteAfterSave)after path:(NSString *)path text:(NSString *)text
+{
     if (!_controller->dirty())
         return YES;
 
@@ -681,6 +699,7 @@ private:
 
     self.afterSave = after;
     self.afterSavePath = path;
+    self.afterSaveText = text;
     _controller->requestSnapshot();
     return NO;
 }
@@ -689,6 +708,7 @@ private:
 {
     const MoteAfterSave after = self.afterSave;
     NSString *path = self.afterSavePath;
+    NSString *text = self.afterSaveText;
     [self resetAfterSave];
 
     switch (after) {
@@ -711,6 +731,9 @@ private:
     case MoteAfterSaveExportPdf:
         [self exportPdf];
         break;
+    case MoteAfterSaveDropText:
+        [self loadDroppedText:text.UTF8String ? std::string(text.UTF8String) : std::string()];
+        break;
     case MoteAfterSaveNone:
         break;
     }
@@ -720,6 +743,7 @@ private:
 {
     self.afterSave = MoteAfterSaveNone;
     self.afterSavePath = nil;
+    self.afterSaveText = nil;
 }
 
 - (BOOL)applicationShouldTerminate

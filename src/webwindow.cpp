@@ -502,8 +502,16 @@ bool WebWindow::openFile(const QString &filePath)
 
 void WebWindow::handleDroppedText(const QString &name, const QString &text)
 {
-    // WebKit 出于安全不暴露拖入文件的真实路径，这里只能作为「未命名」文档载入
     Q_UNUSED(name)
+    // 拖入等同「打开另一份文档」：有未保存修改时先问，不能在用户不知情时覆盖。
+    if (!prepareForReplace(AfterSave::DropText, QString(), text))
+        return;
+    loadDroppedText(text);
+}
+
+void WebWindow::loadDroppedText(const QString &text)
+{
+    // WebKit 出于安全不暴露拖入文件的真实路径，这里只能作为「未命名」文档载入
     m_filePath.clear();
     m_lastText = text;
     if (m_web)
@@ -909,7 +917,8 @@ bool WebWindow::saveFileAsWith(const QString &text)
     return true;
 }
 
-bool WebWindow::prepareForReplace(AfterSave after, const QString &nextPath)
+bool WebWindow::prepareForReplace(AfterSave after, const QString &nextPath,
+                                  const QString &nextText)
 {
     if (!m_dirty)
         return true;
@@ -939,6 +948,7 @@ bool WebWindow::prepareForReplace(AfterSave after, const QString &nextPath)
 
     m_afterSave = after;
     m_afterSavePath = nextPath;
+    m_afterSaveText = nextText;
     if (m_web)
         m_web->requestSnapshot();
     return false;
@@ -948,8 +958,10 @@ void WebWindow::runAfterSave()
 {
     const AfterSave after = m_afterSave;
     const QString path = m_afterSavePath;
+    const QString text = m_afterSaveText;
     m_afterSave = AfterSave::None;
     m_afterSavePath.clear();
+    m_afterSaveText.clear();
 
     switch (after) {
     case AfterSave::OpenDialog:
@@ -966,6 +978,9 @@ void WebWindow::runAfterSave()
         break;
     case AfterSave::ExportPdf:
         QTimer::singleShot(0, this, &WebWindow::promptExportPdf);
+        break;
+    case AfterSave::DropText:
+        QTimer::singleShot(0, this, [this, text] { loadDroppedText(text); });
         break;
     case AfterSave::None:
         break;

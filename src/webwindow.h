@@ -31,7 +31,7 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
-    enum class AfterSave { None, OpenDialog, OpenPath, NewDocument, Close, ExportPdf };
+    enum class AfterSave { None, OpenDialog, OpenPath, NewDocument, Close, ExportPdf, DropText };
 
     void createActions();
     void createUi();
@@ -68,7 +68,9 @@ private:
     void handleDroppedText(const QString &name, const QString &text);
     bool writeText(const QString &filePath, const QString &text);
     bool saveFileAsWith(const QString &text);
-    bool prepareForReplace(AfterSave after, const QString &nextPath = QString());
+    bool prepareForReplace(AfterSave after, const QString &nextPath = QString(),
+                           const QString &nextText = QString());
+    void loadDroppedText(const QString &text);
     void runAfterSave();
 
     WebEditor *m_web = nullptr;
@@ -105,6 +107,7 @@ private:
     qreal m_lastZoom = 1.0;
     AfterSave m_afterSave = AfterSave::None;
     QString m_afterSavePath;
+    QString m_afterSaveText;
 };
 
 #endif // WEBWINDOW_H

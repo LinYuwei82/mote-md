@@ -1036,7 +1036,8 @@ void MoteMainWindow::export_pdf_requested(const std::string &path)
     });
 }
 
-bool MoteMainWindow::prepare_for_replace(AfterSave after, const std::string &path)
+bool MoteMainWindow::prepare_for_replace(AfterSave after, const std::string &path,
+                                        const std::string &text)
 {
     if (!controller_ || !controller_->dirty())
         return true;
@@ -1049,6 +1050,7 @@ bool MoteMainWindow::prepare_for_replace(AfterSave after, const std::string &pat
     case MoteSaveChoice::Save:
         after_save_ = after;
         after_save_path_ = path;
+        after_save_text_ = text;
         controller_->requestSnapshot();
         return false;
     }
@@ -1059,6 +1061,7 @@ void MoteMainWindow::run_after_save()
 {
     const AfterSave after = after_save_;
     const std::string path = after_save_path_;
+    const std::string text = after_save_text_;
     reset_after_save();
 
     switch (after) {
@@ -1078,6 +1081,9 @@ void MoteMainWindow::run_after_save()
     case AfterSave::ExportPdf:
         prompt_export_pdf();
         break;
+    case AfterSave::DropDocument:
+        load_dropped_text(text);
+        break;
     case AfterSave::None:
         break;
     }
@@ -1087,6 +1093,7 @@ void MoteMainWindow::reset_after_save()
 {
     after_save_ = AfterSave::None;
     after_save_path_.clear();
+    after_save_text_.clear();
 }
 
 bool MoteMainWindow::confirm_close()
@@ -1545,6 +1552,14 @@ void MoteMainWindow::revoke_drop_target()
 void MoteMainWindow::drop_received(const std::string &name, const std::string &text)
 {
     (void)name;
+    // 拖入等同「打开另一份文档」：有未保存修改时先问，不能在用户不知情时覆盖。
+    if (!prepare_for_replace(AfterSave::DropDocument, "", text))
+        return;
+    load_dropped_text(text);
+}
+
+void MoteMainWindow::load_dropped_text(const std::string &text)
+{
     // WebView 不暴露拖入文件的真实路径，只能作为「未命名」文档载入
     file_path_.clear();
     last_dir_.clear();

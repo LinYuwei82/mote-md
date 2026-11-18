@@ -58,7 +58,7 @@ public:
 private:
     friend class ShellHost;
 
-    enum class AfterSave { None, OpenDialog, OpenPath, NewDocument, Close, ExportPdf };
+    enum class AfterSave { None, OpenDialog, OpenPath, NewDocument, Close, ExportPdf, DropDocument };
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
     // 低级键盘钩子：WebView2/Chromium 会先吃掉部分组合键（Ctrl+Shift+S、
@@ -76,7 +76,9 @@ private:
     void begin_save_as(bool save_as);
     void save_text(const std::string &text);
     bool write_text(const std::string &text, const std::string &path);
-    bool prepare_for_replace(AfterSave after, const std::string &path);
+    bool prepare_for_replace(AfterSave after, const std::string &path,
+                             const std::string &text = "");
+    void load_dropped_text(const std::string &text);
     void run_after_save();
     void reset_after_save();
     bool confirm_close();
@@ -125,4 +127,5 @@ private:
     double last_zoom_ = 1.0;
     AfterSave after_save_ = AfterSave::None;
     std::string after_save_path_;
+    std::string after_save_text_;
 };
