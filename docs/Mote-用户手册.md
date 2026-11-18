@@ -1,6 +1,6 @@
 # Mote 用户手册
 
-> **Mote v1.0.0** · macOS / Windows 双平台 · 最后更新 2026-11-17
+> **Mote v1.0.3** · macOS / Windows 双平台 · 最后更新 2026-11-19
 > C++20 原生薄外壳 + 系统 WebView 的 Markdown 查看 / 编辑器。macOS 用 AppKit + WKWebView，Windows 用 Win32 + WebView2。前端零框架、零构建，不含 Electron 运行时。
 
 ---
@@ -35,7 +35,7 @@
 
 从官方下载页获取最新版本：
 
-- **macOS**：macOS 14+ · Apple Silicon（M 系列）· [下载 .dmg](https://dl.xiaotu.online/mote/Mote-macOS-native-1.0.0.dmg)
+- **macOS**：macOS 14+ · Apple Silicon（M 系列）· [下载 .dmg](https://dl.xiaotu.online/mote/mote-1.0.3-macos-arm64.dmg)
 - **Windows**：Windows 10/11 · 64 位 · 下载安装包（setup.exe）或绿色版（zip）
 
 macOS 首次打开时，Gatekeeper 可能会提示"无法验证开发者"：在「系统设置 → 隐私与安全性」点「仍要打开」即可。DMG 内 .app 已通过 Apple 公证，spctl 检查为 `Notarized Developer ID`。
@@ -500,4 +500,4 @@ Mote 已通过 Apple 公证（Notarized Developer ID）。macOS 14+ 在 Gatekeep
 
 ---
 
-**Mote · v1.0.0 用户手册 · © 2026**
+**Mote · v1.0.3 用户手册 · © 2026**
