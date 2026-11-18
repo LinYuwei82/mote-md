@@ -121,6 +121,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | 对象键 | 大小（字节） | Content-Type | Cache-Control |
 |---|---|---|---|
 | `devcard/manual.pdf` | 5,563,312 | `application/pdf` | `public, max-age=86400` |
+| `devcard/release-notes-1.2.8.html` | 4,592 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `xiaotu/manual.pdf` | 3,702,580 | `application/pdf` | `public, max-age=86400` |
 | `mote/manual.pdf` | 8,140,873 | `application/pdf` | `public, max-age=86400` |
 | `mote/release-notes-1.0.3.html` | 4,639 | `text/html; charset=utf-8` | `public, max-age=3600` |
@@ -137,11 +138,11 @@ https://dl.xiaotu.online/mote/manual.pdf
 https://dl.xiaotu.online/mote/release-notes-1.0.3.html
 ```
 
-> 发布说明随发布自动上传：Mote 的 `publish_windows.sh` / `.ps1` 与小兔的
-> `publish_windows.sh` / `publish_oss.sh` 检测到仓库里的 `docs/release-notes-<版本>.html`
-> 就一并上传，并把 `<product>/release-notes-<版本>.html` 写进清单 `notes_url`；
-> 缺页则不写该字段，避免客户端出现死链。DevCard 暂未自动上传，需手工处理。
-> PDF 手册仍是手工上传。
+> 发布说明随发布自动上传：Mote 的 `publish_windows.sh` / `.ps1`、小兔的
+> `publish_windows.sh` / `publish_oss.sh`、DevCard 的 `publish_macos.sh` / `publish_windows.ps1`
+> 检测到仓库里的 `docs/release-notes-<版本>.html` 就一并上传，并把
+> `<product>/release-notes-<版本>.html` 写进清单 `notes_url`；
+> 缺页则不写该字段，避免客户端出现死链。PDF 手册仍是手工上传。
 >
 > 小兔 1.0.3 起，Windows 更新卡片在 `notes_url` 非空时显示「查看更新详情」，
 > 调用系统默认浏览器打开；为空则按钮不出现。
@@ -195,8 +196,8 @@ https://xiaotu.online/                      # ECS（备案中）
 |---|---|
 | `xiaotu-inventory/tools/package/publish_oss.sh` | `xiaotu/xiaotu-<ver>-macos-arm64.dmg`、`xiaotu/updates/stable/manifest.json`、`xiaotu/updates/stable/appcast.xml`、`xiaotu/release-notes-<ver>.html`（存在时） |
 | `xiaotu-inventory/tools/package/publish_windows.sh` | `xiaotu/xiaotu-<ver>-win64-setup.exe`、`xiaotu/xiaotu-<ver>-win64-portable.zip`、`xiaotu/updates/stable/manifest.json`、`xiaotu/release-notes-<ver>.html`（存在时） |
-| `dev_card_cpp/tools/release/publish_macos.sh` | `devcard/devcard-<ver>-macos-arm64.dmg`（+ `.edSignature`）、`devcard/updates/stable/appcast.xml`、`devcard/updates/stable/manifest.json` |
-| `dev_card_cpp/tools/release/publish_windows.ps1` | `devcard/devcard-<ver>-win64-setup.exe`、`devcard/devcard-<ver>-win64-portable.zip`、`devcard/updates/stable/manifest.json` |
+| `dev_card_cpp/tools/release/publish_macos.sh` | `devcard/devcard-<ver>-macos-arm64.dmg`（+ `.edSignature`）、`devcard/updates/stable/appcast.xml`、`devcard/updates/stable/manifest.json`、`devcard/release-notes-<ver>.html`（存在时） |
+| `dev_card_cpp/tools/release/publish_windows.ps1` | `devcard/devcard-<ver>-win64-setup.exe`、`devcard/devcard-<ver>-win64-portable.zip`、`devcard/updates/stable/manifest.json`、`devcard/release-notes-<ver>.html`（存在时） |
 | `mote/tools/release/publish_macos.sh` | `mote/mote-<ver>-macos-arm64.dmg`、`mote/updates/stable/appcast.xml`、`mote/updates/stable/manifest.json` |
 | `mote/tools/release/publish_windows.sh`（或 `.ps1`） | `mote/mote-<ver>-win64-portable.zip`、`mote/mote-<ver>-win64-setup.exe`、`mote/updates/stable/manifest.json`、`mote/release-notes-<ver>.html`（存在时） |
 | `mote/tools/release/publish_site_oss.sh` | 本地 `web/` 的 21 个文件 → `xiaotu-site` 桶 |
