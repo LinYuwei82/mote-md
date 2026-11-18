@@ -52,7 +52,8 @@ NSString *MoteInlineLocalImages(NSString *html, NSString *baseDir, int *missingC
         NSData *data = path.length > 0 ? [NSData dataWithContentsOfFile:path] : nil;
         if (data.length == 0) {
             ++missing;
-            [output appendFormat:@"<span class=\"mote-img-missing\">[图片缺失] %@</span>", src];
+            // 不要把原始 src（可能是本机绝对路径）写进导出件，Qt 版只输出占位文字。
+            [output appendString:@"<span class=\"mote-img-missing\">[图片缺失]</span>"];
             continue;
         }
 
