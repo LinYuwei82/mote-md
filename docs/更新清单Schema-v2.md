@@ -82,8 +82,10 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 
 - 三家各自一把 Ed25519 私钥，私钥路径不变（见[发布工作流](./发布工作流.md) 2.1 节）。
 - `key_id` 随公钥一同编译进客户端；轮换密钥 = 新 `key_id` + 新公钥随下一个客户端版本发布。
-- 客户端验签现状：小兔已有 OpenSSL Ed25519 实现（`xiaotu::verify_manifest_signature`，
-  trust anchor 编译期注入）；**Mote、DevCard 客户端需在 v2 中接入验签**（目前只校验产物 SHA256）。
+- 客户端验签现状：**三家均已接入**。小兔用 OpenSSL Ed25519 实现
+  （`xiaotu::verify_manifest_signature`，trust anchor 编译期注入）；Mote、DevCard
+  各自用内嵌 Ed25519 实现，公钥以十六进制随客户端编译（`SUPublicEDKey` 仅用于
+  Sparkle 的 appcast，不参与 manifest 验签）。验签失败一律放弃本次更新。
 
 ## 五、完整示例（mote，数据取自线上 v1 改编）
 
@@ -137,7 +139,12 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
    （`build` 小于等于本机 → 无更新，沿用小兔现状）。
 3. 产物选择：Windows 安装版读 `artifacts.setup`，绿色包读 `artifacts.portable`；
    macOS 读 `artifacts.dmg`。
-4. 下载后先验清单 `signature`，再校验产物 SHA256，两者都过才安装。
+4. 校验顺序：
+   - 两端都在拿到清单后**先验 `signature`**，失败直接放弃（不比较版本、不下载）。
+   - Windows：下载完成后校验 `artifacts.*.sha256` 与 size，两者都过才安装。
+   - macOS：manifest 的 `sha256` 只用于自研预下载；最终安装由 Sparkle 按
+     `appcast.xml` **重新下载**并验证其中的 EdDSA 签名，不以 manifest 的 sha256
+     作为安装前校验。
 5. `rollout_percent` / `mandatory` 按各客户端现有逻辑消费，schema 层面三家一致。
 
 ## 七、安装包命名统一（随 v2 一并执行）

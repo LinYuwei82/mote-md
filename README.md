@@ -23,7 +23,7 @@
 - **链接**：渲染态下 `[文字](地址)` 的文字显示为蓝色带下划线的链接（地址本身仍是零宽标记，不占位、不进入框选复制）；普通点击仍进入编辑态，`Cmd+Click` 才跳转——外部链接交给系统默认浏览器，相对路径的 `.md` 在应用内打开（走未保存确认），文件不存在时弹提示不崩。编辑态显示原始 `[文字](地址)`，复制出去是标准 Markdown。
 - **导出 HTML**：`Option+Cmd+E`（「文件 → 导出 HTML…」）导出单文件自包含 HTML——样式内联、图片转 base64 内嵌、代码高亮与任务复选框状态保留，导出过程不改动原文档与 `dataset.raw`。
 - **导出 PDF**：`Cmd+P`（「文件 → 导出 PDF…」）导出 A4 多页、无页眉页脚；源码模式下禁用。macOS 与 Windows 均已实现，两端分页切点由各自 WebView 引擎决定，未做逐页像素比对。
-- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。「发现新版本」弹窗显示版本号、发布时间、包大小，清单带可选 `notes_url` 时追加一行可点击的「查看完整更新说明…」。macOS 读 `latest.json`，用户确认后交给 Sparkle 下载 DMG、验证 EdDSA 签名并替换重启；若处于 Gatekeeper App Translocation（隔离路径）只读路径，先提示把 Mote 移到「应用程序」再更新。Windows 读 `windows.json`，确认后应用内下载更新包，弹窗内显示百分比与「已下载 / 总大小」并可取消，失败自动重试最多 3 次（间隔 2 秒；4xx 与非法地址不重试），下载完用 SHA256 校验——安装版取 `setup_url`（静默安装后自动重启），绿色版取 `url`（校验通过后打开所在文件夹，解压覆盖）。
+- **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。「发现新版本」弹窗显示版本号、发布时间、包大小，清单带可选 `notes_url` 时追加一行可点击的「查看完整更新说明…」。两端读同一份带 Ed25519 签名的 `manifest.json`：macOS 取 `platforms.macos`，用户确认后交给 Sparkle 下载 `artifacts.dmg`、验证 EdDSA 签名并替换重启；若处于 Gatekeeper App Translocation（隔离路径）只读路径，先提示把 Mote 移到「应用程序」再更新。Windows 取 `platforms.windows`，确认后应用内下载更新包，弹窗内显示百分比与「已下载 / 总大小」并可取消，失败自动重试最多 3 次（间隔 2 秒；4xx 与非法地址不重试），下载完用 SHA256 校验——安装版取 `artifacts.setup`（静默安装后自动重启），绿色版取 `artifacts.portable`（校验通过后打开所在文件夹，解压覆盖）。
 - **页面内状态栏**：原生外壳把状态栏画在前端页面底部（`body.platform-mac` / `body.platform-win`），显示打开/保存/导出提示与字数统计；Qt 构建不启用，避免出现两条状态栏。
 - **目录手型光标**：鼠标移到目录栏（条目文字行、行间空隙、栏内空白）都是系统手型指针，避免移动时手型闪烁；折叠按钮与滚动条保留自身光标语义。
 
@@ -97,32 +97,31 @@ Qt 构建与原生构建共用 `resources/web/` 与 `core/`；版本号仍以 `M
 
 | 用途 | OSS key |
 | --- | --- |
-| macOS 安装包 | `mote/Mote-macOS-native-<version>.dmg` |
+| macOS 安装包 | `mote/mote-<version>-macos-arm64.dmg` |
 | Sparkle feed（EdDSA 验签 + 下载） | `mote/updates/<channel>/appcast.xml` |
-| macOS 自研检查清单 | `mote/updates/<channel>/latest.json` |
-| Windows 绿色包（zip） | `mote/Mote-<version>-win64-portable.zip` |
-| Windows 安装包（exe，可选） | `mote/Mote-Setup-<version>.exe` |
-| Windows 自研检查清单 | `mote/updates/<channel>/windows.json` |
+| 统一更新清单（两平台同一份，Ed25519 验签） | `mote/updates/<channel>/manifest.json` |
+| Windows 绿色包（zip） | `mote/mote-<version>-win64-portable.zip` |
+| Windows 安装包（exe，可选） | `mote/mote-<version>-win64-setup.exe` |
 
 ```bash
 bash packaging/package_macos.sh --native --dmg   # 签名 + 公证 + DMG
-bash tools/release/publish_macos.sh                  # 公证门禁 → EdDSA 签名 → appcast + latest.json → 上传 → 线上校验
+bash tools/release/publish_macos.sh                  # 公证门禁 → EdDSA 签名 → appcast + manifest.json → 上传 → 线上校验
 NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
-  bash tools/release/publish_macos.sh                # 同上，并在 latest.json 写入 notes_url
+  bash tools/release/publish_macos.sh                # 同上，并在 manifest.json 写入 notes_url
 ```
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
-powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1   # 校验 → SHA256 → windows.json → 上传 zip/安装包/清单 → 线上校验
+powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1   # 校验 → SHA256 → manifest.json → 上传 zip/安装包/清单 → 线上校验
 ```
 
 在 macOS 上发布 Windows 包时用等价的 bash 脚本（读同一份 `~/.config/xiaotu-updates/.env`）：
 
 ```bash
-ZIP_PATH=dist/Mote-1.0.0-win64-portable.zip \
-SETUP_PATH=dist/Mote-Setup-1.0.0.exe \
+ZIP_PATH=dist/mote-1.0.0-win64-portable.zip \
+SETUP_PATH=dist/mote-1.0.0-win64-setup.exe \
 NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
-  bash tools/release/publish_windows.sh              # windows.json → 上传 zip/安装包/清单 → 线上校验
+  bash tools/release/publish_windows.sh              # manifest.json → 上传 zip/安装包/清单 → 线上校验
 ```
 
 - 官网与下载页统一由 `web/` 维护：ECS 用 `deploy_site.sh` 发布，备案前的 OSS 镜像用 `publish_site_oss.sh` 发布。旧的单页 `site/index.html` 与 `publish_site.ps1` 已退役，`dl.xiaotu.online` 根路径只做跳转，不再承载页面。
@@ -130,9 +129,9 @@ NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
 - `NOTES_URL` 是可选环境变量，macOS 与 Windows 的发布脚本都支持：非空时写进清单的 `notes_url`，客户端弹窗显示「查看完整更新说明…」；不设置则不写该字段，老清单与老客户端都不受影响。
 - Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
 - 检查权在自研模块（`SUEnableAutomaticChecks=false`）：Sparkle 只负责下载、验签、替换、重启。
-- Windows 按安装形态取包：exe 同级有 `unins000.exe` 判为安装版，优先用 `setup_url`；否则用 `url` 的 zip；清单没给 `setup_url` 时回落到 zip。下载在应用内完成并校验 SHA256：安装版静默安装后自动重启，绿色版下载校验后提示、自动退出并打开所在文件夹，由用户解压覆盖。两条路径都会先检查未保存文档。
-- `publish_windows.ps1` 会一并发布安装包（`dist\Mote-Setup-<version>.exe` 存在时），并逐项校验线上 zip、安装包与清单三者一致。
-- 两份清单分开：macOS 只读 `latest.json`（指向 `.dmg`），Windows 只读 `windows.json`（指向 zip），避免把 `.dmg` 当成 Windows 包。
+- Windows 按安装形态取包：exe 同级有 `unins000.exe` 判为安装版，优先用 `platforms.windows.artifacts.setup`；否则用 `artifacts.portable` 的 zip；清单缺首选产物时回落到另一种。下载在应用内完成并校验 SHA256：安装版静默安装后自动重启，绿色版下载校验后提示、自动退出并打开所在文件夹，由用户解压覆盖。两条路径都会先检查未保存文档。
+- `publish_windows.ps1` 会一并发布安装包（`dist\mote-<version>-win64-setup.exe` 存在时），并逐项校验线上 zip、安装包与清单三者一致。
+- 两个平台共用一份 `manifest.json`：macOS 只取 `platforms.macos`（`artifacts.dmg`），Windows 只取 `platforms.windows`（`artifacts.setup` / `artifacts.portable`），不会把 `.dmg` 当成 Windows 包。
 
 ### 官网（xiaotu.online）
 
