@@ -19,6 +19,10 @@ on:
         description: 只发绿色包（跳过安装包）
         type: boolean
         default: false
+      dry_run:
+        description: 只出包与清单，不上传 OSS
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -91,10 +95,11 @@ jobs:
           OSS_REGION: cn-hongkong
         run: |
           python -m pip install --quiet oss2
+          $dry = '${{ inputs.dry_run }}' -eq 'true'
           if ('${{ inputs.skip_setup }}' -eq 'true') {
-            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }} -SetupPath '不存在.exe'
+            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }} -SetupPath '不存在.exe' -SkipUpload:$dry
           } else {
-            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }}
+            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }} -SkipUpload:$dry
           }
 
       - name: 上传构建产物（留档）
