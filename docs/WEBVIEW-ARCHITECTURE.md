@@ -205,8 +205,11 @@ base64 后 `post({type:'image', source:'paste', …})`；原生解码写盘并�
 
 - 源文本 `source` 是唯一真相；`blocks` 是 `source` 按空行切分的块（围栏代码块、
   表格内部换行不切）。每块保存 `raw`（Markdown 源）与渲染后的 DOM。
-- 序列化：`blocks.map(b => b.raw).join("\n\n")`。MVP 对空行数量有归并（连续多个空行
-  会压成一个），属于已知降级，后续改为保留原始分隔符。
+- 序列化：块间空行按原文保留。载入/切模式时 `splitSourceLayout` 量出文首、块间与
+  文末的换行数，块间数量写到块元素的 `data-gap`；`currentSource` 由 `layoutText`
+  按实际间隔拼接。用户新建的块没有 `data-gap`，按 2 个换行处理（与旧行为一致）。
+  core 层同构实现见 `core/block_layout.h`（`joinBlocks` / `measureBlockGaps` /
+  `blockStartOffset`），往返由 `native/tests/core_tests.cpp` 覆盖。
 - 块渲染规则（MVP）：标题、段落、围栏代码（含行号）、表格、有序/无序列表、引用、图片；
   行内支持 `**粗体**`、`*斜体*`、`` `代码` ``、`[链接](url)`、`![图片](src)`。
 
@@ -230,15 +233,18 @@ base64 后 `post({type:'image', source:'paste', …})`；原生解码写盘并�
 - **撤销/重做（已实现，自建栈）**：`editor.js` 维护 `history`（整篇文本快照 + 绝对字符
   偏移）与 `historyIndex`，`Cmd+Z` / `Cmd+Shift+Z`（含 `Ctrl+Z` / `Ctrl+Y`）统一走
   自建栈，并拦截 WebKit 原生 `historyUndo/historyRedo`，避免两套历史打架。
-  - 快照统一表示：`{ text, start, end, blocks?, trail }`。`text` 是整篇规范化源文本
-    （块间两个换行、末尾换行按原样），`start/end` 是相对整篇的绝对偏移；
-    只在所见即所得态额外保留 `blocks`，按需重建。
+  - 快照统一表示：`{ text, start, end, blocks?, gaps?, trail }`。`text` 是整篇规范化
+    源文本（块间按实际空行数、文末换行数按原样），`start/end` 是相对整篇的绝对偏移；
+    所见即所得态额外保留 `blocks` 与每块之前的空行数 `gaps`、文末换行数 `trail`，
+    按需重建，不存整篇副本。
   - 粒度：连续输入按 600 ms 停顿合并为一步；失焦、回车分块、退格合并、粘贴、
     输入法上屏各自单独成步。
-  - 恢复：按当前模式重建——所见即所得态按 `blocks` 挂块，源码态直接写 `<textarea>`；
-    选区按绝对偏移映射回块内偏移，撤销后光标不会跳到文档开头。
-  - 跨模式：切换「所见即所得 ⇄ 源码」只同步文本与选区，`sameState` 以 `text` 比较，
-    不新增步骤；因此在源码态撤销、再切回渲染态，历史与未保存标记都连续。
+  - 恢复：按当前模式重建——所见即所得态按 `blocks` + `gaps` 挂块，源码态直接写
+    `<textarea>`；选区按绝对偏移（`blockStartOffset` 按实际间隔累加）映射回块内偏移，
+    撤销后光标不会跳到文档开头，也不会因为空行数量不对而错位。
+  - 跨模式：切换「所见即所得 ⇄ 源码」只同步文本与选区，内容未变时 `sameState`
+    不新增步骤（块数组、块间空行、文末换行都参与比较）；因此在源码态撤销、再切回
+    渲染态，历史与未保存标记都连续。
   - 净化：`suppressEvents` 屏蔽重建期间的事件；块内容未变化时只更新当前步的
     选区，不新增步骤，所以进出原文态/渲染态不会污染历史。
   - 保存：Qt 写盘成功后调用前端 `markSaved(text)` 回填基准；之后撤销会重新变
@@ -309,7 +315,7 @@ base64 后 `post({type:'image', source:'paste', …})`；原生解码写盘并�
 2. 源码模式用原生 `<textarea>`：有等宽字体与行内滚动，但不做语法高亮与行号。
 3. 撤销/重做覆盖文字输入、删除、回车分块、退格合并、粘贴、输入法上屏，并跨模式连续；
    尚未覆盖表格单元格内的结构化编辑（表格仍以源码文本编辑）。
-4. 空行数量归并、上下方向键不跨块。
+4. 上下方向键不跨块（空行数量自 1.0.4 起按原文保留，不再归并）。
 5. Windows WebView2 已实现并在实机验证；`MOTE_EVAL`/`MOTE_SNAPSHOT`/`MOTE_DROP` 仍是
    macOS 侧工具，Windows 侧用 `MOTE_KEYLOG`（日志以 `WIN ` 前缀区分）。
 6. 大文档性能未测：前端为全量重排，未做虚拟滚动。

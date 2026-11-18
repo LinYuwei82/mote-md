@@ -2,7 +2,7 @@
 
 **适用改动**：让块与块之间的空行数量在保存后保持原样（此前固定拼 `\n\n`，连续多个空行会被归并）。
 **状态**：改动已落地——core 层纯函数 `core/block_layout.*`（`68fa133`）与前端 `resources/web/editor.js`（`4bb2046`）。Windows 上已用 7 组文档跑「载入 → 保存」字节级往返，全部一致；本清单余下的交互项（选区、查找、undo/redo、双平台）仍未手工验证。
-**依据**：[`WEBVIEW-ARCHITECTURE.md`](WEBVIEW-ARCHITECTURE.md) 中「MVP 对空行数量有归并」的已知限制。
+**依据**：[`WEBVIEW-ARCHITECTURE.md`](WEBVIEW-ARCHITECTURE.md) 的「3.1 唯一数据源与块模型」与「5. 明确降级 / 延后」。
 **风险点**：选区映射、查找高亮、undo/redo 恢复原先都假设「每块之间恰好 2 个字符」（`resources/web/editor.js` 的 1614 / 1719 / 1749 / 2553 / 4898 / 4931 六处）。这些位置已改为按实际间隔累加（`blockStartOffset` / `gapBefore` / 快照携带 `gaps`），仍须按第 4 组逐项确认没有错位。
 
 ---
