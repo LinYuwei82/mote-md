@@ -3,7 +3,7 @@
 > 状态：**迁移完成**（2026-11-18 全量上线并退役 v1）。
 > 全链路完成：生成器 `manifest_v2.py`、guard v2 检查、三仓库发布脚本、
 > 三个客户端解析 + Ed25519 验签、下载页改读 manifest.json；
-> 新内测版已发布：mote 1.0.3 / xiaotu 1.0.2 / devcard 1.2.6，
+> 新内测版已发布：mote 1.0.3 / xiaotu 1.0.2 / devcard 1.2.7，
 > 升级链路实测全绿后，v1 清单（`latest.json` / `windows.json`）已全部删除
 > （`appcast.xml` 永久保留）。
 > 2026-11-19：桶内历史安装包（v1 命名 + v2 旧版本，共 116 MB）已全部清理，
@@ -12,6 +12,9 @@
 > 二进制里却是「编译时刻」，清单永远比安装包新，客户端反复提示同一版本。
 > 现由构建步骤把 `MOTE_BUILD` 传给发布步骤，`build` 必须等于二进制内的值（见 3.4）；
 > mote 1.0.4 按此规则重发。
+> 2026-11-19：DevCard 1.2.8 待发布——WebView 内没有 Ed25519，远端清单改由本地服务端
+> `POST /api/version/verify` 验签后再提供 `artifacts`（见第四节），修复「下载更新包 /
+> 安装并重启」在没有本地清单时永远置灰的问题。
 > 日期：2026-11-18
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 > 背景：三款产品均在内测期、无存量用户，趁此窗口把清单格式一次统一，
@@ -54,12 +57,17 @@
 | `version` | string | 是 | semver，如 `1.0.2`；平台间版本独立递增 |
 | `build` | int | 是 | Windows 构建号，必须等于二进制内编译时的 `MOTE_BUILD`（如 `202611181542`），见 3.4；macOS 无构建号填 `0` |
 | `min_os` | string | 是 | 如 `14.0` / `10.0` |
-| `notes_url` | string | 否 | 发布说明，绝对 https 地址；缺省不发 |
+| `notes_url` | string | 否 | 发布说明页，绝对 https 地址；客户端「查看更新详情」直接打开；缺省不发 |
 | `rollout_percent` | int | 否 | 0–100，缺省 `100`（灰度用） |
-| `mandatory` | bool | 否 | 强制更新开关（现仅小兔使用） |
+| `mandatory` | bool | 是 | 强制更新开关（现仅小兔使用） |
 | `mandatory_deadline` | string | 否 | ISO 8601 UTC |
 | `mandatory_reason` | string | 否 | |
 | `artifacts` | object | 是 | 见 3.3 |
+
+> `notes_url` 一律由发布脚本写入：仓库存在 `docs/release-notes-<版本>.html` 时，随发布上传到
+> `<product>/release-notes-<版本>.html` 并填入该字段；缺页则不写，避免客户端出现死链。
+> 小兔 1.0.3 起，Windows 更新卡片在 `notes_url` 非空时显示「查看更新详情」，
+> 调用系统默认浏览器打开；该字段为空则按钮不出现。
 
 ### 3.3 artifacts
 
@@ -107,8 +115,11 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 - `key_id` 随公钥一同编译进客户端；轮换密钥 = 新 `key_id` + 新公钥随下一个客户端版本发布。
 - 客户端验签现状：**三家均已接入**。小兔 macOS 用 OpenSSL Ed25519 实现
   （`xiaotu::verify_manifest_signature`），公钥取 `Info.plist` 的 `SUPublicEDKey`
-  （打包时注入，与 Sparkle 的 appcast 共用同一把）；小兔 Windows 桥与 Mote、DevCard
-  用内嵌 Ed25519 实现，公钥随客户端编译。验签失败一律放弃本次更新。
+  （打包时注入，与 Sparkle 的 appcast 共用同一把）；小兔 Windows 桥与 Mote 用内嵌
+  Ed25519 实现，公钥随客户端编译。DevCard 的验签放在**本地服务端**：数据目录有
+  `manifest.json` 时由 `/api/version` 直接返回验签结果；没有本地清单时，页面把远端清单
+  原文交回 `POST /api/version/verify`，服务端用内嵌公钥验签后才返回 `artifacts`
+  （WebView 自身无法验签，不能让它直接采信远端资产）。验签失败一律放弃本次更新。
 
 ## 五、完整示例（mote，数据取自线上 v1 改编）
 
