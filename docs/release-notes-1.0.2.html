@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mote v1.0.2 · 发布说明</title>
+<style>
+  :root {
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --text: #141821;
+    --muted: #5f6880;
+    --accent: #4f46e5;
+    --border: #e5e7ef;
+    --warn-text: #b45309;
+    --warn-bg: #fff8ed;
+    --warn-border: #fbe0b4;
+    --link: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d12; --card: #12151d; --text: #e8eaf1; --muted: #9aa3b8;
+      --accent: #6366f1; --border: #232838; --warn-text: #fbbf24;
+      --warn-bg: #2a2009; --warn-border: #4a3410; --link: #60a5fa;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--sans); background: var(--bg); color: var(--text);
+    line-height: 1.7; margin: 0; padding: 0;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 28px 80px; }
+  header { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+  .label {
+    display: inline-block; padding: 4px 12px; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: rgba(79,70,229,.10); border-radius: 999px;
+    letter-spacing: .04em;
+  }
+  h1 { font-size: 34px; margin: 18px 0 8px; letter-spacing: -.01em; }
+  .tagline { color: var(--muted); font-size: 15px; }
+  h2 {
+    font-size: 20px; margin: 40px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); letter-spacing: -.005em;
+  }
+  h3 { font-size: 16px; margin: 22px 0 8px; }
+  p, li { font-size: 15px; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono); background: rgba(79,70,229,.08); padding: 2px 6px;
+    border-radius: 4px; font-size: 13px;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .warn {
+    background: var(--warn-bg); border: 1px solid var(--warn-border);
+    color: var(--warn-text); border-radius: 8px; padding: 14px 18px; margin: 18px 0;
+    font-size: 14px;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0 24px; font-size: 14px;
+  }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  .download-btn {
+    display: inline-block; margin-top: 10px; margin-right: 10px;
+    background: var(--accent); color: #fff !important; padding: 10px 20px;
+    border-radius: 8px; font-weight: 500;
+  }
+  .download-btn:hover { opacity: .9; text-decoration: none; }
+  footer {
+    margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="label">RELEASE NOTES</span>
+  <h1>Mote v1.0.2</h1>
+  <p class="tagline">Windows 自动更新链路修复 · 2026-11-18</p>
+</header>
+
+<h2>本版重点</h2>
+<p>这一版是 Windows 侧的发布链路修复，功能与 1.0.1 相同。若你已经用 1.0.1，此版本没有需要适应的行为变化。</p>
+
+<h2>修复内容</h2>
+<table>
+  <tr><th>问题</th><th>修复</th></tr>
+  <tr>
+    <td>Windows 版本检查不到更新</td>
+    <td>安装包内嵌的更新清单地址已切换到 <code>mote/updates/stable/windows.json</code>，与当前线上目录一致</td>
+  </tr>
+  <tr>
+    <td>发布目录结构不统一</td>
+    <td>安装包、绿色包统一放在 <code>mote/</code>，更新清单统一放在 <code>mote/updates/stable/</code></td>
+  </tr>
+</table>
+
+<h2>下载</h2>
+<p><strong>Windows 安装版</strong>（推荐）：按用户安装，无需管理员权限，更新时静默覆盖并自动重启。</p>
+<a class="download-btn" href="https://dl.xiaotu.online/mote/Mote-Setup-1.0.2.exe">下载 Mote-Setup-1.0.2.exe</a>
+<p style="margin-top:22px"><strong>Windows 绿色版</strong>：解压即用；应用内更新会在校验通过后退出并打开所在目录，由你解压覆盖。</p>
+<a class="download-btn" href="https://dl.xiaotu.online/mote/Mote-1.0.2-win64-portable.zip">下载 Mote-1.0.2-win64-portable.zip</a>
+
+<div class="warn">
+  安装包未做代码签名。首次运行时 Windows 可能提示「未知发布者」，点「更多信息 → 仍要运行」即可。应用内更新走 HTTPS + SHA256 校验，不经过浏览器，不会触发该提示。
+</div>
+
+<h2>升级方式</h2>
+<h3>安装版</h3>
+<p>打开 Mote → 菜单「检查更新...」→ 下载并安装，程序会自动退出、静默安装并重新启动。</p>
+<h3>绿色版</h3>
+<p>菜单「检查更新...」→ 下载完成后 Mote 会退出并打开所在文件夹，把 zip 里的文件解压覆盖到原目录即可。</p>
+
+<h2>系统要求</h2>
+<ul>
+  <li>Windows 10 或更高版本（x64）</li>
+  <li>WebView2 运行时（Windows 11 自带；Windows 10 如缺失，安装包会引导安装）</li>
+</ul>
+
+<h2>完整性校验</h2>
+<p>各安装包的 <code>size</code> 与 <code>sha256</code> 以更新清单为准：
+<a href="https://dl.xiaotu.online/mote/updates/stable/windows.json">updates/stable/windows.json</a>。
+下载后可用 <code>Get-FileHash -Algorithm SHA256</code> 比对。</p>
+
+<footer>
+  Mote · AGPL-3.0 · <a href="https://gitee.com/lin-yuwei168/mote-md">Gitee</a> ·
+  <a href="https://github.com/LinYuwei82/mote-md">GitHub</a>
+</footer>
+
+</div>
+</body>
+</html>
