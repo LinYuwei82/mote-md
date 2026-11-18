@@ -52,13 +52,13 @@ https://dl.xiaotu.online/mote/updates/stable/windows.json
 |---|---|---|---|
 | `devcard/updates/stable/appcast.xml` | 1,269 B | `application/xml; charset=utf-8` | `public, max-age=60` |
 | `devcard/updates/stable/latest.json` | 866 B | `application/json; charset=utf-8` | `public, max-age=60` |
-| `devcard/updates/stable/windows.json` | 809 B | `application/json; charset=utf-8` | `public, max-age=60` |
+| `devcard/updates/stable/windows.json` | 851 B | `application/json; charset=utf-8` | `public, max-age=60` |
 | `xiaotu/updates/stable/appcast.xml` | 710 B | `application/rss+xml` | `no-cache, max-age=60` |
 | `xiaotu/updates/stable/latest.json` | 681 B | `application/json` | `no-cache, max-age=60` |
 | `xiaotu/updates/stable/windows.json` | 900 B | `application/json` | `no-cache, max-age=60` |
 | `mote/updates/stable/appcast.xml` | 777 B | `application/rss+xml` | `no-cache, max-age=60` |
 | `mote/updates/stable/latest.json` | 256 B | `application/json` | `no-cache, max-age=60` |
-| `mote/updates/stable/windows.json` | 529 B | `application/json` | `no-cache, max-age=60` |
+| `mote/updates/stable/windows.json` | 521 B | `application/json` | `no-cache, max-age=60` |
 
 > 清单统一 60 秒缓存，发布后最多 1 分钟生效。`appcast.xml` 的 Content-Type 两个产品是 `rss+xml`、DevCard 是 `xml`，均能被 Sparkle 正常解析。
 
@@ -66,7 +66,7 @@ https://dl.xiaotu.online/mote/updates/stable/windows.json
 
 所有安装包均为 `public, max-age=31536000, immutable`，**同名文件覆盖不会生效，发新版必须换版本号**。
 
-### 3.1 DevCard（macOS 当前 1.2.4，Windows 当前 1.2.2）
+### 3.1 DevCard（macOS 当前 1.2.4，Windows 当前 1.2.5）
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
@@ -80,16 +80,19 @@ https://dl.xiaotu.online/mote/updates/stable/windows.json
 | 验签 | `devcard/DevCard-1.2.1-macos-arm64.dmg.edSignature` | 89 | `text/plain; charset=utf-8` |
 | DMG | `devcard/DevCard-1.2.0-macos-arm64.dmg` | 4,790,698 | `application/octet-stream` |
 | 验签 | `devcard/DevCard-1.2.0-macos-arm64.dmg.edSignature` | 89 | `text/plain; charset=utf-8` |
+| EXE | `devcard/DevCard-1.2.5-setup.exe` | 5,797,259 | `application/octet-stream` |
 | EXE | `devcard/DevCard-1.2.3-setup.exe` | 5,794,245 | `application/octet-stream` |
 | EXE | `devcard/DevCard-1.2.2-setup.exe` | 5,781,239 | `application/octet-stream` |
 | EXE | `devcard/DevCard-1.2.1-setup.exe` | 5,818,875 | `application/octet-stream` |
 | EXE | `devcard/DevCard-1.2.0-setup.exe` | 5,654,984 | `application/octet-stream` |
+| ZIP | `devcard/DevCard-1.2.5-win64-portable.zip` | 6,088,677 | `application/zip` |
 | ZIP | `devcard/DevCard-1.2.3-win64-portable.zip` | 6,088,675 | `application/zip` |
 | ZIP | `devcard/DevCard-1.2.2-win64-portable.zip` | 5,984,916 | `application/zip` |
 | ZIP | `devcard/DevCard-1.2.1-win64-portable.zip` | 6,033,802 | `application/zip` |
 | ZIP | `devcard/DevCard-1.2.0-win64-portable.zip` | 5,750,450 | `application/zip` |
 
-> 1.2.4 只发了 macOS（修复 Sparkle feed 地址），Windows 清单仍指向 1.2.2。
+> 1.2.4 只发过 macOS（修复 Sparkle feed 地址）；Windows 侧 1.2.4 的两个包曾被 CI 误覆盖，
+> 现以 **1.2.5** 为 Windows 最新版，清单已指向 1.2.5。
 
 ### 3.2 小兔进销存（macOS / Windows 当前均为 1.0.0）
 
@@ -102,9 +105,10 @@ https://dl.xiaotu.online/mote/updates/stable/windows.json
 | ZIP | `xiaotu/xiaotu-inventory-1.0.0-win64.zip` | 2,433,248 | `application/zip` |
 | ZIP | `xiaotu/xiaotu-inventory-0.9.0-win64.zip` | 2,137,094 | `application/zip` |
 
-> 现有 1.0.0 Windows 包的壳内清单地址仍是旧路径（发布后永远检查不到更新），需在 Windows 机器上重打后用较新版本号（建议 1.0.1）发布。
+> 现有 1.0.0 Windows 包的壳内清单地址仍是旧路径（发布后永远检查不到更新）。
+> 仓库 `VERSION` 已升到 **1.0.1**，待重打并通过 `release-windows.yml` 发布。
 
-### 3.3 Mote（macOS / Windows 当前均为 1.0.1）
+### 3.3 Mote（macOS 当前 1.0.1，Windows 当前 1.0.2）
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
@@ -118,6 +122,7 @@ https://dl.xiaotu.online/mote/updates/stable/windows.json
 | DMG | `mote/Mote-macOS-native-0.3.6.dmg` | 1,665,531 | `application/octet-stream` |
 | DMG | `mote/Mote-macOS-native-0.3.5.dmg` | 1,655,459 | `application/octet-stream` |
 | DMG | `mote/Mote-macOS-native-0.3.4.dmg` | 580,303 | `application/octet-stream` |
+| EXE | `mote/Mote-Setup-1.0.2.exe` | 2,655,925 | `application/octet-stream` |
 | EXE | `mote/Mote-Setup-1.0.1.exe` | 2,650,735 | `application/octet-stream` |
 | EXE | `mote/Mote-Setup-1.0.0.exe` | 2,645,781 | `application/octet-stream` |
 | EXE | `mote/Mote-Setup-0.3.11.exe` | 2,646,030 | `application/octet-stream` |
@@ -125,6 +130,7 @@ https://dl.xiaotu.online/mote/updates/stable/windows.json
 | EXE | `mote/Mote-Setup-0.3.9.exe` | 2,566,713 | `application/octet-stream` |
 | EXE | `mote/Mote-Setup-0.3.8.exe` | 2,561,701 | `application/octet-stream` |
 | EXE | `mote/Mote-Setup-0.3.7.exe` | 2,561,252 | `application/octet-stream` |
+| ZIP | `mote/Mote-1.0.2-win64-portable.zip` | 702,247 | `application/zip` |
 | ZIP | `mote/Mote-1.0.1-win64-portable.zip` | 677,418 | `application/zip` |
 | ZIP | `mote/Mote-1.0.0-win64-portable.zip` | 670,738 | `application/zip` |
 | ZIP | `mote/Mote-0.3.11-win64-portable.zip` | 670,714 | `application/zip` |
@@ -140,6 +146,7 @@ https://dl.xiaotu.online/mote/updates/stable/windows.json
 | `devcard/manual.pdf` | 5,563,312 | `application/pdf` | `public, max-age=86400` |
 | `xiaotu/manual.pdf` | 3,702,580 | `application/pdf` | `public, max-age=86400` |
 | `mote/manual.pdf` | 8,140,873 | `application/pdf` | `public, max-age=86400` |
+| `mote/release-notes-1.0.2.html` | 5,668 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.1.html` | 7,457 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.0.html` | 9,271 | `text/html; charset=utf-8` | `public, max-age=3600` |
 
@@ -149,10 +156,12 @@ https://dl.xiaotu.online/mote/updates/stable/windows.json
 https://dl.xiaotu.online/devcard/manual.pdf
 https://dl.xiaotu.online/xiaotu/manual.pdf
 https://dl.xiaotu.online/mote/manual.pdf
-https://dl.xiaotu.online/mote/release-notes-1.0.1.html
+https://dl.xiaotu.online/mote/release-notes-1.0.2.html
 ```
 
-> PDF 与发布说明目前是手工上传，发布脚本不会覆盖它们；换版本时需单独上传并确认缓存。
+> 发布说明已随发布自动上传：`publish_windows.sh` / `.ps1` 检测到
+> `docs/release-notes-<版本>.html` 就一并上传并写入 `notes_url`，缺页则不写该字段，
+> 避免客户端出现死链。PDF 手册仍是手工上传。
 
 ## 五、官网网页（`xiaotu-site` 桶 / ECS）
 
@@ -203,7 +212,7 @@ https://xiaotu.online/                      # ECS（备案中）
 | `mote/tools/release/publish_windows.sh`（或 `.ps1`） | `mote/Mote-<版本>-win64-portable.zip`、`mote/Mote-Setup-<版本>.exe`、`mote/updates/stable/windows.json` |
 | `mote/tools/release/publish_site_oss.sh` | 本地 `web/` 的 21 个文件 → `xiaotu-site` 桶 |
 | `mote/tools/release/deploy_site.sh` | 本地 `web/` 的 21 个文件 → ECS `/var/www/xiaotu` |
-| 手工 | `<product>/manual.pdf`、`mote/release-notes-*.html`、README/发布说明等 |
+| 手工 | `<product>/manual.pdf`、README 等 |
 
 ## 七、缓存与 Content-Type 规则
 
@@ -268,7 +277,7 @@ python3 tools/release/guard.py verify-live --product xiaotu --kind win \
 1. **安装包是 `immutable`**：同名覆盖不会生效，换内容必须升版本号；只改清单不换包会被 CDN 继续返回旧文件。
 2. **清单 60 秒生效**：发布后等 1 分钟再验证；下载页版本号由 `site.js` 自动读取，无需改 HTML。
 3. **发布脚本会校验产物**：Mote 校验 dmg 内 `SUFeedURL` 与 appcast 地址一致；小兔校验绿色包内 `xiaotu-shell.exe` 含当前 `windows.json` 地址；不一致直接拒绝上传。
-4. **DevCard Windows 仍为 1.2.2**，1.2.4 只发了 macOS。
-5. **小兔 Windows 1.0.0 包待重打**：壳内地址为旧路径，重打后建议用 1.0.1 发布。
+4. **DevCard Windows 当前 1.2.5**，macOS 当前 1.2.4（Windows 侧 1.2.4 的包曾被 CI 覆盖，已用 1.2.5 重新发布）。
+5. **小兔 Windows 1.0.0 包待重打**：壳内地址为旧路径；仓库已升到 1.0.1，待通过 `release-windows.yml` 发布（私有仓库需先修 Actions 额度/账单）。
 6. `dl.xiaotu.online/logs/` 下是 OSS 每小时访问日志，属系统产出，不在发布范围内。
 7. 桶根的 `devcard/`、`mote/`、`xiaotu/updates/` 等是控制台创建的 0 字节目录占位对象，可忽略。
