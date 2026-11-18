@@ -104,6 +104,10 @@ echo "清单地址：  $MANIFEST_URL"
 
 MANIFEST_V2_PY="$REPO_ROOT/tools/release/manifest_v2.py"
 MANIFEST_LOCAL="$REPO_ROOT/dist/manifest.json"
+# 另一平台段可能已在线上：先取线上清单，--prev 合并后整体重签，避免覆盖另一平台段
+if [ ! -s "$MANIFEST_LOCAL" ]; then
+  curl -fsSL "$MANIFEST_URL" -o "$MANIFEST_LOCAL" 2>/dev/null || rm -f "$MANIFEST_LOCAL"
+fi
 
 # ---- ① 生成 manifest.json（v2，Ed25519 签名）----
 echo ""
@@ -125,6 +129,7 @@ if [ -n "$SETUP_PATH" ] && [ -f "$SETUP_PATH" ]; then
   MANIFEST_ARGS+=(--artifact "setup=$SETUP_PATH")
 fi
 [ -n "$NOTES_URL" ] && MANIFEST_ARGS+=(--notes-url "$NOTES_URL")
+[ -s "$MANIFEST_LOCAL" ] && MANIFEST_ARGS+=(--prev "$MANIFEST_LOCAL")
 python3 "$MANIFEST_V2_PY" "${MANIFEST_ARGS[@]}"
 
 echo "  已生成：$MANIFEST_LOCAL"

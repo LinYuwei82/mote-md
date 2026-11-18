@@ -197,6 +197,13 @@ $manifestV2Args = @(
 )
 if ($SetupFull) { $manifestV2Args += @("--artifact", "setup=$SetupFull") }
 if ($NotesUrl) { $manifestV2Args += @("--notes-url", $NotesUrl) }
+# 另一平台段可能已在线上：先取线上清单，--prev 合并后整体重签，避免覆盖另一平台段
+if (-not (Test-Path -LiteralPath $manifestPath)) {
+    try { Invoke-WebRequest -Uri $ManifestUrl -OutFile $manifestPath -UseBasicParsing } catch {
+        Remove-Item -LiteralPath $manifestPath -ErrorAction SilentlyContinue
+    }
+}
+if (Test-Path -LiteralPath $manifestPath) { $manifestV2Args += @("--prev", $manifestPath) }
 & $python (Join-Path $root "tools\release\manifest_v2.py") @manifestV2Args
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if (-not (Test-Path -LiteralPath $manifestPath)) { Fail "没有找到清单：$manifestPath" }

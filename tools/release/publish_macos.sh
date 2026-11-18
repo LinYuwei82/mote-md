@@ -38,6 +38,10 @@ DMG_PATH="${DMG_PATH:-$REPO_ROOT/dist/Mote-macOS-native-$VERSION.dmg}"
 SIGN_KEY="${SIGN_KEY:-$HOME/.config/mote-updates/ed25519_seed.b64}"
 [ -f "$SIGN_KEY" ] || { echo "更新签名私钥不存在：$SIGN_KEY" >&2; exit 1; }
 
+# Sparkle（appcast EdDSA）与清单 v2（Ed25519）是两把独立密钥，不得混用
+SPARKLE_KEY="${SPARKLE_KEY:-$HOME/.config/mote-updates/sparkle_ed25519_seed.b64}"
+[ -f "$SPARKLE_KEY" ] || { echo "Sparkle 签名私钥不存在：$SPARKLE_KEY" >&2; exit 1; }
+
 CHANNEL="${CHANNEL:-stable}"
 case "$CHANNEL" in stable|beta) ;; *) echo "CHANNEL 必须是 stable/beta" >&2; exit 2 ;; esac
 
@@ -129,7 +133,7 @@ trap - EXIT
 # ---- ② EdDSA 签名 ----
 echo ""
 echo "===== ② EdDSA 签名"
-SIG_ATTRS="$("$SIGN_UPDATE" -f "$SIGN_KEY" "$DMG_PATH")"
+SIG_ATTRS="$("$SIGN_UPDATE" -f "$SPARKLE_KEY" "$DMG_PATH")"
 ED_SIG="$(echo "$SIG_ATTRS" | sed -E 's/.*edSignature="([^"]+)".*/\1/')"
 [ -n "$ED_SIG" ] || { echo "签名失败" >&2; exit 1; }
 echo "  edSignature 长度：${#ED_SIG} 字符"
@@ -163,6 +167,10 @@ echo "  已生成：$APPCAST_LOCAL"
 echo ""
 echo "===== ④ 生成 manifest.json（v2）"
 MANIFEST_LOCAL="$REPO_ROOT/dist/manifest.json"
+# 另一平台段可能已在线上：先取线上清单，--prev 合并后整体重签，避免覆盖另一平台段
+if [ ! -s "$MANIFEST_LOCAL" ]; then
+  curl -fsSL "$MANIFEST_URL" -o "$MANIFEST_LOCAL" 2>/dev/null || rm -f "$MANIFEST_LOCAL"
+fi
 MANIFEST_ARGS=(
   generate
   --product "$PRODUCT_DIR"
@@ -175,6 +183,7 @@ MANIFEST_ARGS=(
   --out "$MANIFEST_LOCAL"
 )
 [ -n "$NOTES_URL" ] && MANIFEST_ARGS+=(--notes-url "$NOTES_URL")
+[ -s "$MANIFEST_LOCAL" ] && MANIFEST_ARGS+=(--prev "$MANIFEST_LOCAL")
 python3 "$REPO_ROOT/tools/release/manifest_v2.py" "${MANIFEST_ARGS[@]}"
 
 echo "  已生成：$MANIFEST_LOCAL"

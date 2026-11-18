@@ -74,7 +74,7 @@ jobs:
 
       - name: 构建原生外壳
         run: |
-          cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release -DMOTE_BUILD=${{ env.BUILD }}
           cmake --build build-native-ninja
 
       - name: 打绿色包
