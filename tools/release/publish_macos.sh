@@ -112,6 +112,14 @@ PLIST_VER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
 PLIST_PUB="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' \
   "$APP_IN_DMG/Contents/Info.plist" 2>/dev/null || true)"
 [ -n "$PLIST_PUB" ] || { echo "拒绝发布：DMG 内 App 缺少 SUPublicEDKey" >&2; exit 1; }
+# feed 地址写死在包内，发错就永远检查不到更新（旧包曾指向已下线的 /mote/appcast.xml）。
+PLIST_FEED="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' \
+  "$APP_IN_DMG/Contents/Info.plist" 2>/dev/null || true)"
+[ "$PLIST_FEED" = "$APPCAST_URL" ] || {
+  echo "拒绝发布：DMG 内 SUFeedURL（${PLIST_FEED:-空}）与发布地址 $APPCAST_URL 不一致" >&2
+  echo "  --skip-build 复用旧产物时尤其容易出现；请完整重建后再发布。" >&2
+  exit 1; }
+echo "  SUFeedURL 与发布地址一致：$PLIST_FEED"
 cleanup
 trap - EXIT
 
@@ -201,7 +209,7 @@ if [ "$SKIP_UPLOAD" = "true" ]; then
 else
   echo ""
   echo "===== ⑤ 上传"
-  [ -f "$OSS_ENV_FILE" ] || { echo "缺少 OSS 凭据文件：$OSS_ENV_FILE（或用环境变量传入）" >&2; exit 1; }
+  [ -f "$OSS_ENV_FILE" ] || { echo "缺少 OSS 凭据文件：${OSS_ENV_FILE}（或用环境变量传入）" >&2; exit 1; }
   # shellcheck disable=SC1090
   set -a; . "$OSS_ENV_FILE"; set +a
   for v in OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET OSS_BUCKET OSS_REGION; do

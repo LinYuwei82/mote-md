@@ -50,6 +50,7 @@ function Import-EnvFile([string]$path) {
         $pair = $line -split "=", 2
         if ($pair.Count -ne 2) { return }
         $name = $pair[0].Trim()
+        if ($name -match '^export\s+(.+)$') { $name = $Matches[1].Trim() }
         $value = $pair[1].Trim().Trim('"').Trim("'")
         if ($name) { Set-Item -Path "Env:$name" -Value $value }
     }
@@ -278,7 +279,7 @@ if ($SkipUpload) {
 }
 
 Write-Host ""
-Write-Host "[6/6] index.html 需要同步的值（Mote 的 Windows 两行）"
+Write-Host "[6/6] 本次发布摘要（下载页由 site.js 读取 windows.json 自动同步，无需手改 index.html）"
 Write-Host ("  版本   : v{0}" -f $Version)
 Write-Host ("  大小   : {0:N0} 字节（约 {1:N1} MB）" -f $Size, ($Size / 1MB))
 Write-Host ("  SHA256 : {0}" -f $Sha256)

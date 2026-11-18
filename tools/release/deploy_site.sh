@@ -2,7 +2,7 @@
 # 把 web/ 同步到 ECS 的站点目录（https://xiaotu.online 的源）。
 #
 # 只发布静态页面：不涉及 OSS 上的安装包、手册与更新清单（那些仍由
-# tools/release/publish_*.sh 与 Windows 侧 publish_site.ps1 负责）。
+# tools/release/publish_*.sh 负责）。
 #
 # 用法：
 #   tools/release/deploy_site.sh                        # 用默认地址

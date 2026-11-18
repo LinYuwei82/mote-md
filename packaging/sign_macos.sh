@@ -49,7 +49,7 @@ SIGN_KEY="${SIGN_KEY:-$HOME/.config/mote-updates/ed25519_seed.b64}"
 [ -f "$SIGN_KEY" ] || die "更新签名私钥不存在：$SIGN_KEY
 首次使用可先在 Mac 上运行 Sparkle 的 generate_keys 生成密钥对：
   \$SPARKLE_BIN/generate_keys
-然后把导出的私钥放到 $SIGN_KEY（或用 SIGN_KEY 指向它）。
+然后把导出的私钥放到 ${SIGN_KEY}（或用 SIGN_KEY 指向它）。
 公钥必须与 App 的 Info.plist 里 SUPublicEDKey 一致。"
 
 CHANNEL="${CHANNEL:-stable}"

@@ -52,8 +52,8 @@ ZIP_PATH="${ZIP_PATH:-$REPO_ROOT/dist/Mote-$VERSION-win64-portable.zip}"
 SETUP_PATH="${SETUP_PATH:-}"
 
 if [ ! -f "$ZIP_PATH" ]; then
-  # dist/ 下找任何 Mote*-win64*.zip
-  ZIP_PATH="$(find "$REPO_ROOT/dist" -maxdepth 1 -name "Mote*-win64*.zip" | head -1 || true)"
+  # 兼容打包脚本的默认产物名 dist/Mote-Windows.zip
+  ZIP_PATH="$(find "$REPO_ROOT/dist" -maxdepth 1 -name "Mote*.zip" | head -1 || true)"
 fi
 [ -n "$ZIP_PATH" ] && [ -f "$ZIP_PATH" ] || { echo "绿色包 zip 不存在：$ZIP_PATH" >&2; exit 1; }
 
@@ -62,9 +62,10 @@ if [ -z "$SETUP_PATH" ] || [ ! -f "$SETUP_PATH" ]; then
 fi
 
 ZIP_BASENAME="$(basename "$ZIP_PATH")"
+REMOTE_ZIP_NAME="Mote-$VERSION-win64-portable.zip"
 ZIP_SIZE="$(stat -f %z "$ZIP_PATH")"
 ZIP_SHA256="$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')"
-ZIP_URL="$CDN_DOMAIN/$PRODUCT_DIR/$ZIP_BASENAME"
+ZIP_URL="$CDN_DOMAIN/$PRODUCT_DIR/$REMOTE_ZIP_NAME"
 
 MANIFEST_KEY="$PRODUCT_DIR/updates/$CHANNEL/windows.json"
 MANIFEST_URL="$CDN_DOMAIN/$MANIFEST_KEY"
@@ -159,7 +160,7 @@ else
   done
   OSS_PY="${OSS_PY:-$HOME/.venv-oss/bin/python}"
   [ -x "$OSS_PY" ] || { echo "缺少 oss2 环境：$OSS_PY" >&2; exit 1; }
-  oss_upload "$ZIP_PATH" "$PRODUCT_DIR/$ZIP_BASENAME" \
+  oss_upload "$ZIP_PATH" "$PRODUCT_DIR/$REMOTE_ZIP_NAME" \
     "public, max-age=31536000, immutable" "application/zip"
   if [ -n "$SETUP_URL" ]; then
     oss_upload "$SETUP_PATH" "$PRODUCT_DIR/$SETUP_BASENAME" \

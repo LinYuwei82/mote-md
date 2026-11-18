@@ -81,7 +81,7 @@ if [ "$NATIVE" -eq 0 ]; then
     QT_BIN="$("$QMAKE" -query QT_INSTALL_BINS)"
     QT_LIB="$("$QMAKE" -query QT_INSTALL_LIBS)"
     MACDEPLOYQT="$QT_BIN/macdeployqt"
-    [ -x "$MACDEPLOYQT" ] || { echo "错误：找不到 macdeployqt（$MACDEPLOYQT）"; exit 1; }
+    [ -x "$MACDEPLOYQT" ] || { echo "错误：找不到 macdeployqt（${MACDEPLOYQT}）"; exit 1; }
 fi
 
 echo "==> 1/${TOTAL} 清理并创建影子构建目录"
