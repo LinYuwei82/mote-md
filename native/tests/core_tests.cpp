@@ -1,4 +1,5 @@
-// core/ 的无窗口单测：JSON 协议、消息分发、图片落盘、脏标记状态机。
+// core/ 的无窗口单测：JSON 协议、消息分发、图片落盘、脏标记状态机、
+// v2 更新清单解析与 Ed25519 验签（与 tools/release/manifest_v2.py 交叉验证）。
 // 不链接任何 UI 框架，ctest 直接跑。
 
 #include "core/base64.h"
@@ -10,9 +11,11 @@
 #include "core/json.h"
 #include "core/paths.h"
 #include "core/update.h"
+#include "core/verify_signature.h"
 
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -178,50 +181,90 @@ static void testUpdate()
 {
     using mote::UpdateDecision;
     using mote::UpdateManifest;
+    using mote::UpdatePlatform;
 
-    // 完整清单
+    // macOS 平台段：完整清单，未知字段、未知 artifacts key 与另一平台一并忽略
     UpdateManifest manifest;
     std::string error;
     CHECK(mote::parseUpdateManifest(
-        R"({"version":"0.3.6","url":"https://dl.xiaotu.online/mote/Mote-0.3.6.dmg",
-            "size":1655459,"sha256":"abc","min_os":"14.0",
-            "published_at":"2026-11-16T08:00:00Z",
-            "setup_url":"https://dl.xiaotu.online/mote/Mote-Setup-0.3.6.exe",
-            "setup_size":2561252,"setup_sha256":"def",
-            "notes_url":"https://dl.xiaotu.online/mote/release-notes-0.3.6.html"})",
-        manifest, &error));
-    CHECK_EQ(manifest.version, std::string("0.3.6"));
-    CHECK_EQ(manifest.size, 1655459LL);
-    CHECK_EQ(manifest.sha256, std::string("abc"));
+        R"json({"manifest_version":2,"product":"mote","channel":"stable",
+                "updated_at":"2026-11-18T04:48:54Z","unknown_top":{"x":1},
+                "platforms":{
+                  "macos":{"version":"1.0.1","build":0,"min_os":"14.0","unknown":true,
+                           "notes_url":"https://dl.xiaotu.online/mote/release-notes-1.0.1.html",
+                           "artifacts":{"dmg":{"url":"https://dl.xiaotu.online/mote/mote-1.0.1-macos-arm64.dmg",
+                                               "size":1794986,"sha256":"abc"},
+                                        "future":{"url":"https://dl.xiaotu.online/mote/ignored"}}},
+                  "windows":{"version":"1.0.2","build":202611180530,"min_os":"10.0",
+                             "artifacts":{"setup":{"url":"https://dl.xiaotu.online/mote/mote-1.0.2-win64-setup.exe",
+                                                   "size":2655925,"sha256":"def"}}}}})json",
+        UpdatePlatform::Macos, manifest, &error));
+    CHECK_EQ(manifest.updated_at, std::string("2026-11-18T04:48:54Z"));
+    CHECK_EQ(manifest.version, std::string("1.0.1"));
+    CHECK_EQ(manifest.build, 0LL);
     CHECK_EQ(manifest.min_os, std::string("14.0"));
-    CHECK_EQ(manifest.published_at, std::string("2026-11-16T08:00:00Z"));
-    CHECK_EQ(manifest.setup_url, std::string("https://dl.xiaotu.online/mote/Mote-Setup-0.3.6.exe"));
-    CHECK_EQ(manifest.setup_size, 2561252LL);
-    CHECK_EQ(manifest.setup_sha256, std::string("def"));
     CHECK_EQ(manifest.notes_url,
-             std::string("https://dl.xiaotu.online/mote/release-notes-0.3.6.html"));
+             std::string("https://dl.xiaotu.online/mote/release-notes-1.0.1.html"));
+    CHECK_EQ(manifest.dmg.url,
+             std::string("https://dl.xiaotu.online/mote/mote-1.0.1-macos-arm64.dmg"));
+    CHECK_EQ(manifest.dmg.size, 1794986LL);
+    CHECK_EQ(manifest.dmg.sha256, std::string("abc"));
+    CHECK(manifest.setup.url.empty());
+    CHECK(manifest.portable.url.empty());
 
-    // 可选字段缺席时保持空/0，不报错
-    CHECK(mote::parseUpdateManifest(R"({"version":"1.0.0","url":"https://x/y.dmg"})", manifest,
-                                    &error));
-    CHECK_EQ(manifest.size, 0LL);
-    CHECK(manifest.sha256.empty());
-    CHECK(manifest.setup_url.empty());
-    CHECK_EQ(manifest.setup_size, 0LL);
-    CHECK(manifest.notes_url.empty());
+    // Windows 平台段：setup 与 portable 同时给出，各取所需
+    CHECK(mote::parseUpdateManifest(
+        R"json({"updated_at":"2026-11-18T04:48:54Z","platforms":{"windows":{
+            "version":"1.0.2","build":202611180530,"min_os":"10.0",
+            "artifacts":{
+              "portable":{"url":"https://dl.xiaotu.online/mote/mote-1.0.2-win64-portable.zip",
+                          "size":702247,"sha256":"portable-sha"},
+              "setup":{"url":"https://dl.xiaotu.online/mote/mote-1.0.2-win64-setup.exe",
+                       "size":2655925,"sha256":"setup-sha"}}}}})json",
+        UpdatePlatform::Windows, manifest, &error));
+    CHECK_EQ(manifest.updated_at, std::string("2026-11-18T04:48:54Z"));
+    CHECK_EQ(manifest.build, 202611180530LL);
+    CHECK_EQ(manifest.portable.url,
+             std::string("https://dl.xiaotu.online/mote/mote-1.0.2-win64-portable.zip"));
+    CHECK_EQ(manifest.portable.size, 702247LL);
+    CHECK_EQ(manifest.setup.sha256, std::string("setup-sha"));
+    CHECK(manifest.dmg.url.empty());
+
+    // 清单里没有自己的平台段：明确报错
+    CHECK(!mote::parseUpdateManifest(
+        R"json({"platforms":{"windows":{"version":"1.0.2","build":1,
+                 "artifacts":{"setup":{"url":"https://x/setup.exe","size":1}}}}})json",
+        UpdatePlatform::Macos, manifest, &error));
+    CHECK_EQ(error, std::string("更新清单缺少 macos 平台"));
 
     // 必填字段与类型校验
-    CHECK(!mote::parseUpdateManifest(R"({"url":"https://x/y.dmg"})", manifest, &error));
-    CHECK_EQ(error, std::string("更新清单缺少 version"));
-    CHECK(!mote::parseUpdateManifest(R"({"version":"1.0.0"})", manifest, &error));
-    CHECK_EQ(error, std::string("更新清单缺少 url"));
-    CHECK(!mote::parseUpdateManifest(R"({"version":1,"url":"https://x"})", manifest, &error));
-    CHECK(!mote::parseUpdateManifest(R"({"version":"1","url":"https://x","size":-1})", manifest,
-                                     &error));
-    CHECK(!mote::parseUpdateManifest(R"({"version":"1","url":"https://x","setup_size":-1})",
-                                     manifest, &error));
-    CHECK(!mote::parseUpdateManifest("not json", manifest, &error));
+    CHECK(!mote::parseUpdateManifest("not json", UpdatePlatform::Macos, manifest, &error));
     CHECK_EQ(error, std::string("更新清单不是合法的 JSON 对象"));
+    CHECK(!mote::parseUpdateManifest(R"({"updated_at":"2026-11-18T04:48:54Z"})",
+                                     UpdatePlatform::Macos, manifest, &error));
+    CHECK_EQ(error, std::string("更新清单缺少 platforms"));
+    CHECK(!mote::parseUpdateManifest(R"({"platforms":{"macos":{}}})", UpdatePlatform::Macos,
+                                     manifest, &error));
+    CHECK_EQ(error, std::string("更新清单缺少 version"));
+    CHECK(!mote::parseUpdateManifest(R"({"platforms":{"macos":{"version":"1.0.0"}}})",
+                                     UpdatePlatform::Macos, manifest, &error));
+    CHECK_EQ(error, std::string("更新清单缺少 artifacts"));
+    CHECK(!mote::parseUpdateManifest(
+        R"({"platforms":{"macos":{"version":"1.0.0","artifacts":{}}}})",
+        UpdatePlatform::Macos, manifest, &error));
+    CHECK_EQ(error, std::string("更新清单缺少 dmg 产物"));
+    CHECK(!mote::parseUpdateManifest(
+        R"({"platforms":{"windows":{"version":"1.0.0","artifacts":{"dmg":{"url":"https://x"}}}}})",
+        UpdatePlatform::Windows, manifest, &error));
+    CHECK_EQ(error, std::string("更新清单至少需要 setup 或 portable 产物"));
+    CHECK(!mote::parseUpdateManifest(
+        R"({"platforms":{"macos":{"version":"1","artifacts":{"dmg":{"url":"https://x","size":-1}}}}})",
+        UpdatePlatform::Macos, manifest, &error));
+    CHECK_EQ(error, std::string("更新清单的 size 不能为负数"));
+    CHECK(!mote::parseUpdateManifest(
+        R"({"platforms":{"windows":{"version":"1","build":-5,"artifacts":{"setup":{"url":"https://x","size":1}}}}})",
+        UpdatePlatform::Windows, manifest, &error));
+    CHECK_EQ(error, std::string("更新清单的 build 不能为负数"));
 
     // 版本比较：数字段比较、缺段补 0、忽略前缀 v 与后缀
     CHECK_EQ(mote::compareVersions("0.3.5", "0.3.5"), 0);
@@ -231,21 +274,210 @@ static void testUpdate()
     CHECK_EQ(mote::compareVersions("0.3.5-beta", "0.3.5"), 0);
     CHECK_EQ(mote::compareVersions("0.3", "0.3.1"), -1);
 
-    // 判定
-    UpdateManifest available;
-    CHECK(mote::parseUpdateManifest(R"({"version":"0.3.6","url":"https://x/a.dmg","min_os":"14.0"})",
-                                    available, nullptr));
-    CHECK(mote::decideUpdate(available, "0.3.5", "14.0") == UpdateDecision::Available);
-    CHECK(mote::decideUpdate(available, "0.3.6", "14.0") == UpdateDecision::UpToDate);
-    CHECK(mote::decideUpdate(available, "0.3.7", "14.0") == UpdateDecision::UpToDate);
-    CHECK(mote::decideUpdate(available, "0.3.5", "13.6") == UpdateDecision::UnsupportedSystem);
-    CHECK(mote::decideUpdate(UpdateManifest{}, "0.3.5", "14.0") == UpdateDecision::Invalid);
-
+    // 判定：macOS 只比 version（currentBuild 不参与）
+    UpdateManifest macAvailable;
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"macos":{"version":"1.0.1","min_os":"14.0",
+                 "artifacts":{"dmg":{"url":"https://x/a.dmg"}}}}})json",
+        UpdatePlatform::Macos, macAvailable, nullptr));
+    CHECK(mote::decideUpdate(macAvailable, UpdatePlatform::Macos, "1.0.0", "14.0", 0)
+          == UpdateDecision::Available);
+    CHECK(mote::decideUpdate(macAvailable, UpdatePlatform::Macos, "1.0.1", "14.0", 0)
+          == UpdateDecision::UpToDate);
+    CHECK(mote::decideUpdate(macAvailable, UpdatePlatform::Macos, "1.0.2", "14.0", 0)
+          == UpdateDecision::UpToDate);
+    CHECK(mote::decideUpdate(macAvailable, UpdatePlatform::Macos, "1.0.1", "14.0", 999)
+          == UpdateDecision::UpToDate);
+    CHECK(mote::decideUpdate(macAvailable, UpdatePlatform::Macos, "1.0.0", "13.6", 0)
+          == UpdateDecision::UnsupportedSystem);
     // 没有 min_os 时不对系统版本设限
-    UpdateManifest anyOs;
-    CHECK(mote::parseUpdateManifest(R"({"version":"0.3.6","url":"https://x/a.dmg"})", anyOs,
-                                    nullptr));
-    CHECK(mote::decideUpdate(anyOs, "0.3.5", "10.15") == UpdateDecision::Available);
+    UpdateManifest macAnyOs;
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"macos":{"version":"1.0.1","artifacts":{"dmg":{"url":"https://x/a.dmg"}}}}})json",
+        UpdatePlatform::Macos, macAnyOs, nullptr));
+    CHECK(mote::decideUpdate(macAnyOs, UpdatePlatform::Macos, "1.0.0", "10.15", 0)
+          == UpdateDecision::Available);
+
+    // 判定：Windows 先比 version，同版本再比 build（build <= 本机 → 无更新）
+    UpdateManifest winAvailable;
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"windows":{"version":"1.0.2","build":202611180530,
+                 "artifacts":{"portable":{"url":"https://x/a.zip"}}}}})json",
+        UpdatePlatform::Windows, winAvailable, nullptr));
+    CHECK(mote::decideUpdate(winAvailable, UpdatePlatform::Windows, "1.0.1", "10.0", 202611180000)
+          == UpdateDecision::Available);
+    CHECK(mote::decideUpdate(winAvailable, UpdatePlatform::Windows, "1.0.2", "10.0", 202611180529)
+          == UpdateDecision::Available);
+    CHECK(mote::decideUpdate(winAvailable, UpdatePlatform::Windows, "1.0.2", "10.0", 202611180530)
+          == UpdateDecision::UpToDate);
+    CHECK(mote::decideUpdate(winAvailable, UpdatePlatform::Windows, "1.0.2", "10.0", 202611190000)
+          == UpdateDecision::UpToDate);
+    // 本机构建号未知（MOTE_BUILD=0）：跳过 build 比较，仅按 version
+    CHECK(mote::decideUpdate(winAvailable, UpdatePlatform::Windows, "1.0.2", "10.0", 0)
+          == UpdateDecision::UpToDate);
+    CHECK(mote::decideUpdate(winAvailable, UpdatePlatform::Windows, "1.0.1", "10.0", 0)
+          == UpdateDecision::Available);
+
+    // 平台产物缺失时判定无效
+    CHECK(mote::decideUpdate(UpdateManifest{}, UpdatePlatform::Macos, "1.0.1", "14.0", 0)
+          == UpdateDecision::Invalid);
+    CHECK(mote::decideUpdate(UpdateManifest{}, UpdatePlatform::Windows, "1.0.1", "10.0", 0)
+          == UpdateDecision::Invalid);
+}
+
+// ---- Ed25519 验签：与 tools/release/manifest_v2.py 交叉验证 ----
+// 测试密钥 = RFC 8032 自检种子（manifest_v2.py 的 _SELFTEST_SEED），
+// 签名与 canonical bytes 由 manifest_v2.py 生成，客户端实现必须逐字节复现。
+
+static const unsigned char kTestPublicKey[32] = {
+    0xd7, 0x5a, 0x98, 0x01, 0x82, 0xb1, 0x0a, 0xb7, 0xd5, 0x4b, 0xfe, 0xd3,
+    0xc9, 0x64, 0x07, 0x3a, 0x0e, 0xe1, 0x72, 0xf3, 0xda, 0xa6, 0x23, 0x25,
+    0xaf, 0x02, 0x1a, 0x68, 0xf7, 0x07, 0x51, 0x1a,
+};
+
+// 手工构造的清单：覆盖键排序、整数、浮点（2.5/0.1）、布尔、null、中文原样
+// UTF-8（ensure_ascii=False）、引号/反斜杠/制表符转义、未知顶层字段。
+static const char kCraftedManifest[] = R"ctx({
+  "channel": "beta",
+  "key_id": "2026-11",
+  "manifest_version": 2,
+  "platforms": {
+    "macos": {
+      "artifacts": {
+        "dmg": {
+          "sha256": "6f6f9fbd61145aca92be509d6595ce376d88746790b714ca1a22d9a9b889e11a",
+          "size": 1794986,
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.1-macos-arm64.dmg"
+        }
+      },
+      "build": 0,
+      "min_os": "14.0",
+      "version": "1.0.1"
+    },
+    "windows": {
+      "artifacts": {
+        "portable": {
+          "sha256": "8fdcb41338deb9385308537a9ec4434a11b13bf250bf81f43c0817c804cf0dcc",
+          "size": 702247,
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.2-win64-portable.zip"
+        },
+        "setup": {
+          "sha256": "9b9c18c6a21f5d4b44bb804aa6a8f683f95035f6018cb35ee27918fe48b2ac16",
+          "size": 2655925,
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.2-win64-setup.exe"
+        }
+      },
+      "build": 202611180530,
+      "min_os": "10.0",
+      "version": "1.0.2"
+    }
+  },
+  "product": "mote",
+  "release_note": "中文\"引号\"与\\反斜杠\t制表符",
+  "signature": "OlDWDKcjWiqqXMAsL+5ORzRx9PyfCX1MCh77p3Q/fstX3+g0qEXcgJnWdeMgln+oKd0qGNLkMHQZnnQIzhK3BA==",
+  "unknown_top": {
+    "aa": -3,
+    "mm": [
+      true,
+      false,
+      null,
+      2.5,
+      0.1
+    ],
+    "zz": 1
+  },
+  "updated_at": "2026-11-18T04:48:54Z"
+})ctx";
+
+// 上面 kCraftedManifest 去掉 signature 后的 canonical bytes（Python 产出）
+static const char kExpectedCanonical[] = R"ctx({"channel":"beta","key_id":"2026-11","manifest_version":2,"platforms":{"macos":{"artifacts":{"dmg":{"sha256":"6f6f9fbd61145aca92be509d6595ce376d88746790b714ca1a22d9a9b889e11a","size":1794986,"url":"https://dl.xiaotu.online/mote/mote-1.0.1-macos-arm64.dmg"}},"build":0,"min_os":"14.0","version":"1.0.1"},"windows":{"artifacts":{"portable":{"sha256":"8fdcb41338deb9385308537a9ec4434a11b13bf250bf81f43c0817c804cf0dcc","size":702247,"url":"https://dl.xiaotu.online/mote/mote-1.0.2-win64-portable.zip"},"setup":{"sha256":"9b9c18c6a21f5d4b44bb804aa6a8f683f95035f6018cb35ee27918fe48b2ac16","size":2655925,"url":"https://dl.xiaotu.online/mote/mote-1.0.2-win64-setup.exe"}},"build":202611180530,"min_os":"10.0","version":"1.0.2"}},"product":"mote","release_note":"中文\"引号\"与\\反斜杠\t制表符","unknown_top":{"aa":-3,"mm":[true,false,null,2.5,0.1],"zz":1},"updated_at":"2026-11-18T04:48:54Z"})ctx";
+
+// manifest_v2.py generate（macos + windows --prev 合并后重签）产出的完整清单
+static const char kSignedManifest[] = R"manifest({
+  "channel": "stable",
+  "key_id": "2026-11",
+  "manifest_version": 2,
+  "platforms": {
+    "macos": {
+      "artifacts": {
+        "dmg": {
+          "sha256": "ac2348937a860bd2091befd75988b77233455641bfccd100db8a1e47c7be1fce",
+          "size": 14,
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.1-macos-arm64.dmg"
+        }
+      },
+      "build": 0,
+      "min_os": "14.0",
+      "rollout_percent": 100,
+      "version": "1.0.1"
+    },
+    "windows": {
+      "artifacts": {
+        "portable": {
+          "sha256": "a597a9f1c78ab2d05f641cfa267dd5ac8138f266608d51202a246182910e2727",
+          "size": 17,
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.2-win64-portable.zip"
+        },
+        "setup": {
+          "sha256": "1d0f8f8879e667e6f81fcc8d03a1b1ed4acefbb9f29690e67ac544552eba5d05",
+          "size": 14,
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.2-win64-setup.exe"
+        }
+      },
+      "build": 202611180530,
+      "min_os": "10.0",
+      "notes_url": "https://dl.xiaotu.online/mote/release-notes-1.0.2.html",
+      "rollout_percent": 100,
+      "version": "1.0.2"
+    }
+  },
+  "product": "mote",
+  "signature": "TLcaBLwQQzSzILfEObbMhBS/jhwGEeRaxQtgrpZdWyVAbpuKTVnnw2qCE0XUqHiFbrGkeZgEMqH4s5eNbdSzAw==",
+  "updated_at": "2026-11-18T07:00:58Z"
+})manifest";
+
+static void testVerifySignature()
+{
+    std::string error;
+
+    // canonical bytes 必须与 Python json.dumps(sort_keys=True, separators=(",",":"),
+    // ensure_ascii=False) 逐字节一致
+    std::string canonical;
+    CHECK(mote::canonicalUpdateManifestBytes(kCraftedManifest, &canonical, &error));
+    CHECK_EQ(canonical, std::string(kExpectedCanonical));
+
+    // 签名验证通过（craft 向量 + manifest_v2.py 产出的两平台清单）
+    CHECK(mote::verifyUpdateManifestSignature(kCraftedManifest, kTestPublicKey, &error));
+    CHECK(mote::verifyUpdateManifestSignature(kSignedManifest, kTestPublicKey, &error));
+
+    // 篡改清单任一值都失败
+    std::string tampered = kSignedManifest;
+    const size_t versionPos = tampered.find("\"1.0.1\"");
+    CHECK(versionPos != std::string::npos);
+    if (versionPos != std::string::npos)
+        tampered.replace(versionPos, 7, "\"9.9.9\"");
+    CHECK(!mote::verifyUpdateManifestSignature(tampered, kTestPublicKey, &error));
+    CHECK_EQ(error, std::string("更新清单签名验证失败（公钥不匹配或清单被改动）"));
+
+    // 错误公钥
+    unsigned char wrongKey[32];
+    std::memcpy(wrongKey, kTestPublicKey, sizeof(wrongKey));
+    wrongKey[0] ^= 1;
+    CHECK(!mote::verifyUpdateManifestSignature(kSignedManifest, wrongKey, &error));
+
+    // 缺 signature / signature 长度不对 / 非 JSON / 非 JSON 对象
+    CHECK(!mote::verifyUpdateManifestSignature(R"({"a":1})", kTestPublicKey, &error));
+    CHECK_EQ(error, std::string("更新清单缺少 signature"));
+    CHECK(!mote::verifyUpdateManifestSignature(R"({"a":1,"signature":"AAAA"})", kTestPublicKey,
+                                               &error));
+    CHECK_EQ(error, std::string("更新清单的 signature 不是 64 字节 Ed25519 签名"));
+    CHECK(!mote::verifyUpdateManifestSignature("junk", kTestPublicKey, &error));
+    CHECK_EQ(error, std::string("更新清单不是合法的 JSON 对象"));
+    CHECK(!mote::verifyUpdateManifestSignature("[1,2]", kTestPublicKey, &error));
+    CHECK(!mote::canonicalUpdateManifestBytes("[1,2]", &canonical, &error));
+
+    // 生产 trust anchor 是 32 字节
+    CHECK(sizeof(mote::kUpdateManifestPublicKey) == 32);
 }
 
 static void testBase64()
@@ -689,6 +921,7 @@ int main()
 {
     testJson();
     testUpdate();
+    testVerifySignature();
     testBase64();
     testPaths();
     testImageStore();

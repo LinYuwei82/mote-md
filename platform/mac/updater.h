@@ -2,8 +2,9 @@
 
 #import <Cocoa/Cocoa.h>
 
-// 在线更新的「自研检查」入口：拉取 OSS 上的 latest.json → 用 core/update 判定 →
-// 自定义弹窗；用户同意后交给 Sparkle 完成下载、验签、替换与重启。
+// 在线更新的「自研检查」入口：拉取 OSS 上的 manifest.json（v2 统一清单）→
+// 验签 + 用 core/update 判定 → 自定义弹窗；用户同意后交给 Sparkle 完成下载、
+// 验签、替换与重启。
 // 检查时机：启动后延迟一次、每 24 小时一次、菜单「检查更新…」立即检查。
 @interface MoteUpdater : NSObject
 

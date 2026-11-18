@@ -5,11 +5,12 @@
 #include <functional>
 
 // Windows 在线更新，口径对齐 macOS：OSS 放清单 + 自研检查 + 自研下载校验 + 静默安装。
-//   core/update   解析清单、比较版本、给出决策（两端共用）
-//   本文件        取清单（WinHTTP）、下载并校验 SHA256、交给安装包静默升级
+//   core/update           解析清单（v2 统一 manifest.json）、比较版本、给出决策（两端共用）
+//   core/verify_signature 清单 Ed25519 验签（TweetNaCl，公钥编译进客户端）
+//   本文件                取清单（WinHTTP）、下载后验签并校验 SHA256、交给安装包静默升级
 //
-// 清单不复用 macOS 的 latest.json：那份指向 .dmg，Windows 读同目录的
-// windows.json（指向绿色包 zip），避免把 .dmg 当成 Windows 安装包。
+// 清单统一为 manifest.json（platforms.windows 平台段），安装版读 artifacts.setup，
+// 绿色包读 artifacts.portable；下载完成后先验清单签名、再校验产物 SHA256。
 namespace mote::win {
 
 // 更新检查用的定时器 id（WM_TIMER）与后台结果消息（WM_APP + 8）

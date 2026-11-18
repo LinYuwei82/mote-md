@@ -1,19 +1,19 @@
-﻿# Mote · Windows 在线更新发布（OSS 清单 + 绿色包 zip）
+﻿# Mote · Windows 在线更新发布（OSS 清单 + 绿色包 zip，更新清单 Schema v2）
 #
 # 输入：packaging/package_windows_native.ps1 产出的 dist\Mote-Windows.zip
-# 动作：门禁校验 → 算 SHA256 → 生成 windows.json → 上传 OSS → 线上校验
+# 动作：门禁校验 → 生成 Ed25519 签名的 manifest.json（v2）→ 上传 OSS → 线上校验
 #
 # 与 macOS 的 publish_macos.sh 对齐：
-#   macOS   appcast.xml（Sparkle 验签）+ latest.json（自研检查）→ .dmg
-#   Windows 没有签名/安装器机制，只发 windows.json（自研检查）→ 绿色包 zip
-# 两份清单分开存放：latest.json 指向 .dmg，Windows 客户端只读 windows.json，
-# 避免把 .dmg 当成 Windows 安装包。
+#   macOS   appcast.xml（Sparkle 验签）+ manifest.json（v2）→ .dmg
+#   Windows 没有签名/安装器机制，只发 manifest.json（v2）→ 绿色包 zip
+# 客户端只读 platforms.windows：artifacts.portable 为默认更新包，
+# artifacts.setup 为安装版，避免把 .dmg 当成 Windows 安装包。
 #
-# 目录约定：
-#   oss://<bucket>/mote/Mote-<version>-win64-portable.zip   长缓存 immutable
-#   oss://<bucket>/mote/updates/<channel>/windows.json      60 秒缓存
+# 目录约定（v2 命名）：
+#   oss://<bucket>/mote/mote-<version>-win64-portable.zip   长缓存 immutable
+#   oss://<bucket>/mote/updates/<channel>/manifest.json     60 秒缓存
 # 对外地址：
-#   https://dl.xiaotu.online/mote/updates/stable/windows.json   ← 客户端读取
+#   https://dl.xiaotu.online/mote/updates/stable/manifest.json   ← 客户端读取
 #
 # 依赖：python + oss2（python -m pip install oss2），凭据用环境变量或凭据文件
 #
@@ -29,6 +29,7 @@ param(
     [string]$CdnDomain = "https://dl.xiaotu.online",
     [string]$ProductDir = "mote",
     [string]$MinOs = "10.0",
+    [string]$Build = "",
     [string]$EnvFile = "",
     [switch]$SkipUpload
 )
@@ -66,6 +67,22 @@ $proLine = Select-String -Path (Join-Path $root "Mote.pro") -Pattern "^VERSION\s
     Select-Object -First 1
 if (-not $proLine) { Fail "无法从 Mote.pro 读取 VERSION" }
 $Version = $proLine.Matches[0].Groups[1].Value
+
+# v2 清单 windows 平台必须带 build（客户端同版本比对构建号），缺省取触发时刻 UTC（分钟级）
+if ([string]::IsNullOrWhiteSpace($Build)) { $Build = (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmm") }
+if ($Build -notmatch '^\d{4,}$') { Fail "非法构建号：$Build（应为纯数字，如 202611180930）" }
+
+# 签名种子：环境变量优先（CI），其次本地种子文件
+$signKeyPath = $null
+if (-not [string]::IsNullOrWhiteSpace($env:MOTE_UPDATE_SIGNING_KEY)) {
+    $signKeyPath = Join-Path $env:TEMP ("mote-manifest-key-" + [guid]::NewGuid().ToString("N") + ".b64")
+    [IO.File]::WriteAllText($signKeyPath, $env:MOTE_UPDATE_SIGNING_KEY.Trim())
+} else {
+    $signKeyPath = Join-Path $env:USERPROFILE ".config\mote-updates\ed25519_seed.b64"
+}
+if (-not (Test-Path -LiteralPath $signKeyPath)) {
+    Fail "v2 清单签名种子不存在：$signKeyPath（或设置环境变量 MOTE_UPDATE_SIGNING_KEY）"
+}
 
 if (-not $ZipPath) { $ZipPath = Join-Path $root "dist\Mote-Windows.zip" }
 if (-not (Test-Path $ZipPath)) {
@@ -130,13 +147,15 @@ $SetupUrl = ""
 if ($SetupFull) {
     $SetupSize = (Get-Item $SetupFull).Length
     $SetupSha256 = (Get-FileHash $SetupFull -Algorithm SHA256).Hash.ToLower()
-    $SetupUrl = "$CdnDomain/$ProductDir/Mote-Setup-$Version.exe"
 }
 
-# 远端文件名固定按版本命名：index.html 与客户端清单都以它为准，不跟随本地 zip 名
-$RemoteName = "Mote-$Version-win64-portable.zip"
+# 远端文件名固定按 v2 命名：<product>-<version>-<os>-<arch>-<type>.<ext>
+# （本地产物名不变，index.html 与客户端清单都以远端 v2 名为准）
+$RemoteName = "mote-$Version-win64-portable.zip"
+$V2SetupName = "mote-$Version-win64-setup.exe"
 $DownloadUrl = "$CdnDomain/$ProductDir/$RemoteName"
-$ManifestKey = "$ProductDir/updates/$Channel/windows.json"
+$SetupUrl = "$CdnDomain/$ProductDir/$V2SetupName"
+$ManifestKey = "$ProductDir/updates/$Channel/manifest.json"
 $ManifestUrl = "$CdnDomain/$ManifestKey"
 
 Write-Host ""
@@ -144,7 +163,7 @@ Write-Host "  zip          : $ZipFull"
 Write-Host "  大小         : $Size 字节"
 Write-Host "  SHA256       : $Sha256"
 Write-Host "  下载地址     : $DownloadUrl"
-Write-Host "  windows.json : $ManifestUrl"
+Write-Host "  manifest.json: $ManifestUrl"
 if ($SetupFull) {
     Write-Host "  setup        : $SetupUrl（$SetupSize 字节）"
     Write-Host "  setup SHA256 : $SetupSha256"
@@ -153,9 +172,11 @@ if ($SetupFull) {
 }
 
 Write-Host ""
-Write-Host "[3/6] 生成 windows.json"
-$manifestPath = Join-Path $root "dist\windows.json"
-# 绿色包是默认更新包；安装版另给 setup_* 三字段，客户端按安装形态二选一。
+Write-Host "[3/6] 生成 manifest.json（v2，Ed25519 签名）"
+$python = (Get-Command python -ErrorAction SilentlyContinue).Source
+if (-not $python) { Fail "找不到 python（manifest_v2 / guard 需要）" }
+$manifestPath = Join-Path $root "dist\manifest.json"
+# platforms.windows.artifacts：portable 为默认更新包，setup 为安装版；
 # notes_url 只在本地存在 docs\release-notes-<版本>.html 时才写，并随本次发布一起上传；
 # 缺页时不写该字段，客户端就不会出现「查看完整更新说明…」的死链。
 $NotesFile = Join-Path $root "docs\release-notes-$Version.html"
@@ -167,37 +188,36 @@ if (Test-Path -LiteralPath $NotesFile) {
 } else {
     Write-Host "  提示：未找到 docs\release-notes-$Version.html，清单不写 notes_url"
 }
-$manifestObject = [ordered]@{
-    version      = $Version
-    url          = $DownloadUrl
-    size         = $Size
-    sha256       = $Sha256
-    min_os       = $MinOs
-    published_at = $PublishedAt
-}
-if ($NotesUrl) { $manifestObject["notes_url"] = $NotesUrl }
-if ($SetupFull) {
-    $manifestObject["setup_url"] = $SetupUrl
-    $manifestObject["setup_size"] = $SetupSize
-    $manifestObject["setup_sha256"] = $SetupSha256
-}
-$manifest = ($manifestObject | ConvertTo-Json) + "`n"
-[IO.File]::WriteAllText($manifestPath, $manifest, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "  已生成：$manifestPath"
+$manifestV2Args = @(
+    "generate", "--product", $ProductDir, "--channel", $Channel,
+    "--platform", "windows", "--version", $Version, "--build", $Build,
+    "--min-os", $MinOs, "--key-id", "2026-11",
+    "--artifact", "portable=$ZipFull",
+    "--key", $signKeyPath, "--out", $manifestPath
+)
+if ($SetupFull) { $manifestV2Args += @("--artifact", "setup=$SetupFull") }
+if ($NotesUrl) { $manifestV2Args += @("--notes-url", $NotesUrl) }
+& $python (Join-Path $root "tools\release\manifest_v2.py") @manifestV2Args
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if (-not (Test-Path -LiteralPath $manifestPath)) { Fail "没有找到清单：$manifestPath" }
+$pubHexLine = & $python (Join-Path $root "tools\release\manifest_v2.py") pubkey --key $signKeyPath
+$PubHex = ($pubHexLine -join "") -replace '.*：', ''
 
 Write-Host ""
-Write-Host "[3.5/6] 发布门禁（guard）"
-$python = (Get-Command python -ErrorAction SilentlyContinue).Source
-if (-not $python) { Fail "找不到 python（guard 需要）" }
-$guardArgs = @("--product", "mote", "--kind", "win", "--channel", $Channel)
+Write-Host "[3.5/6] 发布门禁（guard，v2）"
+$guardArgs = @(
+    "--product", $ProductDir, "--kind", "win", "--channel", $Channel,
+    "--schema", "v2", "--manifest", $manifestPath, "--pub-hex", $PubHex, "--build", $Build
+)
 if ($SetupFull) {
-    $guardArgs += @("--file", $SetupFull, "--zip", $ZipFull, "--zip-name", $RemoteName)
+    $guardArgs += @("--file", $SetupFull, "--name", $V2SetupName,
+                    "--zip", $ZipFull, "--zip-name", $RemoteName)
 } else {
     $guardArgs += @("--file", $ZipFull, "--name", $RemoteName)
 }
 if ($SkipUpload) { $guardArgs += "--offline" }
 & $python (Join-Path $root "tools\release\guard.py") preflight @guardArgs
-if ($LASTEXITCODE -ne 0) { Fail "guard preflight 未通过（命名/版本/覆盖/内嵌地址）" }
+if ($LASTEXITCODE -ne 0) { Fail "guard preflight 未通过（v2 命名/版本/覆盖/内嵌地址/签名）" }
 
 Write-Host ""
 if ($SkipUpload) {
@@ -236,7 +256,7 @@ if notes_key:
                              headers={"Cache-Control": "public, max-age=3600",
                                       "Content-Type": "text/html; charset=utf-8"})
 print("  zip          -> " + os.environ["UPLOAD_ZIP_KEY"])
-print("  windows.json -> " + os.environ["UPLOAD_MANIFEST_KEY"])
+print("  manifest.json-> " + os.environ["UPLOAD_MANIFEST_KEY"])
 if setup_key:
     print("  setup        -> " + setup_key)
 if notes_key:
@@ -250,7 +270,7 @@ if notes_key:
     $env:UPLOAD_MANIFEST_KEY = $ManifestKey
     if ($SetupFull) {
         $env:UPLOAD_SETUP_PATH = $SetupFull
-        $env:UPLOAD_SETUP_KEY = "$ProductDir/Mote-Setup-$Version.exe"
+        $env:UPLOAD_SETUP_KEY = "$ProductDir/$V2SetupName"
     } else {
         Remove-Item Env:UPLOAD_SETUP_PATH -ErrorAction SilentlyContinue
         Remove-Item Env:UPLOAD_SETUP_KEY -ErrorAction SilentlyContinue
@@ -288,16 +308,16 @@ if ($SkipUpload) {
         # PowerShell 5.1 的 ConvertTo-Json 会在冒号后补两个空格，正则不能写死一个空格
         $shaPattern = [regex]::Escape($Sha256)
         $versionPattern = '"version":\s*"' + [regex]::Escape($Version) + '"'
-        $setupPattern = '"setup_url":\s*"' + [regex]::Escape($SetupUrl) + '"'
+        $setupPattern = '"setup":\s*\{[\s\S]*?"url":\s*"' + [regex]::Escape($SetupUrl) + '"'
         if ($live.StatusCode -eq 200 -and $live.Content -match $shaPattern -and
             $live.Content -match $versionPattern -and
             (-not $SetupFull -or $live.Content -match $setupPattern)) {
-            Write-Host "  ✓ windows.json 版本与 SHA256 均与产物一致"
+            Write-Host "  ✓ manifest.json 版本与 SHA256 均与产物一致"
         } else {
-            Write-Host "  ✗ windows.json 内容异常：$($live.Content)"
+            Write-Host "  ✗ manifest.json 内容异常：$($live.Content)"
         }
     } catch {
-        Write-Host "  ✗ windows.json 不可访问：$($_.Exception.Message)"
+        Write-Host "  ✗ manifest.json 不可访问：$($_.Exception.Message)"
     }
 
     if ($SetupFull) {
@@ -322,7 +342,7 @@ if (-not $SkipUpload) {
     if ($LASTEXITCODE -ne 0) { Fail "guard verify-live 未通过（清单/大小/SHA/Content-Type）" }
 }
 
-Write-Host "[6/6] 本次发布摘要（下载页由 site.js 读取 windows.json 自动同步，无需手改 index.html）"
+Write-Host "[6/6] 本次发布摘要（下载页由 site.js 读取 manifest.json 自动同步，无需手改 index.html）"
 Write-Host ("  版本   : v{0}" -f $Version)
 Write-Host ("  大小   : {0:N0} 字节（约 {1:N1} MB）" -f $Size, ($Size / 1MB))
 Write-Host ("  SHA256 : {0}" -f $Sha256)

@@ -55,9 +55,30 @@ void setError(std::string *error, const char *message)
         *error = message;
 }
 
+// 解析一个已知 artifacts key（dmg / setup / portable）。缺席的 key 保持空，
+// 是否必填由调用方按平台规则判断；未知 key 由调用方根本不来问，天然忽略。
+bool parseArtifact(const JsonValue &artifacts, std::string_view key, UpdateArtifact *out,
+                   std::string *error)
+{
+    const JsonValue *entry = artifacts.find(key);
+    if (!entry || !entry->isObject())
+        return true;
+
+    out->url = entry->stringAt("url");
+    out->sha256 = entry->stringAt("sha256");
+    const double size = entry->numberAt("size", 0.0);
+    if (size < 0.0) {
+        setError(error, "更新清单的 size 不能为负数");
+        return false;
+    }
+    out->size = static_cast<long long>(size);
+    return true;
+}
+
 } // namespace
 
-bool parseUpdateManifest(std::string_view text, UpdateManifest &out, std::string *error)
+bool parseUpdateManifest(std::string_view text, UpdatePlatform platform, UpdateManifest &out,
+                         std::string *error)
 {
     out = UpdateManifest{};
 
@@ -67,40 +88,58 @@ bool parseUpdateManifest(std::string_view text, UpdateManifest &out, std::string
         return false;
     }
 
-    out.version = root.stringAt("version");
+    // 顶层只取展示用的 updated_at；manifest_version/product/channel/key_id 由
+    // 验签层与发布端约束，这里不重复校验。
+    out.updated_at = root.stringAt("updated_at");
+
+    // 只取自己平台段：另一平台与一切未知字段一律忽略（保证未来可扩展）
+    const JsonValue *platforms = root.find("platforms");
+    if (!platforms || !platforms->isObject()) {
+        setError(error, "更新清单缺少 platforms");
+        return false;
+    }
+    const char *platformKey = platform == UpdatePlatform::Macos ? "macos" : "windows";
+    const JsonValue *section = platforms->find(platformKey);
+    if (!section || !section->isObject()) {
+        setError(error, platform == UpdatePlatform::Macos ? "更新清单缺少 macos 平台"
+                                                          : "更新清单缺少 windows 平台");
+        return false;
+    }
+
+    out.version = section->stringAt("version");
     if (out.version.empty()) {
         setError(error, "更新清单缺少 version");
         return false;
     }
-    out.url = root.stringAt("url");
-    if (out.url.empty()) {
-        setError(error, "更新清单缺少 url");
+    const double build = section->numberAt("build", 0.0);
+    if (build < 0.0) {
+        setError(error, "更新清单的 build 不能为负数");
         return false;
     }
+    out.build = static_cast<long long>(build);
+    out.min_os = section->stringAt("min_os");
+    out.notes_url = section->stringAt("notes_url");
 
-    out.sha256 = root.stringAt("sha256");
-    out.min_os = root.stringAt("min_os");
-    out.published_at = root.stringAt("published_at");
-
-    const double size = root.numberAt("size", 0.0);
-    if (size < 0.0) {
-        setError(error, "更新清单的 size 不能为负数");
+    const JsonValue *artifacts = section->find("artifacts");
+    if (!artifacts || !artifacts->isObject()) {
+        setError(error, "更新清单缺少 artifacts");
         return false;
     }
-    out.size = static_cast<long long>(size);
+    if (!parseArtifact(*artifacts, "dmg", &out.dmg, error)
+        || !parseArtifact(*artifacts, "setup", &out.setup, error)
+        || !parseArtifact(*artifacts, "portable", &out.portable, error))
+        return false;
 
-    // 可选的安装版条目：老清单没有这些字段，解析后保持空/0
-    out.setup_url = root.stringAt("setup_url");
-    out.setup_sha256 = root.stringAt("setup_sha256");
-    const double setupSize = root.numberAt("setup_size", 0.0);
-    if (setupSize < 0.0) {
-        setError(error, "更新清单的 setup_size 不能为负数");
+    // 平台必填产物：macOS 至少 dmg，Windows 至少 setup 或 portable 之一
+    if (platform == UpdatePlatform::Macos) {
+        if (out.dmg.url.empty()) {
+            setError(error, "更新清单缺少 dmg 产物");
+            return false;
+        }
+    } else if (out.setup.url.empty() && out.portable.url.empty()) {
+        setError(error, "更新清单至少需要 setup 或 portable 产物");
         return false;
     }
-    out.setup_size = static_cast<long long>(setupSize);
-
-    // 可选：发布说明 URL（release notes）
-    out.notes_url = root.stringAt("notes_url");
     return true;
 }
 
@@ -118,13 +157,34 @@ int compareVersions(std::string_view left, std::string_view right)
     return 0;
 }
 
-UpdateDecision decideUpdate(const UpdateManifest &manifest, std::string_view currentVersion,
-                            std::string_view currentOs)
+UpdateDecision decideUpdate(const UpdateManifest &manifest, UpdatePlatform platform,
+                            std::string_view currentVersion, std::string_view currentOs,
+                            long long currentBuild)
 {
-    if (manifest.version.empty() || manifest.url.empty())
+    if (manifest.version.empty())
         return UpdateDecision::Invalid;
-    if (compareVersions(manifest.version, currentVersion) <= 0)
+
+    // 平台产物必须存在，否则清单不可用（与解析的必填规则一致，双保险）
+    const UpdateArtifact *artifact = nullptr;
+    if (platform == UpdatePlatform::Macos) {
+        artifact = &manifest.dmg;
+    } else {
+        artifact = !manifest.portable.url.empty() ? &manifest.portable : &manifest.setup;
+    }
+    if (artifact->url.empty())
+        return UpdateDecision::Invalid;
+
+    const int comparison = compareVersions(manifest.version, currentVersion);
+    if (comparison < 0)
         return UpdateDecision::UpToDate;
+    if (comparison == 0) {
+        if (platform == UpdatePlatform::Macos)
+            return UpdateDecision::UpToDate; // macOS 无构建号，同版本即无更新
+        // Windows：同版本再比构建号；本机构建号未知（MOTE_BUILD=0）时跳过，
+        // 仅按 version 判定
+        if (currentBuild <= 0 || manifest.build <= currentBuild)
+            return UpdateDecision::UpToDate;
+    }
     if (!manifest.min_os.empty() && compareVersions(currentOs, manifest.min_os) < 0)
         return UpdateDecision::UnsupportedSystem;
     return UpdateDecision::Available;

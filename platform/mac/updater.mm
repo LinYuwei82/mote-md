@@ -1,6 +1,7 @@
 #import "updater.h"
 
 #include "core/update.h"
+#include "core/verify_signature.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -52,8 +53,8 @@ NSString *MoteCurrentOsVersion()
                                       (long)version.minorVersion];
 }
 
-// latest.json 与 appcast.xml 同目录，从 SUFeedURL 推导，避免再多一个配置项。
-// MOTE_UPDATE_URL 可覆盖，用于本地联调。
+// manifest.json（v2 统一清单）与 appcast.xml 同目录，从 SUFeedURL 推导，
+// 避免再多一个配置项。MOTE_UPDATE_URL 可覆盖，用于本地联调。
 NSURL *MoteManifestUrl()
 {
     const char *override = std::getenv("MOTE_UPDATE_URL");
@@ -66,7 +67,7 @@ NSURL *MoteManifestUrl()
     NSURL *feedUrl = [NSURL URLWithString:feed];
     if (!feedUrl)
         return nil;
-    return [[feedUrl URLByDeletingLastPathComponent] URLByAppendingPathComponent:@"latest.json"];
+    return [[feedUrl URLByDeletingLastPathComponent] URLByAppendingPathComponent:@"manifest.json"];
 }
 
 NSString *MoteHumanSize(long long bytes)
@@ -118,7 +119,7 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
         return;
     }
 
-    NSString *url = MoteString(manifest.url);
+    NSString *url = MoteString(manifest.dmg.url);
     if (url.length > 0)
         [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
     MoteRunAlert(@"未安装 Sparkle",
@@ -230,10 +231,20 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
         return;
     }
 
+    const std::string text(static_cast<const char *>(data.bytes), data.length);
+
+    // 先验清单 Ed25519 签名：公钥编译进客户端，签名不对说明清单被篡改或非官方发布
+    std::string verifyError;
+    if (!mote::verifyUpdateManifestSignature(text, mote::kUpdateManifestPublicKey, &verifyError)) {
+        MoteUpdateLog("manifest signature invalid: %s", verifyError.c_str());
+        if (interactive)
+            MoteRunAlert(@"检查更新失败", @"更新清单验签失败，已放弃本次更新检查。");
+        return;
+    }
+
     mote::UpdateManifest manifest;
     std::string parseError;
-    const std::string text(static_cast<const char *>(data.bytes), data.length);
-    if (!mote::parseUpdateManifest(text, manifest, &parseError)) {
+    if (!mote::parseUpdateManifest(text, mote::UpdatePlatform::Macos, manifest, &parseError)) {
         MoteUpdateLog("manifest invalid: %s", parseError.c_str());
         if (interactive)
             MoteRunAlert(@"检查更新失败",
@@ -243,8 +254,9 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
 
     const std::string currentVersion(MoteCurrentVersion().UTF8String);
     const std::string currentOs(MoteCurrentOsVersion().UTF8String);
-    const mote::UpdateDecision decision =
-        mote::decideUpdate(manifest, currentVersion, currentOs);
+    // macOS 无构建号，恒传 0：只比 version
+    const mote::UpdateDecision decision = mote::decideUpdate(
+        manifest, mote::UpdatePlatform::Macos, currentVersion, currentOs, 0);
     MoteUpdateLog("current=%s latest=%s os=%s decision=%d", currentVersion.c_str(),
                   manifest.version.c_str(), currentOs.c_str(), static_cast<int>(decision));
 
@@ -296,9 +308,9 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
     }
 
     NSMutableArray<NSString *> *details = [NSMutableArray array];
-    if (!manifest.published_at.empty())
-        [details addObject:[NSString stringWithFormat:@"发布时间：%@", MoteString(manifest.published_at)]];
-    NSString *size = MoteHumanSize(manifest.size);
+    if (!manifest.updated_at.empty())
+        [details addObject:[NSString stringWithFormat:@"更新时间：%@", MoteString(manifest.updated_at)]];
+    NSString *size = MoteHumanSize(manifest.dmg.size);
     if (size)
         [details addObject:[NSString stringWithFormat:@"安装包大小：%@", size]];
 

@@ -16,7 +16,7 @@
     self.mainWindow = [[MoteMainWindow alloc] init];
     [self.mainWindow show];
 
-    // 在线更新：自研检查（OSS 上的 latest.json）负责「有没有新版本」，
+    // 在线更新：自研检查（OSS 上的 manifest.json）负责「有没有新版本」，
     // 用户确认后由 Sparkle 完成下载、验签与替换。启动后延迟一次 + 每 24 小时一次。
     [[MoteUpdater sharedUpdater] start];
 

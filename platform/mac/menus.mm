@@ -134,7 +134,7 @@ NSMenu *MoteBuildMainMenu(id commandTarget, SEL commandAction)
                                                 action:@selector(unhideAllApplications:)
                                          keyEquivalent:@""]];
     [appMenu addItem:[NSMenuItem separatorItem]];
-    // 「检查更新…」走自研入口（拉 latest.json 判定），确认安装后才转给 Sparkle
+    // 「检查更新…」走自研入口（拉 manifest.json 判定），确认安装后才转给 Sparkle
     NSMenuItem *checkUpdate =
         [[NSMenuItem alloc] initWithTitle:@"检查更新…"
                                    action:@selector(checkForUpdatesFromMenu:)

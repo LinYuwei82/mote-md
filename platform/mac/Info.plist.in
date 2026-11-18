@@ -32,7 +32,7 @@
 	<true/>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
-	<!-- Sparkle 只负责下载与安装；「有没有新版本」由自研检查（latest.json）决定 -->
+	<!-- Sparkle 只负责下载与安装；「有没有新版本」由自研检查（manifest.json）决定 -->
 	<key>SUFeedURL</key>
 	<string>@SPARKLE_FEED_URL@</string>
 	<key>SUPublicEDKey</key>

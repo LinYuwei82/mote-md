@@ -37,12 +37,16 @@ jobs:
 
       # guard 是三仓库共用的单一规则源（见 mote/docs/OSS-发布布局.md）
       # Windows 检出可能把哈希文件转成 CRLF，先去掉 \r 再校验
-      - name: 校验 guard 未被单独改动
+      - name: 校验 guard / manifest_v2 未被单独改动
         shell: bash
-        run: tr -d '\r' < tools/release/guard.sha256 | sha256sum -c -
-      - name: guard selftest
+        run: |
+          tr -d '\r' < tools/release/guard.sha256 | sha256sum -c -
+          tr -d '\r' < tools/release/manifest_v2.sha256 | sha256sum -c -
+      - name: guard / manifest_v2 selftest
         shell: pwsh
-        run: python tools/release/guard.py selftest
+        run: |
+          python tools/release/guard.py selftest
+          python tools/release/manifest_v2.py selftest
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
@@ -85,7 +89,7 @@ jobs:
           choco install innosetup --yes --no-progress
           ./packaging/build_installer.ps1
 
-      # publish_windows.ps1 内置 guard preflight / verify-live（3.5/6 与 5.5/6）
+      # publish_windows.ps1 内置 manifest_v2 生成 + guard preflight / verify-live
       - name: 发布（清单 → guard → 上传）
         shell: pwsh
         env:
@@ -93,6 +97,7 @@ jobs:
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
           OSS_BUCKET: xiaotu-update
           OSS_REGION: cn-hongkong
+          MOTE_UPDATE_SIGNING_KEY: ${{ secrets.MOTE_UPDATE_SIGNING_KEY }}
         run: |
           python -m pip install --quiet oss2
           $dry = '${{ inputs.dry_run }}' -eq 'true'
@@ -110,6 +115,6 @@ jobs:
           path: |
             dist/Mote-Windows.zip
             dist/Mote-Setup-*.exe
-            dist/windows.json
+            dist/manifest.json
           if-no-files-found: warn
           retention-days: 14

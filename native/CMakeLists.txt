@@ -31,6 +31,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 静态链接 MSVC 运行库（/MT），避免目标机缺 MSVCP140/VCRUNTIME140
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 
+# TweetNaCl（公有领域，上游原样引入）：v2 更新清单的 Ed25519 验签。
+# 独立静态库，避免工程级告警选项影响第三方源码；客户端只用 crypto_sign_open。
+add_library(mote_tweetnacl STATIC
+  "${MOTE_REPO_ROOT}/core/third_party/tweetnacl/tweetnacl.c")
+target_include_directories(mote_tweetnacl PUBLIC
+  "${MOTE_REPO_ROOT}/core/third_party/tweetnacl")
+
 # 无 Qt、无平台 API 的核心：macOS 与 Windows 共用
 add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/base64.cpp"
@@ -41,8 +48,10 @@ add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/js_bridge.cpp"
   "${MOTE_REPO_ROOT}/core/json.cpp"
   "${MOTE_REPO_ROOT}/core/paths.cpp"
-  "${MOTE_REPO_ROOT}/core/update.cpp")
+  "${MOTE_REPO_ROOT}/core/update.cpp"
+  "${MOTE_REPO_ROOT}/core/verify_signature.cpp")
 target_include_directories(mote_core PUBLIC "${MOTE_REPO_ROOT}")
+target_link_libraries(mote_core PUBLIC mote_tweetnacl)
 
 if(MSVC)
   target_compile_options(mote_core PRIVATE /utf-8 /W4)
@@ -104,9 +113,15 @@ if(WIN32)
   target_link_libraries(Mote PRIVATE
     mote_core user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32
     urlmon windowscodecs winhttp bcrypt)
+  # Windows 构建号：同版本清单靠 build 判断是否有新构建；默认 0（未知，跳过
+  # build 比较仅按 version），发布脚本用 -DMOTE_BUILD=202611180530 覆盖
+  if(NOT MOTE_BUILD)
+    set(MOTE_BUILD "0")
+  endif()
   target_compile_definitions(Mote PRIVATE
     UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00
-    MOTE_VERSION="${MOTE_VERSION}")
+    MOTE_VERSION="${MOTE_VERSION}"
+    MOTE_BUILD=${MOTE_BUILD})
   target_compile_options(Mote PRIVATE /utf-8 /W4 /permissive-)
   # 关闭链接器自动生成的 manifest，改用 app.manifest（Common Controls v6）
   target_link_options(Mote PRIVATE /MANIFEST:NO)

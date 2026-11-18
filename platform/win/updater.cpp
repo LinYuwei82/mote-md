@@ -1,6 +1,7 @@
 #include "updater.h"
 
 #include "core/update.h"
+#include "core/verify_signature.h"
 #include "dialogs.h"
 #include "env.h"
 
@@ -28,13 +29,20 @@
 #define MOTE_VERSION "0.0.0"
 #endif
 
+// Windows 构建号：发布时由 CMake -DMOTE_BUILD=202611180530 注入（见
+// native/CMakeLists.txt）。清单同版本时靠 build 判断是否有新构建；
+// 0（未知）时跳过 build 比较，仅按 version。
+#ifndef MOTE_BUILD
+#define MOTE_BUILD 0
+#endif
+
 namespace mote::win {
 
 namespace {
 
-// 与 macOS 的 SUFeedURL 同源：清单放在 updates/stable/ 下，WINDOWS 用独立文件名
+// 与 macOS 的 SUFeedURL 同源：v2 统一清单放在 updates/stable/manifest.json
 constexpr wchar_t kDefaultManifestUrl[] =
-    L"https://dl.xiaotu.online/mote/updates/stable/windows.json";
+    L"https://dl.xiaotu.online/mote/updates/stable/manifest.json";
 constexpr DWORD kCheckIntervalSeconds = 24 * 60 * 60;
 constexpr UINT kStartupDelayMs = 10 * 1000;
 constexpr int kRequestTimeoutMs = 15 * 1000;
@@ -289,8 +297,8 @@ bool running_installed_copy()
     return std::filesystem::exists(exe.parent_path() / L"unins000.exe");
 }
 
-// 按安装形态挑更新包：安装版优先用清单里的 setup_url，
-// 清单没给（旧清单）时回落到 url，避免老清单直接失效。
+// 按安装形态挑更新包：安装版用 artifacts.setup，绿色包用 artifacts.portable；
+// 对应产物缺失（清单只给了一种）时回落到另一形态，避免清单直接失效。
 struct UpdateTarget {
     std::string url;
     std::string sha256;
@@ -301,16 +309,15 @@ struct UpdateTarget {
 UpdateTarget pick_target(const UpdateManifest &manifest)
 {
     UpdateTarget target;
-    if (running_installed_copy() && !manifest.setup_url.empty()) {
-        target.url = manifest.setup_url;
-        target.sha256 = manifest.setup_sha256;
-        target.size = manifest.setup_size;
-        target.installer = true;
-    } else {
-        target.url = manifest.url;
-        target.sha256 = manifest.sha256;
-        target.size = manifest.size;
-    }
+    const bool installed = running_installed_copy();
+    const UpdateArtifact &preferred = installed ? manifest.setup : manifest.portable;
+    const UpdateArtifact &fallback = installed ? manifest.portable : manifest.setup;
+    const UpdateArtifact &chosen = !preferred.url.empty() ? preferred : fallback;
+    target.url = chosen.url;
+    target.sha256 = chosen.sha256;
+    target.size = chosen.size;
+    // 拿到安装包（setup.exe）就静默安装；拿到绿色包 zip 就交给用户解压
+    target.installer = installed ? !preferred.url.empty() : preferred.url.empty();
     return target;
 }
 
@@ -426,6 +433,7 @@ struct DownloadState {
     std::atomic<long long> written{0};
     std::atomic<long long> expected_size{0}; // 只读，Content-Length 读到后赋值
     std::string expected_sha256; // 只读，线程启动前赋值
+    std::string manifest_text;   // 只读，原始清单 JSON；下载完成后验签用
     bool ok = false;
     std::wstring error;
     std::filesystem::path path;
@@ -610,8 +618,8 @@ void run_download_dialog(HWND hwnd, DownloadState *state, std::thread *worker)
         worker->join();
 }
 
-// 用户确认后：下载 → 校验 SHA256 → 安装版静默升级并重启 / 绿色版交给用户解压
-void begin_download(HWND hwnd, const UpdateTarget &target)
+// 用户确认后：下载 → 验清单签名 → 校验 SHA256 → 安装版静默升级 / 绿色版交给用户解压
+void begin_download(HWND hwnd, const UpdateTarget &target, const std::string &manifestText)
 {
     // 安装版会覆盖当前目录的可执行文件，绿色版要求用户解压覆盖也得先退出；
     // 两条路径都要先保存，否则 quit 流程可能因保存确认而被用户取消，更新包已下载却退出不了
@@ -637,6 +645,7 @@ void begin_download(HWND hwnd, const UpdateTarget &target)
 
     DownloadState state;
     state.expected_sha256 = target.sha256;
+    state.manifest_text = manifestText;
     state.path = dest;
     DownloadState *raw = &state;
 
@@ -678,6 +687,17 @@ void begin_download(HWND hwnd, const UpdateTarget &target)
             }
         }
 
+        if (ok) {
+            // 先验清单 Ed25519 签名（公钥编译进客户端）：清单被篡改则放弃更新
+            std::string verify_error;
+            if (!verifyUpdateManifestSignature(raw->manifest_text, kUpdateManifestPublicKey,
+                                               &verify_error)) {
+                ok = false;
+                raw->error = L"更新清单验签失败，已放弃更新。";
+                if (log_enabled())
+                    update_log("manifest verify failed: %s", verify_error.c_str());
+            }
+        }
         if (ok) {
             std::string actual;
             if (!sha256_file(dest, &actual)) {
@@ -731,7 +751,7 @@ void begin_download(HWND hwnd, const UpdateTarget &target)
 
     // 绿色版：Mote.exe 正在运行，覆盖前必须先退出，否则解压会被「文件被占用」挡住
     MoteAlert(hwnd, L"更新包已下载",
-              "已通过 SHA256 校验：\n" + wide_to_utf8(dest.wstring())
+              "已通过清单签名与 SHA256 校验：\n" + wide_to_utf8(dest.wstring())
                   + "\n\n将打开所在文件夹并退出 Mote，解压覆盖后重新打开即可。");
     const std::wstring args = L"/select,\"" + dest.wstring() + L"\"";
     ShellExecuteW(hwnd, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
@@ -743,6 +763,7 @@ struct CheckResult {
     bool ok = false;
     bool interactive = false;
     std::string error;
+    std::string manifest_text; // 原始清单 JSON，下载完成后验签用
     UpdateManifest manifest;
     UpdateDecision decision = UpdateDecision::Invalid;
 };
@@ -765,12 +786,17 @@ void check_in_background(HWND hwnd, bool interactive)
         std::wstring net_error;
         if (!fetch_url(url, &body, &net_error)) {
             result->error = wide_to_utf8(net_error);
-        } else if (!parseUpdateManifest(body, result->manifest, &result->error)) {
-            // parseUpdateManifest 直接给中文原因
         } else {
-            result->ok = true;
-            result->decision =
-                decideUpdate(result->manifest, MOTE_VERSION, current_os_version());
+            result->manifest_text = body;
+            // parseUpdateManifest 直接给中文原因
+            if (!parseUpdateManifest(body, UpdatePlatform::Windows, result->manifest,
+                                     &result->error)) {
+            } else {
+                result->ok = true;
+                // 同版本时按构建号比较：本机 build 来自编译期宏 MOTE_BUILD
+                result->decision = decideUpdate(result->manifest, UpdatePlatform::Windows,
+                                                MOTE_VERSION, current_os_version(), MOTE_BUILD);
+            }
         }
 
         CheckResult *raw = result.release();
@@ -795,13 +821,13 @@ HRESULT CALLBACK install_dialog_callback(HWND hwnd, UINT message, WPARAM, LPARAM
 bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarget &target)
 {
     std::wstring content = L"当前版本 " + utf8_to_wide(MOTE_VERSION) + L"。";
-    if (!manifest.published_at.empty())
-        content += L"\n发布时间：" + utf8_to_wide(manifest.published_at);
+    if (!manifest.updated_at.empty())
+        content += L"\n更新时间：" + utf8_to_wide(manifest.updated_at);
     const std::wstring size = human_size(target.size);
     if (!size.empty())
         content += L"\n安装包大小：" + size;
     content += target.installer
-        ? L"\n\n当前是安装版：将下载安装包、校验 SHA256 后静默安装并重启。"
+        ? L"\n\n当前是安装版：将下载安装包、验签并校验 SHA256 后静默安装并重启。"
         : L"\n\n当前是绿色版：将下载并校验更新包，随后打开所在文件夹，解压覆盖即可。";
 
     const std::wstring plain_content = content;
@@ -901,7 +927,7 @@ void show_result(HWND hwnd, const CheckResult &result)
     }
 
     reg_delete_value(kSkippedValue);
-    begin_download(hwnd, target);
+    begin_download(hwnd, target, result.manifest_text);
 }
 
 } // namespace

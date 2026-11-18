@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Mote · macOS 在线更新发布（OSS 清单 + Sparkle 安装）
+# Mote · macOS 在线更新发布（OSS 清单 + Sparkle 安装，更新清单 Schema v2）
 #
 # 输入：已用 Developer ID 签名并通过公证的 DMG（packaging/package_macos.sh 产出）
-# 动作：EdDSA 签名 → 生成 appcast.xml 与 latest.json → 上传 dl.xiaotu.online → 校验线上可读
+# 动作：EdDSA 签名 → 生成 appcast.xml 与 manifest.json（v2）→ 上传 dl.xiaotu.online → 校验线上可读
 #
 # 两个清单的分工：
-#   appcast.xml  给 Sparkle 用：下载地址 + EdDSA 签名，Sparkle 验签后才安装
-#   latest.json  给 Mote 自研检查用：版本号 + 大小 + SHA256，决定要不要提示用户
-# 两份必须同一次发布一起上传，避免用户看到「有新版」却装不上。
+#   appcast.xml    给 Sparkle 用：下载地址 + EdDSA 签名，Sparkle 验签后才安装（不在 v2 范围）
+#   manifest.json  统一 Schema v2 清单：platforms.macos + Ed25519 签名（见 docs/更新清单Schema-v2.md）
+# 本脚本不再生成 latest.json，旧内测客户端按切换方案重装或经 Sparkle 升级。
 #
 # 目录约定（与 index.html 现有下载路径同源）：
-#   oss://<bucket>/mote/<dmg 文件名>                     长缓存 immutable
-#   oss://<bucket>/mote/updates/stable/appcast.xml        60 秒缓存
-#   oss://<bucket>/mote/updates/stable/latest.json        60 秒缓存
+#   oss://<bucket>/mote/mote-<ver>-macos-arm64.dmg            长缓存 immutable（v2 命名）
+#   oss://<bucket>/mote/updates/stable/appcast.xml             60 秒缓存
+#   oss://<bucket>/mote/updates/stable/manifest.json           60 秒缓存
 # 对外地址：
-#   https://dl.xiaotu.online/mote/updates/stable/appcast.xml   ← Info.plist SUFeedURL
-#   https://dl.xiaotu.online/mote/updates/stable/latest.json   ← 自研检查读取
+#   https://dl.xiaotu.online/mote/updates/stable/appcast.xml    ← Info.plist SUFeedURL
+#   https://dl.xiaotu.online/mote/updates/stable/manifest.json  ← 自研检查读取
 #
 # 依赖：Sparkle 发行包里的 bin/sign_update、python3 + oss2、spctl
 #
@@ -76,21 +76,24 @@ SIGN_UPDATE="$(find_sign_update || true)"
 DMG_BASENAME="$(basename "$DMG_PATH")"
 DMG_SIZE="$(stat -f %z "$DMG_PATH")"
 DMG_SHA256="$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
-DMG_URL="$CDN_DOMAIN/$PRODUCT_DIR/$DMG_BASENAME"
+# v2 安装包命名：<product>-<version>-<os>-<arch>-<type>.<ext>；本地产物名不变，远端按 v2 命名
+V2_DMG_NAME="mote-$VERSION-macos-arm64.dmg"
+DMG_URL="$CDN_DOMAIN/$PRODUCT_DIR/$V2_DMG_NAME"
 APPCAST_KEY="$PRODUCT_DIR/updates/$CHANNEL/appcast.xml"
 APPCAST_URL="$CDN_DOMAIN/$APPCAST_KEY"
-MANIFEST_KEY="$PRODUCT_DIR/updates/$CHANNEL/latest.json"
+MANIFEST_KEY="$PRODUCT_DIR/updates/$CHANNEL/manifest.json"
 MANIFEST_URL="$CDN_DOMAIN/$MANIFEST_KEY"
 PUB_DATE="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')"
 PUB_ISO="$(LC_ALL=C date -u '+%Y-%m-%dT%H:%M:%SZ')"
 
 echo "===== Mote 发布 · $VERSION / $CHANNEL ====="
 echo "DMG：      $DMG_PATH"
+echo "远端名（v2）：$V2_DMG_NAME"
 echo "大小：     $DMG_SIZE 字节"
 echo "SHA256：   $DMG_SHA256"
 echo "下载地址： $DMG_URL"
 echo "appcast：  $APPCAST_URL"
-echo "latest.json：$MANIFEST_URL"
+echo "manifest.json：$MANIFEST_URL"
 
 # ---- ① 门禁：DMG 必须已公证，否则更新装上去会被 Gatekeeper 拦 ----
 echo ""
@@ -156,37 +159,27 @@ cat > "$APPCAST_LOCAL" <<EOF
 EOF
 echo "  已生成：$APPCAST_LOCAL"
 
-# ---- ④ 生成 latest.json（自研检查用）----
+# ---- ④ 生成 manifest.json（统一 Schema v2，Ed25519 签名）----
 echo ""
-echo "===== ④ 生成 latest.json"
-MANIFEST_LOCAL="$REPO_ROOT/dist/latest.json"
-# NOTES_URL 可选：非空才写 notes_url 字段，客户端两端都按是否为空决定要不要显示链接
-if [ -n "$NOTES_URL" ]; then
-  cat > "$MANIFEST_LOCAL" <<EOF
-{
-  "version": "$VERSION",
-  "url": "$DMG_URL",
-  "size": $DMG_SIZE,
-  "sha256": "$DMG_SHA256",
-  "min_os": "$MIN_OS",
-  "published_at": "$PUB_ISO",
-  "notes_url": "$NOTES_URL"
-}
-EOF
-else
-  cat > "$MANIFEST_LOCAL" <<EOF
-{
-  "version": "$VERSION",
-  "url": "$DMG_URL",
-  "size": $DMG_SIZE,
-  "sha256": "$DMG_SHA256",
-  "min_os": "$MIN_OS",
-  "published_at": "$PUB_ISO"
-}
-EOF
-fi
+echo "===== ④ 生成 manifest.json（v2）"
+MANIFEST_LOCAL="$REPO_ROOT/dist/manifest.json"
+MANIFEST_ARGS=(
+  generate
+  --product "$PRODUCT_DIR"
+  --channel "$CHANNEL"
+  --platform macos
+  --version "$VERSION"
+  --min-os "$MIN_OS"
+  --artifact "dmg=$DMG_PATH"
+  --key "$SIGN_KEY"
+  --out "$MANIFEST_LOCAL"
+)
+[ -n "$NOTES_URL" ] && MANIFEST_ARGS+=(--notes-url "$NOTES_URL")
+python3 "$REPO_ROOT/tools/release/manifest_v2.py" "${MANIFEST_ARGS[@]}"
+
 echo "  已生成：$MANIFEST_LOCAL"
 [ -n "$NOTES_URL" ] && echo "  notes_url: $NOTES_URL" || echo "  notes_url: (未设置)"
+PUB_HEX="$(python3 "$REPO_ROOT/tools/release/manifest_v2.py" pubkey --key "$SIGN_KEY" | sed 's/.*：//')"
 
 # ---- ⑤ 上传 OSS ----
 oss_upload() {
@@ -203,9 +196,13 @@ print(f"  ✓ {ok}  ({ct}, {cc})")
 PY_EOF
 }
 
-# ---- ④b 发布门禁（三仓库共用 tools/release/guard.py）----
+# ---- ④b 发布门禁（三仓库共用 tools/release/guard.py，v2 规则）----
 GUARD_PY="${GUARD_PY:-$REPO_ROOT/tools/release/guard.py}"
-GUARD_ARGS=(--product mote --kind mac --channel "$CHANNEL" --file "$DMG_PATH")
+GUARD_ARGS=(
+  --product "$PRODUCT_DIR" --kind mac --channel "$CHANNEL"
+  --file "$DMG_PATH" --name "$V2_DMG_NAME"
+  --schema v2 --manifest "$MANIFEST_LOCAL" --pub-hex "$PUB_HEX"
+)
 [ "$SKIP_UPLOAD" = "true" ] && GUARD_ARGS+=(--offline)
 echo ""
 echo "===== ④b 发布门禁"
@@ -225,7 +222,7 @@ else
   done
   OSS_PY="${OSS_PY:-$HOME/.venv-oss/bin/python}"
   [ -x "$OSS_PY" ] || { echo "缺少 oss2 环境：$OSS_PY" >&2; exit 1; }
-  oss_upload "$DMG_PATH" "$PRODUCT_DIR/$DMG_BASENAME" \
+  oss_upload "$DMG_PATH" "$PRODUCT_DIR/$V2_DMG_NAME" \
     "public, max-age=31536000, immutable" "application/octet-stream"
   oss_upload "$APPCAST_LOCAL" "$APPCAST_KEY" \
     "no-cache, max-age=60" "application/rss+xml"
@@ -252,9 +249,9 @@ else
   if [ "$CODE" = "200" ] \
     && grep -q "\"version\":[[:space:]]*\"$VERSION\"" /tmp/mote-manifest-check.json \
     && grep -q "\"sha256\":[[:space:]]*\"$DMG_SHA256\"" /tmp/mote-manifest-check.json; then
-    echo "  ✓ 线上 latest.json 版本与 SHA256 均与产物一致"
+    echo "  ✓ 线上 manifest.json 版本与 SHA256 均与产物一致"
   else
-    echo "  ✗ 线上 latest.json 异常，请检查 CDN 缓存或上传结果"
+    echo "  ✗ 线上 manifest.json 异常，请检查 CDN 缓存或上传结果"
   fi
   rm -f /tmp/mote-manifest-check.json
   echo "  -- 统一门禁 verify-live --"
@@ -267,4 +264,4 @@ echo "版本：      $VERSION"
 echo "DMG：       $DMG_URL"
 echo "SHA256：    $DMG_SHA256"
 echo "appcast：   $APPCAST_URL"
-echo "latest.json：$MANIFEST_URL"
+echo "manifest.json：$MANIFEST_URL"

@@ -2,7 +2,7 @@
 # Mote · macOS DMG 签名（只签名与生成清单，不上传）
 #
 # 用途：对已经打好的 DMG 生成 Sparkle EdDSA 签名，并在 dist/ 下产出
-# appcast.xml 与 latest.json。上传仍交给 tools/release/publish_macos.sh 或手工处理。
+# appcast.xml（Sparkle 用）。manifest.json（v2）与上传仍交给 tools/release/publish_macos.sh。
 #
 # 与 publish_macos.sh 的分工：
 #   sign_macos.sh     只做签名与清单生成：不联网、不需要 OSS 凭据
@@ -24,7 +24,7 @@
 # 环境变量：
 #   SPARKLE_BIN         Sparkle 发行包的 bin 目录（含 sign_update）
 #   SIGN_KEY            EdDSA 私钥文件，默认 $HOME/.config/mote-updates/ed25519_seed.b64
-#   NOTES_URL           可选，非空时写进 latest.json 的 notes_url
+#   NOTES_URL           可选，非空时写进 manifest.json 的 notes_url（见 publish_macos.sh）
 #   MIN_OS              默认 14.0
 #   CHANNEL             stable|beta，默认 stable
 #   CDN_DOMAIN          默认 https://dl.xiaotu.online
@@ -169,44 +169,17 @@ cat > "$APPCAST_LOCAL" <<EOF
 EOF
 echo "  已生成：$APPCAST_LOCAL"
 
-# ---- ④ 生成 latest.json ----
-echo ""
-echo "===== ④ 生成 latest.json"
-MANIFEST_LOCAL="$REPO_ROOT/dist/latest.json"
-if [ -n "$NOTES_URL" ]; then
-  cat > "$MANIFEST_LOCAL" <<EOF
-{
-  "version": "$VERSION",
-  "url": "$DMG_URL",
-  "size": $DMG_SIZE,
-  "sha256": "$DMG_SHA256",
-  "min_os": "$MIN_OS",
-  "published_at": "$PUB_ISO",
-  "notes_url": "$NOTES_URL"
-}
-EOF
-else
-  cat > "$MANIFEST_LOCAL" <<EOF
-{
-  "version": "$VERSION",
-  "url": "$DMG_URL",
-  "size": $DMG_SIZE,
-  "sha256": "$DMG_SHA256",
-  "min_os": "$MIN_OS",
-  "published_at": "$PUB_ISO"
-}
-EOF
-fi
-echo "  已生成：$MANIFEST_LOCAL"
-echo "  notes_url: ${NOTES_URL:-(未设置)}"
+# ---- ④ 清单 ----
+# v2 起清单为 manifest.json（Ed25519 签名），由 tools/release/publish_macos.sh
+# 与 appcast 一起生成上传；本脚本只做 Sparkle 签名，不再生成 latest.json。
 
 echo ""
 echo "===== 完成"
 cat <<EOF
   edSignature : $ED_SIG
   下一步：
-    1) 把 $DMG_BASENAME 上传到 oss://<bucket>/$PRODUCT_DIR/
-    2) 上传 dist/appcast.xml 与 dist/latest.json 到
-       oss://<bucket>/$PRODUCT_DIR/updates/$CHANNEL/
-    3) 或直接运行 tools/release/publish_macos.sh 走完整发布（会重做签名与校验）
+    1) 把 $DMG_BASENAME 上传到 oss://<bucket>/$PRODUCT_DIR/mote-$VERSION-macos-arm64.dmg
+       （v2 命名；或直接运行 tools/release/publish_macos.sh 走完整发布，会重做签名与校验）
+    2) 上传 dist/appcast.xml 到 oss://<bucket>/$PRODUCT_DIR/updates/$CHANNEL/
+    3) manifest.json 由 publish_macos.sh 生成并上传
 EOF

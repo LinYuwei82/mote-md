@@ -22,28 +22,24 @@
 
 ## 二、自动更新清单（核心）
 
+> Schema v2 已定稿并接入发布脚本与客户端（见[更新清单Schema-v2](./更新清单Schema-v2.md)）：
+> 每个产品一个 `manifest.json` 覆盖双平台，Ed25519 签名。`latest.json` / `windows.json`
+> 为 v1 遗留文件，旧内测客户端退役前先不删除；新发布只写 `manifest.json`。
+> `appcast.xml`（Sparkle）不在 v2 范围，路径与格式不变。
+
 三个产品的路径规则完全一致，只有产品目录不同：
 
-| 产品 | macOS 清单（自研客户端） | Sparkle 清单 | Windows 清单 |
+| 产品 | 统一清单（v2） | Sparkle 清单 | v1 遗留（不再更新） |
 |---|---|---|---|
-| DevCard | `devcard/updates/stable/latest.json` | `devcard/updates/stable/appcast.xml` | `devcard/updates/stable/windows.json` |
-| 小兔进销存 | `xiaotu/updates/stable/latest.json` | `xiaotu/updates/stable/appcast.xml` | `xiaotu/updates/stable/windows.json` |
-| Mote | `mote/updates/stable/latest.json` | `mote/updates/stable/appcast.xml` | `mote/updates/stable/windows.json` |
+| DevCard | `devcard/updates/stable/manifest.json` | `devcard/updates/stable/appcast.xml` | `latest.json`、`windows.json` |
+| 小兔进销存 | `xiaotu/updates/stable/manifest.json` | `xiaotu/updates/stable/appcast.xml` | `latest.json`、`windows.json` |
+| Mote | `mote/updates/stable/manifest.json` | `mote/updates/stable/appcast.xml` | `latest.json`、`windows.json` |
 
 完整公网地址：
 
 ```
-https://dl.xiaotu.online/devcard/updates/stable/latest.json
-https://dl.xiaotu.online/devcard/updates/stable/appcast.xml
-https://dl.xiaotu.online/devcard/updates/stable/windows.json
-
-https://dl.xiaotu.online/xiaotu/updates/stable/latest.json
-https://dl.xiaotu.online/xiaotu/updates/stable/appcast.xml
-https://dl.xiaotu.online/xiaotu/updates/stable/windows.json
-
-https://dl.xiaotu.online/mote/updates/stable/latest.json
-https://dl.xiaotu.online/mote/updates/stable/appcast.xml
-https://dl.xiaotu.online/mote/updates/stable/windows.json
+https://dl.xiaotu.online/<product>/updates/stable/manifest.json    # v2 统一清单
+https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 ```
 
 线上实际元数据：
@@ -207,12 +203,12 @@ https://xiaotu.online/                      # ECS（备案中）
 
 | 仓库 / 脚本 | 上传对象 |
 |---|---|
-| `xiaotu-inventory/tools/package/publish_oss.sh` | `xiaotu/<dmg>`、`xiaotu/updates/stable/latest.json`、`xiaotu/updates/stable/appcast.xml` |
-| `xiaotu-inventory/tools/package/publish_windows.sh` | `xiaotu/<setup.exe>`、`xiaotu/<win64.zip>`、`xiaotu/updates/stable/windows.json` |
-| `dev_card_cpp/tools/release/publish_macos.sh` | `devcard/<dmg>`、`devcard/<dmg>.edSignature`、`devcard/updates/stable/appcast.xml`、`devcard/updates/stable/latest.json` |
-| `dev_card_cpp/tools/release/publish_windows.ps1` | `devcard/<setup.exe>`、`devcard/<win64-portable.zip>`、`devcard/updates/stable/windows.json` |
-| `mote/tools/release/publish_macos.sh` | `mote/<dmg>`、`mote/updates/stable/appcast.xml`、`mote/updates/stable/latest.json` |
-| `mote/tools/release/publish_windows.sh`（或 `.ps1`） | `mote/Mote-<版本>-win64-portable.zip`、`mote/Mote-Setup-<版本>.exe`、`mote/updates/stable/windows.json` |
+| `xiaotu-inventory/tools/package/publish_oss.sh` | `xiaotu/xiaotu-<ver>-macos-arm64.dmg`、`xiaotu/updates/stable/manifest.json`、`xiaotu/updates/stable/appcast.xml` |
+| `xiaotu-inventory/tools/package/publish_windows.sh` | `xiaotu/xiaotu-<ver>-win64-setup.exe`、`xiaotu/xiaotu-<ver>-win64-portable.zip`、`xiaotu/updates/stable/manifest.json` |
+| `dev_card_cpp/tools/release/publish_macos.sh` | `devcard/devcard-<ver>-macos-arm64.dmg`（+ `.edSignature`）、`devcard/updates/stable/appcast.xml`、`devcard/updates/stable/manifest.json` |
+| `dev_card_cpp/tools/release/publish_windows.ps1` | `devcard/devcard-<ver>-win64-setup.exe`、`devcard/devcard-<ver>-win64-portable.zip`、`devcard/updates/stable/manifest.json` |
+| `mote/tools/release/publish_macos.sh` | `mote/mote-<ver>-macos-arm64.dmg`、`mote/updates/stable/appcast.xml`、`mote/updates/stable/manifest.json` |
+| `mote/tools/release/publish_windows.sh`（或 `.ps1`） | `mote/mote-<ver>-win64-portable.zip`、`mote/mote-<ver>-win64-setup.exe`、`mote/updates/stable/manifest.json` |
 | `mote/tools/release/publish_site_oss.sh` | 本地 `web/` 的 21 个文件 → `xiaotu-site` 桶 |
 | `mote/tools/release/deploy_site.sh` | 本地 `web/` 的 21 个文件 → ECS `/var/www/xiaotu` |
 | 手工 | `<product>/manual.pdf`、README 等 |
@@ -222,7 +218,8 @@ https://xiaotu.online/                      # ECS（备案中）
 | 对象类型 | Cache-Control | Content-Type |
 |---|---|---|
 | dmg / exe / zip | `public, max-age=31536000, immutable` | dmg/exe `application/octet-stream`，zip `application/zip` |
-| appcast.xml / latest.json / windows.json | `no-cache, max-age=60` | `application/json` / `application/xml`（Mote、小兔为 `rss+xml`） |
+| manifest.json / appcast.xml | `no-cache, max-age=60` | `application/json` / `application/rss+xml`（DevCard 为 `application/xml`） |
+| v1 遗留 latest.json / windows.json | `no-cache, max-age=60` | `application/json` |
 | `*.dmg.edSignature` | `public, max-age=300` | `text/plain; charset=utf-8` |
 | manual.pdf | `public, max-age=86400` | `application/pdf` |
 | release-notes-*.html | `public, max-age=3600` | `text/html; charset=utf-8` |
@@ -252,8 +249,9 @@ bash mote/tools/release/deploy_site.sh                 # → xiaotu.online（ECS
 
 # Windows 也可走 GitHub Actions 发布（三仓库均有 release-windows.yml，手动触发）：
 #   Actions → Windows 发布 → Run workflow（可选 dry_run 只出包不上传）
-#   前置 secrets：OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET；
-#   小兔另需 XIAOTU_UPDATE_SIGNING_KEY（Ed25519 私钥 PEM）。
+#   前置 secrets：OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET，以及清单签名种子/私钥：
+#   小兔 XIAOTU_UPDATE_SIGNING_KEY（Ed25519 私钥 PEM）、
+#   DevCard DEVCARD_UPDATE_SIGNING_KEY、Mote MOTE_UPDATE_SIGNING_KEY（32 字节种子 base64）。
 ```
 
 ### 统一门禁 `guard.py`
@@ -279,7 +277,7 @@ python3 tools/release/guard.py verify-live --product xiaotu --kind win \
 
 1. **安装包是 `immutable`**：同名覆盖不会生效，换内容必须升版本号；只改清单不换包会被 CDN 继续返回旧文件。
 2. **清单 60 秒生效**：发布后等 1 分钟再验证；下载页版本号由 `site.js` 自动读取，无需改 HTML。
-3. **发布脚本会校验产物**：Mote 校验 dmg 内 `SUFeedURL` 与 appcast 地址一致；小兔校验绿色包内 `xiaotu-shell.exe` 含当前 `windows.json` 地址；不一致直接拒绝上传。
+3. **发布脚本会校验产物**：Mote 校验 dmg 内 `SUFeedURL` 与 appcast 地址一致；guard（v2）校验绿色包内壳 exe 含当前 `manifest.json` 地址、清单 Ed25519 签名与产物 SHA256；不一致直接拒绝上传。
 4. **DevCard Windows 当前 1.2.5**，macOS 当前 1.2.4（Windows 侧 1.2.4 的包曾被 CI 覆盖，已用 1.2.5 重新发布）。
 5. **小兔 Windows 1.0.0 包待重打**：壳内地址为旧路径；仓库已升到 1.0.1，待通过 `release-windows.yml` 发布（私有仓库需先修 Actions 额度/账单）。
 6. `dl.xiaotu.online/logs/` 下是 OSS 每小时访问日志，属系统产出，不在发布范围内。

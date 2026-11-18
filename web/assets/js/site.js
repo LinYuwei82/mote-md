@@ -85,41 +85,25 @@
   /* ---------- 版本校准 ----------
      页面里的版本号、大小、SHA256、下载地址以 OSS 上的更新清单为准；
      清单取不到（离线、CORS、未发布）时保留页面内置的兜底值，不显示错误。
-     小兔进销存的 Windows 绿色包没有进清单，这一行仍为静态值；DevCard 的
-     清单是 latest + assets[]，按扩展名从 assets 里挑对应产物。 */
+     三个产品共用统一 Schema v2 的 manifest.json（platforms.<os>.artifacts.*，
+     见 mote/docs/更新清单Schema-v2.md）。 */
 
-  var MOTEWIN = 'https://dl.xiaotu.online/mote/updates/stable/windows.json';
-  var XIAOTUWIN = 'https://dl.xiaotu.online/xiaotu/updates/stable/windows.json';
-  var DEVCARD_MAC = 'https://dl.xiaotu.online/devcard/updates/stable/latest.json';
-  var DEVCARD_WIN = 'https://dl.xiaotu.online/devcard/updates/stable/windows.json';
+  var BASE = 'https://dl.xiaotu.online';
+  var MANIFEST_URLS = {
+    mote: BASE + '/mote/updates/stable/manifest.json',
+    xiaotu: BASE + '/xiaotu/updates/stable/manifest.json',
+    devcard: BASE + '/devcard/updates/stable/manifest.json'
+  };
   var SOURCES = {
-    'mote-mac': {
-      url: 'https://dl.xiaotu.online/mote/updates/stable/latest.json',
-      version: 'version', size: 'size', sha: 'sha256', href: 'url'
-    },
-    'mote-win-setup': {
-      url: MOTEWIN,
-      version: 'version', size: 'setup_size', sha: 'setup_sha256', href: 'setup_url'
-    },
-    'mote-win-zip': {
-      url: MOTEWIN,
-      version: 'version', size: 'size', sha: 'sha256', href: 'url'
-    },
-    'xiaotu-mac': {
-      url: 'https://dl.xiaotu.online/xiaotu/updates/stable/latest.json',
-      version: 'version', size: 'size', sha: 'sha256', href: 'url'
-    },
-    'xiaotu-win-setup': {
-      url: XIAOTUWIN,
-      version: 'version', size: 'size', sha: 'sha256', href: 'url'
-    },
-    'xiaotu-win-zip': {
-      url: XIAOTUWIN,
-      version: 'version', size: 'portable_size', sha: 'portable_sha256', href: 'portable_url'
-    },
-    'devcard-mac': { url: DEVCARD_MAC, version: 'latest', asset: '.dmg' },
-    'devcard-win-setup': { url: DEVCARD_WIN, version: 'latest', asset: '.exe' },
-    'devcard-win-zip': { url: DEVCARD_WIN, version: 'latest', asset: '.zip' }
+    'mote-mac': { url: MANIFEST_URLS.mote, platform: 'macos', artifact: 'dmg' },
+    'mote-win-setup': { url: MANIFEST_URLS.mote, platform: 'windows', artifact: 'setup' },
+    'mote-win-zip': { url: MANIFEST_URLS.mote, platform: 'windows', artifact: 'portable' },
+    'xiaotu-mac': { url: MANIFEST_URLS.xiaotu, platform: 'macos', artifact: 'dmg' },
+    'xiaotu-win-setup': { url: MANIFEST_URLS.xiaotu, platform: 'windows', artifact: 'setup' },
+    'xiaotu-win-zip': { url: MANIFEST_URLS.xiaotu, platform: 'windows', artifact: 'portable' },
+    'devcard-mac': { url: MANIFEST_URLS.devcard, platform: 'macos', artifact: 'dmg' },
+    'devcard-win-setup': { url: MANIFEST_URLS.devcard, platform: 'windows', artifact: 'setup' },
+    'devcard-win-zip': { url: MANIFEST_URLS.devcard, platform: 'windows', artifact: 'portable' }
   };
 
   var cache = {};
@@ -141,19 +125,11 @@
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  /* DevCard 清单把产物放在 assets[] 里，按文件名后缀挑；digest 带 sha256: 前缀。 */
-  function pickAsset(data, suffix) {
-    var list = data && Array.isArray(data.assets) ? data.assets : [];
-    for (var i = 0; i < list.length; i++) {
-      var name = String((list[i] && list[i].name) || '').toLowerCase();
-      if (name.slice(-suffix.length) === suffix) return list[i];
-    }
-    return null;
-  }
-
-  function shaHex(digest) {
-    var match = /^sha256:([0-9a-f]{64})$/i.exec(String(digest || ''));
-    return match ? match[1].toLowerCase() : '';
+  /* v2 清单：platforms.<os>.artifacts.<key> = { url, size, sha256 }。 */
+  function pickArtifact(data, platform, artifact) {
+    var section = data && data.platforms && data.platforms[platform];
+    var arts = section && section.artifacts;
+    return (arts && arts[artifact]) || null;
   }
 
   function setField(row, name, value) {
@@ -174,24 +150,21 @@
     var source = SOURCES[row.getAttribute('data-manifest')];
     if (!source) return;
     loadManifest(source.url).then(function (data) {
-      var asset = null;
-      if (source.asset) {
-        asset = pickAsset(data, source.asset);
-        if (!asset) throw new Error('no ' + source.asset + ' asset');
-      }
+      var platform = data && data.platforms && data.platforms[source.platform];
+      if (!platform) throw new Error('no platforms.' + source.platform);
+      var artifact = pickArtifact(data, source.platform, source.artifact);
+      if (!artifact) throw new Error('no artifacts.' + source.artifact);
       row.setAttribute('data-synced', 'ok');
-      var version = (asset && asset.version) || data[source.version];
-      if (version) {
-        setField(row, 'version', 'v' + version);
-        setField(row, 'version-plain', version);
+      if (platform.version) {
+        setField(row, 'version', 'v' + platform.version);
+        setField(row, 'version-plain', platform.version);
       }
-      var size = asset ? asset.size : data[source.size];
-      if (size) {
-        setField(row, 'size', Number(size).toLocaleString('en-US'));
-        setField(row, 'size-human', '约 ' + humanSize(size));
+      if (artifact.size) {
+        setField(row, 'size', Number(artifact.size).toLocaleString('en-US'));
+        setField(row, 'size-human', '约 ' + humanSize(artifact.size));
       }
-      setField(row, 'sha', asset ? shaHex(asset.digest) : data[source.sha]);
-      setField(row, 'href', asset ? asset.download_url : data[source.href]);
+      setField(row, 'sha', artifact.sha256);
+      setField(row, 'href', artifact.url);
     }).catch(function () {
       row.setAttribute('data-synced', 'fallback');
     });
