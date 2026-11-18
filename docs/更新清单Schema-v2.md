@@ -1,9 +1,12 @@
 # 更新清单 Schema v2（统一设计稿）
 
-> 状态：**已全面接入**（生成器 `manifest_v2.py`、guard v2 检查、三仓库发布脚本、
-> 三个客户端解析 + Ed25519 验签均已完成）。
-> 线上切换按第十节顺序执行：先传 manifest.json → 发新客户端 →
-> 旧内测版退役后再清理 `latest.json` / `windows.json`（v1 文件在旧客户端退役前不可删）。
+> 状态：**已上线**（2026-11-18 三产品双平台全量切换）。
+> 全链路完成：生成器 `manifest_v2.py`、guard v2 检查、三仓库发布脚本、
+> 三个客户端解析 + Ed25519 验签、下载页改读 manifest.json；
+> 新内测版已发布：mote 1.0.3 / xiaotu 1.0.2 / devcard 1.2.6，
+> 三个 `manifest.json` 均为双平台合并且线上验签通过。
+> 剩余：确认内测用户全部升级后删除 `latest.json` / `windows.json`
+> （`appcast.xml` 永久保留）。
 > 日期：2026-11-18
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 > 背景：三款产品均在内测期、无存量用户，趁此窗口把清单格式一次统一，
@@ -192,6 +195,8 @@ guard 按此规则校验命名，清理脚本按 `<product>-<version>` 前缀分
 |---|---|
 | 清单文件名 | **`manifest.json`**（新名字明确区分 v1/v2，客户端切换期互不干扰） |
 | 安装包统一命名 | **随 v2 执行**，`<product>-<version>-<os>-<arch>-<type>.<ext>`；macOS dmg 带 `-arm64` 后缀 |
+| dmg 卷名 | 小兔 dmg 卷名改英文 `Xiaotu Inventory`（中文卷名在自动化/沙箱环境 hdiutil 会被 TCC 拦截；自 1.0.2 起生效） |
+| Mote 清单密钥 | 独立轮换（2026-11-18），与 Sparkle 密钥、小兔密钥解耦；客户端公钥随 1.0.3 发布 |
 
 ### 待确认
 

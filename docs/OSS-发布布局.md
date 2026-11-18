@@ -22,9 +22,9 @@
 
 ## 二、自动更新清单（核心）
 
-> Schema v2 已定稿并接入发布脚本与客户端（见[更新清单Schema-v2](./更新清单Schema-v2.md)）：
+> Schema v2 **已上线**（2026-11-18，见[更新清单Schema-v2](./更新清单Schema-v2.md)）：
 > 每个产品一个 `manifest.json` 覆盖双平台，Ed25519 签名。`latest.json` / `windows.json`
-> 为 v1 遗留文件，旧内测客户端退役前先不删除；新发布只写 `manifest.json`。
+> 为 v1 遗留文件，内测用户全部升级到新客户端后再删除；新发布只写 `manifest.json`。
 > `appcast.xml`（Sparkle）不在 v2 范围，路径与格式不变。
 
 三个产品的路径规则完全一致，只有产品目录不同：
@@ -46,12 +46,15 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 | 对象 | 大小 | Content-Type | Cache-Control |
 |---|---|---|---|
+| `devcard/updates/stable/manifest.json` | 1,260 B | `application/json` | `no-cache, max-age=60` |
 | `devcard/updates/stable/appcast.xml` | 1,269 B | `application/xml; charset=utf-8` | `public, max-age=60` |
 | `devcard/updates/stable/latest.json` | 866 B | `application/json; charset=utf-8` | `public, max-age=60` |
 | `devcard/updates/stable/windows.json` | 851 B | `application/json; charset=utf-8` | `public, max-age=60` |
+| `xiaotu/updates/stable/manifest.json` | 1,253 B | `application/json` | `no-cache, max-age=60` |
 | `xiaotu/updates/stable/appcast.xml` | 710 B | `application/rss+xml` | `no-cache, max-age=60` |
 | `xiaotu/updates/stable/latest.json` | 681 B | `application/json` | `no-cache, max-age=60` |
 | `xiaotu/updates/stable/windows.json` | 900 B | `application/json` | `no-cache, max-age=60` |
+| `mote/updates/stable/manifest.json` | 1,238 B | `application/json` | `no-cache, max-age=60` |
 | `mote/updates/stable/appcast.xml` | 777 B | `application/rss+xml` | `no-cache, max-age=60` |
 | `mote/updates/stable/latest.json` | 256 B | `application/json` | `no-cache, max-age=60` |
 | `mote/updates/stable/windows.json` | 521 B | `application/json` | `no-cache, max-age=60` |
@@ -62,7 +65,17 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 所有安装包均为 `public, max-age=31536000, immutable`，**同名文件覆盖不会生效，发新版必须换版本号**。
 
-### 3.1 DevCard（macOS 当前 1.2.4，Windows 当前 1.2.5）
+### 3.1 DevCard（macOS 当前 1.2.6，Windows 当前 1.2.6）
+
+当前版本（v2 命名，`dl.xiaotu.online/devcard/`）：
+
+| 类型 | 对象键 | 大小（字节） | Content-Type |
+|---|---|---|---|
+| DMG | `devcard/devcard-1.2.6-macos-arm64.dmg` | 6,012,633 | `application/octet-stream` |
+| EXE | `devcard/devcard-1.2.6-win64-setup.exe` | 5,820,685 | `application/octet-stream` |
+| ZIP | `devcard/devcard-1.2.6-win64-portable.zip` | 6,130,765 | `application/zip` |
+
+v1 命名遗留：
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
@@ -90,7 +103,17 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > 1.2.4 只发过 macOS（修复 Sparkle feed 地址）；Windows 侧 1.2.4 的两个包曾被 CI 误覆盖，
 > 现以 **1.2.5** 为 Windows 最新版，清单已指向 1.2.5。
 
-### 3.2 小兔进销存（macOS 当前 1.0.0，Windows 当前 1.0.1）
+### 3.2 小兔进销存（macOS 当前 1.0.2，Windows 当前 1.0.2）
+
+当前版本（v2 命名，`dl.xiaotu.online/xiaotu/`）：
+
+| 类型 | 对象键 | 大小（字节） | Content-Type |
+|---|---|---|---|
+| DMG | `xiaotu/xiaotu-1.0.2-macos-arm64.dmg` | 6,377,193 | `application/octet-stream` |
+| EXE | `xiaotu/xiaotu-1.0.2-win64-setup.exe` | 3,691,741 | `application/octet-stream` |
+| ZIP | `xiaotu/xiaotu-1.0.2-win64-portable.zip` | 2,423,867 | `application/zip` |
+
+v1 命名遗留：
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
@@ -101,13 +124,23 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | EXE | `xiaotu/xiaotu-inventory-0.9.0-win64-setup.exe` | 3,580,457 | `application/octet-stream` |
 | ZIP | `xiaotu/xiaotu-inventory-0.9.0-win64.zip` | 2,137,094 | `application/zip` |
 
-> Windows 1.0.1（build `202611180530`）已在本地 Windows 构建、Mac 发布，
-> 壳内地址为 `https://dl.xiaotu.online/xiaotu/updates/stable/windows.json`，
-> `windows.json` 已指向该版本。规则名 1.0.0 的 Windows 包（setup + zip）已删除；
-> 1.0.0 的 **dmg 保留**，因为 macOS `latest.json` 仍指向它。
-> macOS 尚未发 1.0.1，升版时请一并重打 dmg 并保留旧 dmg 直到清单切换。
+> Windows 1.0.2（build `202611190000`）与 macOS 1.0.2 均已按 v2 发布：
+> 壳内地址为 `https://dl.xiaotu.online/xiaotu/updates/stable/manifest.json`，
+> dmg 卷名自 1.0.2 起改用英文 `Xiaotu Inventory`（中文卷名在自动化环境
+> 会被 TCC 拦截，见 `make_dmg.sh` 注释）。旧版 v1 命名包为遗留，待清理脚本
+> 按版本分组删除。
 
-### 3.3 Mote（macOS 当前 1.0.1，Windows 当前 1.0.2）
+### 3.3 Mote（macOS 当前 1.0.3，Windows 当前 1.0.3）
+
+当前版本（v2 命名，`dl.xiaotu.online/mote/`）：
+
+| 类型 | 对象键 | 大小（字节） | Content-Type |
+|---|---|---|---|
+| DMG | `mote/mote-1.0.3-macos-arm64.dmg` | 1,816,684 | `application/octet-stream` |
+| EXE | `mote/mote-1.0.3-win64-setup.exe` | 2,665,384 | `application/octet-stream` |
+| ZIP | `mote/mote-1.0.3-win64-portable.zip` | 715,978 | `application/zip` |
+
+v1 命名遗留（旧内测客户端仍在用 `latest.json` 指向旧版本，清理前确认已升级）：
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
