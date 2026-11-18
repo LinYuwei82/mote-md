@@ -10,6 +10,7 @@
 #include "core/js_bridge.h"
 #include "core/json.h"
 #include "core/paths.h"
+#include "core/text_encoding.h"
 #include "core/update.h"
 #include "core/verify_signature.h"
 
@@ -917,6 +918,29 @@ static void testCommandTable()
     CHECK(view.at(8) == CommandId::ZoomReset);
 }
 
+static void testTextEncoding()
+{
+    // UTF-8 BOM 去掉，其余字节保持原样
+    CHECK(mote::normalizeTextEncoding("\xEF\xBB\xBF你好") == "你好");
+    CHECK(mote::isValidUtf8("你好"));
+
+    // UTF-16 LE：BOM + 'A' + '你'
+    const std::string le = std::string("\xFF\xFE", 2) + std::string("\x41\x00\x60\x4F", 4);
+    CHECK(mote::normalizeTextEncoding(le) == "A你");
+    // UTF-16 BE：BOM + 'A' + '你'
+    const std::string be = std::string("\xFE\xFF", 2) + std::string("\x00\x41\x4F\x60", 4);
+    CHECK(mote::normalizeTextEncoding(be) == "A你");
+
+    // 代理对（U+1F600）正确合成为一个码点：4 字节 UTF-8
+    const std::string emoji = std::string("\xFF\xFE", 2) + std::string("\x3D\xD8\0\xDE", 4);
+    CHECK(mote::normalizeTextEncoding(emoji) == "\xF0\x9F\x98\x80");
+
+    // GBK 的「中文」不是合法 UTF-8，原样返回，由调用方按系统代码页兜底
+    const std::string gbk = "\xD6\xD0\xCE\xC4";
+    CHECK(!mote::isValidUtf8(gbk));
+    CHECK(mote::normalizeTextEncoding(gbk) == gbk);
+}
+
 int main()
 {
     testJson();
@@ -924,6 +948,7 @@ int main()
     testVerifySignature();
     testBase64();
     testPaths();
+    testTextEncoding();
     testImageStore();
     testPendingMarkdown();
     testChangeBaseDirReloads();

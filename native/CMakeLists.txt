@@ -48,6 +48,7 @@ add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/js_bridge.cpp"
   "${MOTE_REPO_ROOT}/core/json.cpp"
   "${MOTE_REPO_ROOT}/core/paths.cpp"
+  "${MOTE_REPO_ROOT}/core/text_encoding.cpp"
   "${MOTE_REPO_ROOT}/core/update.cpp"
   "${MOTE_REPO_ROOT}/core/verify_signature.cpp")
 target_include_directories(mote_core PUBLIC "${MOTE_REPO_ROOT}")

@@ -12,6 +12,7 @@
 #include "core/editor_controller.h"
 #include "core/js_bridge.h"
 #include "core/paths.h"
+#include "core/text_encoding.h"
 
 #include <shlobj.h>
 #include <shellapi.h>
@@ -131,10 +132,17 @@ bool read_text_file(const std::string &path, std::string *text)
     if (!file)
         return false;
     text->assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-    if (text->size() >= 3 && static_cast<unsigned char>((*text)[0]) == 0xEF
-        && static_cast<unsigned char>((*text)[1]) == 0xBB
-        && static_cast<unsigned char>((*text)[2]) == 0xBF) {
-        text->erase(0, 3);
+    *text = mote::normalizeTextEncoding(*text);
+    if (!mote::isValidUtf8(*text)) {
+        // 老文档常是 GBK 等系统代码页编码：按 CP_ACP 转一道，否则打开就是乱码。
+        const int length = MultiByteToWideChar(CP_ACP, 0, text->data(),
+                                               static_cast<int>(text->size()), nullptr, 0);
+        if (length > 0) {
+            std::wstring wide(static_cast<std::size_t>(length), L'\0');
+            MultiByteToWideChar(CP_ACP, 0, text->data(), static_cast<int>(text->size()),
+                                wide.data(), length);
+            *text = wide_to_utf8(wide);
+        }
     }
     return true;
 }
