@@ -118,12 +118,14 @@ powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1   # �
 在 macOS 上发布 Windows 包时用等价的 bash 脚本（读同一份 `~/.config/xiaotu-updates/.env`）：
 
 ```bash
+BUILD=202611180930 \
 ZIP_PATH=dist/mote-1.0.0-win64-portable.zip \
 SETUP_PATH=dist/mote-1.0.0-win64-setup.exe \
 NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
   bash tools/release/publish_windows.sh              # manifest.json → 上传 zip/安装包/清单 → 线上校验
 ```
 
+- `BUILD` 必填，且必须等于 Windows 构建时的 `-DMOTE_BUILD`：清单 `build` 比安装包新会让客户端反复提示同一版本。
 - 官网与下载页统一由 `web/` 维护：ECS 用 `deploy_site.sh` 发布，备案前的 OSS 镜像用 `publish_site_oss.sh` 发布。旧的单页 `site/index.html` 与 `publish_site.ps1` 已退役，`dl.xiaotu.online` 根路径只做跳转，不再承载页面。
 - 版本号只改 `Mote.pro` 的 `VERSION`，各发布脚本都从那里读。
 - `NOTES_URL` 是可选环境变量，macOS 与 Windows 的发布脚本都支持：非空时写进清单的 `notes_url`，客户端弹窗显示「查看完整更新说明…」；不设置则不写该字段，老清单与老客户端都不受影响。

@@ -21,6 +21,10 @@
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -SkipUpload
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -ZipPath dist\x.zip
+#   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -Build 202611190930
+#
+# -Build 必须等于编译时的 -DMOTE_BUILD；省略时从 build-native-ninja\CMakeCache.txt 读取，
+# 读不到直接失败（不再退回当前时间：清单比安装包新会让客户端反复提示同一版本）。
 
 param(
     [string]$ZipPath = "",
@@ -69,9 +73,9 @@ if (-not $proLine) { Fail "无法从 Mote.pro 读取 VERSION" }
 $Version = $proLine.Matches[0].Groups[1].Value
 
 # v2 清单 windows 平台必须带 build（客户端同版本比对构建号）。
-# 必须与二进制里的 MOTE_BUILD 一致：取编译时写进 CMakeCache 的值，取不到才退回
-# 当前 UTC。用当前时间会在「构建」与「发布」跨分钟时让清单比安装包更新，客户端
-# 每次检测都判定有新版本，装完仍是同一个包，形成无限更新循环。
+# 必须与二进制里的 MOTE_BUILD 一致：取编译时写进 CMakeCache 的值。取不到就直接
+# 失败并要求显式传 -Build——退回当前时间会让清单比安装包「更新」，客户端每次检测
+# 都判定有新版本、装完仍是同一个包，形成无限更新循环，且很难在线上看出来。
 if ([string]::IsNullOrWhiteSpace($Build)) {
     $cachePath = Join-Path $root "build-native-ninja\CMakeCache.txt"
     if (Test-Path -LiteralPath $cachePath) {
@@ -80,8 +84,7 @@ if ([string]::IsNullOrWhiteSpace($Build)) {
         if ($match.Success) { $Build = $match.Groups[1].Value }
     }
     if ([string]::IsNullOrWhiteSpace($Build)) {
-        $Build = (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmm")
-        Write-Host "[警告] 未从 CMakeCache 读到编译时的 MOTE_BUILD，改用当前时间 $Build（清单可能比安装包更新）"
+        Fail "未能确定编译时的 MOTE_BUILD：CMakeCache 里没有该变量。请用 -Build <构建号> 显式传入，值必须与 -DMOTE_BUILD 一致"
     }
 }
 if ($Build -notmatch '^\d{4,}$') { Fail "非法构建号：$Build（应为纯数字，如 202611180930）" }

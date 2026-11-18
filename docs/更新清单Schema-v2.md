@@ -8,6 +8,10 @@
 > （`appcast.xml` 永久保留）。
 > 2026-11-19：桶内历史安装包（v1 命名 + v2 旧版本，共 116 MB）已全部清理，
 > 每个产品只保留当前版本 3 个包。
+> 2026-11-19：修复 Windows 清单 `build` 错位——发布脚本原先取「发布时刻」，
+> 二进制里却是「编译时刻」，清单永远比安装包新，客户端反复提示同一版本。
+> 现由构建步骤把 `MOTE_BUILD` 传给发布步骤，`build` 必须等于二进制内的值（见 3.4）；
+> mote 1.0.4 按此规则重发。
 > 日期：2026-11-18
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 > 背景：三款产品均在内测期、无存量用户，趁此窗口把清单格式一次统一，
@@ -48,7 +52,7 @@
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `version` | string | 是 | semver，如 `1.0.2`；平台间版本独立递增 |
-| `build` | int | 是 | Windows 构建号；macOS 无构建号填 `0` |
+| `build` | int | 是 | Windows 构建号，必须等于二进制内编译时的 `MOTE_BUILD`（如 `202611181542`），见 3.4；macOS 无构建号填 `0` |
 | `min_os` | string | 是 | 如 `14.0` / `10.0` |
 | `notes_url` | string | 否 | 发布说明，绝对 https 地址；缺省不发 |
 | `rollout_percent` | int | 否 | 0–100，缺省 `100`（灰度用） |
@@ -70,6 +74,25 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 
 必填规则：`macos.artifacts` 至少含 `dmg`；`windows.artifacts` 至少含 `setup` 或 `portable`。
 客户端遇到未知的 artifacts key / 未知字段一律忽略，保证未来可扩展。
+
+### 3.4 构建号一致性（Windows 必读）
+
+`build` 不是「发布时刻」的流水号，而是**编译进二进制**的 `MOTE_BUILD`：
+
+| 环节 | 取值 |
+|---|---|
+| 构建（configure） | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>`：写进 CMakeCache，同时编进 `Mote.exe` |
+| 打包 / 发布 | 从 CMakeCache 读同一个值（Actions 由构建步骤经 `MOTE_BUILD_STAMP` 传递），写进 `manifest.json` |
+
+两者不一致的后果：
+
+- 清单 `build` **大于**安装包内的值：客户端同版本时判定「有新版本」，装完本机值没变，
+  下次检测继续提示——表现为「已经是 1.0.4，却一直提示更新 1.0.4」；
+- 清单 `build` **小于**安装包内的值：该构建永远收不到更新提示。
+
+约束：`publish_windows.ps1` 未显式传 `-Build` 时从 `build-native-ninja/CMakeCache.txt`
+读取编译值，读不到直接失败，不再退回当前时间；`release-windows.yml` 会把构建步骤
+实际生效的值传给发布步骤。发布后按[发布工作流](./发布工作流.md) 第 6 节核对。
 
 ## 四、签名规则
 
@@ -136,7 +159,8 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 
 1. 只取 `platforms.<自己的平台>`，忽略另一平台与一切未知字段。
 2. 更新判定：macOS 只比 `version`；Windows 先比 `version`，同版本再比 `build`
-   （`build` 小于等于本机 → 无更新，沿用小兔现状）。
+   （`build` 小于等于本机 → 无更新，沿用小兔现状）。所以清单里的 `build` 必须与
+   安装包内编译时的 `MOTE_BUILD` 逐位相同，否则同版本会反复提示，见 3.4。
 3. 产物选择：Windows 安装版读 `artifacts.setup`，绿色包读 `artifacts.portable`；
    macOS 读 `artifacts.dmg`。
 4. 校验顺序：

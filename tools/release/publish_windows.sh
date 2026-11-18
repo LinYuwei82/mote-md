@@ -14,14 +14,15 @@
 #   oss://<bucket>/mote/mote-<ver>-win64-setup.exe   （可选）
 #   oss://<bucket>/mote/updates/stable/manifest.json
 #
-# 构建号：v2 清单 windows 平台必须带 build（客户端同版本比对构建号），缺省取
-# 触发时刻 UTC（分钟级）；与 GitHub Actions 的构建号约定一致。
+# 构建号：v2 清单 windows 平台必须带 build（客户端同版本比对构建号）。它必须等于
+# Windows 侧编译时的 -DMOTE_BUILD，因此这里**要求显式传入 BUILD**，不再用当前时间
+# 兜底：清单比安装包「新」会让客户端反复提示同一版本、装完照旧。
 #
 # 用法：
-#   tools/release/publish_windows.sh                          # 从 dist/ 自动找 zip
+#   BUILD=202611180930 tools/release/publish_windows.sh      # 从 dist/ 自动找 zip
 #   BUILD=202611180930 ZIP_PATH=/path/to/portable.zip \
 #   SETUP_PATH=/path/to/setup.exe tools/release/publish_windows.sh
-#   NOTES_URL=https://... tools/release/publish_windows.sh    # 附带发布说明链接
+#   BUILD=202611180930 NOTES_URL=https://... tools/release/publish_windows.sh
 
 set -euo pipefail
 
@@ -34,7 +35,12 @@ VERSION="${VERSION:-$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\
 CHANNEL="${CHANNEL:-stable}"
 case "$CHANNEL" in stable|beta) ;; *) echo "CHANNEL 必须是 stable/beta" >&2; exit 2 ;; esac
 
-BUILD="${BUILD:-$(LC_ALL=C date -u '+%Y%m%d%H%M')}"
+BUILD="${BUILD:-}"
+if [ -z "$BUILD" ]; then
+  echo "缺少 BUILD：清单 build 必须等于 Windows 构建时的 -DMOTE_BUILD，否则客户端会反复提示同一版本" >&2
+  echo "用法：BUILD=202611180930 $0" >&2
+  exit 1
+fi
 [[ "$BUILD" =~ ^[0-9]{4,}$ ]] || { echo "非法构建号：$BUILD（应为纯数字，如 202611180930）" >&2; exit 1; }
 
 CDN_DOMAIN="${CDN_DOMAIN:-https://dl.xiaotu.online}"

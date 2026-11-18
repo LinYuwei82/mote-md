@@ -34,6 +34,17 @@ $exe = Join-Path $BuildDir "Mote.exe"
 if (-not (Test-Path $exe)) { Fail "未找到 $exe（先构建或检查 -BuildDir）" }
 if (-not (Test-Path $loader)) { Fail "未找到 $loader（设置 WEBVIEW2_SDK）" }
 
+# 发布清单的 build 必须等于编译时的 MOTE_BUILD，否则客户端会反复提示同一版本
+$cacheFile = Join-Path $BuildDir "CMakeCache.txt"
+if (Test-Path -LiteralPath $cacheFile) {
+    $stamp = [regex]::Match((Get-Content -LiteralPath $cacheFile -Raw), 'MOTE_BUILD:[A-Z]+=(\d+)').Groups[1].Value
+    if ($stamp -and $stamp -ne "0") {
+        Write-Host "构建号 MOTE_BUILD=$stamp（发布时清单必须写同一个值）"
+    } else {
+        Write-Host "[提示] 本次构建未设置 MOTE_BUILD，发布 Windows 更新时需用 -Build 显式指定构建号"
+    }
+}
+
 Write-Host "[2/6] 清理并创建产物目录"
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 if (Test-Path $zip) { Remove-Item $zip -Force }

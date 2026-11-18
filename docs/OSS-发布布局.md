@@ -54,7 +54,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | `devcard/updates/stable/appcast.xml` | 1,099 B | `application/xml; charset=utf-8` | `public, max-age=60` |
 | `xiaotu/updates/stable/manifest.json` | 1,253 B | `application/json` | `no-cache, max-age=60` |
 | `xiaotu/updates/stable/appcast.xml` | 714 B | `application/rss+xml` | `no-cache, max-age=60` |
-| `mote/updates/stable/manifest.json` | 1,238 B | `application/json` | `no-cache, max-age=60` |
+| `mote/updates/stable/manifest.json` | 1,278 B | `application/json` | `no-cache, max-age=60` |
 | `mote/updates/stable/appcast.xml` | 834 B | `application/rss+xml` | `no-cache, max-age=60` |
 
 > v1 清单（`latest.json` / `windows.json`）已删除，v2 清单与 appcast 是 updates/ 目录下仅有的内容。
@@ -63,7 +63,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 ## 三、安装包：dmg / exe / zip
 
-所有安装包均为 `public, max-age=31536000, immutable`，**同名文件覆盖不会生效，发新版必须换版本号**。
+所有安装包均为 `public, max-age=31536000, immutable`。`dl.xiaotu.online` 是 CNAME 直连、无 CDN 层，同名重传会替换源站对象，但客户端侧仍可能按 1 年缓存继续用旧字节，**正常发版必须换版本号**。仅在修复清单错误（如 2026-11-19 的 `build` 错位）而同版本重发时才允许覆盖同名对象，重发后必须核对线上 SHA256 已变化。
 
 > 历史版本已于 2026-11-19 全部清理，每个产品只保留当前版本的 3 个包；需要回滚只能重新构建产物。
 
@@ -94,15 +94,19 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > dmg 卷名自 1.0.2 起改用英文 `Xiaotu Inventory`（中文卷名在自动化环境
 > 会被 TCC 拦截，见 `make_dmg.sh` 注释）。
 
-### 3.3 Mote（macOS 当前 1.0.3，Windows 当前 1.0.3）
+### 3.3 Mote（macOS 当前 1.0.4，Windows 当前 1.0.4）
 
 当前版本（v2 命名，`dl.xiaotu.online/mote/`）：
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
-| DMG | `mote/mote-1.0.3-macos-arm64.dmg` | 1,816,684 | `application/octet-stream` |
-| EXE | `mote/mote-1.0.3-win64-setup.exe` | 2,665,384 | `application/octet-stream` |
-| ZIP | `mote/mote-1.0.3-win64-portable.zip` | 715,978 | `application/zip` |
+| DMG | `mote/mote-1.0.4-macos-arm64.dmg` | 750,328 | `application/octet-stream` |
+| EXE | `mote/mote-1.0.4-win64-setup.exe` | 2,666,670 | `application/octet-stream` |
+| ZIP | `mote/mote-1.0.4-win64-portable.zip` | 717,845 | `application/zip` |
+
+> 2026-11-19 修复清单 `build` 错位（发布时刻 vs 编译时刻）后，1.0.4 按构建号一致重发；
+> 重发会更新 EXE / ZIP 的字节数与 SHA256，以线上 `manifest.json` 为准。Windows 客户端
+> 的同版本判定规则见[更新清单Schema-v2](./更新清单Schema-v2.md) 3.4。
 
 ## 四、PDF 手册与发布说明
 
@@ -247,10 +251,10 @@ python3 tools/release/guard.py verify-live --product xiaotu --kind win \
 
 ## 九、注意事项
 
-1. **安装包是 `immutable`**：同名覆盖不会生效，换内容必须升版本号。`dl.xiaotu.online` 是 OSS 自定义域名（CNAME 直连，**无 CDN 层**），上传即生效；`Cache-Control` 只影响客户端侧缓存。
+1. **安装包是 `immutable`**：正常发版必须升版本号；只有修复清单错误而同版本重发时才覆盖同名对象（CNAME 直连、无 CDN，源站立即换字节），重发后核对 SHA256 已变化。`Cache-Control` 只影响客户端侧缓存。
 2. **清单生效**：源站上传即生效；客户端可能因 `max-age=60` 缓存最多 1 分钟，验证时等 1 分钟或加时间戳。下载页版本号由 `site.js` 自动读取，无需改 HTML。
 3. **发布脚本会校验产物**：Mote 校验 dmg 内 `SUFeedURL` 与 appcast 地址一致；guard（v2）校验绿色包内壳 exe 含当前 `manifest.json` 地址、清单 Ed25519 签名与产物 SHA256；不一致直接拒绝上传。
-4. **三个产品已全部迁移到 v2**：当前版本 mote 1.0.3、xiaotu 1.0.2、devcard 1.2.6（macOS + Windows 双平台）。
+4. **三个产品已全部迁移到 v2**：当前版本 mote 1.0.4、xiaotu 1.0.2、devcard 1.2.6（macOS + Windows 双平台）。
 5. **历史安装包已清零**：桶内只有当前 9 个包，`manual.pdf`、`release-notes-*.html`、`manifest.json`、`appcast.xml` 长期保留。
 6. `dl.xiaotu.online/logs/` 下是 OSS 每小时访问日志，属系统产出，不在发布范围内。
 7. 桶根的 `devcard/`、`mote/`、`xiaotu/updates/` 等是控制台创建的 0 字节目录占位对象，可忽略。
