@@ -82,10 +82,10 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 
 - 三家各自一把 Ed25519 私钥，私钥路径不变（见[发布工作流](./发布工作流.md) 2.1 节）。
 - `key_id` 随公钥一同编译进客户端；轮换密钥 = 新 `key_id` + 新公钥随下一个客户端版本发布。
-- 客户端验签现状：**三家均已接入**。小兔用 OpenSSL Ed25519 实现
-  （`xiaotu::verify_manifest_signature`，trust anchor 编译期注入）；Mote、DevCard
-  各自用内嵌 Ed25519 实现，公钥以十六进制随客户端编译（`SUPublicEDKey` 仅用于
-  Sparkle 的 appcast，不参与 manifest 验签）。验签失败一律放弃本次更新。
+- 客户端验签现状：**三家均已接入**。小兔 macOS 用 OpenSSL Ed25519 实现
+  （`xiaotu::verify_manifest_signature`），公钥取 `Info.plist` 的 `SUPublicEDKey`
+  （打包时注入，与 Sparkle 的 appcast 共用同一把）；小兔 Windows 桥与 Mote、DevCard
+  用内嵌 Ed25519 实现，公钥随客户端编译。验签失败一律放弃本次更新。
 
 ## 五、完整示例（mote，数据取自线上 v1 改编）
 
