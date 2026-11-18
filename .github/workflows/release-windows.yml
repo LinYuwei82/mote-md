@@ -84,6 +84,9 @@ jobs:
           $stamped = [regex]::Match($cache, 'MOTE_BUILD:[A-Z]+=(\d+)').Groups[1].Value
           Write-Host "cache 中的构建号: $stamped"
           if ($stamped -notmatch '^\d{12}$') { throw "MOTE_BUILD 未生效: '$stamped'" }
+          # 清单必须写同一个构建号：发布步骤是另一个进程，默认值会取「发布时刻」，
+          # 比二进制新，客户端会反复提示同一个版本
+          "MOTE_BUILD_STAMP=$stamped" | Out-File -FilePath $env:GITHUB_ENV -Append
           cmake --build build-native-ninja
 
       - name: 打绿色包
@@ -111,9 +114,9 @@ jobs:
           python -m pip install --quiet oss2
           $dry = '${{ inputs.dry_run }}' -eq 'true'
           if ('${{ inputs.skip_setup }}' -eq 'true') {
-            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }} -SetupPath '不存在.exe' -SkipUpload:$dry
+            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }} -Build $env:MOTE_BUILD_STAMP -SetupPath '不存在.exe' -SkipUpload:$dry
           } else {
-            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }} -SkipUpload:$dry
+            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }} -Build $env:MOTE_BUILD_STAMP -SkipUpload:$dry
           }
 
       - name: 上传构建产物（留档）

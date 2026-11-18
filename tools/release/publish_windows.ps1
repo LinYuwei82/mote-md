@@ -68,9 +68,24 @@ $proLine = Select-String -Path (Join-Path $root "Mote.pro") -Pattern "^VERSION\s
 if (-not $proLine) { Fail "无法从 Mote.pro 读取 VERSION" }
 $Version = $proLine.Matches[0].Groups[1].Value
 
-# v2 清单 windows 平台必须带 build（客户端同版本比对构建号），缺省取触发时刻 UTC（分钟级）
-if ([string]::IsNullOrWhiteSpace($Build)) { $Build = (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmm") }
+# v2 清单 windows 平台必须带 build（客户端同版本比对构建号）。
+# 必须与二进制里的 MOTE_BUILD 一致：取编译时写进 CMakeCache 的值，取不到才退回
+# 当前 UTC。用当前时间会在「构建」与「发布」跨分钟时让清单比安装包更新，客户端
+# 每次检测都判定有新版本，装完仍是同一个包，形成无限更新循环。
+if ([string]::IsNullOrWhiteSpace($Build)) {
+    $cachePath = Join-Path $root "build-native-ninja\CMakeCache.txt"
+    if (Test-Path -LiteralPath $cachePath) {
+        $cacheText = Get-Content -LiteralPath $cachePath -Raw
+        $match = [regex]::Match($cacheText, 'MOTE_BUILD:[A-Z]+=(\d+)')
+        if ($match.Success) { $Build = $match.Groups[1].Value }
+    }
+    if ([string]::IsNullOrWhiteSpace($Build)) {
+        $Build = (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmm")
+        Write-Host "[警告] 未从 CMakeCache 读到编译时的 MOTE_BUILD，改用当前时间 $Build（清单可能比安装包更新）"
+    }
+}
 if ($Build -notmatch '^\d{4,}$') { Fail "非法构建号：$Build（应为纯数字，如 202611180930）" }
+Write-Host "构建号：$Build"
 
 # 签名种子：环境变量优先（CI），其次本地种子文件
 $signKeyPath = $null
