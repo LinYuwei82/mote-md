@@ -6,7 +6,7 @@
   var tocList = document.getElementById('toc-list');
 
   var savedText = '';           // 最近一次载入或保存落盘时的源文本
-  var trailingNewline = false;
+  var trailingNewlines = 0;     // 文末空行数量；改动前只记「有没有」，会归并成 1 个
   var composing = false;
   var dirtyTimer = null;
   var pendingOffset = null;
@@ -677,31 +677,57 @@
 
   /* ---------------- Markdown 渲染 ---------------- */
 
-  // 按空行切块；围栏代码块内部的空行与换行不切
-  function splitSource(text) {
-    var lines = String(text).replace(/\r\n?/g, '\n').split('\n');
-    var chunks = [];
+  // 按空行切块，同时记录块间空行：改动前只取块文本，连续多个空行会被归并成
+  // 固定的 2 个换行。gaps[i] 是第 i 块之前的换行数（gaps[0] 即文首空行），
+  // trail 是最后一块之后的换行数；围栏代码块内部的空行不切块也不计入间隔。
+  function splitSourceLayout(text) {
+    var source = String(text).replace(/\r\n?/g, '\n');
+    var lines = source.split('\n');
+    var blocks = [];
+    var gaps = [];
     var current = [];
+    var pending = 0;      // 刚才跨过的空行数，等下一块出现时归到它的间隔里
     var inFence = false;
+    var started = false;
+
+    function flush() {
+      if (!current.length)
+        return;
+      // 内容之间：k 个空行对应 k+1 个换行；文首没有前一块，空行数就是换行数
+      gaps.push(started ? pending + 1 : pending);
+      blocks.push(current.join('\n'));
+      current = [];
+      pending = 0;
+      started = true;
+    }
 
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
       if (/^\s*```/.test(line))
         inFence = !inFence;
       if (!inFence && line.trim() === '') {
-        if (current.length) {
-          chunks.push(current.join('\n'));
-          current = [];
-        }
+        flush();
+        pending++;
         continue;
       }
       current.push(line);
     }
-    if (current.length)
-      chunks.push(current.join('\n'));
-    if (!chunks.length)
-      chunks.push('');
-    return chunks;
+    flush();
+
+    var trail = pending;
+    if (!blocks.length) {
+      // 整篇没有正文：保留一个空块，换行全部算文末（lines.length - 1 才是
+      // 真实的换行数，末尾 split 出的空串不算一个换行）
+      blocks.push('');
+      gaps.push(0);
+      trail = Math.max(0, lines.length - 1);
+    }
+    return { blocks: blocks, gaps: gaps, trail: trail };
+  }
+
+  function trailingNewlineCount(text) {
+    var match = /(\n*)$/.exec(String(text));
+    return match ? match[1].length : 0;
   }
 
   function isCodeBlock(el) {
@@ -1241,31 +1267,74 @@
 
   /* ---------------- 文档模型与选区 ---------------- */
 
+  // 块原文：代码块的 DOM 里还有行号栏，textContent 不能代表原文，编辑期间由
+  // dataset.raw 逐次同步（见 syncCode），渲染态本来就用 dataset.raw。
+  function blockRawText(el) {
+    var raw;
+    if (isCodeBlock(el))
+      raw = el.dataset.raw;
+    else
+      raw = el.classList.contains('editing') ? el.textContent : el.dataset.raw;
+    if (raw === undefined)
+      raw = el.textContent;
+    return String(raw).replace(/\r/g, '').replace(/\n+$/, '');
+  }
+
   function collectBlocks() {
-    var parts = [];
-    for (var i = 0; i < root.children.length; i++) {
-      var el = root.children[i];
-      if (!el.classList || !el.classList.contains('block'))
-        continue;
-      // 代码块的 DOM 里还有行号栏，textContent 不能代表原文：编辑期间由
-      // dataset.raw 逐次同步（见 syncCode），渲染态本来就用 dataset.raw。
-      var raw;
-      if (isCodeBlock(el))
-        raw = el.dataset.raw;
-      else
-        raw = el.classList.contains('editing') ? el.textContent : el.dataset.raw;
-      if (raw === undefined)
-        raw = el.textContent;
-      parts.push(String(raw).replace(/\r/g, '').replace(/\n+$/, ''));
+    return blockList().map(blockRawText);
+  }
+
+  // 第 index 块之前的空行数：载入、撤销重建时写进 data-gap；用户新建的块没有
+  // 这个属性，第 0 块按文首 0 个、其余按 2 个（与改动前固定的 '\n\n' 一致）。
+  function blockGap(el, first) {
+    var value = el && el.dataset ? parseInt(el.dataset.gap, 10) : NaN;
+    if (isNaN(value) || value < 0)
+      return first ? 0 : 2;
+    return value;
+  }
+
+  function collectGaps() {
+    var list = blockList();
+    var gaps = [];
+    for (var i = 0; i < list.length; i++)
+      gaps.push(blockGap(list[i], i === 0));
+    return gaps;
+  }
+
+  function gapBefore(gaps, index) {
+    if (gaps && index < gaps.length)
+      return gaps[index];
+    return index === 0 ? 0 : 2;
+  }
+
+  // 整篇文本 = 各块前的间隔 + 块原文 + 文末换行
+  function layoutText(blocks, gaps, trail) {
+    var out = '';
+    for (var i = 0; i < blocks.length; i++) {
+      for (var n = gapBefore(gaps, i); n > 0; n--)
+        out += '\n';
+      out += blocks[i];
     }
-    return parts;
+    for (var t = trail > 0 ? trail : 0; t > 0; t--)
+      out += '\n';
+    return out;
+  }
+
+  // 第 index 块在整篇文本里的起始偏移（绝对偏移 → 块内偏移的反向换算）
+  function blockStartOffset(blocks, gaps, index) {
+    var offset = 0;
+    for (var i = 0; i <= index && i < blocks.length; i++) {
+      offset += gapBefore(gaps, i);
+      if (i < index)
+        offset += blocks[i].length;
+    }
+    return offset;
   }
 
   function currentSource() {
     if (mode === 'source')
       return sourceEl.value;
-    // 保留原文件末尾的换行，避免每次保存都悄悄删掉一个字节
-    return collectBlocks().join('\n\n') + (trailingNewline ? '\n' : '');
+    return layoutText(collectBlocks(), collectGaps(), trailingNewlines);
   }
 
   function scheduleDirty() {
@@ -1609,30 +1678,28 @@
   function absoluteOffsets(blocks, sel) {
     if (sel.index < 0)
       return { start: 0, end: 0, has: false };
-    var base = 0;
-    for (var i = 0; i < sel.index && i < blocks.length; i++)
-      base += blocks[i].length + 2;
+    var base = blockStartOffset(blocks, collectGaps(), sel.index);
     return { start: base + sel.start, end: base + sel.end, has: true };
   }
 
-  // 快照：wysiwyg 只保留块数组（保住末尾空块），source 只保留纯文本。
-  // 不再同时存两份：wysiwyg 的整篇文本由 blocks.join('\n\n') 按需拼出，
-  // 否则每步都要多留一份整篇副本。
+  // 快照：wysiwyg 只保留块数组与块间空行（保住文首/文末空行），source 只保留
+  // 纯文本。wysiwyg 的整篇文本由 layoutText 按需拼出，不额外存副本。
   function snapshotState() {
     if (mode === 'source') {
       var text = sourceEl.value;
       return {
-        text: text, blocks: null, trail: /\n$/.test(text),
+        text: text, blocks: null, gaps: null, trail: trailingNewlineCount(text),
         start: sourceEl.selectionStart, end: sourceEl.selectionEnd,
         hasSel: document.activeElement === sourceEl
       };
     }
     var blocks = collectBlocks();
+    var gaps = collectGaps();
     var sel = editingSelection();
     var offsets = absoluteOffsets(blocks, sel);
     return {
       text: null,
-      blocks: blocks, trail: trailingNewline,
+      blocks: blocks, gaps: gaps, trail: trailingNewlines,
       start: offsets.start, end: offsets.end, hasSel: offsets.has
     };
   }
@@ -1640,7 +1707,7 @@
   function stateText(snap) {
     if (typeof snap.text === 'string')
       return snap.text;
-    return snap.blocks.join('\n\n') + (snap.trail ? '\n' : '');
+    return layoutText(snap.blocks, snap.gaps, snap.trail);
   }
 
   function sameState(a, b) {
@@ -1650,6 +1717,14 @@
         return false;
       for (var i = 0; i < a.blocks.length; i++)
         if (a.blocks[i] !== b.blocks[i])
+          return false;
+      // 块间空行也是文档内容：只改空行数量同样要落一个撤销步
+      var gapsA = a.gaps || [];
+      var gapsB = b.gaps || [];
+      if (gapsA.length !== gapsB.length)
+        return false;
+      for (var g = 0; g < gapsA.length; g++)
+        if (gapsA[g] !== gapsB[g])
           return false;
       return true;
     }
@@ -1694,29 +1769,35 @@
     }, COALESCE_MS);
   }
 
-  function mountBlocks(blocks) {
+  // gaps 省略时全部按默认间隔（新建块之间的 2 个换行），供只关心文本的调用方使用
+  function mountBlocks(blocks, gaps, trail) {
     closeLangMenu();
     root.innerHTML = '';
     for (var i = 0; i < blocks.length; i++) {
       var el = document.createElement('div');
       el.className = 'block';
       el.setAttribute('contenteditable', 'true');
+      if (gaps)
+        el.dataset.gap = String(gapBefore(gaps, i));
       renderBlock(el, blocks[i]);
       root.appendChild(el);
     }
+    if (typeof trail === 'number')
+      trailingNewlines = trail > 0 ? trail : 0;
     // 全部挂载完成、文档结构稳定后再归一化，避免逐个元素强制布局
     normalizeCodeScrolls();
     postWordCount();
   }
 
   // 绝对偏移 → 所在块下标与块内偏移（undo/redo 恢复选区用）
-  function locateBlock(blocks, absStart) {
+  function locateBlock(blocks, gaps, absStart) {
     var base = 0;
     for (var i = 0; i < blocks.length; i++) {
+      base += gapBefore(gaps, i);
       var stop = base + blocks[i].length;
       if (absStart <= stop || i === blocks.length - 1)
         return { index: i, start: Math.max(0, absStart - base) };
-      base = stop + 2;
+      base = stop;
     }
     return { index: blocks.length - 1, start: 0 };
   }
@@ -1727,11 +1808,13 @@
 
     if (mode === 'source') {
       sourceEl.value = stateText(snap);
-      trailingNewline = snap.trail;
+      trailingNewlines = snap.trail > 0 ? snap.trail : 0;
     } else {
-      var blocks = snap.blocks ? snap.blocks.slice() : splitSource(stateText(snap));
-      trailingNewline = snap.trail;
-      mountBlocks(blocks);
+      var layout = snap.blocks
+        ? { blocks: snap.blocks.slice(), gaps: snap.gaps || [], trail: snap.trail }
+        : splitSourceLayout(stateText(snap));
+      var blocks = layout.blocks;
+      mountBlocks(blocks, layout.gaps, layout.trail);
 
       if (snap.hasSel) {
         var base = 0;
@@ -1739,6 +1822,7 @@
         var start = 0;
         var end = 0;
         for (var i = 0; i < blocks.length; i++) {
+          base += gapBefore(layout.gaps, i);
           var stop = base + blocks[i].length;
           if (snap.start <= stop || i === blocks.length - 1) {
             index = i;
@@ -1746,7 +1830,7 @@
             end = Math.max(start, Math.min(snap.end, stop) - base);
             break;
           }
-          base = stop + 2;
+          base = stop;
         }
         if (index >= 0 && root.children[index]) {
           var target = root.children[index];
@@ -2523,14 +2607,15 @@
       } catch (error) { /* ignore */ }
     } else {
       mode = 'wysiwyg';
-      trailingNewline = /\n$/.test(text);
-      var blocks = splitSource(text);
-      mountBlocks(blocks);
+      var layout = splitSourceLayout(text);
+      var blocks = layout.blocks;
+      mountBlocks(blocks, layout.gaps, layout.trail);
       document.body.classList.remove('source-mode');
       suppressEvents = false;
 
       var base = 0;
       for (var i = 0; i < blocks.length; i++) {
+        base += gapBefore(layout.gaps, i);
         var stop = base + blocks[i].length;
         if (caret <= stop || i === blocks.length - 1) {
           var target = root.children[i];
@@ -2550,7 +2635,7 @@
           }
           break;
         }
-        base = stop + 2;
+        base = stop;
       }
     }
 
@@ -3369,9 +3454,8 @@
   }
 
   function insertMultilinePaste(el, text, baselineDone) {
-    var chunks = String(text).replace(/\r\n?/g, '\n').replace(/\n+$/, '').split(/\n[ \t]*\n+/);
-    if (!chunks.length)
-      chunks = [''];
+    var layout = splitSourceLayout(String(text).replace(/\r\n?/g, '\n').replace(/\n+$/, ''));
+    var chunks = layout.blocks;
     if (!baselineDone)
       commitHistory();
     document.execCommand('insertHTML', false, multilinePasteHtml(chunks[0]));
@@ -3380,6 +3464,8 @@
       var neo = document.createElement('div');
       neo.className = 'block';
       neo.setAttribute('contenteditable', 'true');
+      // 粘贴文本里的连续空行原样保留，不压回 2 个换行
+      neo.dataset.gap = String(gapBefore(layout.gaps, i));
       root.insertBefore(neo, last.nextSibling);
       renderBlock(neo, '');
       neo.innerHTML = multilinePasteHtml(chunks[i]);
@@ -4893,12 +4979,29 @@
 
   /* ---------- 源码模式：同一套规则作用于 textarea 文本 ---------- */
 
+  // 段落起点：回退到空白行之后。连续多个空行要整段跨过，不能只退两格，
+  // 否则保存了 3 个换行的文档在源码模式下转换会吃掉一个换行。
+  function paragraphStart(text, position) {
+    var gap = text.lastIndexOf('\n\n', Math.max(0, position - 1));
+    if (gap < 0)
+      return 0;
+    while (gap < text.length && text.charAt(gap) === '\n')
+      gap++;
+    return gap;
+  }
+
+  function paragraphEnd(text, position) {
+    var gap = text.indexOf('\n\n', position);
+    if (gap < 0)
+      return text.length;
+    while (gap > 0 && text.charAt(gap - 1) === '\n')
+      gap--;
+    return gap;
+  }
+
   function sourceParagraph(text, start, end) {
-    var from = text.lastIndexOf('\n\n', Math.max(0, start - 1));
-    from = from < 0 ? 0 : from + 2;
-    var to = text.indexOf('\n\n', end);
-    if (to < 0)
-      to = text.length;
+    var from = paragraphStart(text, start);
+    var to = paragraphEnd(text, end);
     return { start: from, end: to, text: text.slice(from, to) };
   }
 
@@ -4928,7 +5031,7 @@
     // 多行选区：按当前段落范围整体转换（与块模型一致）
     var range = (start === end || /^\s*$/.test(text.slice(start, end)))
       ? sourceParagraph(text, start, end)
-      : { start: text.lastIndexOf('\n\n', Math.max(0, start - 1)) + 2 || 0, end: text.indexOf('\n\n', end) };
+      : { start: paragraphStart(text, start), end: paragraphEnd(text, end) };
     if (range.end < 0)
       range.end = text.length;
     if (range.start < 0)
@@ -5594,8 +5697,11 @@
     for (var k = 0; k < editable.length; k++)
       editable[k].removeAttribute('contenteditable');
     var blocks = body.querySelectorAll('.block');
-    for (var m = 0; m < blocks.length; m++)
+    for (var m = 0; m < blocks.length; m++) {
       blocks[m].classList.remove('editing', 'selected', 'focus');
+      // 块间空行是编辑器内部状态，不写进导出件
+      blocks[m].removeAttribute('data-gap');
+    }
     // 导出件同样生成标题锚点：文档里的 #标题 链接在导出 HTML 中也能跳
     var seen = {};
     for (var n = 0; n < blocks.length; n++) {
@@ -5735,14 +5841,14 @@
       closeTurnMenu();
       closeLangMenu();
       var normalized = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n');
-      trailingNewline = /\n$/.test(normalized);
 
       suppressEvents = true;
       if (mode === 'source') {
         sourceEl.value = normalized;
+        trailingNewlines = trailingNewlineCount(normalized);
       } else {
-        var chunks = splitSource(normalized);
-        mountBlocks(chunks);
+        var layout = splitSourceLayout(normalized);
+        mountBlocks(layout.blocks, layout.gaps, layout.trail);
       }
       suppressEvents = false;
 
@@ -5768,7 +5874,7 @@
     markSaved: function (text) {
       var normalized = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n');
       savedText = normalized;
-      trailingNewline = /\n$/.test(normalized);
+      trailingNewlines = trailingNewlineCount(normalized);
       scheduleDirty();
     },
     requestSnapshot: function () {
