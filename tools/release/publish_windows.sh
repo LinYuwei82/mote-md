@@ -46,6 +46,13 @@ if [ -n "$NOTES_URL" ]; then
     *) echo "NOTES_URL 必须是绝对 http(s) 地址：$NOTES_URL" >&2; exit 2 ;;
   esac
 fi
+# 未显式指定时，若仓库里有 docs/release-notes-<版本>.html 就自动带上并上传；
+# 缺页则不写 notes_url，避免客户端出现死链。
+NOTES_FILE=""
+if [ -z "$NOTES_URL" ] && [ -f "$REPO_ROOT/docs/release-notes-$VERSION.html" ]; then
+  NOTES_FILE="$REPO_ROOT/docs/release-notes-$VERSION.html"
+  NOTES_URL="$CDN_DOMAIN/$PRODUCT_DIR/release-notes-$VERSION.html"
+fi
 
 # ---- 定位产物 ----
 ZIP_PATH="${ZIP_PATH:-$REPO_ROOT/dist/Mote-$VERSION-win64-portable.zip}"
@@ -178,6 +185,10 @@ else
   if [ -n "$SETUP_URL" ]; then
     oss_upload "$SETUP_PATH" "$PRODUCT_DIR/$SETUP_BASENAME" \
       "public, max-age=31536000, immutable" "application/octet-stream"
+  fi
+  if [ -n "$NOTES_FILE" ]; then
+    oss_upload "$NOTES_FILE" "$PRODUCT_DIR/release-notes-$VERSION.html" \
+      "public, max-age=3600" "text/html; charset=utf-8"
   fi
   oss_upload "$MANIFEST_LOCAL" "$MANIFEST_KEY" \
     "no-cache, max-age=60" "application/json"

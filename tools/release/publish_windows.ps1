@@ -156,9 +156,17 @@ Write-Host ""
 Write-Host "[3/6] 生成 windows.json"
 $manifestPath = Join-Path $root "dist\windows.json"
 # 绿色包是默认更新包；安装版另给 setup_* 三字段，客户端按安装形态二选一。
-# notes_url 指向 OSS 上对应的发布说明页面（由发布者另行上传），可选；
-# 客户端弹窗里 notes_url 非空时会出现「查看完整更新说明…」超链接。
-$NotesUrl = "$CdnDomain/$ProductDir/release-notes-$Version.html"
+# notes_url 只在本地存在 docs\release-notes-<版本>.html 时才写，并随本次发布一起上传；
+# 缺页时不写该字段，客户端就不会出现「查看完整更新说明…」的死链。
+$NotesFile = Join-Path $root "docs\release-notes-$Version.html"
+$NotesUrl = ""
+$NotesKey = ""
+if (Test-Path -LiteralPath $NotesFile) {
+    $NotesKey = "$ProductDir/release-notes-$Version.html"
+    $NotesUrl = "$CdnDomain/$NotesKey"
+} else {
+    Write-Host "  提示：未找到 docs\release-notes-$Version.html，清单不写 notes_url"
+}
 $manifestObject = [ordered]@{
     version      = $Version
     url          = $DownloadUrl
@@ -166,8 +174,8 @@ $manifestObject = [ordered]@{
     sha256       = $Sha256
     min_os       = $MinOs
     published_at = $PublishedAt
-    notes_url    = $NotesUrl
 }
+if ($NotesUrl) { $manifestObject["notes_url"] = $NotesUrl }
 if ($SetupFull) {
     $manifestObject["setup_url"] = $SetupUrl
     $manifestObject["setup_size"] = $SetupSize
@@ -222,10 +230,17 @@ if setup_key:
     bkt.put_object_from_file(setup_key, os.environ["UPLOAD_SETUP_PATH"],
                              headers={"Cache-Control": "public, max-age=31536000, immutable",
                                       "Content-Type": "application/octet-stream"})
+notes_key = os.environ.get("UPLOAD_NOTES_KEY")
+if notes_key:
+    bkt.put_object_from_file(notes_key, os.environ["UPLOAD_NOTES_PATH"],
+                             headers={"Cache-Control": "public, max-age=3600",
+                                      "Content-Type": "text/html; charset=utf-8"})
 print("  zip          -> " + os.environ["UPLOAD_ZIP_KEY"])
 print("  windows.json -> " + os.environ["UPLOAD_MANIFEST_KEY"])
 if setup_key:
     print("  setup        -> " + setup_key)
+if notes_key:
+    print("  release-notes-> " + notes_key)
 '@
     [IO.File]::WriteAllText($uploadScript, $pythonCode, (New-Object System.Text.UTF8Encoding($false)))
 
@@ -239,6 +254,13 @@ if setup_key:
     } else {
         Remove-Item Env:UPLOAD_SETUP_PATH -ErrorAction SilentlyContinue
         Remove-Item Env:UPLOAD_SETUP_KEY -ErrorAction SilentlyContinue
+    }
+    if ($NotesKey) {
+        $env:UPLOAD_NOTES_PATH = $NotesFile
+        $env:UPLOAD_NOTES_KEY = $NotesKey
+    } else {
+        Remove-Item Env:UPLOAD_NOTES_PATH -ErrorAction SilentlyContinue
+        Remove-Item Env:UPLOAD_NOTES_KEY -ErrorAction SilentlyContinue
     }
     & $python $uploadScript
     if ($LASTEXITCODE -ne 0) { Fail "上传失败（python 退出码 $LASTEXITCODE）" }
