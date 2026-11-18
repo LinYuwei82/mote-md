@@ -54,8 +54,17 @@ jobs:
       - name: 构建
         run: |
           $build = (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmm')
-          cmake -S native -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DMOTE_BUILD=$build
+          if (-not $build) { throw '构建号为空' }
+          Write-Host "构建号: $build"
+          # 参数整体加引号：不引号时 PowerShell 会把 -DMOTE_BUILD=$build 原样传给 cmake
+          cmake -S native -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release "-DMOTE_BUILD=$build"
           cmake --build build-native
+
+      - name: 确认构建号已进入 CMake
+        run: |
+          $line = Select-String -Path build-native/CMakeCache.txt -Pattern '^MOTE_BUILD:'
+          Write-Host $line
+          if ($line -notmatch ':STRING=\d{12}$') { throw 'MOTE_BUILD 未生效' }
 
       - name: 单元测试
         run: ctest --test-dir build-native --output-on-failure

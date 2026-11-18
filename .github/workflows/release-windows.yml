@@ -76,7 +76,12 @@ jobs:
         run: |
           # 构建号必须每次唯一：同版本重发时客户端靠它判断「有新的构建」。
           $build = (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmm')
-          cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release -DMOTE_BUILD=$build
+          if (-not $build) { throw '构建号为空' }
+          Write-Host "构建号: $build"
+          # 参数整体加引号：不引号时 PowerShell 会把 -DMOTE_BUILD=$build 原样传给 cmake
+          cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release "-DMOTE_BUILD=$build"
+          $cache = Select-String -Path build-native-ninja/CMakeCache.txt -Pattern '^MOTE_BUILD:'
+          if ($cache -notmatch ':STRING=\d{12}$') { throw 'MOTE_BUILD 未生效' }
           cmake --build build-native-ninja
 
       - name: 打绿色包
