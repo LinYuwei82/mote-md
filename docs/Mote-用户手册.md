@@ -479,7 +479,7 @@ Mote 已通过 Apple 公证（Notarized Developer ID）。macOS 14+ 在 Gatekeep
 
 ### Q：更新进度很慢 / 失败？
 
-- 检查网络：更新包托管在阿里云 OSS（`oss-cn-hongkong`），走 `dl.xiaotu.online` CDN
+- 检查网络：更新包托管在阿里云 OSS（`oss-cn-hongkong`），通过 `dl.xiaotu.online` 直连访问
 - macOS 用户如果看到 Sparkle 自动重启后失败，通常是隔离路径（App Translocation）问题——把 Mote 拖进「应用程序」后重试
 
 ### Q：Windows 绿色版怎么更新？

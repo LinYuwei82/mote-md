@@ -250,7 +250,7 @@ else
   echo "  GET $APPCAST_URL → HTTP $CODE"
   [ "$CODE" = "200" ] && grep -q "edSignature" /tmp/mote-appcast-check.xml \
     && echo "  ✓ 线上 appcast 含 edSignature" \
-    || echo "  ✗ 线上 appcast 异常，请检查 CDN 缓存或上传结果"
+    || echo "  ✗ 线上 appcast 异常，请检查上传结果（OSS 直连无 CDN，源站即时生效）"
   rm -f /tmp/mote-appcast-check.xml
 
   CODE="$(curl -s -o /tmp/mote-manifest-check.json -w '%{http_code}' "$MANIFEST_URL")"
@@ -260,7 +260,7 @@ else
     && grep -q "\"sha256\":[[:space:]]*\"$DMG_SHA256\"" /tmp/mote-manifest-check.json; then
     echo "  ✓ 线上 manifest.json 版本与 SHA256 均与产物一致"
   else
-    echo "  ✗ 线上 manifest.json 异常，请检查 CDN 缓存或上传结果"
+    echo "  ✗ 线上 manifest.json 异常，请检查上传结果（OSS 直连无 CDN，源站即时生效）"
   fi
   rm -f /tmp/mote-manifest-check.json
   echo "  -- 统一门禁 verify-live --"

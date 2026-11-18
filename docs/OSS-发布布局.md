@@ -304,10 +304,9 @@ python3 tools/release/guard.py verify-live --product xiaotu --kind win \
 
 ## 九、注意事项
 
-1. **安装包是 `immutable`**：同名覆盖不会生效，换内容必须升版本号；只改清单不换包会被 CDN 继续返回旧文件。
-2. **清单 60 秒生效**：发布后等 1 分钟再验证；下载页版本号由 `site.js` 自动读取，无需改 HTML。
+1. **安装包是 `immutable`**：同名覆盖不会生效，换内容必须升版本号。`dl.xiaotu.online` 是 OSS 自定义域名（CNAME 直连，**无 CDN 层**），上传即生效；`Cache-Control` 只影响客户端侧缓存。
+2. **清单生效**：源站上传即生效；客户端可能因 `max-age=60` 缓存最多 1 分钟，验证时等 1 分钟或加时间戳。下载页版本号由 `site.js` 自动读取，无需改 HTML。
 3. **发布脚本会校验产物**：Mote 校验 dmg 内 `SUFeedURL` 与 appcast 地址一致；guard（v2）校验绿色包内壳 exe 含当前 `manifest.json` 地址、清单 Ed25519 签名与产物 SHA256；不一致直接拒绝上传。
-4. **DevCard Windows 当前 1.2.5**，macOS 当前 1.2.4（Windows 侧 1.2.4 的包曾被 CI 覆盖，已用 1.2.5 重新发布）。
-5. **小兔 Windows 1.0.0 包待重打**：壳内地址为旧路径；仓库已升到 1.0.1，待通过 `release-windows.yml` 发布（私有仓库需先修 Actions 额度/账单）。
+4. **三个产品已全部迁移到 v2**：当前版本 mote 1.0.3、xiaotu 1.0.2、devcard 1.2.6（macOS + Windows 双平台）。
 6. `dl.xiaotu.online/logs/` 下是 OSS 每小时访问日志，属系统产出，不在发布范围内。
 7. 桶根的 `devcard/`、`mote/`、`xiaotu/updates/` 等是控制台创建的 0 字节目录占位对象，可忽略。
