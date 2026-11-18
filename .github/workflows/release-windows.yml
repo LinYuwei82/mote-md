@@ -74,7 +74,9 @@ jobs:
 
       - name: 构建原生外壳
         run: |
-          cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release -DMOTE_BUILD=${{ env.BUILD }}
+          # 构建号必须每次唯一：同版本重发时客户端靠它判断「有新的构建」。
+          $build = (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmm')
+          cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release -DMOTE_BUILD=$build
           cmake --build build-native-ninja
 
       - name: 打绿色包
