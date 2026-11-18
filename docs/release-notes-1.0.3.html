@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mote v1.0.2 · 发布说明</title>
+<style>
+  :root {
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --text: #141821;
+    --muted: #5f6880;
+    --accent: #4f46e5;
+    --border: #e5e7ef;
+    --warn-text: #b45309;
+    --warn-bg: #fff8ed;
+    --warn-border: #fbe0b4;
+    --link: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d12; --card: #12151d; --text: #e8eaf1; --muted: #9aa3b8;
+      --accent: #6366f1; --border: #232838; --warn-text: #fbbf24;
+      --warn-bg: #2a2009; --warn-border: #4a3410; --link: #60a5fa;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--sans); background: var(--bg); color: var(--text);
+    line-height: 1.7; margin: 0; padding: 0;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 28px 80px; }
+  header { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+  .label {
+    display: inline-block; padding: 4px 12px; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: rgba(79,70,229,.10); border-radius: 999px;
+    letter-spacing: .04em;
+  }
+  h1 { font-size: 34px; margin: 18px 0 8px; letter-spacing: -.01em; }
+  .tagline { color: var(--muted); font-size: 15px; }
+  h2 {
+    font-size: 20px; margin: 40px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); letter-spacing: -.005em;
+  }
+  h3 { font-size: 16px; margin: 22px 0 8px; }
+  p, li { font-size: 15px; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono); background: rgba(79,70,229,.08); padding: 2px 6px;
+    border-radius: 4px; font-size: 13px;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .warn {
+    background: var(--warn-bg); border: 1px solid var(--warn-border);
+    color: var(--warn-text); border-radius: 8px; padding: 14px 18px; margin: 18px 0;
+    font-size: 14px;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0 24px; font-size: 14px;
+  }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  .download-btn {
+    display: inline-block; margin-top: 10px; margin-right: 10px;
+    background: var(--accent); color: #fff !important; padding: 10px 20px;
+    border-radius: 8px; font-weight: 500;
+  }
+  .download-btn:hover { opacity: .9; text-decoration: none; }
+  footer {
+    margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="label">RELEASE NOTES</span>
+  <h1>Mote v1.0.3</h1>
+  <p class="tagline">在线更新改用统一清单 · 2026-11-18</p>
+</header>
+
+<h2>本版重点</h2>
+<p>这一版改的是"应用怎么检查更新"，编辑与导出功能与 1.0.2 完全一致，没有需要适应的行为变化。</p>
+
+<h2>更新链路变化</h2>
+<table>
+  <tr><th>项</th><th>1.0.3 之前</th><th>1.0.3</th></tr>
+  <tr>
+    <td>清单文件</td>
+    <td>两个平台各一份（<code>latest.json</code> / <code>windows.json</code>）</td>
+    <td>双平台合并为一份 <code>manifest.json</code>（Schema v2）</td>
+  </tr>
+  <tr>
+    <td>清单校验</td>
+    <td>只校验安装包的 SHA256</td>
+    <td>清单本身先做 Ed25519 验签，验签不通过直接放弃本次更新</td>
+  </tr>
+  <tr>
+    <td>签名实现</td>
+    <td>—</td>
+    <td>内置 TweetNaCl 实现，不引入第三方运行时依赖</td>
+  </tr>
+  <tr>
+    <td>macOS 签名密钥</td>
+    <td>与 Sparkle 共用一把</td>
+    <td>清单签名与 Sparkle 签名各用一把，互不影响</td>
+  </tr>
+</table>
+
+<h2>升级方式</h2>
+<h3>从 1.0.2 手动升级到 1.0.3</h3>
+<p>1.0.2 及更早的客户端读取的是已经下线的旧清单，无法自动发现 1.0.3，请手动下载本版安装包覆盖安装一次。从 1.0.3 起后续版本都能自动更新。</p>
+<h3>之后</h3>
+<p>启动 10 秒后自动检查一次，之后每 24 小时一次；也可以走菜单「检查更新…」手动触发。</p>
+
+<h2>系统要求</h2>
+<ul>
+  <li>macOS 14（Sonoma）或更高，Apple Silicon</li>
+  <li>Windows 10 或更高（x64），需要 WebView2 运行时（Windows 11 自带）</li>
+</ul>
+
+<h2>完整性校验</h2>
+<p>各安装包的 <code>size</code> 与 <code>sha256</code> 以更新清单为准：
+<a href="https://dl.xiaotu.online/mote/updates/stable/manifest.json">updates/stable/manifest.json</a>。
+清单可再用发布公钥验签（方法见 <code>docs/更新清单Schema-v2.md</code>）。</p>
+
+<div class="warn">
+  安装包未做 Windows 代码签名。首次运行时 Windows 可能提示「未知发布者」，点「更多信息 → 仍要运行」即可。
+</div>
+
+<footer>
+  Mote · AGPL-3.0 · <a href="https://gitee.com/lin-yuwei168/mote-md">Gitee</a> ·
+  <a href="https://github.com/LinYuwei82/mote-md">GitHub</a>
+</footer>
+
+</div>
+</body>
+</html>

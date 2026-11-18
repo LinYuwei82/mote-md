@@ -111,6 +111,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | `devcard/manual.pdf` | 5,563,312 | `application/pdf` | `public, max-age=86400` |
 | `xiaotu/manual.pdf` | 3,702,580 | `application/pdf` | `public, max-age=86400` |
 | `mote/manual.pdf` | 8,140,873 | `application/pdf` | `public, max-age=86400` |
+| `mote/release-notes-1.0.3.html` | 4,639 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.2.html` | 5,664 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.1.html` | 7,453 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.0.html` | 9,184 | `text/html; charset=utf-8` | `public, max-age=3600` |
@@ -121,7 +122,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 https://dl.xiaotu.online/devcard/manual.pdf
 https://dl.xiaotu.online/xiaotu/manual.pdf
 https://dl.xiaotu.online/mote/manual.pdf
-https://dl.xiaotu.online/mote/release-notes-1.0.2.html
+https://dl.xiaotu.online/mote/release-notes-1.0.3.html
 ```
 
 > 发布说明已随发布自动上传：`publish_windows.sh` / `.ps1` 检测到
