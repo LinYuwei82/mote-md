@@ -62,9 +62,10 @@ jobs:
 
       - name: 确认构建号已进入 CMake
         run: |
-          $line = Select-String -Path build-native/CMakeCache.txt -Pattern '^MOTE_BUILD:'
-          Write-Host $line
-          if ($line -notmatch ':STRING=\d{12}$') { throw 'MOTE_BUILD 未生效' }
+          $cache = Get-Content build-native/CMakeCache.txt -Raw
+          $stamped = [regex]::Match($cache, 'MOTE_BUILD:[A-Z]+=(\d+)').Groups[1].Value
+          Write-Host "cache 中的构建号: $stamped"
+          if ($stamped -notmatch '^\d{12}$') { throw "MOTE_BUILD 未生效: '$stamped'" }
 
       - name: 单元测试
         run: ctest --test-dir build-native --output-on-failure
