@@ -106,14 +106,14 @@ Qt 构建与原生构建共用 `resources/web/` 与 `core/`；版本号仍以 `M
 
 ```bash
 bash packaging/package_macos.sh --native --dmg   # 签名 + 公证 + DMG
-bash packaging/publish_macos.sh                  # 公证门禁 → EdDSA 签名 → appcast + latest.json → 上传 → 线上校验
+bash tools/release/publish_macos.sh                  # 公证门禁 → EdDSA 签名 → appcast + latest.json → 上传 → 线上校验
 NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
-  bash packaging/publish_macos.sh                # 同上，并在 latest.json 写入 notes_url
+  bash tools/release/publish_macos.sh                # 同上，并在 latest.json 写入 notes_url
 ```
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
-powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1   # 校验 → SHA256 → windows.json → 上传 zip/安装包/清单 → 线上校验
+powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1   # 校验 → SHA256 → windows.json → 上传 zip/安装包/清单 → 线上校验
 ```
 
 在 macOS 上发布 Windows 包时用等价的 bash 脚本（读同一份 `~/.config/xiaotu-updates/.env`）：
@@ -122,7 +122,7 @@ powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1   # 校�
 ZIP_PATH=dist/Mote-1.0.0-win64-portable.zip \
 SETUP_PATH=dist/Mote-Setup-1.0.0.exe \
 NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
-  bash packaging/publish_windows.sh              # windows.json → 上传 zip/安装包/清单 → 线上校验
+  bash tools/release/publish_windows.sh              # windows.json → 上传 zip/安装包/清单 → 线上校验
 ```
 
 - 官网与下载页统一由 `web/` 维护：ECS 用 `deploy_site.sh` 发布，备案前的 OSS 镜像用 `publish_site_oss.sh` 发布。旧的单页 `site/index.html` 与 `publish_site.ps1` 已退役，`dl.xiaotu.online` 根路径只做跳转，不再承载页面。
@@ -139,11 +139,11 @@ NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
 官网是 `web/` 下的多页静态站（首页、三款产品页、下载页、文档页、隐私页、404、sitemap 与 robots）。正式站托管在 ECS 的 nginx 上；备案未通过期间用独立的 OSS 桶 `xiaotu-site` 做镜像，走 `pre.xiaotu.online`：
 
 ```bash
-bash packaging/deploy_site.sh                    # rsync web/ → ECS:/var/www/xiaotu
-bash packaging/publish_site_oss.sh               # 同步 web/ → OSS 桶 xiaotu-site（pre 镜像）
+bash tools/release/deploy_site.sh                    # rsync web/ → ECS:/var/www/xiaotu
+bash tools/release/publish_site_oss.sh               # 同步 web/ → OSS 桶 xiaotu-site（pre 镜像）
 bash packaging/renew_site_cert.sh                # 续期 pre 域名证书并更新到 OSS
-SKIP_LINK_CHECK=1 bash packaging/deploy_site.sh  # 跳过死链门禁（不推荐）
-DEPLOY_HOST=user@host bash packaging/deploy_site.sh
+SKIP_LINK_CHECK=1 bash tools/release/deploy_site.sh  # 跳过死链门禁（不推荐）
+DEPLOY_HOST=user@host bash tools/release/deploy_site.sh
 ```
 
 - 发布前做本地完整性检查（入口页、下载页、样式、脚本、图标）与死链门禁：页面里指向 `dl.xiaotu.online` 的下载链接必须全部 200，否则直接失败。

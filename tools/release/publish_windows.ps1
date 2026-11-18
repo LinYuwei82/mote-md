@@ -18,9 +18,9 @@
 # 依赖：python + oss2（python -m pip install oss2），凭据用环境变量或凭据文件
 #
 # 用法：
-#   powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1
-#   powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1 -SkipUpload
-#   powershell -ExecutionPolicy Bypass -File packaging\publish_windows.ps1 -ZipPath dist\x.zip
+#   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1
+#   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -SkipUpload
+#   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -ZipPath dist\x.zip
 
 param(
     [string]$ZipPath = "",
@@ -34,7 +34,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 function Fail([string]$message) {
     Write-Host "[失败] $message"

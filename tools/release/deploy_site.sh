@@ -2,12 +2,12 @@
 # 把 web/ 同步到 ECS 的站点目录（https://xiaotu.online 的源）。
 #
 # 只发布静态页面：不涉及 OSS 上的安装包、手册与更新清单（那些仍由
-# packaging/publish_*.sh 与 Windows 侧 publish_site.ps1 负责）。
+# tools/release/publish_*.sh 与 Windows 侧 publish_site.ps1 负责）。
 #
 # 用法：
-#   packaging/deploy_site.sh                        # 用默认地址
-#   DEPLOY_HOST=deploy@1.2.3.4 packaging/deploy_site.sh
-#   SKIP_LINK_CHECK=1 packaging/deploy_site.sh      # 跳过死链门禁
+#   tools/release/deploy_site.sh                        # 用默认地址
+#   DEPLOY_HOST=deploy@1.2.3.4 tools/release/deploy_site.sh
+#   SKIP_LINK_CHECK=1 tools/release/deploy_site.sh      # 跳过死链门禁
 #
 # 前置条件（服务器只需做一次）：
 #   1. 建 deploy 用户，把发布机的公钥写进 ~deploy/.ssh/authorized_keys
@@ -21,7 +21,7 @@ TARGET="${DEPLOY_PATH:-/var/www/xiaotu}"
 PORT="${DEPLOY_PORT:-22}"
 SKIP_LINK_CHECK="${SKIP_LINK_CHECK:-0}"
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOURCE="$REPO_ROOT/web/"
 
 # ---- ① 本地完整性：缺任何一个都说明 web/ 被改动过，先停下 ----

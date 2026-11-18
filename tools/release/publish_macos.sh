@@ -20,13 +20,13 @@
 # 依赖：Sparkle 发行包里的 bin/sign_update、python3 + oss2、spctl
 #
 # 用法：
-#   packaging/publish_macos.sh                    # 完整发布
-#   SKIP_UPLOAD=true packaging/publish_macos.sh   # 只本地生成清单，不碰 OSS
-#   DMG_PATH=/path/to/x.dmg packaging/publish_macos.sh
+#   tools/release/publish_macos.sh                    # 完整发布
+#   SKIP_UPLOAD=true tools/release/publish_macos.sh   # 只本地生成清单，不碰 OSS
+#   DMG_PATH=/path/to/x.dmg tools/release/publish_macos.sh
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 VERSION="$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p' Mote.pro | head -1)"

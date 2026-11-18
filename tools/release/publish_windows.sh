@@ -15,15 +15,15 @@
 #   oss://<bucket>/mote/updates/stable/windows.json
 #
 # 用法：
-#   packaging/publish_windows.sh                          # 从 dist/ 自动找 zip
+#   tools/release/publish_windows.sh                          # 从 dist/ 自动找 zip
 #   ZIP_PATH=/path/to/portable.zip \
 #   SETUP_PATH=/path/to/setup.exe \
-#   packaging/publish_windows.sh
-#   NOTES_URL=https://... packaging/publish_windows.sh    # 附带发布说明链接
+#   tools/release/publish_windows.sh
+#   NOTES_URL=https://... tools/release/publish_windows.sh    # 附带发布说明链接
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 VERSION="${VERSION:-$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p' Mote.pro | head -1)}"

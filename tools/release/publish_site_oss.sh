@@ -8,8 +8,8 @@
 # 只适合 curl 校验；给人看必须先绑定自定义域名（如 pre.xiaotu.online）。
 #
 # 用法：
-#   packaging/publish_site_oss.sh
-#   SITE_BUCKET=xiaotu-site packaging/publish_site_oss.sh
+#   tools/release/publish_site_oss.sh
+#   SITE_BUCKET=xiaotu-site tools/release/publish_site_oss.sh
 #
 # 依赖：python3 + oss2。系统 Python 受 PEP 668 保护不能直接装，
 # 推荐用专用虚拟环境：python3 -m venv ~/.venvs/xiaotu-oss &&
@@ -31,7 +31,7 @@ SITE_BUCKET="${SITE_BUCKET:-xiaotu-site}"
 SITE_ENDPOINT="${SITE_ENDPOINT:-https://oss-cn-hongkong.aliyuncs.com}"
 SITE_PUBLIC_URL="${SITE_PUBLIC_URL:-https://$SITE_BUCKET.oss-cn-hongkong.aliyuncs.com}"
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOURCE="$REPO_ROOT/web"
 
 [ -f "$SOURCE/index.html" ] || { echo "找不到 $SOURCE/index.html" >&2; exit 1; }

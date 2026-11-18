@@ -2,7 +2,7 @@
 # Mote · macOS DMG 签名（只签名与生成清单，不上传）
 #
 # 用途：对已经打好的 DMG 生成 Sparkle EdDSA 签名，并在 dist/ 下产出
-# appcast.xml 与 latest.json。上传仍交给 packaging/publish_macos.sh 或手工处理。
+# appcast.xml 与 latest.json。上传仍交给 tools/release/publish_macos.sh 或手工处理。
 #
 # 与 publish_macos.sh 的分工：
 #   sign_macos.sh     只做签名与清单生成：不联网、不需要 OSS 凭据
@@ -208,5 +208,5 @@ cat <<EOF
     1) 把 $DMG_BASENAME 上传到 oss://<bucket>/$PRODUCT_DIR/
     2) 上传 dist/appcast.xml 与 dist/latest.json 到
        oss://<bucket>/$PRODUCT_DIR/updates/$CHANNEL/
-    3) 或直接运行 packaging/publish_macos.sh 走完整发布（会重做签名与校验）
+    3) 或直接运行 tools/release/publish_macos.sh 走完整发布（会重做签名与校验）
 EOF
