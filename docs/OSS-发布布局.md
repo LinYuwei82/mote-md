@@ -23,8 +23,8 @@
 ## 二、自动更新清单（核心）
 
 > Schema v2 **已上线**（2026-11-18，见[更新清单Schema-v2](./更新清单Schema-v2.md)）：
-> 每个产品一个 `manifest.json` 覆盖双平台，Ed25519 签名。`latest.json` / `windows.json`
-> 为 v1 遗留文件，内测用户全部升级到新客户端后再删除；新发布只写 `manifest.json`。
+> 每个产品一个 `manifest.json` 覆盖双平台，Ed25519 签名。
+> v1 清单（`latest.json` / `windows.json`）已于 2026-11-18 全部删除（升级实测全绿后退役）。
 > `appcast.xml`（Sparkle）不在 v2 范围，路径与格式不变。
 
 三个产品的路径规则完全一致，只有产品目录不同：
@@ -47,17 +47,13 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | 对象 | 大小 | Content-Type | Cache-Control |
 |---|---|---|---|
 | `devcard/updates/stable/manifest.json` | 1,260 B | `application/json` | `no-cache, max-age=60` |
-| `devcard/updates/stable/appcast.xml` | 1,269 B | `application/xml; charset=utf-8` | `public, max-age=60` |
-| `devcard/updates/stable/latest.json` | 866 B | `application/json; charset=utf-8` | `public, max-age=60` |
-| `devcard/updates/stable/windows.json` | 851 B | `application/json; charset=utf-8` | `public, max-age=60` |
+| `devcard/updates/stable/appcast.xml` | 1,099 B | `application/xml; charset=utf-8` | `public, max-age=60` |
 | `xiaotu/updates/stable/manifest.json` | 1,253 B | `application/json` | `no-cache, max-age=60` |
-| `xiaotu/updates/stable/appcast.xml` | 710 B | `application/rss+xml` | `no-cache, max-age=60` |
-| `xiaotu/updates/stable/latest.json` | 681 B | `application/json` | `no-cache, max-age=60` |
-| `xiaotu/updates/stable/windows.json` | 900 B | `application/json` | `no-cache, max-age=60` |
+| `xiaotu/updates/stable/appcast.xml` | 714 B | `application/rss+xml` | `no-cache, max-age=60` |
 | `mote/updates/stable/manifest.json` | 1,238 B | `application/json` | `no-cache, max-age=60` |
-| `mote/updates/stable/appcast.xml` | 777 B | `application/rss+xml` | `no-cache, max-age=60` |
-| `mote/updates/stable/latest.json` | 256 B | `application/json` | `no-cache, max-age=60` |
-| `mote/updates/stable/windows.json` | 521 B | `application/json` | `no-cache, max-age=60` |
+| `mote/updates/stable/appcast.xml` | 834 B | `application/rss+xml` | `no-cache, max-age=60` |
+
+> v1 清单（`latest.json` / `windows.json`）已删除，v2 清单与 appcast 是 updates/ 目录下仅有的内容。
 
 > 清单统一 60 秒缓存，发布后最多 1 分钟生效。`appcast.xml` 的 Content-Type 两个产品是 `rss+xml`、DevCard 是 `xml`，均能被 Sparkle 正常解析。
 

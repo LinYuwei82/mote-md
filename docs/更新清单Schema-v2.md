@@ -1,11 +1,10 @@
 # 更新清单 Schema v2（统一设计稿）
 
-> 状态：**已上线**（2026-11-18 三产品双平台全量切换）。
+> 状态：**迁移完成**（2026-11-18 全量上线并退役 v1）。
 > 全链路完成：生成器 `manifest_v2.py`、guard v2 检查、三仓库发布脚本、
 > 三个客户端解析 + Ed25519 验签、下载页改读 manifest.json；
 > 新内测版已发布：mote 1.0.3 / xiaotu 1.0.2 / devcard 1.2.6，
-> 三个 `manifest.json` 均为双平台合并且线上验签通过。
-> 剩余：确认内测用户全部升级后删除 `latest.json` / `windows.json`
+> 升级链路实测全绿后，v1 清单（`latest.json` / `windows.json`）已全部删除
 > （`appcast.xml` 永久保留）。
 > 日期：2026-11-18
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
