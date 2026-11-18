@@ -3,6 +3,7 @@
 // 不链接任何 UI 框架，ctest 直接跑。
 
 #include "core/base64.h"
+#include "core/block_layout.h"
 #include "core/command_table.h"
 #include "core/editor_controller.h"
 #include "core/image_store.h"
@@ -828,6 +829,104 @@ static void testChunkSplitting()
     }
 }
 
+static void testBlockLayout()
+{
+    using mote::BlockLayout;
+    using mote::blockStartOffset;
+    using mote::joinBlocks;
+    using mote::measureBlockGaps;
+
+    const std::vector<std::string> ab = { "A", "B" };
+
+    // 默认排版（一块之间 2 个换行 + 文末 1 个）就是改动前的固定拼法
+    BlockLayout standard;
+    standard.between = { 2 };
+    standard.trailing = 1;
+    CHECK_EQ(joinBlocks(ab, standard), std::string("A\n\nB\n"));
+
+    // 间隔 1/2/3/4 个换行：量出来的间隔要能逐字节拼回原文
+    for (const int newlines : { 1, 2, 3, 4 }) {
+        const std::string text = "A" + std::string(static_cast<size_t>(newlines), '\n') + "B";
+        const mote::MeasuredLayout measured = measureBlockGaps(text, ab);
+        CHECK(measured.ok);
+        CHECK_EQ(measured.layout.between.size(), static_cast<size_t>(1));
+        CHECK_EQ(measured.layout.between.at(0), newlines);
+        CHECK_EQ(joinBlocks(ab, measured.layout), text);
+    }
+
+    // 文首、文末多余空行
+    {
+        const std::string text = "\n\nA\n\nB\n\n\n";
+        const mote::MeasuredLayout measured = measureBlockGaps(text, ab);
+        CHECK(measured.ok);
+        CHECK_EQ(measured.layout.leading, 2);
+        CHECK_EQ(measured.layout.between.at(0), 2);
+        CHECK_EQ(measured.layout.trailing, 3);
+        CHECK_EQ(joinBlocks(ab, measured.layout), text);
+    }
+
+    // 全空文档：没有块，换行全部算文末，不崩溃
+    {
+        const mote::MeasuredLayout measured = measureBlockGaps("\n\n\n", {});
+        CHECK(measured.ok);
+        CHECK_EQ(measured.layout.trailing, 3);
+        CHECK_EQ(joinBlocks({}, measured.layout), std::string("\n\n\n"));
+        CHECK(measureBlockGaps("", {}).ok);
+    }
+
+    // 空块与代码块混合：块内换行不参与间隔统计
+    {
+        const std::vector<std::string> blocks = { "# 标题", "```\nline1\n\nline2\n```", "" };
+        const std::string text = "# 标题\n\n\n```\nline1\n\nline2\n```\n\n";
+        const mote::MeasuredLayout measured = measureBlockGaps(text, blocks);
+        CHECK(measured.ok);
+        CHECK_EQ(measured.layout.between.at(0), 3);
+        // 末尾空块不占字节，紧邻的换行归到文末；拼接结果不变才是硬约束
+        CHECK_EQ(measured.layout.between.at(1), 0);
+        CHECK_EQ(measured.layout.trailing, 2);
+        CHECK_EQ(joinBlocks(blocks, measured.layout), text);
+    }
+
+    // 空块按零长度处理：间隔分布可能与原文不同，但拼接结果不变
+    {
+        const std::vector<std::string> blocks = { "A", "", "B" };
+        const std::string text = "A\n\n\n\nB";
+        const mote::MeasuredLayout measured = measureBlockGaps(text, blocks);
+        CHECK(measured.ok);
+        CHECK_EQ(joinBlocks(blocks, measured.layout), text);
+    }
+
+    // 块偏移：替代前端「每块固定 +2」的累加，指向每块起点
+    {
+        BlockLayout layout;
+        layout.leading = 1;
+        layout.between = { 2, 3 };
+        layout.trailing = 0;
+        const std::vector<std::string> blocks = { "A", "BB", "C" };
+        const std::string text = joinBlocks(blocks, layout);
+        CHECK_EQ(text, std::string("\nA\n\nBB\n\n\nC"));
+        CHECK_EQ(blockStartOffset(blocks, layout, 0), static_cast<size_t>(1));
+        CHECK_EQ(blockStartOffset(blocks, layout, 1), static_cast<size_t>(4));
+        CHECK_EQ(blockStartOffset(blocks, layout, 2), static_cast<size_t>(9));
+        for (std::size_t i = 0; i < blocks.size(); ++i)
+            CHECK_EQ(text.compare(blockStartOffset(blocks, layout, i), blocks[i].size(), blocks[i]), 0);
+        CHECK_EQ(blockStartOffset(blocks, layout, 3), std::string::npos);
+    }
+
+    // between 缺项或为负数时按 0 处理，不产生多余的换行
+    {
+        BlockLayout layout;
+        layout.between = { -3 };
+        CHECK_EQ(joinBlocks(ab, layout), std::string("AB"));
+    }
+
+    // 块文本对不上（顺序错、块外有非换行字符）时明确失败，调用方回退默认间隔
+    CHECK(!measureBlockGaps("B\n\nA", ab).ok);
+    CHECK(!measureBlockGaps("A x B", ab).ok);
+    CHECK(!measureBlockGaps("A\n\nB 尾巴", ab).ok);
+}
+
+
 static void testPdfPending()
 {
     TestHost host;
@@ -958,6 +1057,7 @@ int main()
     testInjectDocumentHook();
     testClipboardImagePaste();
     testChunkSplitting();
+    testBlockLayout();
     testImageMessages();
     testPdfPending();
     testCommandTable();

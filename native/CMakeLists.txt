@@ -41,6 +41,7 @@ target_include_directories(mote_tweetnacl PUBLIC
 # 无 Qt、无平台 API 的核心：macOS 与 Windows 共用
 add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/base64.cpp"
+  "${MOTE_REPO_ROOT}/core/block_layout.cpp"
   "${MOTE_REPO_ROOT}/core/command_table.cpp"
   "${MOTE_REPO_ROOT}/core/editor_controller.cpp"
   "${MOTE_REPO_ROOT}/core/image_store.cpp"
