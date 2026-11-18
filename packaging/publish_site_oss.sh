@@ -11,10 +11,20 @@
 #   packaging/publish_site_oss.sh
 #   SITE_BUCKET=xiaotu-site packaging/publish_site_oss.sh
 #
-# 依赖：python3 + oss2（python3 -m pip install oss2）
+# 依赖：python3 + oss2。系统 Python 受 PEP 668 保护不能直接装，
+# 推荐用专用虚拟环境：python3 -m venv ~/.venvs/xiaotu-oss &&
+# ~/.venvs/xiaotu-oss/bin/pip install oss2（脚本会自动使用它）。
 # 凭据：与其它发布脚本共用 ~/.config/xiaotu-updates/.env
 
 set -euo pipefail
+
+# oss2 装在专用虚拟环境里时自动切换，避免每次手动加 PATH
+PYTHON="${PYTHON:-python3}"
+if ! "$PYTHON" -c 'import oss2' >/dev/null 2>&1; then
+    if [ -x "$HOME/.venvs/xiaotu-oss/bin/python3" ]; then
+        PYTHON="$HOME/.venvs/xiaotu-oss/bin/python3"
+    fi
+fi
 
 OSS_ENV_FILE="${OSS_ENV_FILE:-$HOME/.config/xiaotu-updates/.env}"
 SITE_BUCKET="${SITE_BUCKET:-xiaotu-site}"
@@ -36,7 +46,7 @@ fi
 
 echo "===== 发布 $SOURCE → oss://$SITE_BUCKET"
 
-python3 - "$OSS_ENV_FILE" "$SITE_BUCKET" "$SITE_ENDPOINT" "$SOURCE" <<'PY'
+"$PYTHON" - "$OSS_ENV_FILE" "$SITE_BUCKET" "$SITE_ENDPOINT" "$SOURCE" <<'PY'
 import os
 import sys
 
@@ -52,7 +62,7 @@ for line in open(env_file, encoding="utf-8"):
 try:
     import oss2
 except ImportError:
-    sys.exit("缺少 oss2：python3 -m pip install oss2")
+    sys.exit("缺少 oss2：python3 -m venv ~/.venvs/xiaotu-oss && ~/.venvs/xiaotu-oss/bin/pip install oss2")
 
 auth = oss2.Auth(env["OSS_ACCESS_KEY_ID"], env["OSS_ACCESS_KEY_SECRET"])
 bucket = oss2.Bucket(auth, endpoint, bucket_name)
