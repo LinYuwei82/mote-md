@@ -203,6 +203,14 @@ print(f"  ✓ {ok}  ({ct}, {cc})")
 PY_EOF
 }
 
+# ---- ④b 发布门禁（三仓库共用 tools/release/guard.py）----
+GUARD_PY="${GUARD_PY:-$REPO_ROOT/tools/release/guard.py}"
+GUARD_ARGS=(--product mote --kind mac --channel "$CHANNEL" --file "$DMG_PATH")
+[ "$SKIP_UPLOAD" = "true" ] && GUARD_ARGS+=(--offline)
+echo ""
+echo "===== ④b 发布门禁"
+python3 "$GUARD_PY" preflight "${GUARD_ARGS[@]}"
+
 if [ "$SKIP_UPLOAD" = "true" ]; then
   echo ""
   echo "===== ⑤ [SKIP_UPLOAD] 跳过上传"
@@ -249,6 +257,8 @@ else
     echo "  ✗ 线上 latest.json 异常，请检查 CDN 缓存或上传结果"
   fi
   rm -f /tmp/mote-manifest-check.json
+  echo "  -- 统一门禁 verify-live --"
+  python3 "$GUARD_PY" verify-live "${GUARD_ARGS[@]}"
 fi
 
 echo ""

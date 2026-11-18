@@ -239,6 +239,25 @@ bash mote/tools/release/publish_site_oss.sh            # → pre.xiaotu.online
 bash mote/tools/release/deploy_site.sh                 # → xiaotu.online（ECS）
 ```
 
+### 统一门禁 `guard.py`
+
+三个仓库各有一份**完全相同**的 `tools/release/guard.py`（Python 标准库，无第三方依赖），
+发布脚本会在上传前自动调用 `preflight`、上传后自动调用 `verify-live`：
+
+```bash
+python3 tools/release/guard.py selftest      # CI 每次跑
+python3 tools/release/guard.py preflight --product xiaotu --kind mac --file <dmg>
+python3 tools/release/guard.py verify-live --product xiaotu --kind win \
+  --file <setup.exe> --zip <portable.zip>
+```
+
+它统一校验：产品/通道、文件名、版本单调、同名覆盖风险、清单字段与 SHA256、
+线上 Content-Type，以及 dmg / 绿色包内嵌的更新地址。DevCard 与小兔的 CI
+都有 `release-guard` 作业，阻止规则被改坏。
+
+改 `guard.py` 后必须用 `mote/tools/release/sync_guard.sh` 同步三份并更新各自的
+`guard.sha256`；CI 会先执行 `sha256sum -c`，单仓库私自改动会直接失败。
+
 ## 九、注意事项
 
 1. **安装包是 `immutable`**：同名覆盖不会生效，换内容必须升版本号；只改清单不换包会被 CDN 继续返回旧文件。

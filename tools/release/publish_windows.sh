@@ -87,6 +87,19 @@ else
 fi
 echo "清单地址：  $MANIFEST_URL"
 
+# ---- ⓪ 发布门禁（三仓库共用 tools/release/guard.py）----
+GUARD_PY="${GUARD_PY:-$REPO_ROOT/tools/release/guard.py}"
+GUARD_ARGS=(--product mote --kind win --channel "$CHANNEL")
+if [ -n "$SETUP_BASENAME" ]; then
+  GUARD_ARGS+=(--file "$SETUP_PATH" --zip "$ZIP_PATH" --zip-name "$REMOTE_ZIP_NAME")
+else
+  GUARD_ARGS+=(--file "$ZIP_PATH" --name "$REMOTE_ZIP_NAME")
+fi
+[ "$SKIP_UPLOAD" = "true" ] && GUARD_ARGS+=(--offline)
+echo ""
+echo "===== ⓪ 发布门禁"
+python3 "$GUARD_PY" preflight "${GUARD_ARGS[@]}"
+
 # ---- ① 生成 windows.json ----
 echo ""
 echo "===== ① 生成 windows.json"
@@ -186,6 +199,8 @@ else
     echo "  ✗ 线上 windows.json 异常，请检查 CDN 缓存或上传结果"
   fi
   rm -f /tmp/mote-win-manifest-check.json
+  echo "  -- 统一门禁 verify-live --"
+  python3 "$GUARD_PY" verify-live "${GUARD_ARGS[@]}"
 fi
 
 echo ""
