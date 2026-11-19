@@ -41,7 +41,9 @@ if [ -z "$BUILD" ]; then
   echo "用法：BUILD=202611180930 $0" >&2
   exit 1
 fi
-[[ "$BUILD" =~ ^[0-9]{4,}$ ]] || { echo "非法构建号：$BUILD（应为纯数字，如 202611180930）" >&2; exit 1; }
+# bash 3.2（macOS 系统自带）set -u 下 $BUILD 紧接全角括号会把 0xef 当成变量名的一部分报 unbound variable，
+# 必须用 ${BUILD} 显式界定边界。见 tools/release/test_release_scripts.py 相关用例。
+[[ "$BUILD" =~ ^[0-9]{4,}$ ]] || { echo "非法构建号：${BUILD}（应为纯数字，如 202611180930）" >&2; exit 1; }
 
 CDN_DOMAIN="${CDN_DOMAIN:-https://dl.xiaotu.online}"
 PRODUCT_DIR="${PRODUCT_DIR:-mote}"

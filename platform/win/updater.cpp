@@ -36,6 +36,16 @@
 #define MOTE_BUILD 0
 #endif
 
+#if !defined(MOTE_BUILD_STR)
+#define MOTE_BUILD_STR "0"
+#endif
+
+// 发布门禁用的构建号字符串：guard.py preflight 会在绿色包/安装包的 Mote.exe
+// 里搜索 "MOTE_BUILD=<digits>" 并与 --build 参数比对，防止清单 build 与编译值
+// 不一致导致客户端反复提示同一版本（2026-11-19 mote 1.0.4 即因此重发）。
+static const char kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR;
+[[maybe_unused]] static const char* kBuildStampRef = kBuildStamp;
+
 namespace mote::win {
 
 namespace {

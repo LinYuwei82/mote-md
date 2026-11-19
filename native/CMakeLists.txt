@@ -114,14 +114,19 @@ if(WIN32)
     mote_core user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32
     urlmon windowscodecs winhttp bcrypt)
   # Windows 构建号：同版本清单靠 build 判断是否有新构建；默认 0（未知，跳过
-  # build 比较仅按 version），发布脚本用 -DMOTE_BUILD=202611180530 覆盖
+  # build 比较仅按 version），发布脚本用 -DMOTE_BUILD=202611180530 覆盖。
+  # 同时以字符串形式注入 MOTE_BUILD_STR，客户端 updater.cpp 会在二进制里
+  # 留一条 "MOTE_BUILD=<digits>" 的可搜索 pattern——guard.py preflight 发布
+  # 时会 grep 绿色包/安装包里的 Mote.exe，与 --build 参数比对，防止清单 build
+  # 与编译值不一致导致客户端反复提示同一版本（2026-11-19 mote 1.0.4 即因此重发）。
   if(NOT MOTE_BUILD)
     set(MOTE_BUILD "0")
   endif()
   target_compile_definitions(Mote PRIVATE
     UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00
     MOTE_VERSION="${MOTE_VERSION}"
-    MOTE_BUILD=${MOTE_BUILD})
+    MOTE_BUILD=${MOTE_BUILD}
+    MOTE_BUILD_STR="${MOTE_BUILD}")
   target_compile_options(Mote PRIVATE /utf-8 /W4 /permissive-)
   # 关闭链接器自动生成的 manifest，改用 app.manifest（Common Controls v6）
   target_link_options(Mote PRIVATE /MANIFEST:NO)
@@ -180,12 +185,22 @@ else()
     MACOSX_PACKAGE_LOCATION "Resources")
 
   # Sparkle 自动更新（纯 Sparkle 方案：Info.plist 键 + framework 拷贝 + 一行初始化）
+  # 历史踩坑：检测到缺失时只 WARNING 继续构建，最终 DMG 缺 framework → 自动更新退化
+  # 为浏览器下载（2026-11-19 mote 1.0.4 即因此重发）。默认 WARNING 兼容开发机本地跑不
+  # 起来 Sparkle 的场景；发布脚本 / CI 传 -DMOTE_STRICT_BUILD=ON 升级为 FATAL_ERROR。
   set(MOTE_SPARKLE_FRAMEWORK "${MOTE_REPO_ROOT}/resources/Sparkle.framework")
   if(NOT EXISTS "${MOTE_SPARKLE_FRAMEWORK}/Sparkle")
-    message(WARNING
-      "未找到 Sparkle.framework（期望在 ${MOTE_SPARKLE_FRAMEWORK}），"
-      "自动更新将被禁用。下载地址："
-      "https://github.com/sparkle-project/Sparkle/releases")
+    if(MOTE_STRICT_BUILD)
+      message(FATAL_ERROR
+        "MOTE_STRICT_BUILD=ON 但未找到 Sparkle.framework（期望在 ${MOTE_SPARKLE_FRAMEWORK}）。"
+        "发布流程要求 Sparkle.framework 必须存在，否则自动更新将退化为打开浏览器下载。"
+        "下载：https://github.com/sparkle-project/Sparkle/releases")
+    else()
+      message(WARNING
+        "未找到 Sparkle.framework（期望在 ${MOTE_SPARKLE_FRAMEWORK}），"
+        "自动更新将被禁用。下载地址："
+        "https://github.com/sparkle-project/Sparkle/releases")
+    endif()
     set(MOTE_SPARKLE_ENABLED OFF)
   else()
     set(MOTE_SPARKLE_ENABLED ON)

@@ -74,7 +74,9 @@ fi
 mkdir -p "$DIST_DIR"
 
 echo "==> 2/${TOTAL} cmake + build (Release)"
-cmake -S "$ROOT/native" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
+# MOTE_STRICT_BUILD=ON：resources/Sparkle.framework 缺失时 FATAL_ERROR，
+# 防止最终 DMG 缺自动更新 framework 退化为浏览器下载（2026-11-19 mote 1.0.4 即因此重发）
+cmake -S "$ROOT/native" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DMOTE_STRICT_BUILD=ON
 cmake --build "$BUILD_DIR" --config Release -j"$(sysctl -n hw.ncpu)"
 APP_PATH="$BUILD_DIR/${APP_NAME}.app"
 [ -d "$APP_PATH" ] || { echo "错误：构建失败，未生成 $APP_PATH"; exit 1; }
@@ -196,6 +198,23 @@ fi
 
 # install_name_tool 会破坏签名，这里重签后立刻全包扫描；有残留就停，不出包
 scan_external_paths fail
+
+# ---- 产物完整性门禁：Sparkle.framework 必须存在 ----
+# 历史踩坑：CMakeLists.txt 检测不到 resources/Sparkle.framework 时只 WARNING 继续构建，
+# 最终 DMG 缺 framework → 自动更新退化为打开浏览器下载（2026-11-19 mote 1.0.4 即因此重发）。
+# 出包前在此处硬性拦截，避免把残缺产物带进公证流程浪费 Apple 队列。
+SPARKLE_FW="$APP_PATH/Contents/Frameworks/Sparkle.framework"
+if [ ! -d "$SPARKLE_FW" ]; then
+    echo "拒绝打包：$SPARKLE_FW 不存在！" >&2
+    echo "  CMake 应该在 resources/Sparkle.framework 缺失时已经报 WARNING，请检查构建目录" >&2
+    exit 1
+fi
+APP_SIZE_KB=$(du -sk "$APP_PATH" | awk '{print $1}')
+if [ "$APP_SIZE_KB" -lt 1024 ]; then
+    echo "拒绝打包：.app 体积过小（${APP_SIZE_KB} KB，含 Sparkle.framework 的 mote .app 应 > 1024 KB）" >&2
+    exit 1
+fi
+echo "  Sparkle.framework 存在：✓    .app 体积：${APP_SIZE_KB} KB"
 
 echo "==> 6/${TOTAL} 公证流程前：先做 DMG（提交 DMG 给 Apple，最终分发也是 DMG）"
 NOTARY_STAGE="${TMPDIR:-/tmp}/mote-notary"

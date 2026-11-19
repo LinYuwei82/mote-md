@@ -121,6 +121,19 @@ trap cleanup EXIT
 hdiutil attach "$DMG_PATH" -mountpoint "$MOUNT" -nobrowse -readonly >/dev/null 2>&1
 APP_IN_DMG="$(find "$MOUNT" -maxdepth 2 -name "*.app" | head -1)"
 [ -n "$APP_IN_DMG" ] || { echo "DMG 内没有 .app" >&2; exit 1; }
+# Sparkle.framework 必须在 DMG 内 App 里，否则自动更新退化为浏览器下载
+# （2026-11-19 mote 1.0.4 即因此重发——CMakeLists.txt 检测到缺失只 WARNING 继续构建）
+SPARKLE_IN_DMG="$APP_IN_DMG/Contents/Frameworks/Sparkle.framework"
+if [ ! -d "$SPARKLE_IN_DMG" ]; then
+  echo "拒绝发布：DMG 内 App 缺少 Sparkle.framework！" >&2
+  echo "  自动更新将退化为打开浏览器下载（2026-11-19 mote 1.0.4 即因此重发）" >&2
+  exit 1
+fi
+APP_IN_DMG_SIZE_KB=$(du -sk "$APP_IN_DMG" | awk '{print $1}')
+if [ "$APP_IN_DMG_SIZE_KB" -lt 1024 ]; then
+  echo "拒绝发布：DMG 内 App 体积过小（${APP_IN_DMG_SIZE_KB} KB，含 Sparkle.framework 应 > 1024 KB）" >&2
+  exit 1
+fi
 SPCTL_OUT="$(spctl --assess --type execute -vv "$APP_IN_DMG" 2>&1 || true)"
 echo "$SPCTL_OUT" | sed 's/^/  /'
 echo "$SPCTL_OUT" | grep -q "Notarized Developer ID" || {
