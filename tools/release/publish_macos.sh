@@ -59,6 +59,14 @@ if [ -n "$NOTES_URL" ]; then
     *) echo "NOTES_URL 必须是绝对 http(s) 地址：$NOTES_URL" >&2; exit 2 ;;
   esac
 fi
+# 未显式指定时，若仓库里有 docs/release-notes-<版本>.html 就自动带上并上传到
+# <product>/release-notes-<版本>.html；两个平台的清单都写同一个地址。
+# 没有说明页则不写 notes_url，避免客户端出现死链。
+NOTES_FILE=""
+if [ -z "$NOTES_URL" ] && [ -f "$REPO_ROOT/docs/release-notes-$VERSION.html" ]; then
+  NOTES_FILE="$REPO_ROOT/docs/release-notes-$VERSION.html"
+  NOTES_URL="$CDN_DOMAIN/$PRODUCT_DIR/release-notes-$VERSION.html"
+fi
 
 # ---- 定位 sign_update ----
 find_sign_update() {
@@ -235,6 +243,10 @@ else
     "public, max-age=31536000, immutable" "application/octet-stream"
   oss_upload "$APPCAST_LOCAL" "$APPCAST_KEY" \
     "no-cache, max-age=60" "application/rss+xml"
+  if [ -n "$NOTES_FILE" ]; then
+    oss_upload "$NOTES_FILE" "$PRODUCT_DIR/release-notes-$VERSION.html" \
+      "public, max-age=3600" "text/html; charset=utf-8"
+  fi
   oss_upload "$MANIFEST_LOCAL" "$MANIFEST_KEY" \
     "no-cache, max-age=60" "application/json"
 fi
@@ -263,6 +275,13 @@ else
     echo "  ✗ 线上 manifest.json 异常，请检查上传结果（OSS 直连无 CDN，源站即时生效）"
   fi
   rm -f /tmp/mote-manifest-check.json
+
+  if [ -n "$NOTES_URL" ]; then
+    CODE="$(curl -s -o /dev/null -w '%{http_code}' -I "$NOTES_URL")"
+    echo "  GET $NOTES_URL → HTTP $CODE"
+    [ "$CODE" = "200" ] && echo "  ✓ 线上发布说明可访问" \
+      || echo "  ✗ 线上发布说明不可访问，请检查上传结果"
+  fi
   echo "  -- 统一门禁 verify-live --"
   python3 "$GUARD_PY" verify-live "${GUARD_ARGS[@]}"
 fi

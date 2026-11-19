@@ -71,11 +71,12 @@
 | `mandatory_reason` | string | 否 | |
 | `artifacts` | object | 是 | 见 3.3 |
 
-> `notes_url` 由发布脚本写入：小兔与 DevCard 的脚本会在仓库存在
-> `docs/release-notes-<版本>.html` 时连同产物一起上传并填入该字段；Mote 的 Windows 脚本
-> 同样自动检测，macOS 脚本只接受 `NOTES_URL`（说明页需先手工上传）。缺页则不写，避免客户端出现死链。
-> 当前线上 devcard 1.2.8 与小兔 1.0.3 都带该字段（小兔的说明页于 2026-11-19 补传，
-> 清单已重签写入，见 `OSS-发布布局.md` 第四节）；mote 1.0.4 没有说明页，清单不含该字段。
+> `notes_url` 由发布脚本写入：三家脚本都检测仓库里的
+> `docs/release-notes-<版本>.html`，存在时连同产物一起上传到
+> `<product>/release-notes-<版本>.html` 并填入该字段；缺页则不写，避免客户端出现死链。
+> Mote 的 macOS 脚本自 2026-11-19 起也走同一规则（此前只接受显式的 `NOTES_URL`）。
+> 当前三份线上清单均含该字段：devcard 1.2.8、xiaotu 1.0.3、mote 1.0.4。其中后两份是
+> 发布后补传说明页、再改 `notes_url` 整体重签并自验签完成的，详见 `OSS-发布布局.md` 第四节。
 > 小兔 1.0.3 起，Windows 更新卡片在 `notes_url` 非空时显示「查看更新详情」，
 > 调用系统默认浏览器打开；该字段为空则按钮不出现。
 
@@ -144,13 +145,14 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
   "product": "mote",
   "channel": "stable",
   "key_id": "2026-11",
-  "updated_at": "2026-11-18T15:42:47Z",
+  "updated_at": "2026-11-19T02:04:48Z",
   "platforms": {
     "macos": {
       "version": "1.0.4",
       "build": 0,
       "min_os": "14.0",
       "rollout_percent": 100,
+      "notes_url": "https://dl.xiaotu.online/mote/release-notes-1.0.4.html",
       "artifacts": {
         "dmg": {
           "url": "https://dl.xiaotu.online/mote/mote-1.0.4-macos-arm64.dmg",
@@ -164,6 +166,7 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
       "build": 202611181542,
       "min_os": "10.0",
       "rollout_percent": 100,
+      "notes_url": "https://dl.xiaotu.online/mote/release-notes-1.0.4.html",
       "artifacts": {
         "portable": {
           "url": "https://dl.xiaotu.online/mote/mote-1.0.4-win64-portable.zip",
@@ -182,9 +185,9 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 }
 ```
 
-> 该版本没有发布说明页，所以示例里没有 `notes_url`；存在
-> `docs/release-notes-<版本>.html` 且脚本拿到地址（Mote 的 macOS 发布需显式传
-> `NOTES_URL`）时才写入该字段。
+> 示例取自 2026-11-19 补页重签后的线上清单：两个平台段写同一个说明页地址，
+> 客户端据此显示「查看完整更新说明…」。仓库里存在
+> `docs/release-notes-<版本>.html` 时发布脚本会自动上传并填入该字段；缺页则不写。
 
 ## 六、客户端解析规则
 

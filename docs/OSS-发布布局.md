@@ -52,9 +52,9 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 |---|---|---|---|
 | `devcard/updates/stable/manifest.json` | 1,420 B | `application/json; charset=utf-8` | `no-cache, max-age=60` |
 | `devcard/updates/stable/appcast.xml` | 1,277 B | `application/xml; charset=utf-8` | `no-cache, max-age=60` |
-| `xiaotu/updates/stable/manifest.json` | 1,253 B | `application/json` | `no-cache, max-age=60` |
+| `xiaotu/updates/stable/manifest.json` | 1,411 B | `application/json` | `no-cache, max-age=60` |
 | `xiaotu/updates/stable/appcast.xml` | 714 B | `application/rss+xml` | `no-cache, max-age=60` |
-| `mote/updates/stable/manifest.json` | 1,278 B | `application/json` | `no-cache, max-age=60` |
+| `mote/updates/stable/manifest.json` | 1,391 B | `application/json` | `no-cache, max-age=60` |
 | `mote/updates/stable/appcast.xml` | 833 B | `application/rss+xml` | `no-cache, max-age=60` |
 
 > v1 清单（`latest.json` / `windows.json`）已删除，v2 清单与 appcast 是 updates/ 目录下仅有的内容。
@@ -118,6 +118,8 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > `mote-<ver>-macos-arm64.dmg`；Windows 绿色包由 `packaging/package_windows_native.ps1`
 > 生成，安装包由 `packaging/build_installer.ps1`（Inno Setup 6）生成，两者版本都读仓库根
 > `VERSION.txt`。2026-11-19 修复清单 `build` 错位（发布时刻 vs 编译时刻）后，1.0.4 按构建号一致重发。
+> 同一补丁顺带补齐发布说明：`mote/release-notes-1.0.4.html`（5,951 字节）已上传，
+> 清单两个平台段均写入 `notes_url` 并重新签名（`updated_at=2026-11-19T02:04:48Z`）。
 
 ## 四、PDF 手册与发布说明
 
@@ -128,6 +130,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | `xiaotu/manual.pdf` | 3,702,580 | `application/pdf` | `public, max-age=86400` |
 | `xiaotu/release-notes-1.0.3.html` | 3,886 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/manual.pdf` | 8,140,873 | `application/pdf` | `public, max-age=86400` |
+| `mote/release-notes-1.0.4.html` | 5,951 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.3.html` | 5,410 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.2.html` | 5,664 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.1.html` | 7,453 | `text/html; charset=utf-8` | `public, max-age=3600` |
@@ -139,17 +142,18 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 https://dl.xiaotu.online/devcard/manual.pdf
 https://dl.xiaotu.online/xiaotu/manual.pdf
 https://dl.xiaotu.online/mote/manual.pdf
-https://dl.xiaotu.online/mote/release-notes-1.0.3.html
+https://dl.xiaotu.online/mote/release-notes-1.0.4.html
 ```
 
-> 发布说明随发布自动上传：Mote 的 `publish_windows.sh` / `.ps1`、小兔的
-> `publish_windows.sh` / `publish_oss.sh`、DevCard 的 `publish_macos.sh` / `publish_windows.ps1`
-> 检测到仓库里的 `docs/release-notes-<版本>.html` 就一并上传，并把
-> `<product>/release-notes-<版本>.html` 写进清单 `notes_url`；
-> 缺页则不写该字段，避免客户端出现死链。PDF 手册仍是手工上传。
+> 发布说明随发布自动上传：三家发布脚本（Mote 的 `publish_macos.sh` / `publish_windows.sh`、
+> 小兔的 `publish_oss.sh` / `publish_windows.sh`、DevCard 的 `publish_macos.sh` /
+> `publish_windows.ps1`）都检测仓库里的 `docs/release-notes-<版本>.html`，存在就一并上传，
+> 并把 `<product>/release-notes-<版本>.html` 写进清单 `notes_url`；缺页则不写该字段，
+> 避免客户端出现死链。PDF 手册仍是手工上传。
 >
-> 小兔 1.0.3 起，Windows 更新卡片在 `notes_url` 非空时显示「查看更新详情」，
-> 调用系统默认浏览器打开；为空则按钮不出现（线上小兔清单已含该字段）。
+> 截至 2026-11-19，三份线上清单的 `notes_url` 均已就位：
+> devcard 1.2.8、xiaotu 1.0.3、mote 1.0.4（其中 xiaotu / mote 两份为补传后重签）。
+> 客户端在 `notes_url` 非空时显示「查看完整更新说明…」/「查看更新详情」，为空则不出按钮。
 
 ## 五、官网网页（`xiaotu-site` 桶 / ECS）
 
@@ -202,15 +206,15 @@ https://xiaotu.online/                      # ECS（备案中）
 | `xiaotu-inventory/tools/package/publish_windows.sh` | `xiaotu/xiaotu-<ver>-win64-setup.exe`、`xiaotu/xiaotu-<ver>-win64-portable.zip`、`xiaotu/updates/stable/manifest.json`、`xiaotu/release-notes-<ver>.html`（存在时） |
 | `dev_card_cpp/tools/release/publish_macos.sh` | `devcard/devcard-<ver>-macos-arm64.dmg`（+ `.edSignature`）、`devcard/updates/stable/appcast.xml`、`devcard/updates/stable/manifest.json`、`devcard/release-notes-<ver>.html`（存在时） |
 | `dev_card_cpp/tools/release/publish_windows.ps1` | `devcard/devcard-<ver>-win64-setup.exe`、`devcard/devcard-<ver>-win64-portable.zip`、`devcard/updates/stable/manifest.json`、`devcard/release-notes-<ver>.html`（存在时） |
-| `mote/tools/release/publish_macos.sh` | `mote/mote-<ver>-macos-arm64.dmg`、`mote/updates/stable/appcast.xml`、`mote/updates/stable/manifest.json` |
+| `mote/tools/release/publish_macos.sh` | `mote/mote-<ver>-macos-arm64.dmg`、`mote/updates/stable/appcast.xml`、`mote/updates/stable/manifest.json`、`mote/release-notes-<ver>.html`（存在时） |
 | `mote/tools/release/publish_windows.sh`（或 `.ps1`） | `mote/mote-<ver>-win64-portable.zip`、`mote/mote-<ver>-win64-setup.exe`（存在时）、`mote/updates/stable/manifest.json`、`mote/release-notes-<ver>.html`（存在时） |
 | `mote/tools/release/publish_site_oss.sh` | 本地 `web/` 的 21 个文件 → `xiaotu-site` 桶 |
-
-> Mote 的 macOS 发布脚本只把 `NOTES_URL` 写进清单，不自动上传说明页；线上
-> `mote/release-notes-1.0.0`–`1.0.3.html` 都是手工上传的。Windows 脚本会检测
-> `docs/release-notes-<版本>.html` 并自动上传。
 | `mote/tools/release/deploy_site.sh` | 本地 `web/` 的 21 个文件 → ECS `/var/www/xiaotu` |
 | 手工 | `<product>/manual.pdf`、README 等 |
+
+> Mote 的 `publish_macos.sh` 自 2026-11-19 起与 Windows 脚本同口径：检测到
+> `docs/release-notes-<版本>.html` 就上传并写入 `notes_url`，显式传 `NOTES_URL` 时
+> 以传入值为准（说明页需自行保证可访问）。此前 `1.0.0`–`1.0.3` 的说明页是手工上传的。
 
 ## 七、缓存与 Content-Type 规则
 
