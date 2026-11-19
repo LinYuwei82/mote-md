@@ -160,7 +160,7 @@ setup.exe 是 Inno Setup 6 压缩包，直接读字节找不到内部壳 EXE。g
 
 guard.py 2026-11-20 起对三产品做相同的 BUILD_STR 二次校验，`_BUILD_STAMP_PREFIX["devcard"] = b"DEVCARD_BUILD_STAMP="`，selftest 也补了 DevCard 正向用例（绿色包 `DevCard.exe` 含 `DEVCARD_BUILD_STAMP=<digits>`）。未注入时 `compiled_build_number()` 返回 0，自动跳过 build 比较，向后兼容。
 
-DevCard 本地验证工具：`dev_card_cpp/tools/release/verify_build_stamp.ps1`（249 行，UTF-8 + BOM）覆盖 8 项验证，2026-11-19 命令行 8/8 PASS，每次 DevCard Windows 发版前跑一次即可。
+DevCard Windows 发版前验证工具：`dev_card_cpp/tools/release/verify_build_stamp.ps1`（零依赖纯 PowerShell 5，一次性跑通 **cmake 双宏注入 → CMakeCache 落盘 → devcard_core_tests 运行时断言 → DevCard.exe BUILD_STR 字节 grep → 无注入回退链路 → manifest 生成对齐** 6 项验证 + 1 项可选签名验证）。完整运行命令、覆盖项表、实测输出示例见 [发布工作流 §4.1 验证步骤](./发布工作流.md#devcard-windows-构建号注入验证步骤每次发版前必跑)。
 
 ## 四、签名规则
 
