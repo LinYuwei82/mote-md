@@ -660,7 +660,20 @@ dist\Mote-Windows\
 └── samples\welcome.md, sample-diagram.png
 ```
 
-### 2.3 手动逐步执行（不用脚本时）
+### 2.3 可选：打安装包
+
+绿色包就绪后，用 Inno Setup 6 打一个按用户安装的 `setup.exe`（版本号读仓库根 `VERSION.txt`）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
+# 产物：dist\Mote-Setup-<版本>.exe
+```
+
+脚本会校验绿色包里运行必需的文件齐全、不含 Qt 产物，再调用 `ISCC.exe` 编译
+`packaging\mote.iss`；发布时 `publish_windows.ps1` 检测到该文件就一并上传，
+不存在则只发绿色包。
+
+### 2.4 手动逐步执行（不用脚本时）
 
 ```powershell
 $env:WEBVIEW2_SDK = "C:\path\to\Microsoft.Web.WebView2\pkg"
@@ -683,7 +696,7 @@ Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip 
 
 然后在干净 Windows 机器上解压 zip，双击 `Mote.exe`，按第 3 节清单逐项确认。
 
-### 2.4 Windows 注意事项
+### 2.5 Windows 注意事项
 
 - **静态 CRT**：CMake 用 `/MT` 链接 MSVC 运行库，目标机器不需要额外安装
   VC++ Redistributable。
@@ -792,6 +805,8 @@ powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 | zip | 607,489 字节 |
 | 依赖 | USER32 / ole32 / ADVAPI32 / SHLWAPI / SHELL32 / COMCTL32 / KERNEL32 |
 | Qt 文件 | 0 |
+
+绿色包就绪后可按 2.3 打安装包（Inno Setup 6，产物 `dist/Mote-Setup-<版本>.exe`）。
 
 ### 6.2 截图与页面基线
 

@@ -1,14 +1,15 @@
 # 从 macOS 把本项目搬到 Windows 打包（分步操作指南）
 
 面向对象：代码已经在 macOS 上写好、能正常编译运行，现在想在一台 Windows 机器上
-产出可分发的 `Mote-Windows.zip`。
+产出可分发的 `Mote-Windows.zip`（安装版 `Mote-Setup-<版本>.exe` 为可选项）。
 
 先说清楚三件事：
 
 1. **Windows 包必须在 Windows 上构建**。本机是 macOS，没有 MSVC，也无法交叉编译；
    macOS 上打出的 `dist/Mote-macOS-native.zip` 里是 arm64 的 `.app`，Windows 用不了。
 2. 整个流程只有一条主线：**只带源码去 Windows → 装 Build Tools / CMake / WebView2 SDK
-   → 跑 `packaging\package_windows_native.ps1` → 拿 `dist\Mote-Windows.zip` →
+   → 跑 `packaging\package_windows_native.ps1` → 拿 `dist\Mote-Windows.zip`（可选再跑
+   `packaging\build_installer.ps1` 出安装版）→
    在干净的 Windows 机器上验证**。
 3. Windows 包不链接、也不分发 Qt：外壳是 Win32 + WebView2，只依赖系统组件与
    `WebView2Loader.dll`。
@@ -50,6 +51,7 @@ powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 | `resources/` | **必须** | 前端页面、字体、示例、`win/` 图标资源 |
 | `VERSION.txt`、`LICENSE` | **必须** | 版本号唯一来源与许可证 |
 | `packaging/package_windows_native.ps1` | **必须** | Windows 打包脚本本体 |
+| `packaging/build_installer.ps1`、`packaging/mote.iss` | 需安装包时 | Inno Setup 安装版构建（版本读 `VERSION.txt`） |
 | `packaging/PACKAGING.md`、本文件 | 建议 | 交付说明与本文档，方便 Windows 侧照着核对 |
 | `tools/make_icon.py` | 可选 | 只在重新生成图标时用，且依赖 macOS 的 `iconutil` |
 | `build*` / `dist/` | **不要** | 构建与打包产物，脚本会重建 |
@@ -142,6 +144,20 @@ powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 构建号 `MOTE_BUILD` 必须与发布清单一致：脚本会提示本次构建写进 `CMakeCache.txt` 的值，
 发布时 `publish_windows.ps1` 要用同一个构建号。
 
+### 4.1 可选：打安装包
+
+绿色包就绪后，用 Inno Setup 6 产出按用户安装的 `setup.exe`：
+
+```powershell
+choco install innosetup --yes --no-progress   # 或 winget install JRSoftware.InnoSetup
+powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
+# 产物：dist\Mote-Setup-<版本>.exe（版本读仓库根 VERSION.txt）
+```
+
+脚本会先断言绿色包里 `Mote.exe`、`WebView2Loader.dll`、`web\editor.html`、
+`fonts\JetBrainsMono-Light.ttf` 齐全且不含 Qt 产物，再编译 `packaging\mote.iss`。
+发布时该文件存在就一并上传，不存在则只发绿色包。
+
 ---
 
 ## 5. 产物与结构
@@ -155,9 +171,12 @@ dist\Mote-Windows.zip
     ├── fonts\                        ← JetBrains Mono
     ├── samples\welcome.md, sample-diagram.png
     └── licenses\JetBrainsMono-OFL.txt, LICENSE-AGPL-3.0.txt
+
+dist\Mote-Setup-<版本>.exe            ← 可选安装版，内容与绿色包一致
 ```
 
 exe 只链接系统 DLL；WebView2 运行时由目标机器提供（Evergreen），不随包分发。
+打包机另可选产出 `dist\Mote-Setup-<版本>.exe`（Inno Setup 安装版，见 4.1），内容与绿色包一致。
 未做 Windows 代码签名。
 
 ---

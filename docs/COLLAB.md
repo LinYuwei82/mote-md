@@ -19,7 +19,7 @@ git clone git@gitee.com:lin-yuwei168/mote-md.git
 平台专属文件可以两边同时改：
 
 - macOS：`platform/mac/*`、`packaging/package_macos.sh`、`packaging/sign_macos.sh`
-- Windows：`platform/win/*`、`packaging/package_windows_native.ps1`
+- Windows：`platform/win/*`、`packaging/package_windows_native.ps1`、`packaging/build_installer.ps1` 与 `packaging/mote.iss`（安装包）
 
 **共享处同一时间只允许一台机器改**：
 
@@ -69,7 +69,7 @@ git status -sb
 
 ## 6. 已知事故记录
 
-- **2026-11：Windows 侧的改动让 macOS 编译失败**——`src/macwebview.mm` 里一个匿名命名空间漏了闭合大括号。Windows 构建根本不编译这个文件，本机一路全绿；macOS 拉下来直接编译失败。教训：动跨平台共享层（`src/webviewbase.*`、`src/webpage.*`、`Mote.pro` 等）必须在两台机器上都编过，不能只看本机通过。`tools/preflight.*` 就是为这条准备的。
+- **2026-11：Windows 侧的改动让 macOS 编译失败**——`src/macwebview.mm` 里一个匿名命名空间漏了闭合大括号。Windows 构建根本不编译这个文件，本机一路全绿；macOS 拉下来直接编译失败。教训：动跨平台共享层（`src/webviewbase.*`、`src/webpage.*`、`Mote.pro` 等，均已于 2026-11-19 随 Qt 路径删除）必须在两台机器上都编过，不能只看本机通过。`tools/preflight.sh` 就是为这条准备的。
 
 ## 冲突处理（最简）
 

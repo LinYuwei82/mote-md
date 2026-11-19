@@ -487,7 +487,7 @@ static void testBase64()
     const std::vector<std::uint8_t> hello = mote::base64Decode("aGVsbG8=");
     CHECK_EQ(std::string(hello.begin(), hello.end()), std::string("hello"));
 
-    // 页面可能带换行；与 Qt 的 fromBase64 一样容错
+    // 页面可能带换行；解码时忽略空白
     const std::vector<std::uint8_t> wrapped = mote::base64Decode("aGVs\nbG8=");
     CHECK_EQ(std::string(wrapped.begin(), wrapped.end()), std::string("hello"));
     CHECK(mote::base64Decode("").empty());

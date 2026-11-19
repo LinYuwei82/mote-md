@@ -272,7 +272,7 @@ WebHostView::~WebHostView()
 
 void WebHostView::initialize()
 {
-    // 与 Qt 版一致：动态加载 Loader，不引入 WebView2Loader.lib，
+    // 动态加载 Loader，不引入 WebView2Loader.lib；
     // 缺失时给出可操作的提示，而不是启动即崩。
     loader_ = LoadLibraryW(L"WebView2Loader.dll");
     if (!loader_) {
@@ -535,7 +535,7 @@ bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
 bool WebHostView::is_current_source(const std::wstring &source) const
 {
     const size_t hash = source.find_last_of(L'#');
-    // 没有 fragment 时无法判断代次，按 Qt 版行为放行；带 fragment 则必须匹配
+    // 没有 fragment 时无法判断代次，直接放行；带 fragment 则必须匹配
     if (hash == std::wstring::npos)
         return true;
     return source.substr(hash + 1) == L"g" + std::to_wstring(generation_);

@@ -115,7 +115,7 @@ static NSString *MoteReadBundleText(NSString *name, NSString *ext, NSString *sub
                                        error:NULL];
 }
 
-// 与 Qt 构建同口径：MOTE_INLINE_PROTO=0/false/off/no 时关闭行内标记
+// MOTE_INLINE_PROTO=0/false/off/no 时关闭行内标记
 static BOOL MoteInlineProtoEnabled(void)
 {
     const char *raw = std::getenv("MOTE_INLINE_PROTO");

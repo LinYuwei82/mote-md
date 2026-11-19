@@ -20,7 +20,7 @@
     // 用户确认后由 Sparkle 完成下载、验签与替换。启动后延迟一次 + 每 24 小时一次。
     [[MoteUpdater sharedUpdater] start];
 
-    // 与 Qt 构建一致：第一个命令行参数当作待打开文件
+    // 第一个命令行参数当作待打开文件
     NSArray<NSString *> *arguments = NSProcessInfo.processInfo.arguments;
     if (arguments.count > 1)
         [self.mainWindow openPath:arguments[1]];

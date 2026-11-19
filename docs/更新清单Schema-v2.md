@@ -3,16 +3,17 @@
 > 状态：**迁移完成**（2026-11-18 全量上线并退役 v1）。
 > 全链路完成：生成器 `manifest_v2.py`、guard v2 检查、三仓库发布脚本、
 > 三个客户端解析 + Ed25519 验签、下载页改读 manifest.json；
-> 新内测版已发布：mote 1.0.3 / xiaotu 1.0.2 / devcard 1.2.7，
+> 新内测版已发布：当前线上为 mote 1.0.4（Windows build `202611181542`）、
+> xiaotu 1.0.3（build `202611190001`）、devcard 1.2.8（build `202611181646`）。
 > 升级链路实测全绿后，v1 清单（`latest.json` / `windows.json`）已全部删除
 > （`appcast.xml` 永久保留）。
-> 2026-11-19：桶内历史安装包（v1 命名 + v2 旧版本，共 116 MB）已全部清理，
-> 每个产品只保留当前版本 3 个包。
+> 2026-11-19：按清单/appcast 白名单清理过一次历史安装包（116 MB）；之后发布的
+> 上一版（devcard 1.2.6/1.2.7、xiaotu 1.0.2）仍保留在桶内供回滚。
 > 2026-11-19：修复 Windows 清单 `build` 错位——发布脚本原先取「发布时刻」，
 > 二进制里却是「编译时刻」，清单永远比安装包新，客户端反复提示同一版本。
 > 现由构建步骤把 `MOTE_BUILD` 传给发布步骤，`build` 必须等于二进制内的值（见 3.4）；
 > mote 1.0.4 按此规则重发。
-> 2026-11-19：DevCard 1.2.8 待发布——WebView 内没有 Ed25519，远端清单改由本地服务端
+> 2026-11-19：DevCard 1.2.8 已发布——WebView 内没有 Ed25519，远端清单改由本地服务端
 > `POST /api/version/verify` 验签后再提供 `artifacts`（见第四节），修复「下载更新包 /
 > 安装并重启」在没有本地清单时永远置灰的问题。
 > 日期：2026-11-18
@@ -66,6 +67,7 @@
 
 > `notes_url` 一律由发布脚本写入：仓库存在 `docs/release-notes-<版本>.html` 时，随发布上传到
 > `<product>/release-notes-<版本>.html` 并填入该字段；缺页则不写，避免客户端出现死链。
+> 小兔 1.0.3 与 devcard 1.2.8 都带了发行说明；mote 1.0.4 没有，所以线上 mote 清单不含该字段。
 > 小兔 1.0.3 起，Windows 更新卡片在 `notes_url` 非空时显示「查看更新详情」，
 > 调用系统默认浏览器打开；该字段为空则按钮不出现。
 
@@ -121,7 +123,7 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
   原文交回 `POST /api/version/verify`，服务端用内嵌公钥验签后才返回 `artifacts`
   （WebView 自身无法验签，不能让它直接采信远端资产）。验签失败一律放弃本次更新。
 
-## 五、完整示例（mote，数据取自线上 v1 改编）
+## 五、完整示例（mote 1.0.4，取自线上实际清单，`signature` 省略）
 
 ```json
 {
@@ -129,42 +131,46 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
   "product": "mote",
   "channel": "stable",
   "key_id": "2026-11",
-  "updated_at": "2026-11-18T04:48:54Z",
+  "updated_at": "2026-11-18T15:42:47Z",
   "platforms": {
     "macos": {
-      "version": "1.0.1",
+      "version": "1.0.4",
       "build": 0,
       "min_os": "14.0",
+      "rollout_percent": 100,
       "artifacts": {
         "dmg": {
-          "url": "https://dl.xiaotu.online/mote/mote-1.0.1-macos-arm64.dmg",
-          "size": 1794986,
-          "sha256": "6f6f9fbd61145aca92be509d6595ce376d88746790b714ca1a22d9a9b889e11a"
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.4-macos-arm64.dmg",
+          "size": 750328,
+          "sha256": "2f04e3f8b740bb85b38a09be5b2e93fb34df90feec8d035336633d0234299124"
         }
       }
     },
     "windows": {
-      "version": "1.0.2",
-      "build": 202611180530,
+      "version": "1.0.4",
+      "build": 202611181542,
       "min_os": "10.0",
-      "notes_url": "https://dl.xiaotu.online/mote/release-notes-1.0.2.html",
+      "rollout_percent": 100,
       "artifacts": {
         "portable": {
-          "url": "https://dl.xiaotu.online/mote/mote-1.0.2-win64-portable.zip",
-          "size": 702247,
-          "sha256": "8fdcb41338deb9385308537a9ec4434a11b13bf250bf81f43c0817c804cf0dcc"
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.4-win64-portable.zip",
+          "size": 717845,
+          "sha256": "01c928b5637af0e7a1494baa12810ed80612d7ec3849b84344b7f2a7308ed363"
         },
         "setup": {
-          "url": "https://dl.xiaotu.online/mote/mote-1.0.2-win64-setup.exe",
-          "size": 2655925,
-          "sha256": "9b9c18c6a21f5d4b44bb804aa6a8f683f95035f6018cb35ee27918fe48b2ac16"
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.4-win64-setup.exe",
+          "size": 2666670,
+          "sha256": "7bc1db2b5dbfec2ff19cda47fb529608f9f3c8a436eb4164d17a231ef20e1d1d"
         }
       }
     }
   },
-  "signature": "（生成时计算）"
+  "signature": "（生成时计算，线上为 88 字符 base64）"
 }
 ```
+
+> 该版本没有发布说明页，所以示例里没有 `notes_url`；有 `docs/release-notes-<版本>.html`
+> 时发布脚本才写入该字段。
 
 ## 六、客户端解析规则
 
@@ -186,7 +192,7 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 
 规则：小写、连字符分隔，`<product>-<version>-<os>-<arch>-<type>.<ext>`。
 
-| 旧名（现状） | 新名（v2） |
+| 旧名（v2 之前） | 新名（v2） |
 |---|---|
 | `DevCard-1.2.5-setup.exe` | `devcard-1.2.5-win64-setup.exe` |
 | `DevCard-1.2.5-win64-portable.zip` | `devcard-1.2.5-win64-portable.zip` |
@@ -205,7 +211,7 @@ guard 按此规则校验命名，清理脚本按 `<product>-<version>` 前缀分
 以 mote 为主本，三仓库同文件 + `manifest_v2.sha256` 哈希校验，
 由 `sync_guard.sh` 一并同步（guard 与 manifest_v2 同一脚本维护）。
 三个发布脚本调用它生成并签名 manifest.json，不再各自 printf 拼 JSON
-（Mote 的 windows.json 目前就是手工拼接且**未签名**，v2 一并补上）。
+（Mote 在 v2 之前用 windows.json 手工拼接且未签名，切换时已一并补上）。
 
 ## 九、改动清单
 

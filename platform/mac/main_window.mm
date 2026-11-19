@@ -634,7 +634,7 @@ private:
         NSString *suggested = path.length > 0
             ? path
             : [dir stringByAppendingPathComponent:@"未命名.md"];
-        // 自动化验证用（与 Qt 构建同一约定）：跳过保存面板
+        // 自动化验证用：跳过保存面板
         const char *forced = std::getenv("MOTE_SAVE_AS");
         if (forced && *forced) {
             path = [NSString stringWithUTF8String:forced];

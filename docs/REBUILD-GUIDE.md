@@ -222,7 +222,8 @@ bash packaging/package_macos.sh --dmg --clean-dist
 
 ### 8.2 Windows
 
-`packaging/package_windows_native.ps1` 出绿色版 `dist/Mote-Windows.zip`（exe + `WebView2Loader.dll` + `web/` + `fonts/`）。
+`packaging/package_windows_native.ps1` 出绿色版 `dist/Mote-Windows.zip`（exe + `WebView2Loader.dll` + `web/` + `fonts/`）；
+`packaging/build_installer.ps1` 用 Inno Setup 6 出安装版 `dist/Mote-Setup-<版本>.exe`。
 WebView2 SDK（NuGet 1.0.2903.40）放在仓库外，用 `WEBVIEW2_SDK` 覆盖路径。
 
 ### 8.3 版本号
@@ -654,7 +655,7 @@ MSVC 产物在 `build\release\Mote.exe`，MinGW 在 `build\Mote.exe`。
 → 文档写明「更多信息 → 仍要运行」；不要假设用户能无障碍打开。
 
 **W12 安装包版本号漂移**
-`mote.iss` 不写默认版本，漏传 `/DMyAppVersion` 直接 `#error`；`build_installer.ps1` 从 `Mote.pro` 的 `VERSION` 正则读取后传入。
+`mote.iss` 不写默认版本，漏传 `/DMyAppVersion` 直接 `#error`；`build_installer.ps1` 从仓库根 `VERSION.txt` 读取后传入。
 → 版本号始终单一来源；手工编译时必须自己传参。
 
 **W13 升级安装变成并存两份**

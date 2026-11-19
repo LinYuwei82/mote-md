@@ -1387,7 +1387,7 @@ void MoteMainWindow::update_menu_state()
     mote::win::set_command_checked(menu, mote::CommandId::ToggleSource, source_on_);
     mote::win::set_command_checked(menu, mote::CommandId::ToggleDark, dark_mode_);
     mote::win::set_command_checked(menu, mote::CommandId::FollowSystem, follow_system_);
-    // 与 Qt 版一致：源码模式（textarea）由 WebView2 原生处理编辑命令
+    // 源码模式（textarea）由 WebView2 原生处理编辑命令
     mote::win::set_command_enabled(menu, mote::CommandId::ExportPdf, !source_on_);
     mote::win::set_command_enabled(menu, mote::CommandId::Cut, !source_on_);
     mote::win::set_command_enabled(menu, mote::CommandId::Copy, !source_on_);
@@ -1628,7 +1628,7 @@ void MoteMainWindow::set_clipboard(const std::string &text, const std::string &h
 
 std::string MoteMainWindow::clipboard_text()
 {
-    // 资源管理器复制的文件列表不是可粘贴正文，与 Qt 版同口径
+    // 资源管理器复制的文件列表不是可粘贴正文
     if (IsClipboardFormatAvailable(CF_HDROP))
         return std::string();
     if (!OpenClipboard(hwnd_))
