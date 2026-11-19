@@ -123,9 +123,9 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | `devcard/manual.pdf` | 5,563,312 | `application/pdf` | `public, max-age=86400` |
 | `devcard/release-notes-1.2.8.html` | 4,592 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `xiaotu/manual.pdf` | 3,702,580 | `application/pdf` | `public, max-age=86400` |
-| `xiaotu/release-notes-1.0.3.html` | 3,986 | `text/html; charset=utf-8` | `public, max-age=3600` |
+| `xiaotu/release-notes-1.0.3.html` | 3,986 | `text/html; charset=utf-8` | `no-cache` |
 | `mote/manual.pdf` | 8,140,873 | `application/pdf` | `public, max-age=86400` |
-| `mote/release-notes-1.0.3.html` | 4,639 | `text/html; charset=utf-8` | `public, max-age=3600` |
+| `mote/release-notes-1.0.3.html` | 5,410 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.2.html` | 5,664 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.1.html` | 7,453 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.0.html` | 9,184 | `text/html; charset=utf-8` | `public, max-age=3600` |
@@ -202,6 +202,10 @@ https://xiaotu.online/                      # ECS（备案中）
 | `mote/tools/release/publish_macos.sh` | `mote/mote-<ver>-macos-arm64.dmg`、`mote/updates/stable/appcast.xml`、`mote/updates/stable/manifest.json` |
 | `mote/tools/release/publish_windows.sh`（或 `.ps1`） | `mote/mote-<ver>-win64-portable.zip`、`mote/mote-<ver>-win64-setup.exe`（存在时）、`mote/updates/stable/manifest.json`、`mote/release-notes-<ver>.html`（存在时） |
 | `mote/tools/release/publish_site_oss.sh` | 本地 `web/` 的 21 个文件 → `xiaotu-site` 桶 |
+
+> Mote 的 macOS 发布脚本只把 `NOTES_URL` 写进清单，不自动上传说明页；线上
+> `mote/release-notes-1.0.0`–`1.0.3.html` 都是手工上传的。Windows 脚本会检测
+> `docs/release-notes-<版本>.html` 并自动上传。
 | `mote/tools/release/deploy_site.sh` | 本地 `web/` 的 21 个文件 → ECS `/var/www/xiaotu` |
 | 手工 | `<product>/manual.pdf`、README 等 |
 
@@ -213,7 +217,7 @@ https://xiaotu.online/                      # ECS（备案中）
 | manifest.json / appcast.xml | `no-cache, max-age=60` | `application/json` / `application/rss+xml`（DevCard 为 `application/xml`） |
 | `*.dmg.edSignature` | `public, max-age=300` | `text/plain; charset=utf-8` |
 | manual.pdf | `public, max-age=86400` | `application/pdf` |
-| release-notes-*.html | `public, max-age=3600` | `text/html; charset=utf-8` |
+| release-notes-*.html | `public, max-age=3600`（小兔为 `no-cache`，由 `publish_oss.sh` 上传） | `text/html; charset=utf-8` |
 | 网页 HTML / 404 | `no-cache` | `text/html; charset=utf-8` |
 | 网页 CSS / JS / 图片 | `public, max-age=604800` | 按扩展名 |
 | logs/ | 无 | `application/octet-stream` |

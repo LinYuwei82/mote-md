@@ -65,8 +65,9 @@
 | `mandatory_reason` | string | 否 | |
 | `artifacts` | object | 是 | 见 3.3 |
 
-> `notes_url` 一律由发布脚本写入：仓库存在 `docs/release-notes-<版本>.html` 时，随发布上传到
-> `<product>/release-notes-<版本>.html` 并填入该字段；缺页则不写，避免客户端出现死链。
+> `notes_url` 由发布脚本写入：小兔与 DevCard 的脚本会在仓库存在
+> `docs/release-notes-<版本>.html` 时连同产物一起上传并填入该字段；Mote 的 Windows 脚本
+> 同样自动检测，macOS 脚本只接受 `NOTES_URL`（说明页需先手工上传）。缺页则不写，避免客户端出现死链。
 > 小兔 1.0.3 与 devcard 1.2.8 都带了发行说明；mote 1.0.4 没有，所以线上 mote 清单不含该字段。
 > 小兔 1.0.3 起，Windows 更新卡片在 `notes_url` 非空时显示「查看更新详情」，
 > 调用系统默认浏览器打开；该字段为空则按钮不出现。
@@ -169,8 +170,9 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 }
 ```
 
-> 该版本没有发布说明页，所以示例里没有 `notes_url`；有 `docs/release-notes-<版本>.html`
-> 时发布脚本才写入该字段。
+> 该版本没有发布说明页，所以示例里没有 `notes_url`；存在
+> `docs/release-notes-<版本>.html` 且脚本拿到地址（Mote 的 macOS 发布需显式传
+> `NOTES_URL`）时才写入该字段。
 
 ## 六、客户端解析规则
 
