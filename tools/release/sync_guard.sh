@@ -12,6 +12,7 @@
 #   PEERS="/path/to/x /path/to/y" ./sync_guard.sh  # 跨机器时覆盖路径
 #   tools/release/sync_guard.sh --dry-run        # 只 diff 不实际 cp
 #   tools/release/sync_guard.sh --local-only     # 只跑 mote 本地 selftest + 重算 sha256（不 cp）
+#   tools/release/sync_guard.sh --check-build-str  # 检查三仓库 BUILD_STR 合规性
 #
 # 约定：三个仓库是同级的本地目录（mote / xiaotu-inventory / dev_card_cpp）。
 # 改完先跑两个自检，再跑本脚本；CI 会校验 *.sha256，防止单仓库漂移。
@@ -21,14 +22,16 @@ set -euo pipefail
 # ---- 参数解析 ----
 DRY_RUN=0
 LOCAL_ONLY=0
+CHECK_BUILD_STR=0
 for arg in "$@"; do
   case "$arg" in
-    --dry-run)   DRY_RUN=1 ;;
-    --local-only) LOCAL_ONLY=1 ;;
+    --dry-run)      DRY_RUN=1 ;;
+    --local-only)   LOCAL_ONLY=1 ;;
+    --check-build-str) CHECK_BUILD_STR=1 ;;
     -h|--help)
-      sed -n '2,28p' "$0"
+      sed -n '2,29p' "$0"
       exit 0 ;;
-    *) echo "未知参数：$arg（可用：--dry-run, --local-only）" >&2; exit 2 ;;
+    *) echo "未知参数：$arg（可用：--dry-run, --local-only, --check-build-str）" >&2; exit 2 ;;
   esac
 done
 
@@ -165,3 +168,96 @@ echo "下一步建议（需要你手动做）："
 echo "  cd $MOTE_ROOT && git add tools/release/guard.py tools/release/guard.sha256"
 echo "  cd $MOTE_ROOT/../xiaotu-inventory && git add tools/release/guard.py tools/release/guard.sha256"
 echo "  cd $MOTE_ROOT/../dev_card_cpp && git add tools/release/guard.py tools/release/guard.sha256"
+exit 0
+fi
+
+# ============================================================================
+# --check-build-str：检查三仓库 BUILD_STR 合规性
+# ============================================================================
+if [ "$CHECK_BUILD_STR" -eq 1 ]; then
+  check_build_str_compliance() {
+    local repo="$1" name="$2" product_prefix="$3" cmake_path="$4" shell_src="$5"
+    local ok=1
+    local label
+    label="$(basename "$repo")"
+
+    echo "--- $name（$label）---"
+
+    # 1) CMakeLists.txt 里有 XXX_BUILD_STR 字符串宏
+    if [ -f "$repo/$cmake_path" ]; then
+      if grep -q "${product_prefix}_BUILD_STR" "$repo/$cmake_path"; then
+        echo "  ✓ CMakeLists.txt 含 ${product_prefix}_BUILD_STR 宏"
+      else
+        echo "  ✗ CMakeLists.txt 缺少 ${product_prefix}_BUILD_STR 宏"
+        ok=0
+      fi
+    else
+      echo "  ! CMakeLists.txt 不存在（跳过）"
+    fi
+
+    # 2) 壳源码里有 kBuildStamp 静态字符串
+    if [ -n "$shell_src" ] && [ -f "$repo/$shell_src" ]; then
+      if grep -q "kBuildStamp\[\].*${product_prefix}_BUILD_STR" "$repo/$shell_src"; then
+        echo "  ✓ 壳源码含 kBuildStamp"
+      elif grep -q "constexpr.*${product_prefix}_BUILD=" "$repo/$shell_src"; then
+        echo "  ✓ 壳源码含 BUILD stamp 字符串"
+      else
+        echo "  ✗ 壳源码缺少 ${product_prefix}_BUILD= 静态标记"
+        ok=0
+      fi
+    elif [ -n "$shell_src" ]; then
+      echo "  ! 壳源码不存在（跳过）"
+    else
+      echo "  · 无独立壳源码"
+    fi
+
+    # 3) guard.py 的 _BUILD_STAMP_PREFIX 映射应该与实现一致
+    local guard_has_prefix
+    guard_has_prefix=$(grep -A1 "_BUILD_STAMP_PREFIX" "$repo/tools/release/guard.py" 2>/dev/null \
+                       | grep -c "\"$product_prefix\":")
+    if [ "$guard_has_prefix" -gt 0 ]; then
+      echo "  ✓ guard.py _BUILD_STAMP_PREFIX 含 \"$product_prefix\""
+    else
+      echo "  ! guard.py 不含 \"$product_prefix\" 前缀映射"
+    fi
+    echo ""
+    [ "$ok" -eq 1 ]
+  }
+
+  echo "========== BUILD_STR 合规检查 =========="
+  echo "主本：$MOTE_ROOT"
+  echo ""
+
+  local any_fail=0
+
+  # Mote：native/CMakeLists.txt + platform/win/updater.cpp
+  check_build_str_compliance "$MOTE_ROOT" "Mote" "MOTE" \
+    "native/CMakeLists.txt" "platform/win/updater.cpp" || any_fail=1
+
+  # Xiaotu：shell/win/CMakeLists.txt + shell/win/updater_win.cpp
+  if [ -d "$MOTE_ROOT/../xiaotu-inventory" ]; then
+    check_build_str_compliance "$MOTE_ROOT/../xiaotu-inventory" "小兔进销存" "XIAOTU" \
+      "shell/win/CMakeLists.txt" "shell/win/updater_win.cpp" || any_fail=1
+  else
+    echo "! 找不到 xiaotu-inventory 仓库，跳过"
+  fi
+
+  # DevCard：无独立 updater 壳，_BUILD_STAMP_PREFIX="devcard": None 是正确的
+  if [ -d "$MOTE_ROOT/../dev_card_cpp" ]; then
+    echo "--- DevCard（dev_card_cpp）---"
+    echo "  · 无独立 updater_win 壳，_BUILD_STAMP_PREFIX=\"devcard\": None 正确"
+    echo "  ✓ 跳过 BUILD_STR 检查"
+    echo ""
+  else
+    echo "! 找不到 dev_card_cpp 仓库，跳过"
+  fi
+
+  echo "========== BUILD_STR 合规检查完成 =========="
+  if [ "$any_fail" -eq 1 ]; then
+    echo "存在缺失项，请按 ✗ 标记补齐"
+    exit 1
+  else
+    echo "三仓库 BUILD_STR 机制合规"
+    exit 0
+  fi
+fi
