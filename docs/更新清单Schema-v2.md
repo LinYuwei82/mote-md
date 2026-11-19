@@ -22,6 +22,11 @@
 > 2026-11-19：DevCard 1.2.8 已发布——WebView 内没有 Ed25519，远端清单改由本地服务端
 > `POST /api/version/verify` 验签后再提供 `artifacts`（见第四节），修复「下载更新包 /
 > 安装并重启」在没有本地清单时永远置灰的问题。
+> 2026-11-19：DevCard 补齐 Windows 构建号注入机制（`DEVCARD_BUILD` CMake 选项 →
+> `compiled_build_number()` 条件编译返回注入值），与小兔 / Mote 对齐；未注入时回退 0
+> 自动跳过同版本 build 比较（向后兼容所有存量客户端与存量清单）。
+> DevCard 当前阶段 macOS + Windows 同步发布，v2 manifest.json 必须同时含
+> `platforms.macos` + `platforms.windows`（`guard.py preflight` 强制，缺失任一 die 拦截）。
 > 2026-11-19：`manifest_v2.py resign` 扩展为可改 `notes_url`（`--notes-url`），
 > 补发说明页无需重新打包；三份线上清单（devcard 1.2.8、xiaotu 1.0.3、mote 1.0.4）
 > 现均含该字段。工具改动已通过 `sync_guard.sh` 同步到另外两个仓库。
@@ -65,7 +70,7 @@
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `version` | string | 是 | semver，如 `1.0.2`；平台间版本独立递增 |
-| `build` | int | 是 | Windows 构建号：小兔 `XIAOTU_BUILD`、Mote `MOTE_BUILD`，必须等于二进制内编译时的值（如 `202611181542`），见 3.4；macOS 固定 `0`，不参与任何更新判定 |
+| `build` | int | 是 | Windows 构建号：小兔 `XIAOTU_BUILD`、Mote `MOTE_BUILD`、DevCard `DEVCARD_BUILD`，必须等于二进制内编译时的值（如 `202611181542`），见 3.4；macOS 固定 `0`，不参与任何更新判定 |
 | `min_os` | string | 是 | 如 `14.0` / `10.0` |
 | `notes_url` | string | 否 | 发布说明页，绝对 https 地址；客户端「查看更新详情」直接打开；缺省不发 |
 | `rollout_percent` | int | 否 | 0–100，缺省 `100`（灰度用） |
@@ -99,27 +104,29 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 
 ### 3.4 构建号一致性（Windows 必读）
 
-`build` 不是「发布时刻」的流水号，而是**编译进二进制**的构建号（小兔 `XIAOTU_BUILD`、Mote `MOTE_BUILD`）：
+`build` 不是「发布时刻」的流水号，而是**编译进二进制**的构建号（小兔 `XIAOTU_BUILD`、Mote `MOTE_BUILD`、DevCard `DEVCARD_BUILD`）：
 
 | 环节 | 取值 |
 |---|---|
-| 构建（configure） | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>` / `-DXIAOTU_BUILD=<UTC yyyyMMddHHmm>`：写进 CMakeCache，同时编进 `Mote.exe` / `Xiaotu Inventory` |
-| 打包 / 发布 | 从 CMakeCache 读同一个值（Mote 的 Actions 由构建步骤经 `MOTE_BUILD_STAMP` 传递；小兔本地发布用 `BUILD=<同一值> tools/package/publish_windows.sh`），写进 `manifest.json` |
+| 构建（configure） | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>` / `-DXIAOTU_BUILD=<UTC yyyyMMddHHmm>` / `-DDEVCARD_BUILD=<UTC yyyyMMddHHmm>`：写进 CMakeCache，同时编进各自的 Windows 二进制 |
+| 打包 / 发布 | 从 CMakeCache 读同一个值（Mote / DevCard 的 Actions 由构建步骤经 `<PRODUCT>_BUILD_STAMP` 传递；小兔本地发布用 `BUILD=<同一值> tools/package/publish_windows.sh`），写进 `manifest.json` |
 
-两者不一致的后果：
+三者不一致的后果：
 
 - 清单 `build` **大于**安装包内的值：客户端同版本时判定「有新版本」，装完本机值没变，
   下次检测继续提示——表现为「已经是 1.0.4，却一直提示更新 1.0.4」；
 - 清单 `build` **小于**安装包内的值：该构建永远收不到更新提示。
 
-约束：`publish_windows.ps1` 未显式传 `-Build` 时从 `build-native-ninja/CMakeCache.txt`
-读取编译值，读不到直接失败，不再退回当前时间；`release-windows.yml` 会把构建步骤
+约束：`publish_windows.ps1` 未显式传 `-Build` 时从 `CMakeCache.txt` 读取编译值，
+读不到直接失败，不再退回当前时间；`release-windows.yml` 会把构建步骤
 实际生效的值传给发布步骤。发布后按[发布工作流](./发布工作流.md) 第 6 节核对。
 
-**DevCard 例外**：其 Windows 客户端没有可靠的本机构建号（版本资源第 4 段恒 `0`），
-本地服务端按 `0` 处理并跳过同版本 `build` 比较（见 `dev_card_cpp/server/src/server.cpp`
-的 `available` 判定）。因此 devcard 同版本重发不会提示更新，修复只能升 `version`；
-清单里的 `build` 仅作记录与排查锚点。
+**DevCard 已补齐（2026-11-19）**：此前 DevCard Windows 客户端没有可靠的本机构建号
+（版本资源第 4 段恒 `0`），同版本不比 `build`、修复只能升 `version`。现通过 CMake
+`DEVCARD_BUILD` 选项 → `devcard_add_build_stamp()` 函数 → 所有 target 注入
+`-DDEVCARD_BUILD_STAMP=<UTC>`，运行时 `compiled_build_number()` 条件编译返回注入值
+（未注入时回退 0，自动跳过 build 比较，向后兼容）。与小兔 / Mote 全链路对齐，
+发布脚本保证 CMake 注入值 = 清单 build = 发布参数三端一致。
 
 ## 四、签名规则
 
@@ -196,12 +203,12 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 
 1. 只取 `platforms.<自己的平台>`，忽略另一平台与一切未知字段。
 2. 更新判定：
-   - macOS：只比 `version`，`build` 固定 `0` 且不参与任何判定。小兔 1.0.3 起，
-     「是否有更新 / 待安装 / 验证期 / 恢复模式」全部按版本号；Mote、DevCard 的 macOS 壳同口径。
-   - Windows：小兔与 Mote 先比 `version`，同版本再比 `build`（`build` 小于等于本机 → 无更新），
-     清单 `build` 必须与安装包内编译值逐位相同，否则同版本会反复提示，见 3.4；
-     DevCard 没有本机构建号，同版本不比 `build`，一律视为无更新。
-   - 修复只能靠递增 `version`；构建号只在「同版本重发也要让客户端感知」时有意义（小兔 / Mote）。
+   - macOS：只比 `version`，`build` 固定 `0` 且不参与任何判定。三产品 macOS 壳同口径。
+   - Windows：小兔、Mote、DevCard 三产品先比 `version`，同版本再比 `build`
+     （DevCard 2026-11-19 补齐 CMake 注入机制后与小兔 / Mote 对齐，
+     未注入时 `compiled_build_number()` 返回 0 自动跳过 build 比较，向后兼容），
+     清单 `build` 必须与安装包内编译值逐位相同，否则同版本会反复提示，见 3.4。
+   - 修复只能靠递增 `version`；构建号只在「同版本重发也要让客户端感知」时有意义。
 3. 产物选择：Windows 安装版读 `artifacts.setup`，绿色包读 `artifacts.portable`；
    macOS 读 `artifacts.dmg`。
 4. 校验顺序：

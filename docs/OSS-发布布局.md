@@ -70,7 +70,9 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 ### 3.1 DevCard（macOS 当前 1.2.8，Windows 当前 1.2.8）
 
-当前版本（v2 命名，`dl.xiaotu.online/devcard/`，2026-11-18 16:47 发布）：
+当前版本（v2 命名，`dl.xiaotu.online/devcard/`，2026-11-18 16:47 发布；
+2026-11-19 补齐 Windows 构建号注入机制，1.2.8 为启用前发布，客户端同版本不比 build，
+下一个 patch 版本起生效）：
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
@@ -81,6 +83,15 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > 1.2.8 已按 v2 正式发布（WebView 侧改由本地服务端验签远端清单，见第四节）。
 > 1.2.7 与 1.2.6 的 3 个包仍可访问，回滚可直接复用；
 > 1.2.4 只发过 macOS、1.2.5 为过渡版本，二者已于 2026-11-19 清理。
+>
+> DevCard Windows 构建号机制（2026-11-19 落地，与小兔 / Mote 对齐）：
+> CMake configure 传 `-DDEVCARD_BUILD=<UTC yyyyMMddHHmm>`，编译进二进制；
+> `compiled_build_number()` 条件编译返回注入值（未注入返回 0）；
+> 服务端同版本时比较清单 `build` 与本地 `compiled_build_number()`。
+> 发布脚本（本地 `publish_windows.ps1 -Build N` 或 GitHub Actions）保证三端同值：
+> CMake 注入 = 清单 build = 发布参数。
+> macOS 段 build 固定 0，跨平台清单必须同时含 `platforms.macos` + `platforms.windows`
+> （`guard.py preflight` 强制，缺失任一 die 拦截）。
 
 ### 3.2 小兔进销存（macOS 当前 1.0.3，Windows 当前 1.0.3）
 
@@ -289,7 +300,7 @@ python3 tools/release/guard.py verify-live --product xiaotu --kind win \
 1. **安装包是 `immutable`**：正常发版必须升版本号；只有修复清单错误而同版本重发时才覆盖同名对象（CNAME 直连、无 CDN，源站立即换字节），重发后核对 SHA256 已变化。`Cache-Control` 只影响客户端侧缓存。
 2. **清单生效**：源站上传即生效；客户端可能因 `max-age=60` 缓存最多 1 分钟，验证时等 1 分钟或加时间戳。下载页版本号由 `site.js` 自动读取，无需改 HTML。
 3. **发布脚本会校验产物**：Mote 校验 dmg 内 `SUFeedURL` 与 appcast 地址一致；guard（v2）校验绿色包内壳 exe 含当前 `manifest.json` 地址、清单 Ed25519 签名与产物 SHA256；不一致直接拒绝上传。
-4. **三个产品已全部迁移到 v2**：当前版本 mote 1.0.4（build `202611181542`）、xiaotu 1.0.3（build `202611190001`）、devcard 1.2.8（build `202611181646`）。
+4. **三个产品已全部迁移到 v2**：当前版本 mote 1.0.4（build `202611181542`）、xiaotu 1.0.3（build `202611190001`）、devcard 1.2.8（build `202611181646`，启用新构建号注入机制前发布；下一个 patch 版本起同版本重发可按 build 比较）。
 5. **历史安装包未完全清零**：devcard 1.2.6 / 1.2.7、xiaotu 1.0.2 的包仍在桶内，作为回滚保留；`manual.pdf`、`release-notes-*.html`、`manifest.json`、`appcast.xml` 长期保留。
 6. `dl.xiaotu.online/logs/` 下是 OSS 每小时访问日志，属系统产出，不在发布范围内。
 7. 桶根的 `devcard/`、`mote/`、`xiaotu/updates/` 等是控制台创建的 0 字节目录占位对象，可忽略。
