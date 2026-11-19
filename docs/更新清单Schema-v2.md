@@ -30,7 +30,7 @@
 > 2026-11-19：`manifest_v2.py resign` 扩展为可改 `notes_url`（`--notes-url`），
 > 补发说明页无需重新打包；三份线上清单（devcard 1.2.8、xiaotu 1.0.3、mote 1.0.4）
 > 现均含该字段。工具改动已通过 `sync_guard.sh` 同步到另外两个仓库。
-> 2026-11-20：DevCard BUILD_STR 双宏落地（`DEVCARD_BUILD_STAMP=<int>` + `DEVCARD_BUILD_STAMP_STR="<int>"`），guard.py 对三产品做相同的 BUILD_STR 二次校验不再跳过 DevCard，selftest 补 DevCard 正向用例；sync_guard.sh `--check-build-str` 覆盖 DevCard；DevCard 本地验证工具 verify_build_stamp.ps1（8/8 PASS）；三仓库新增 UTF-8 BOM 三道闸（`.gitattributes` + `tools/hooks/pre-commit` + `setup-hooks.ps1`）。
+> 2026-11-20：DevCard BUILD_STR 双宏落地（`DEVCARD_BUILD_STAMP=<int>` + `DEVCARD_BUILD_STAMP_STR="<int>"`），guard.py 对三产品做相同的 BUILD_STR 二次校验不再跳过 DevCard，selftest 补 DevCard 正向用例；sync_guard.sh `--check-build-str` 覆盖 DevCard；DevCard Windows 发版前验证工具 `verify_build_stamp.ps1`（零依赖 PowerShell 5，7 PASS + T7 SKIP，见[发布工作流 §4.1](./发布工作流.md#devcard-windows-构建号注入验证步骤每次发版前必跑)）；三仓库新增 UTF-8 BOM 三道闸（`.gitattributes` + `tools/hooks/pre-commit` + `setup-hooks.ps1`）。
 > 日期：2026-11-20
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 > 背景：三款产品均在内测期、无存量用户，趁此窗口把清单格式一次统一，
@@ -109,8 +109,8 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 
 | 产品 | 整数宏（CMake configure 直接注入，写进 CMakeCache） | 字符串宏（壳源码拼接 BUILD_STR 用） | 壳源码 BUILD_STR 位置 |
 |---|---|---|---|
-| Mote | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>` | `-DMOTE_BUILD_STR="<UTC>"`（顶层 CMakeLists.txt 直接注入） | `platform/win/updater.cpp`：`constexpr kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR` |
-| 小兔 | `-DXIAOTU_BUILD=<UTC>` | `-DXIAOTU_BUILD_STR="<UTC>"`（顶层 CMakeLists.txt 直接注入） | `shell/win/updater_win.cpp`：`constexpr kBuildStamp[] = "XIAOTU_BUILD=" XIAOTU_BUILD_STR` |
+| Mote | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>` | `-DMOTE_BUILD_STR="<UTC>"`（`native/CMakeLists.txt` 一处注入） | `platform/win/updater.cpp`：`constexpr kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR` |
+| 小兔 | `-DXIAOTU_BUILD=<UTC>` | `-DXIAOTU_BUILD_STR="<UTC>"`（顶层只校验，实际注入分散在 `shell/win/CMakeLists.txt` 给 updater、`core/CMakeLists.txt` 给 core） | `shell/win/updater_win.cpp`：`constexpr kBuildStamp[] = "XIAOTU_BUILD=" XIAOTU_BUILD_STR` |
 | DevCard | `-DDEVCARD_BUILD_STAMP=<UTC>`（函数注入） | `-DDEVCARD_BUILD_STAMP_STR="<UTC>"`（`cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数同时注入双宏） | `shell/win/main.cpp`：`constexpr kBuildStamp[] = "DEVCARD_BUILD_STAMP=" DEVCARD_BUILD_STAMP_STR` |
 
 DevCard 双宏原因：core 模块里的 `compiled_build_number()` 需要纯整数宏做 `static_cast<uint64_t>`；shell 里的 BUILD_STR 需要字符串宏做 C++ 字符串字面量拼接。**分开注入、各司其职，缺一不可**。guard.py 统一搜索的前缀是 `b"DEVCARD_BUILD_STAMP="`。
