@@ -67,10 +67,9 @@ Import-EnvFile $EnvFile
 Write-Host "===== Mote 发布 · Windows ====="
 
 Write-Host "[1/6] 读取版本与产物"
-$proLine = Select-String -Path (Join-Path $root "Mote.pro") -Pattern "^VERSION\s*=\s*([0-9.]+)" |
-    Select-Object -First 1
-if (-not $proLine) { Fail "无法从 Mote.pro 读取 VERSION" }
-$Version = $proLine.Matches[0].Groups[1].Value
+$versionLine = Get-Content -LiteralPath (Join-Path $root "VERSION.txt") | Select-Object -First 1
+if (-not $versionLine) { Fail "无法从 VERSION.txt 读取版本号" }
+$Version = $versionLine.Trim()
 
 # v2 清单 windows 平台必须带 build（客户端同版本比对构建号）。
 # 必须与二进制里的 MOTE_BUILD 一致：取编译时写进 CMakeCache 的值。取不到就直接
@@ -116,7 +115,7 @@ if (Test-Path $SetupPath) {
     # Inno 写出的 FileVersion 会补空格（"0.3.7               "），先 Trim 再比
     $setupVersion = (Get-Item $SetupFull).VersionInfo.FileVersion.Trim()
     if ($setupVersion -ne $Version) {
-        Fail "安装包版本 $setupVersion 与 Mote.pro VERSION $Version 不一致，先重新打包"
+        Fail "安装包版本 $setupVersion 与 VERSION $Version 不一致，先重新打包"
     }
 }
 
@@ -149,10 +148,10 @@ try {
     $archive.Dispose()
 }
 
-Write-Host "  Mote.pro VERSION : $Version"
+Write-Host "  VERSION           : $Version"
 Write-Host "  zip 内 exe 版本   : $exeVersion"
 if ($exeVersion -ne $Version) {
-    Fail "zip 内 exe 版本 $exeVersion 与 Mote.pro VERSION $Version 不一致，先重新构建打包"
+    Fail "zip 内 exe 版本 $exeVersion 与 VERSION $Version 不一致，先重新构建打包"
 }
 
 $Size = (Get-Item $ZipFull).Length

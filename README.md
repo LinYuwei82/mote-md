@@ -127,7 +127,7 @@ NOTES_URL=https://dl.xiaotu.online/mote/release-notes-1.0.0.html \
 
 - `BUILD` 必填，且必须等于 Windows 构建时的 `-DMOTE_BUILD`：清单 `build` 比安装包新会让客户端反复提示同一版本。
 - 官网与下载页统一由 `web/` 维护：ECS 用 `deploy_site.sh` 发布，备案前的 OSS 镜像用 `publish_site_oss.sh` 发布。旧的单页 `site/index.html` 与 `publish_site.ps1` 已退役，`dl.xiaotu.online` 根路径只做跳转，不再承载页面。
-- 版本号只改 `Mote.pro` 的 `VERSION`，各发布脚本都从那里读。
+- 版本号只改仓库根的 `VERSION.txt`（单行 `x.y.z`），各发布脚本与 CMake 都从那里读。
 - `NOTES_URL` 是可选环境变量，macOS 与 Windows 的发布脚本都支持：非空时写进清单的 `notes_url`，客户端弹窗显示「查看完整更新说明…」；不设置则不写该字段，老清单与老客户端都不受影响。
 - Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
 - 检查权在自研模块（`SUEnableAutomaticChecks=false`）：Sparkle 只负责下载、验签、替换、重启。

@@ -1,4 +1,4 @@
-// 由 CMake 生成：图标与版本号跟随 Mote.pro 的 VERSION，不再手工同步
+// 由 CMake 生成：图标与版本号跟随仓库根 VERSION.txt，不再手工同步
 1 ICON "app.ico"
 
 // Common Controls v6：TaskDialogIndirect 等需要 v6，无 manifest 会加载 v5.82 并 ordinal not found

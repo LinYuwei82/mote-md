@@ -38,8 +38,8 @@ cd "$REPO_ROOT"
 
 die() { echo "[失败] $*" >&2; exit 1; }
 
-VERSION="$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p' Mote.pro | head -1)"
-[ -n "$VERSION" ] || die "无法从 Mote.pro 读取 VERSION"
+VERSION="$(tr -d '[:space:]' < VERSION.txt)"
+[ -n "$VERSION" ] || die "无法从 VERSION.txt 读取版本号"
 
 DMG_PATH="${1:-${DMG_PATH:-$REPO_ROOT/dist/Mote-macOS-native-$VERSION.dmg}}"
 [ -f "$DMG_PATH" ] || die "DMG 不存在：$DMG_PATH"
@@ -109,7 +109,7 @@ if command -v hdiutil >/dev/null 2>&1; then
       PLIST_VER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
         "$APP_IN_DMG/Contents/Info.plist" 2>/dev/null || true)"
       [ -n "$PLIST_VER" ] && [ "$PLIST_VER" != "$VERSION" ] && \
-        echo "  警告：DMG 内 App 版本 $PLIST_VER ≠ Mote.pro VERSION $VERSION"
+        echo "  警告：DMG 内 App 版本 $PLIST_VER ≠ VERSION.txt 版本 $VERSION"
       if command -v spctl >/dev/null 2>&1; then
         SPCTL_OUT="$(spctl --assess --type execute -vv "$APP_IN_DMG" 2>&1 || true)"
         case "$SPCTL_OUT" in

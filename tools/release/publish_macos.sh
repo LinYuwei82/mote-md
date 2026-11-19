@@ -29,8 +29,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-VERSION="$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p' Mote.pro | head -1)"
-[ -n "$VERSION" ] || { echo "无法从 Mote.pro 读取 VERSION" >&2; exit 1; }
+VERSION="$(tr -d '[:space:]' < VERSION.txt)"
+[ -n "$VERSION" ] || { echo "无法从 VERSION.txt 读取版本号" >&2; exit 1; }
 
 DMG_PATH="${DMG_PATH:-$REPO_ROOT/dist/Mote-macOS-native-$VERSION.dmg}"
 [ -f "$DMG_PATH" ] || { echo "DMG 不存在：$DMG_PATH" >&2; exit 1; }
@@ -114,7 +114,7 @@ echo "$SPCTL_OUT" | grep -q "Notarized Developer ID" || {
   echo "拒绝发布：DMG 内 App 未通过公证（期望 source=Notarized Developer ID）" >&2; exit 1; }
 PLIST_VER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
   "$APP_IN_DMG/Contents/Info.plist" 2>/dev/null || true)"
-[ "$PLIST_VER" = "$VERSION" ] || echo "  警告：DMG 内版本 $PLIST_VER ≠ Mote.pro VERSION $VERSION"
+[ "$PLIST_VER" = "$VERSION" ] || echo "  警告：DMG 内版本 $PLIST_VER ≠ VERSION $VERSION"
 # 校验 DMG 内 App 与 Info.plist 承诺的公钥一致
 PLIST_PUB="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' \
   "$APP_IN_DMG/Contents/Info.plist" 2>/dev/null || true)"

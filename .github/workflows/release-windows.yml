@@ -4,7 +4,7 @@ name: Windows 发布
 # → 生成 manifest.json → 上传 OSS → 线上校验。
 #
 # 前置 secrets：OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET（仅授予 PutObject）。
-# 注意：发布前先改 Mote.pro 的 VERSION（必须大于线上版本）；guard 会拒绝版本回退，
+# 注意：发布前先改仓库根 VERSION.txt（必须大于线上版本）；guard 会拒绝版本回退，
 # 安装包 immutable 长缓存，同名覆盖不会生效。
 
 on:

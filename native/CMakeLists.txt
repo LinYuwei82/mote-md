@@ -14,12 +14,11 @@ get_filename_component(MOTE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 set(MOTE_PLATFORM_MAC "${MOTE_REPO_ROOT}/platform/mac")
 set(MOTE_PLATFORM_WIN "${MOTE_REPO_ROOT}/platform/win")
 
-# 版本号唯一来源：Mote.pro 的 VERSION 行
-file(READ "${MOTE_REPO_ROOT}/Mote.pro" MOTE_PRO_CONTENT)
-if(NOT MOTE_PRO_CONTENT MATCHES "\nVERSION[ \t]*=[ \t]*([0-9]+\\.[0-9]+\\.[0-9]+)")
-  message(FATAL_ERROR "无法从 Mote.pro 读取 VERSION")
+# 版本号唯一来源：仓库根的 VERSION.txt（单行 x.y.z）
+file(STRINGS "${MOTE_REPO_ROOT}/VERSION.txt" MOTE_VERSION LIMIT_COUNT 1)
+if(NOT MOTE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+  message(FATAL_ERROR "无法从 VERSION.txt 读取版本号")
 endif()
-set(MOTE_VERSION "${CMAKE_MATCH_1}")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)

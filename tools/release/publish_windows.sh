@@ -29,7 +29,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-VERSION="${VERSION:-$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p' Mote.pro | head -1)}"
+VERSION="${VERSION:-$(tr -d '[:space:]' < VERSION.txt)}"
 [ -n "$VERSION" ] || { echo "无法确定 VERSION" >&2; exit 1; }
 
 CHANNEL="${CHANNEL:-stable}"
