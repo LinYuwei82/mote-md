@@ -135,6 +135,9 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | `mote/release-notes-1.0.2.html` | 5,664 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.1.html` | 7,453 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.0.html` | 9,184 | `text/html; charset=utf-8` | `public, max-age=3600` |
+| `mote/release-notes-1.0.2.html` | 5,664 | `text/html; charset=utf-8` | `public, max-age=3600` |
+| `mote/release-notes-1.0.1.html` | 7,453 | `text/html; charset=utf-8` | `public, max-age=3600` |
+| `mote/release-notes-1.0.0.html` | 9,184 | `text/html; charset=utf-8` | `public, max-age=3600` |
 
 公网地址：
 
