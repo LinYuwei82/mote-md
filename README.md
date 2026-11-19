@@ -136,6 +136,7 @@ DEPLOY_HOST=user@host bash tools/release/deploy_site.sh
 ```
 
 - 发布前做本地完整性检查（入口页、下载页、样式、脚本、图标）与死链门禁：页面里指向 `dl.xiaotu.online` 的下载链接必须全部 200，否则直接失败。
+- 页面里的版本号、体积、SHA256 与下载地址由 `python3 tools/render_download.py` 从三份 `manifest.json` 渲染；发布前用 `--check` 比对，避免手抄值过期（站点脚本运行时也会做同样的校准，静态值只是兜底）。
 - 同步用 `rsync -az --delete`，远端站点目录与 `web/` 完全一致；发布后校验入口页、下载页与静态资源都在。
 - 服务器侧只需一次配置：deploy 用户公钥、`/var/www/xiaotu` 属主、nginx 站点（[packaging/nginx-xiaotu.conf](packaging/nginx-xiaotu.conf)）。
 - 两个域名分工：`xiaotu.online` 放官网页面（`web/`），`dl.xiaotu.online` 放安装包、手册与更新清单（OSS），页面里的下载链接直接指向后者。
