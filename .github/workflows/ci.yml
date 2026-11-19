@@ -61,10 +61,13 @@ jobs:
         run: |
           $build = (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmm')
           if (-not $build) { throw '构建号为空' }
-          Write-Host "构建号: $build"
+          $buildHash = (git rev-parse --short HEAD 2>$null)
+          if ($LASTEXITCODE -ne 0) { $buildHash = "" }
+          Write-Host "构建号: $build  hash: $buildHash"
           # 参数整体加引号：不引号时 PowerShell 会把 -DMOTE_BUILD=$build 原样传给 cmake
           # -DMOTE_STRICT_BUILD=ON：Sparkle.framework 缺失时 FATAL_ERROR（macOS 生效，Windows 无害）
-          cmake -S native -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release "-DMOTE_BUILD=$build" -DMOTE_STRICT_BUILD=ON
+          $buildHashArg = if ($buildHash) { "-DMOTE_BUILD_HASH=$buildHash" } else { "" }
+          cmake -S native -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release "-DMOTE_BUILD=$build" $buildHashArg -DMOTE_STRICT_BUILD=ON
           cmake --build build-native
 
       - name: 确认构建号已进入 CMake

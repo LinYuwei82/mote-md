@@ -115,18 +115,28 @@ if(WIN32)
     urlmon windowscodecs winhttp bcrypt)
   # Windows 构建号：同版本清单靠 build 判断是否有新构建；默认 0（未知，跳过
   # build 比较仅按 version），发布脚本用 -DMOTE_BUILD=202611180530 覆盖。
-  # 同时以字符串形式注入 MOTE_BUILD_STR，客户端 updater.cpp 会在二进制里
+  # 同时以字符串形式注入 MOTE_BUILD_STR（纯前 12 位数字，保持客户端整数比较兼容）
+  # 和 MOTE_BUILD_HASH（短 git hash，可选，用于发布追溯）。updater.cpp 会在二进制里
   # 留一条 "MOTE_BUILD=<digits>" 的可搜索 pattern——guard.py preflight 发布
   # 时会 grep 绿色包/安装包里的 Mote.exe，与 --build 参数比对，防止清单 build
   # 与编译值不一致导致客户端反复提示同一版本（2026-11-19 mote 1.0.4 即因此重发）。
   if(NOT MOTE_BUILD)
     set(MOTE_BUILD "0")
   endif()
+  if(NOT MOTE_BUILD_HASH)
+    set(MOTE_BUILD_HASH "")
+  endif()
+  # 带 hash 的完整 stamp（仅用于二进制内搜索和追溯），与数字版 MOTE_BUILD 分离
+  if(MOTE_BUILD_HASH)
+    set(MOTE_BUILD_STAMP "${MOTE_BUILD}-${MOTE_BUILD_HASH}")
+  else()
+    set(MOTE_BUILD_STAMP "${MOTE_BUILD}")
+  endif()
   target_compile_definitions(Mote PRIVATE
     UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00
     MOTE_VERSION="${MOTE_VERSION}"
     MOTE_BUILD=${MOTE_BUILD}
-    MOTE_BUILD_STR="${MOTE_BUILD}")
+    MOTE_BUILD_STR="${MOTE_BUILD_STAMP}")
   target_compile_options(Mote PRIVATE /utf-8 /W4 /permissive-)
   # 关闭链接器自动生成的 manifest，改用 app.manifest（Common Controls v6）
   target_link_options(Mote PRIVATE /MANIFEST:NO)

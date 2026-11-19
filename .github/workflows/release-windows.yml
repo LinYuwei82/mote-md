@@ -77,10 +77,14 @@ jobs:
           # 构建号必须每次唯一：同版本重发时客户端靠它判断「有新的构建」。
           $build = (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmm')
           if (-not $build) { throw '构建号为空' }
-          Write-Host "构建号: $build"
+          # 附加 git short hash 到二进制 stamp（用于追溯：build + commit）
+          $buildHash = (git rev-parse --short HEAD 2>$null)
+          if ($LASTEXITCODE -ne 0) { $buildHash = "" }
+          Write-Host "构建号: $build  hash: $buildHash"
           # 参数整体加引号：不引号时 PowerShell 会把 -DMOTE_BUILD=$build 原样传给 cmake
           # -DMOTE_STRICT_BUILD=ON：Sparkle.framework 缺失时 FATAL_ERROR（macOS 生效，Windows 无害）
-          cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release "-DMOTE_BUILD=$build" -DMOTE_STRICT_BUILD=ON
+          $buildHashArg = if ($buildHash) { "-DMOTE_BUILD_HASH=$buildHash" } else { "" }
+          cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release "-DMOTE_BUILD=$build" $buildHashArg -DMOTE_STRICT_BUILD=ON
           $cache = Get-Content build-native-ninja/CMakeCache.txt -Raw
           $stamped = [regex]::Match($cache, 'MOTE_BUILD:[A-Z]+=(\d+)').Groups[1].Value
           Write-Host "cache 中的构建号: $stamped"
