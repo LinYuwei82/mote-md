@@ -148,7 +148,8 @@ PUB_HEX="$(python3 "$MANIFEST_V2_PY" pubkey --key "$SIGN_KEY" | sed 's/.*：//')
 GUARD_PY="${GUARD_PY:-$REPO_ROOT/tools/release/guard.py}"
 GUARD_ARGS=(
   --product "$PRODUCT_DIR" --kind win --channel "$CHANNEL"
-  --schema v2 --manifest "$MANIFEST_LOCAL" --pub-hex "$PUB_HEX" --build "$BUILD"
+  --manifest "$MANIFEST_LOCAL" --pub-hex "$PUB_HEX" --build "$BUILD"
+# 注：不再传 --schema v2；guard.py 已硬编码 schema=v2（v1 清单 2026-11-18 全量删除）
 )
 if [ -n "$SETUP_PATH" ] && [ -f "$SETUP_PATH" ]; then
   GUARD_ARGS+=(--file "$SETUP_PATH" --name "$V2_SETUP_NAME"
