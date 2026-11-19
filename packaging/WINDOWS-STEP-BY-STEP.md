@@ -164,7 +164,7 @@ git clone https://gitee.com/lin-yuwei168/mote-md.git "$env:USERPROFILE\dev\mote-
 Get-ChildItem "$env:USERPROFILE\dev\mote-md"
 ```
 
-能看到 `Mote.pro`、`src`、`resources`、`packaging`。
+能看到 `native`、`core`、`platform`、`resources`、`packaging`。
 
 报 `fatal: destination path ... already exists` → 第三段第 5 条。
 
@@ -221,36 +221,25 @@ git rev-parse HEAD
 **7.3 行尾**
 
 ```powershell
-git ls-files --eol packaging/package_macos.sh packaging/package_windows.bat
+git ls-files --eol packaging/package_macos.sh tools/release/publish_windows.ps1
 ```
 
-成功：第一行含 `w/lf`（`package_macos.sh`），第二行含 `w/crlf`（`package_windows.bat`）；两行 `i/` 都是 `i/lf`。
+成功：第一行含 `w/lf`（`package_macos.sh`），第二行含 `w/crlf`（`publish_windows.ps1`）；两行 `i/` 都是 `i/lf`。
 `w/` 是工作区，`i/` 是入库内容——入库统一 LF 是对的。
 
 不信 Git 时直接数字节：
 
 ```powershell
-$b=[IO.File]::ReadAllBytes("packaging\package_windows.bat"); "CR=$(( $b -eq 13 ).Count) LF=$(( $b -eq 10 ).Count)"
+$b=[IO.File]::ReadAllBytes("tools\release\publish_windows.ps1"); "CR=$(( $b -eq 13 ).Count) LF=$(( $b -eq 10 ).Count)"
 ```
 
 成功：`CR` 与 `LF` 相等且都大于 0。
-
-**7.4 用脚本一次跑完 7.1–7.3（可选）**
-
-```powershell
-powershell -ExecutionPolicy Bypass -File packaging\setup_windows.ps1 -UserName "你的名字" -UserEmail "你的邮箱"
-echo $LASTEXITCODE
-```
-
-成功：每行以 `[OK]` 开头，末尾 `仓库已就绪`，`$LASTEXITCODE` 为 `0`。
-退出码：`2` 未装 Git、`3` 目录非空、`4` clone 失败、`5` 验收未过。
-提示「禁止运行脚本 / 未对文件进行数字签名」就是漏了 `-ExecutionPolicy Bypass`，照上面整条命令跑。
 
 ### 8. 用 Trae 打开
 
 Trae → **文件 → 打开文件夹** → 选 `C:\Users\<你>\dev\mote-md` → 信任该文件夹。
 
-成功：左侧资源树出现 `src` / `resources` / `packaging`；`Ctrl+P` 输入 `WINDOWS-SETUP` 能打开对应文档。
+成功：左侧资源树出现 `native` / `core` / `platform` / `resources` / `packaging`；`Ctrl+P` 输入 `WINDOWS-SETUP` 能打开对应文档。
 
 检查终端：Trae 里新开的终端右下角应显示 **PowerShell**。
 若是 `WSL` / `bash`，那是另一套环境——SSH 密钥、凭据管理器、行尾规则都不通，切回 PowerShell 再用。
@@ -435,10 +424,10 @@ git config --global --unset core.autocrlf
 git stash push -m "wonky-eol"
 git rm --cached -r .
 git reset --hard
-git ls-files --eol packaging/package_macos.sh packaging/package_windows.bat
+git ls-files --eol packaging/package_macos.sh tools/release/publish_windows.ps1
 ```
 
-成功：`.sh` 是 `w/lf`、`.bat` 是 `w/crlf`，`git status -sb` 干净。
+成功：`.sh` 是 `w/lf`、`.ps1` 是 `w/crlf`，`git status -sb` 干净。
 
 `git reset --hard` 会丢弃未提交改动，所以前面先 stash；确认没问题再 `git stash drop`。
 
@@ -446,6 +435,6 @@ git ls-files --eol packaging/package_macos.sh packaging/package_windows.bat
 
 ## 四、这份文档的状态
 
-由 macOS 侧整理，**未在 Windows 上实测**；`setup_windows.ps1` 同样未实测。
+由 macOS 侧整理，**未在 Windows 上实测**。
 Gitee 页面（SSH 公钥、私人令牌权限项）与 Git Credential Manager 的弹窗形态以你实机为准。
 实机跑完后把实际输出反馈回来，我再校正文中期望值。

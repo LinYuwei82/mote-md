@@ -28,7 +28,7 @@ cd $env:USERPROFILE\dev\mote-md
 git config user.name  "你的名字"      # 仓库级，只影响这一个 clone，见 1.2
 git config user.email "你的邮箱"
 git status -sb
-git ls-files --eol packaging/package_macos.sh packaging/package_windows.bat
+git ls-files --eol packaging/package_macos.sh tools/release/publish_windows.ps1
 ```
 
 没装 Git 先看 1.1；走 HTTPS + 令牌把第一行的地址换成 `https://gitee.com/lin-yuwei168/mote-md.git`，见第 3 节。
@@ -56,8 +56,6 @@ git --version    # 期望输出 git version 2.x
 没有的话：`winget install --id Git.Git -e --source winget`，或从 <https://git-scm.com/download/win> 装。
 装完**重开一个终端**再验证（PATH 不会热更新）。
 
-`packaging\setup_windows.ps1` 会做这项检测并给提示，但**不会替你安装**任何东西。
-
 ### 1.2 身份：写进仓库，不要写进全局
 
 提交作者信息来自 `user.name` / `user.email`。这个仓库建议**只设仓库级**：
@@ -71,8 +69,6 @@ git config --local --list | Select-String "user\."
 
 写全局（`--global`）也能用，但如果这台机器上还有别的项目（公司仓库、别人的账号），
 全局身份会一起被改掉，提交记录里就会出现错误的作者。仓库级只影响这一个 clone。
-
-`setup_windows.ps1` 固定只写仓库级（`git config`，不带 `--global`），这是硬约束。
 
 ### 1.3 不要动全局 `core.autocrlf`（重要）
 
@@ -233,23 +229,22 @@ git fetch origin; git rev-parse origin/main; git rev-parse HEAD    # 两个哈�
 仓库里正好有两类被 `.gitattributes` 钉死的脚本，用它们验收最直接：
 
 ```powershell
-git ls-files --eol packaging/package_macos.sh packaging/package_windows.bat
+git ls-files --eol packaging/package_macos.sh tools/release/publish_windows.ps1
 ```
 
 期望输出（`w/` 是工作区，才是真正要看的）：
 
 ```
 i/lf    w/lf      attr/text eol=lf      	packaging/package_macos.sh
-i/lf    w/crlf    attr/text eol=crlf    	packaging/package_windows.bat
+i/lf    w/crlf    attr/text=auto        	tools/release/publish_windows.ps1
 ```
 
 两点说明，避免误判：
 
 - **入库都是 `i/lf`**，这是对的（仓库统一存 LF）。
-- 在 Mac 上跑同一条命令，`.bat` 显示的是 `w/lf`：因为该文件是 `11:55` 提交的，
-  而 `.gitattributes` 到 `12:24` 才加上 `*.bat text eol=crlf`，Mac 上这份工作区文件没重新检出过。
-  属性已经生效，仓库内容没问题，只是本地工作区还没按新规则重检。Windows 上**全新 clone**
-  才是 `w/crlf`；如果你那边也是 `w/lf`（例如用了很早以前的 clone），重检一次即可：
+- 在 Mac 上跑同一条命令，`.ps1` 可能显示 `w/lf`：属性已经生效，仓库内容没问题，
+  只是本地工作区没按平台行尾重新检出。Windows 上**全新 clone** 才会是 `w/crlf`；
+  如果你那边也是 `w/lf`（例如用了很早以前的 clone），重检一次即可：
 
   ```powershell
   git rm --cached -r . ; git reset --hard
@@ -265,26 +260,12 @@ function Test-Eol([string]$p) {
   "{0,-38} CR={1,-5} LF={2,-5} -> {3}" -f $p, $cr, $lf,
     $(if ($cr -eq 0) { "LF" } elseif ($cr -eq $lf) { "CRLF" } else { "混合(异常)" })
 }
-Test-Eol packaging/package_macos.sh      # 期望 LF
-Test-Eol packaging/package_windows.bat   # 期望 CRLF
+Test-Eol packaging/package_macos.sh              # 期望 LF
+Test-Eol tools/release/publish_windows.ps1        # Windows 上期望 CRLF
 ```
 
 出现「混合」就是有问题：不要提交它，先查 `.gitattributes` 是否被改动、
 以及编辑器是否把文件另存成了别的行尾。
-
-`packaging\setup_windows.ps1` 会把 4.1–4.3 跑一遍并给结论：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File packaging\setup_windows.ps1 `
-  -UserName "你的名字" -UserEmail "你的邮箱"
-```
-
-它对已存在的目录分三种情况：已是本仓库 → 跳过 clone 只做校验；目录为空 → 直接 clone；
-目录非空且不是仓库 → **停止**，不覆盖已有文件。退出码：`2` 未装 Git、`3` 目录非空、
-`4` clone 失败、`5` 验收未通过、`0` 全部通过。脚本只读全局配置、只写仓库级配置。
-
-注意先有鸡还是先有蛋：脚本本身在这个仓库里，**第一次接入**要么按第 0 节手工 clone
-（再跑脚本复检），要么先把 `setup_windows.ps1` 从 Mac 拷过去 / 在 Gitee 网页上下载单文件再运行。
 
 ---
 
@@ -416,37 +397,34 @@ git rebase --continue
 ```powershell
 git status -sb                       # 干净、没有 "rebase in progress"
 git log --oneline -3
-git ls-files --eol packaging/package_macos.sh packaging/package_windows.bat   # 行尾没被弄坏
+git ls-files --eol packaging/package_macos.sh tools/release/publish_windows.ps1   # 行尾没被弄坏
 ```
 
-改了前端（`resources/web/*`）或 C++（`src/*`）的话，在对应的平台上重新编译、跑一遍再推。
+改了前端（`resources/web/*`）或 C++（`core/*`、`platform/*`）的话，在对应的平台上重新编译、跑一遍再推。
 
 ---
 
 ## 7. 和 Windows 编译的关系（只影响「能不能跑」，不影响「能不能同步」）
 
-同步链路只需要 Git：clone 下来就能看代码、改文档、提交、推送，**不需要 Qt**。
+同步链路只需要 Git：clone 下来就能看代码、改文档、提交、推送。
 `build/`、`dist/` 都被忽略，编译产物不会进仓库。
 
-只有在 Windows 上要**运行/打包 Windows 版**时才需要 Qt 6（MSVC 2022 x64 或 MinGW）、
-WebView2 运行时，以及 `windeployqt`；那套步骤在
-[WINDOWS-FROM-MACOS.md](WINDOWS-FROM-MACOS.md) 和 `packaging\package_windows.bat` 里。
+只有在 Windows 上要**运行/打包 Windows 版**时才需要 MSVC、CMake、WebView2 SDK 与
+WebView2 Runtime；那套步骤在 [WINDOWS-FROM-MACOS.md](WINDOWS-FROM-MACOS.md) 和
+[docs/windows-native-build-setup.md](../docs/windows-native-build-setup.md) 里。
 
 对同步有实际影响的两点：
 
-1. **前端资源在 qrc 里**，改 `resources/web/*` 后需要在各自平台重新 `make` 才能看到效果；
+1. **前端资源在构建时拷进产物**，改 `resources/web/*` 后需要在各自平台重新构建才能看到效果；
    Mac 侧验证过的改动，Windows 侧不重新编译就不会体现——这不是同步问题，别误判成「没拉到代码」。
-2. **`dist/` 不进仓库**，所以 Windows 需要的包必须在本机用 `package_windows.bat` 重新打；
-   不要把 `dist/Mote-macOS.zip` 拷过去用（里面是 arm64 的 `.app`）。
+2. **`dist/` 不进仓库**，所以 Windows 需要的包必须在本机用 `package_windows_native.ps1` 重新打；
+   不要把 `dist/Mote-macOS-native.zip` 拷过去用（里面是 arm64 的 `.app`）。
 
 ---
 
-## 8. 这份文档与脚本的验证状态（如实说明）
+## 8. 这份文档的验证状态（如实说明）
 
-- 编写与提交环境是 **macOS**，本机**没有 Windows 环境**。
-  `packaging\setup_windows.ps1` **没有在 Windows / PowerShell 上实际执行过**，
-  第 4 节的 `git ls-files --eol` 期望输出也是在 Mac 上推导的属性规则，**未在 Windows 上实测**。
-- 脚本按 Windows PowerShell 5.1 与 PowerShell 7 的公共语法编写，只用 `git` 与 .NET 基础 API，
-  不写全局配置；首次运行请按第 4 节手工复核一遍，把实际输出反馈回来再补文档。
+- 编写与提交环境是 **macOS**，本机**没有 Windows 环境**，
+  第 4 节的 `git ls-files --eol` 期望输出是在 Mac 上推导的属性规则，**未在 Windows 上实测**。
 - 涉及 Gitee 侧的操作（SSH 公钥入口、443 端口 SSH、私人令牌权限名）以 Gitee 当前页面为准，
   这里只给路径不给截图。

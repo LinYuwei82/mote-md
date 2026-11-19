@@ -65,7 +65,7 @@ struct MenuSpec {
     std::vector<CommandId> items; // 含 CommandId::Separator
 };
 
-// 菜单栏唯一来源：Qt 外壳与原生外壳都按这张表生成，保证两端顺序、标题、
+// 菜单栏唯一来源：macOS 与 Windows 外壳都按这张表生成，保证两端顺序、标题、
 // 快捷键一致。应用菜单（关于/隐藏/退出）与窗口菜单由系统约定，不在此表内。
 const std::vector<MenuSpec> &menus();
 const CommandSpec *findCommand(CommandId id);

@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-# 原生薄外壳：macOS（阶段 A，AppKit + WKWebView）与 Windows（阶段 B，Win32 + WebView2）。
-# Qt 构建仍由仓库根的 Mote.pro 负责，两者互不影响。
+# 原生薄外壳：macOS（AppKit + WKWebView）与 Windows（Win32 + WebView2）。
 # 用法：cmake -S native -B build-native && cmake --build build-native
 
 if(WIN32)
@@ -37,7 +36,7 @@ add_library(mote_tweetnacl STATIC
 target_include_directories(mote_tweetnacl PUBLIC
   "${MOTE_REPO_ROOT}/core/third_party/tweetnacl")
 
-# 无 Qt、无平台 API 的核心：macOS 与 Windows 共用
+# 无平台 API 的核心：macOS 与 Windows 共用
 add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/base64.cpp"
   "${MOTE_REPO_ROOT}/core/block_layout.cpp"

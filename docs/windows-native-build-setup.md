@@ -1,6 +1,6 @@
 # 干净 Windows 11 上搭建 mote 原生构建环境
 
-面向一台全新的 Windows 11 x64 机器，从零装到能编译、运行、跑单测。只装 Native（Win32 + WebView2）构建需要的东西；完整 Visual Studio IDE、Qt、MinGW、vcpkg 都不需要。
+面向一台全新的 Windows 11 x64 机器，从零装到能编译、运行、跑单测。只装 Native（Win32 + WebView2）构建需要的东西；完整 Visual Studio IDE、MinGW、vcpkg 都不需要。
 
 版本口径以本机实测（2026-11-14）为参照：
 
@@ -14,7 +14,6 @@
 | Ninja | 1.13.2 | 可换 VS 生成器，但本机用 Ninja |
 | WebView2 SDK | 1.0.2903.40 | NuGet 包 `Microsoft.Web.WebView2` |
 | WebView2 Runtime | 157.0.4341.46 | Win11 一般自带，Evergreen |
-| Qt | 6.9.3 `msvc2022_64` | **原生构建不需要**，只服务 Qt 回退路径 |
 
 ---
 
@@ -164,32 +163,7 @@ winget install --id Microsoft.EdgeWebView2Runtime -e
 
 缺失时程序不会崩，会弹「缺少 WebView2 Runtime」的可操作提示。
 
-## 7. Qt 6.9.3（仅 Qt 回退路径需要）
-
-**原生构建完全不读 Qt**：`native/CMakeLists.txt` 没有任何 `find_package(Qt6)`，也不需要 `CMAKE_PREFIX_PATH`。Qt 只在你要跑仓库根 `Mote.pro` 那条回退路径（qmake + Qt 外壳）时才装。
-
-装法：Qt 在线安装器（Qt Account 登录）→ 自定义安装 → 勾 `Qt 6.9.3` → `MSVC 2022 64-bit`，装到默认的 `C:\Qt`。`msvc2022_64` 对应 MSVC 14.4x 工具集，与上面的 14.44 匹配。
-
-验证：
-
-```powershell
-Test-Path C:\Qt\6.9.3\msvc2022_64\bin\qmake.exe
-& C:\Qt\6.9.3\msvc2022_64\bin\qmake.exe -query QT_VERSION
-```
-
-期望：`True` 与 `6.9.3`。
-
-`CMAKE_PREFIX_PATH` 的用法（只为以后可能出现的 Qt/CMake 工程或 IDE 识别准备，对当前原生 configure 无作用）：
-
-```powershell
-$env:CMAKE_PREFIX_PATH = "C:\Qt\6.9.3\msvc2022_64"
-# 永久写入用户环境变量（可选）
-[Environment]::SetEnvironmentVariable("CMAKE_PREFIX_PATH", "C:\Qt\6.9.3\msvc2022_64", "User")
-```
-
-Qt 回退版走 qmake，不读这个变量：`qmake6 Mote.pro && nmake`（或 `jom`）。
-
-## 8. 从零 configure + build
+## 7. 从零 configure + build
 
 同一条 PowerShell 会话里按顺序执行：
 
@@ -216,11 +190,11 @@ ctest --test-dir build-native-ninja --output-on-failure
 
 说明：
 
-- 工程根是 `native/`，不是仓库根；版本号自动从 `Mote.pro` 的 `VERSION` 读。
+- 工程根是 `native/`，不是仓库根；版本号自动从仓库根 `VERSION.txt` 读。
 - `-G Ninja` 省略时会退回 VS 生成器（需要 MSBuild），同样能编，但命令要加 `--config Release`。想用多配置生成器时改成 `cmake -S native -B build-native-win -A x64`。
 - 运行库是静态链接（`/MT`），目标机不需要 VC++ 可再发行包。
 
-## 9. 跑通的判断依据
+## 8. 跑通的判断依据
 
 | 阶段 | 期望输出 |
 |---|---|
@@ -252,7 +226,7 @@ Get-Content "$env:TEMP\mote-build.log" | Select-String "JSLOG EVAL|stats"
 
 期望 `JSLOG EVAL 44`（示例文档 44 个块）与 `NATIVE stats cjk=909 words=345`。
 
-## 10. 常见失败
+## 9. 常见失败
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
@@ -263,11 +237,10 @@ Get-Content "$env:TEMP\mote-build.log" | Select-String "JSLOG EVAL|stats"
 | 启动弹「缺少 WebView2 Runtime」 | 目标机没装 Evergreen Runtime | 执行 6 节的 `winget install` |
 | 页面空白、日志无 `page loaded` | `web/` 没拷到 exe 同级 | 确认产物目录有 `web\editor.html` 等三个文件 |
 
-## 11. 明确不用装
+## 10. 明确不用装
 
 - Visual Studio 完整 IDE（Community/Professional）——Build Tools 就够。
 - .NET 桌面开发 / ASP.NET / Azure / Python / Node 等工作负载。
 - 其它 Windows SDK 版本、Windows Driver Kit、DirectX SDK。
-- Qt（原生构建；仅 Qt 回退路径需要）。
 - MinGW、MSYS2、Strawberry Perl、vcpkg / Conan。
 - C++/CLI、ATL/MFC、C++ 分析工具。

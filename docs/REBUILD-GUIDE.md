@@ -1,9 +1,14 @@
 # Mote 复刻技术方案（交给 AI 的重建手册）
 
 > 目的：让另一个 AI 在不重复试错的前提下，按本文件重建 Mote 这个项目。
-> 结论先行：**Qt 6 只做外壳，正文交给系统 WebView；前端是零依赖的原生 JS，靠一套「块模型 + 零位移标记」维持所见即所得；PDF 与复制等平台能力全部回到原生侧实现，不依赖网页 API。**
+> 结论先行：**外壳是原生实现（macOS：AppKit + WKWebView；Windows：Win32 + WebView2），正文交给系统 WebView；前端是零依赖的原生 JS，靠一套「块模型 + 零位移标记」维持所见即所得；PDF 与复制等平台能力全部回到原生侧实现，不依赖网页 API。**
 >
 > 本文件只写有代码或文档依据的结论。标注「未验证」的条目不要当成设计承诺。
+>
+> **历史说明**：本文件主体写于 Qt 外壳时代。Qt 构建路径（`Mote.pro` + `src/`）已于
+> 2026-11-19 删除，文中涉及 qmake / macdeployqt / `src/` 的段落仅作历史参考；
+> 当前架构与构建方式以 [技术方案](技术方案.md)、[WEBVIEW-ARCHITECTURE](WEBVIEW-ARCHITECTURE.md)
+> 与 `native/CMakeLists.txt` 为准。
 
 **目录**：0 产品定义 · 1 验收线 · 2 选型与硬约束 · 3 文件地图 · 4 块模型 · 5 消息协议 · 6 平台宿主 · 7 PDF · 8 构建打包 · 9 调试验证 · 10 坑清单（P01–P39）· 11 重建路线 · 12 禁止事项 · 13 已知限制 · 14 最小骨架 · 15 打包坑点详解
 
@@ -11,7 +16,7 @@
 
 ## 0. 一句话产品定义
 
-一个 Markdown 查看 / 编辑器：窗口、菜单、文件读写、打包由 Qt 6（C++20）负责，正文的渲染与编辑交给系统 WebView（macOS：WKWebView，Windows：WebView2），不引入任何前端框架、bundler 或运行时。
+一个 Markdown 查看 / 编辑器：窗口、菜单、文件读写、打包由原生外壳（macOS：AppKit；Windows：Win32）负责，正文的渲染与编辑交给系统 WebView（macOS：WKWebView，Windows：WebView2），不引入任何前端框架、bundler 或运行时。
 
 核心交互：**正文按空行切块，点击某块就在原位显示该块 Markdown 原文，其余块保持渲染效果；离开即重新渲染。** 这不是整篇切换源码，而是逐块就地编辑。
 
@@ -35,14 +40,14 @@
 
 | 决策 | 选择 | 理由 | 被否方案 |
 | --- | --- | --- | --- |
-| 外壳 | Qt 6 Widgets（C++20，qmake） | 跨平台窗口/菜单/文件对话框/打包成熟，团队已有积累 | Electron（体积 100MB+）、Tauri（Rust 依赖链）、纯原生双份实现 |
-| 正文渲染 | 系统 WebView | 排版、选区、输入法、滚动交给系统内核；HTML/CSS 表达 Markdown 语义最快 | QtWebEngine（+100MB Chromium）、QTextDocument 自绘（旧实现，见 `backup/`） |
+| 外壳 | 原生：macOS AppKit + WKWebView、Windows Win32 + WebView2 | 不引入第三方运行时，包体最小（.app 约 4 MB、exe 约 0.6 MB） | Electron（体积 100MB+）、Tauri（Rust 依赖链）、Qt 外壳（包体 40MB 量级，已于 2026-11-19 删除） |
+| 正文渲染 | 系统 WebView | 排版、选区、输入法、滚动交给系统内核；HTML/CSS 表达 Markdown 语义最快 | QtWebEngine（+100MB Chromium）、QTextDocument 自绘（旧实现，见 `backup/`，已删除） |
 | 前端 | 原生 JS + CSS，无框架、无构建 | 页面只有一个，状态都在 DOM 上；引入框架会带来构建链和版本噪音 | React/Vue + Vite |
 | Markdown 解析 | 自写轻量解析（`editor.js`） | 只需要「块级切分 + 行内标记」，第三方库会把标记吃进 DOM，破坏零位移 | marked / markdown-it |
 | 语法高亮 | 自写词法扫描（`highlightCode`） | 同上，且要按行号栏与编辑态定制 | highlight.js / Prism |
 | 撤销 | 整篇快照 + 绝对偏移 | 语义简单、与输入法/跨块选区不冲突 | 细粒度 diff（在块模型上极易错） |
 | PDF | 原生侧抓取 + 自绘分页 | WebKit/WebView2 的现成 PDF 接口都不能直接给 A4 分页 | 网页里 `window.print()`（不可控、会被外壳布局污染） |
-| 版本号 | `Mote.pro` 的 `VERSION` 单一来源 | 构建期注入，避免多处手改 | 手写 plist / rc（Windows 仍需手写同步，见 P34） |
+| 版本号 | 仓库根 `VERSION.txt` 单一来源 | CMake 构建期注入 `Info.plist` 与 Windows 资源，避免多处手改 | 手写 plist / rc |
 
 **硬约束（改动会连带破坏其它功能，重建时必须当成不变量）：**
 
@@ -57,30 +62,31 @@
 ## 3. 文件地图（重建时按这个骨架建仓）
 
 ```
-Mote.pro                  qmake 工程，VERSION 唯一来源
-src/
-  main.cpp                入口；MOTE_LEGACY_QT=1 回退旧引擎
-  webwindow.*             主窗口：菜单、文件对话框、保存、导出、拖放落地
-  webview.h               WebEditor 抽象接口（平台无关）
-  webviewbase.*           共享宿主：消息分发、图片落盘、拖放、页面代次、待注入文档
-  macwebview.mm           WKWebView 宿主 + 按键监听 + PDF 抓取拼页
-  webview_win.*           WebView2 宿主（COM 回调、快捷键、PrintToPdf）
-  webview_win_drop.*      Windows OLE IDropTarget
-  webview_stub.cpp        其它平台占位（返回 nullptr）
-  mainwindow.* / previewview.* / codehighlighter.*   旧 Qt 引擎（仅回退，可删）
+VERSION.txt               版本号唯一来源（单行 x.y.z）
+native/CMakeLists.txt     唯一的构建入口：按平台生成 target，拷贝前端/字体/示例
+core/
+  json / base64 / paths   协议解析、图片解码、路径与 file:// 目录
+  js_bridge               外壳 → 页面的脚本片段
+  editor_controller       页面代次、ready 缓存、消息分发、脏标记
+  image_store             assets/ 落盘与重名处理
+  command_table           菜单唯一来源
+  inject_chunks           大文档分片切分（UTF-8 安全）
+  update                  更新清单解析、版本比较与升级判定
+platform/mac/             AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
+platform/win/             Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
 resources/
-  web/editor.html         唯一页面骨架（476 字节，两个占位符）
+  web/editor.html         唯一页面骨架（两个占位符）
   web/editor.css          全部样式（含打印与 PDF 清理）
-  web/editor.js           解析 + 渲染 + 编辑 + 历史 + 菜单（约 5.8k 行）
-  resources.qrc           以上全部编进二进制
+  web/editor.js           解析 + 渲染 + 编辑 + 历史 + 菜单
   fonts/                  JetBrains Mono（Light/Regular/Bold）+ OFL
-  samples/                welcome.md 与示例图
-packaging/                package_macos.sh / package_windows.bat / mote.iss / Info.plist
-tools/preflight.sh|.bat   干净目录构建 + 启动冒烟
+  icons/ samples/         图标、内置示例
+  win/                    Windows 图标资源（app.ico）
+packaging/                package_macos.sh / package_windows_native.ps1 / PACKAGING.md
+tools/preflight.sh        干净目录构建 + 启动冒烟（macOS）
 docs/                     架构、决策、验收、发行说明
 ```
 
-**页面组装方式**：`editor.html` 只有 `__MOTE_CSS__`、`__MOTE_JS__` 两个占位符。原生读取 `:/web/editor.html`、`:/web/editor.css`、`:/web/editor.js`，内联后写到**文档同目录**的隐藏文件 `.mote-preview-<pid>.html`，再加载该文件。这一段是坑 P01 的解，不要改成 `loadHTMLString`。
+**页面组装方式**：`editor.html` 只有 `__MOTE_CSS__`、`__MOTE_JS__` 两个占位符。外壳读取产物内的 `web/editor.html`、`web/editor.css`、`web/editor.js`（macOS 在 `Contents/Resources/web/`，Windows 在 exe 同级 `web/`），内联后写到**文档同目录**的隐藏文件 `.mote-preview-<pid>.html`，再加载该文件。这一段是坑 P01 的解，不要改成 `loadHTMLString`。
 
 **`editor.js` 体积警告**：单文件 5.8k 行已经偏大。重建时可以拆成「解析 / 渲染 / 编辑 / 历史 / 浮层」五个 IIFE 文件，但**不要引入 AMD/ESM/bundler**——原生按顺序拼进 `__MOTE_JS__` 即可，保持零构建。
 
@@ -147,23 +153,23 @@ docs/                     架构、决策、验收、发行说明
 
 ## 6. 平台宿主实现要点
 
-### 6.1 macOS（`macwebview.mm`）
+### 6.1 macOS（`platform/mac/web_host_view.mm`）
 
 1. 用 `WKWebView` + `loadFileURL:allowingReadAccessToURL:` 加载隐藏临时页面（P01）。
-2. `WKScriptMessageHandler` 收 `NSDictionary` → `NSJSONSerialization` → JSON 字符串 → `QJsonDocument`。
+2. `WKScriptMessageHandler` 收 `NSDictionary` → `NSJSONSerialization` → JSON 字符串 → `core/json` 解析。
 3. **按键**：`NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown` 接管 `Cmd+Z / Shift+Cmd+Z / Cmd+Y`，返回 `nil` 吞掉事件；其它按键放行（P04、P05）。
 4. **拖放**：`WKWebView` 子类注册 `NSPasteboardTypeFileURL`，`draggingEntered` 只接受 md/图片，`performDragOperation` 把真实路径交给 `handleNativeFileDrop`。
 5. **PDF**：见第 7 节。
 6. 诊断：`MOTE_KEYLOG`、`MOTE_EVAL`、`MOTE_SNAPSHOT`、`MOTE_PDF_AS`、`MOTE_EXPORT_AS`。
 
-### 6.2 Windows（`webview_win.*`）
+### 6.2 Windows（`platform/win/web_host_view.cpp`）
 
-1. `WebView2Loader.dll` 必须与 exe 同级；`QMAKE_POST_LINK` 用 `$(DESTDIR)` 复制，不能写死 `release/`（P33）。
+1. `WebView2Loader.dll` 必须与 exe 同级；CMake 的 POST_BUILD 步骤负责复制，不能写死构建子目录（P33）。
 2. 文档创建前用 `AddScriptToExecuteOnDocumentCreated` 注入消息桥，`editor.js` 一加载就会 `post ready`，桥必须先生效。
 3. 快捷键走 `ICoreWebView2AcceleratorKeyPressed`，在 `AcceleratorKeyPressed` 里把 `Ctrl+Z` 等转成 `window.mote.undo()` 并标记 handled。
 4. `PrintToPdf` 在 `ICoreWebView2_7`，打印设置工厂在 `ICoreWebView2Environment6`；Runtime < 108 直接报错，不做降级（P29）。
 5. 拖放用 OLE `IDropTarget`，与 macOS 共用 `moteIsMarkdownPath/moteIsImagePath` 判定。
-6. 中文路径：全程 `QString → std::wstring`，不要经过 `toLocal8Bit`。
+6. 中文路径：全程 UTF-8 `std::string` ↔ `std::wstring`（Win32 边界才转），不要经过本地代码页。
 
 ---
 
@@ -202,31 +208,28 @@ docs/                     架构、决策、验收、发行说明
 
 ### 8.1 macOS
 
-依赖：macOS 14+、Qt 6.11.1（Homebrew，`qmake6`/`macdeployqt` 在 PATH）、Xcode CLT。
+依赖：macOS 14+、Xcode CLT、CMake 3.25+（不需要 Qt）。
 
 ```bash
-qmake6 Mote.pro && make -j4
+cmake -S native -B build-native && cmake --build build-native
 bash packaging/package_macos.sh --dmg --clean-dist
 ```
 
-脚本固定八步：影子构建 → `macdeployqt` → **删除 QtPdf/QtSvg/虚拟键盘插件** → 修绝对路径/去 rpath/strip → Ad-hoc 签名 → 组装 → DMG → 依赖自检。
+脚本固定七步：影子构建 → 依赖自检（不得链接 Qt）→ 去 rpath/strip → 签名/公证 → 做 DMG → 组装 zip → 外部路径自检。
 自检要求 `otool -L/-D` 中 `/opt/homebrew`、`/usr/local`、`/Users/` 均为 0 行。
 
-产物：`dist/Mote-macOS-<ver>.dmg`（约 34MB）、`dist/Mote-macOS.zip`（约 31MB，解压 75MB）。
-包体主要来自 `libicudata`（约 32MB）；要压到 40MB 以内只能换不带 ICU 的 Qt 构建，尚未做。
+产物：`dist/Mote-macOS-native-<ver>.dmg`（约 1.7MB）、`dist/Mote-macOS-native.zip`（`.app` 约 4.1MB，含 Sparkle.framework）。
 
 ### 8.2 Windows
 
-`packaging/package_windows.bat` 出绿色版 zip；`packaging/build_installer.ps1` + `mote.iss` 出安装包。
+`packaging/package_windows_native.ps1` 出绿色版 `dist/Mote-Windows.zip`（exe + `WebView2Loader.dll` + `web/` + `fonts/`）。
 WebView2 SDK（NuGet 1.0.2903.40）放在仓库外，用 `WEBVIEW2_SDK` 覆盖路径。
 
 ### 8.3 版本号
 
-- 唯一来源：`Mote.pro` 的 `VERSION`。
-- 程序内：`DEFINES += MOTE_VERSION=\"$$VERSION\"`。
-- macOS：`Info.plist` 用 `@FULL_VERSION@`，qmake 生成 bundle 时展开——**不要手改成常量**。
-- Windows：`app.rc` 由 rc.exe 直接编译，qmake 不替换，**必须手工同步三处**。
-- 打包脚本自动用版本号命名产物，不要在脚本里再写一遍。
+- 唯一来源：仓库根 `VERSION.txt`（单行 `x.y.z`）。
+- CMake 读取后同时注入编译宏、macOS `Info.plist` 与 Windows `app.rc` 的版本字段。
+- 不要在任何脚本里再写一份版本常量；打包脚本自动用版本号命名产物。
 
 ---
 

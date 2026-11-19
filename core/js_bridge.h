@@ -30,8 +30,7 @@ std::string insertImage(std::string_view relativePath);
 std::string applyBaseHref(std::string_view fileUrl);
 std::string clearBaseHref();
 
-// 状态栏移入前端：外壳给 body 加平台类后 #statusbar 才显示，
-// 这样 Qt 构建不会多出一条与原生状态栏重复的条。platform 取 "mac" / "win"。
+// 状态栏移入前端：外壳给 body 加平台类后 #statusbar 才显示。platform 取 "mac" / "win"。
 std::string enableStatusBar(std::string_view platform);
 std::string statusMessage(std::string_view text);
 

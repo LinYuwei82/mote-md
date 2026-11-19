@@ -6,7 +6,7 @@
 git clone git@gitee.com:lin-yuwei168/mote-md.git
 ```
 
-本机的机械检查交给 `tools/preflight.sh`（macOS）与 `tools/preflight.bat`（Windows），用法见文末。
+本机的机械检查交给 `tools/preflight.sh`（macOS），用法见文末。
 
 ## 1. 分支策略
 
@@ -18,15 +18,15 @@ git clone git@gitee.com:lin-yuwei168/mote-md.git
 
 平台专属文件可以两边同时改：
 
-- macOS：`src/macwebview.mm`、`src/macwebview.h`、`packaging/package_macos.sh`、`packaging/macos/*`
-- Windows：`src/webview_win*.cpp`、`src/webview_win*.h`、`resources/win/app.rc`、`packaging/*.bat`、`packaging/*.ps1`
+- macOS：`platform/mac/*`、`packaging/package_macos.sh`、`packaging/sign_macos.sh`
+- Windows：`platform/win/*`、`packaging/package_windows_native.ps1`
 
 **共享处同一时间只允许一台机器改**：
 
-- `src/webviewbase.*`、`src/webpage.*`
+- `core/*`（协议、状态机、菜单表、图片落盘、分片切分、更新判定）
 - `resources/web/*`（`editor.js` / `editor.css` / `editor.html`）
-- `Mote.pro`
-- 其它两端共用的外壳与接口：`src/webwindow.*`、`src/webview.h`、`src/main.cpp`
+- `native/CMakeLists.txt`、`VERSION.txt`
+- 其它两端共用的外壳与接口：`platform/*` 里的公共头文件
 
 规矩：改之前先 `git pull`；这台机器把改动合入 `main` 之前，另一台不得动同一处。必须并行时先约定到文件级范围（例如一边只改 `editor.js` 的查找部分，另一边只改 CSS），避免同一文件双写。
 
@@ -64,9 +64,8 @@ git status -sb
 4. 才在 `main` 上打 `vX.Y.Z` 并推；
 5. 另一台 `git pull` 对齐。
 
-版本号以 `Mote.pro` 的 `VERSION` 为准：`Info.plist` 的 `@FULL_VERSION@`、发行说明与 DMG 文件名都从它派生。
-`resources/win/app.rc` 里的 FILEVERSION/PRODUCTVERSION 是 rc.exe 直接编译的，qmake 不会替换，
-**每次改版本都要手工同步**；改完在两台机器上各构建一次，并在 Windows 产物属性里确认版本一致。
+版本号以仓库根 `VERSION.txt` 为准：CMake 读它填 `Info.plist`、Windows 资源版本与 DMG 文件名，
+`resources/win/app.rc` 由 CMake 从 `app.rc.in` 生成，不需要手工同步。
 
 ## 6. 已知事故记录
 
@@ -81,11 +80,14 @@ git status -sb
 
 ## Windows 侧环境
 
-- Qt 6.x（MSVC 2022 64-bit 或 MinGW 64-bit，与 Qt 套件一致）
+- VS 2022 生成工具（MSVC x64）与 Windows SDK
+- CMake ≥ 3.25、Ninja
 - WebView2 SDK（`WEBVIEW2_SDK` 环境变量指向 NuGet 包解压目录；构建期需要头文件与 `WebView2Loader.dll`）
 - WebView2 Runtime（Win10/11 通常已预装；缺失时从微软官网装 Evergreen Runtime）
 - Git for Windows（自带 OpenSSH；把公钥加到 Gitee）
-- 构建：`qmake Mote.pro && nmake`（MSVC）或 `mingw32-make`（MinGW）
+- 构建：`cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build-native-ninja`
+
+完整装机步骤见 [windows-native-build-setup.md](windows-native-build-setup.md)。
 
 ## 注意
 
@@ -101,14 +103,8 @@ bash tools/preflight.sh              # 构建 + 启动冒烟
 bash tools/preflight.sh --no-smoke   # 只构建
 ```
 
-- 依次做：打印当前分支与未提交改动 → 在独立目录（默认 `/tmp/mote-preflight`，可用 `MOTE_PREFLIGHT_DIR` 覆盖）跑 `qmake6`（回退 `qmake`）+ `make -j` → 用项目自带的 `MOTE_EVAL` 钩子启动一次冒烟（超时自动退出），打印块数、图片数等指标。
+- 依次做：打印当前分支与未提交改动 → 在独立目录（默认 `/tmp/mote-preflight`，可用 `MOTE_PREFLIGHT_DIR` 覆盖）跑 `cmake` 原生构建 → 用项目自带的 `MOTE_EVAL` 钩子启动一次冒烟（超时自动退出），打印块数、图片数等指标。
 - 失败时高亮第一条 `error:` 并以非 0 退出，完整日志留在构建目录的 `build.log`。
 
-Windows：
-
-```bat
-tools\preflight.bat
-```
-
-- 依次做：打印当前分支与未提交改动 → `qmake` + `nmake`（回退 `mingw32-make`）→ 检查 errorlevel 与 `Mote.exe` 是否存在 → 提示手动启动验证。
-- **未在 Windows 验证**：首次在 Windows 机器上跑通后，请把结论补回本节。
+Windows 侧没有对应脚本：按 [windows-native-build-setup.md](windows-native-build-setup.md)
+在开发者命令行里 `cmake --build`，再手动启动 `Mote.exe` 验证。

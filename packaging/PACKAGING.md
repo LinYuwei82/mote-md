@@ -1,17 +1,19 @@
 # Mote · 打包与交付说明
 
-本工程是一个 C++20 + Qt 6（qmake `.pro`）的 Markdown 查看/编辑桌面程序。
-本文档说明打包方式、产物位置，以及在两台平台上的实际执行情况。
+本工程是一个 C++20 原生薄外壳（macOS：AppKit + WKWebView；Windows：Win32 + WebView2）的
+Markdown 查看/编辑桌面程序，不链接 Qt。
+本文档说明打包方式、产物位置，以及在两个平台上的实际执行情况。
 
 | 平台 | 状态 | 产物 |
 | --- | --- | --- |
-| macOS（本机，已执行） | 已完成并验证 | `dist/Mote-macOS.zip`（内含 `.app`） |
-| Windows（由 Windows 机器执行） | 已构建并校验，本机未复现 | `Mote-Setup-0.3.0.exe`、`Mote-Windows.zip` |
+| macOS（本机，已执行） | 已完成并验证 | `dist/Mote-macOS-native.zip`（内含 `.app`）、`dist/Mote-macOS-native-<版本>.dmg` |
+| Windows（由 Windows 机器执行） | 已构建并校验，本机未复现 | `dist/Mote-Windows.zip` |
 
-> 本机为 macOS，Windows 的两个产物由 Windows 机器按第 2 节脚本构建并校验，
-> 校验值见 `docs/release-notes-0.3.0.md`；本机未重复执行该流程。
+> 本机为 macOS，Windows 产物由 Windows 机器按第 6 节的脚本构建并校验，
+> 本机未重复执行该流程。
 >
-> 这两个是 Qt 路径的旧产物。Windows 当前默认发布包是原生薄外壳，见第 6 节。
+> 第 1.4–1.14 节是 **Qt 构建时代**（2026-11-10 前后）的实测记录，保留作历史；
+> Qt 构建路径已在 2026-11-19 删除，当前打包方式以 1.1–1.3 与第 6 节为准。
 
 ---
 
@@ -20,42 +22,38 @@
 ### 1.1 环境
 
 - macOS 14 及以上（Apple Silicon，arm64）；更早的系统未经测试
-- Qt 6.11.1（`qmake6` / `macdeployqt` 在 PATH 中），来源二选一：
-  - **官方安装器（推荐，不带 ICU）**：`QMAKE=~/Qt/6.11.1/macos/bin/qmake6`，打出的 DMG 约 24MB
-  - Homebrew：Qt 链接 ICU，包内多出约 37MB（`libicudata` 32MB），DMG 约 34MB
-  - 脚本会在包内发现 `libicu*.dylib` 时打印提示；代码两边完全一样，只有 Qt 构建不同
-- Xcode Command Line Tools（提供 `codesign`、`iconutil`、`strip`）
+- Xcode Command Line Tools（提供 `codesign`、`strip`）
+- CMake 3.25+（`native/` 是唯一的构建入口）
+- 不需要额外 SDK：WebKit、AppKit 都由系统提供
 - 工程目录：`/Users/lin/Projects/mote`（不在 iCloud 同步范围，避免每次构建都触发同步）
 
 ### 1.2 一键打包
 
 ```bash
-bash packaging/package_macos.sh          # 只产出 zip（原有流程）
+bash packaging/package_macos.sh          # 只产出 zip
 bash packaging/package_macos.sh --dmg    # 额外产出一个拖拽安装式 DMG
 ```
 
 脚本依次完成：
 
-1. 在 **临时目录**（`$TMPDIR/mote-build`）做影子构建，避免 iCloud「文稿」目录的
+1. 在 **临时目录**（`$TMPDIR/mote-build-native`）做影子构建，避免 iCloud「文稿」目录的
    FinderInfo 扩展属性导致 `codesign` 报 `resource fork, Finder information ... not allowed`；
-2. `qmake6` + `make`（Release，C++20）；
-3. `macdeployqt` 复制 Qt 框架与插件，并改写依赖路径；
-4. 删掉用不到的插件与被牵连的大依赖（`platforminputcontexts`、`iconengines`、
-   `libqpdf` 及 QtVirtualKeyboard / QtPdf / QtSvg / QtQml / QtQuick）；
-5. 把漏改的绝对库路径（如 Homebrew 的 `libbrotlicommon`）统一改写为包内路径，
-   并删除包内所有 Mach-O 上指向 `/opt/homebrew`、`/usr/local` 的开发机 rpath；
-6. `strip` 调试符号、清理扩展属性、**Ad-hoc 签名**（`codesign --force --deep --sign -`）；
-7. 在临时目录组装 `Mote-macOS/`（含 `.app`、`samples/` 与字体授权 `licenses/`）
+2. `cmake -S native` + 构建（Release，C++20）；
+3. 依赖自检：可执行文件不得链接 Qt；
+4. `strip` 调试符号、删除包内指向 `/opt/homebrew`、`/usr/local` 的 rpath、
+   清理扩展属性并做**全包外部路径自检**；
+5. **Developer ID 签名 + 公证**（找不到证书时 fallback 到 ad-hoc，见 1.5）；
+6. 在临时目录组装 `Mote-macOS-native/`（含 `.app`、`samples/` 与字体授权 `licenses/`）
    并 `ditto` 压缩成 zip；
-8. 带 `--dmg` 时，再组装一个只含 `Mote.app` 与 `Applications` 替身的暂存目录，
-   用 `hdiutil create -format UDZO -fs HFS+` 打成 `Mote-macOS-<版本>.dmg` 并自检（详见 1.14）。
+7. 带 `--dmg` 时，再组装一个只含 `Mote.app` 与 `Applications` 替身的暂存目录，
+   用 `hdiutil create -format UDZO -fs HFS+` 打成 `Mote-macOS-native-<版本>.dmg`。
 
 ### 1.3 产物
 
 ```
-dist/Mote-macOS.zip                 # 30 MB（30,919,184 字节）
-└── Mote-macOS/
-    ├── Mote.app/                   # 解压后 75 MB，内含 Qt 框架、插件与代码字体
+dist/Mote-macOS-native.zip
+└── Mote-macOS-native/
+    ├── Mote.app/                   # 只含系统框架，无第三方运行时
     ├── licenses/
     │   ├── JetBrainsMono-OFL.txt             # 内置代码字体的 SIL OFL 授权
     │   └── LICENSE-AGPL-3.0.txt              # 项目自身的 AGPL-3.0 全文
@@ -63,26 +61,22 @@ dist/Mote-macOS.zip                 # 30 MB（30,919,184 字节）
         ├── welcome.md
         └── sample-diagram.png
 
-dist/Mote-macOS-0.3.0.dmg          # 33 MB（34,252,460 字节，--dmg 才有）
+dist/Mote-macOS-native-<版本>.dmg
 └── Mote（挂载后的卷）
     ├── Mote.app                    # 与 zip 里同一个 app
     └── Applications -> /Applications          # 拖进去即安装
 ```
 
-- SHA256（zip）：`3001d127b22131eecd87d784d36a65c5ad5eeaab1531ea779bb03791ba99e149`
-- SHA256（dmg）：`7ff5693b77ff1c8877a7c4e729367ab81c845963305ae60c5f26385c8f58a189`
+- 当前体积：`.app` 约 4.1 MB（含 Sparkle.framework），DMG 约 1.7 MB
 - 可执行文件架构：`arm64`（Apple Silicon 原生，Intel 机器不可直接运行）
 - Bundle ID：`com.mote.Mote`
-- 签名：Ad-hoc（`codesign --verify --deep --strict` 通过）
-
-> 两个哈希都对应**本次**构建。zip 重打包后哈希会变；DMG 里带卷 UUID 与时间戳，
-> 即使内容相同、每次重建的哈希也不同，不能用它做内容一致性校验，只用它核对分发文件完整性。
+- 版本号读自仓库根 `VERSION.txt`，由 CMake 填进 `Info.plist`
 
 ### 1.4 干净环境验证（已实际执行）
 
-> 说明：1.4–1.9 的验证记录针对**旧的纯 Qt 文本引擎实现**。当前默认架构已改为
-> 「Qt 外壳 + 系统 WKWebView」，其打包与验证见 **1.10**；旧实现仍编在包里，
-> 以 `MOTE_LEGACY_QT=1` 启动即可回到旧界面。
+> 说明：1.4–1.14 的验证记录产生于 **Qt 构建时代**（Qt 外壳 + `src/` 实现）。
+> 2026-11-19 起 Qt 构建路径已删除，产物统一由 `native/` 的 AppKit + WKWebView 外壳产出；
+> 这些记录保留作历史，当前口径见 1.1–1.3 与 README。
 
 把 zip 解压到全新临时目录 `/tmp/clean-test`，在**不设置任何 Qt 环境变量**的终端里
 直接启动 `.app` 内的可执行文件，并使用 `samples/welcome.md` 验证：
@@ -620,50 +614,39 @@ bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-ma
 > 本节所有内容均为操作说明。当前 macOS 机器无法编译 Windows 程序，
 > `Mote.exe` 与 `Mote-Windows.zip` 需在 Windows 机器上构建产出。
 >
-> 从 macOS 搬迁到 Windows 的分步操作（拷贝清单、传输方式、Qt 组件勾选、环境变量、
-> 路径规范、报错处理、换机验证）见 **[WINDOWS-FROM-MACOS.md](WINDOWS-FROM-MACOS.md)**。
+> 从 macOS 搬迁到 Windows 的分步操作见 **[WINDOWS-FROM-MACOS.md](WINDOWS-FROM-MACOS.md)**；
+> 从零装机（Build Tools 组件、WebView2 SDK、验证命令）见
+> **[docs/windows-native-build-setup.md](../docs/windows-native-build-setup.md)**。
 
 ### 2.1 前置条件
 
 1. Windows 10/11 x64。
-2. 安装 **Qt 6.5 以上**（Qt Online Installer），推荐 **6.11.1**（与本机打包环境一致；
-   更早的 6.x 未验证），勾选：
-   - `MSVC 2022 64-bit`（推荐，需配合 Visual Studio 生成工具），或
-   - `MinGW 64-bit`（推荐给「不想装运行库」的场景，脚本会带上 GCC 运行库 DLL）。
-3. 若用 MSVC：安装 Visual Studio 2022 生成工具（含「使用 C++ 的桌面开发」），
+2. Visual Studio 2022 生成工具（含「使用 C++ 的桌面开发」）与 Windows SDK，
    并从开始菜单打开 **「x64 Native Tools Command Prompt for VS 2022」**。
-4. 若用 MinGW：把 `%QTDIR%\bin` 和 MinGW 的 `bin` 加入 `PATH`。
+3. CMake ≥ 3.25、Ninja。
+4. WebView2 SDK：`WEBVIEW2_SDK` 指向 NuGet 包解出的 `pkg` 目录。
+5. WebView2 Evergreen Runtime（Win11 一般自带；缺失时从微软官网安装）。
 
 ### 2.2 一键打包（推荐）
 
-在项目根目录的命令行中执行：
+在项目根目录的 PowerShell 中执行：
 
-```bat
-set QTDIR=C:\Qt\6.11.1\msvc2022_64
-packaging\package_windows.bat
-```
-
-MinGW 套件：
-
-```bat
-set QTDIR=C:\Qt\6.11.1\mingw_64
-set USE_MINGW=1
-packaging\package_windows.bat
+```powershell
+$env:WEBVIEW2_SDK = "C:\dev\webview2sdk\pkg"
+cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-native-ninja
+powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 ```
 
 脚本会：
 
-1. 清理并新建 `build\`、`dist\`；
-2. `qmake ..\Mote.pro`；
-3. `nmake`（或 `mingw32-make -j`）编译 Release；
-4. 复制 `Mote.exe` 到 `dist\Mote-Windows\`；
-5. `windeployqt --release --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw`
-   部署 Qt DLL、MSVC 运行库与 `plugins\`（`platforms\qwindows.dll`、`imageformats\`、`styles\` 等）；
-6. 从 WebView2 SDK 复制 `build\native\x64\WebView2Loader.dll` 到 `dist\Mote-Windows\`；
-7. 删除 `opengl32sw.dll`、`d3dcompiler_47.dll`、`translations\` 下的其它 `.qm`、`qml\`、`*.pdb` 等无用文件，
-   只保留 `translations\qtbase_zh_CN.qm`（QMessageBox 等标准按钮的中文文案来自它）；
-8. 复制 `samples\`（示例 md 与图片）与 `licenses\`（`JetBrainsMono-OFL.txt`、`LICENSE-AGPL-3.0.txt`）；
-9. 用 PowerShell `Compress-Archive` 压成 `dist\Mote-Windows.zip`。
+1. `cmake --build` 构建 Release（`-SkipBuild` 跳过编译，`-BuildDir` 指定构建目录）；
+2. 清理并新建 `dist\Mote-Windows\`；
+3. 复制 `Mote.exe` 与 `WebView2Loader.dll`；
+4. 复制 `web\`、`fonts\`、`samples\` 与 `licenses\`；
+5. 自检：产物内不得出现 `Qt6*.dll` 与 `platforms\qwindows.dll`，`dumpbin /dependents`
+   只允许系统 DLL（`api-ms-*` 放行）与 `WebView2Loader.dll`；
+6. `Compress-Archive` 压成 `dist\Mote-Windows.zip`。
 
 产物结构：
 
@@ -671,58 +654,50 @@ packaging\package_windows.bat
 dist\Mote-Windows\
 ├── Mote.exe
 ├── WebView2Loader.dll
-├── Qt6Core.dll / Qt6Gui.dll / Qt6Widgets.dll / ...
-├── platforms\qwindows.dll
-├── imageformats\ ... , styles\ ...
+├── web\                    （editor.html / editor.css / editor.js）
+├── fonts\JetBrainsMono-Light.ttf
 ├── licenses\JetBrainsMono-OFL.txt, LICENSE-AGPL-3.0.txt
 └── samples\welcome.md, sample-diagram.png
 ```
 
 ### 2.3 手动逐步执行（不用脚本时）
 
-```bat
-set QTDIR=C:\Qt\6.11.1\msvc2022_64
-set WEBVIEW2_SDK=C:\path\to\Microsoft.Web.WebView2
-mkdir build && cd build
-%QTDIR%\bin\qmake.exe ..\Mote.pro
-nmake
-cd ..
+```powershell
+$env:WEBVIEW2_SDK = "C:\path\to\Microsoft.Web.WebView2\pkg"
+cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-native-ninja
 
 mkdir dist\Mote-Windows
-copy build\Mote.exe dist\Mote-Windows\
-%QTDIR%\bin\windeployqt.exe --release --compiler-runtime --no-translations --no-system-d3d-compiler --no-opengl-sw dist\Mote-Windows\Mote.exe
-copy "%WEBVIEW2_SDK%\build\native\x64\WebView2Loader.dll" dist\Mote-Windows\
-del dist\Mote-Windows\opengl32sw.dll
-del dist\Mote-Windows\d3dcompiler_47.dll
+copy build-native-ninja\Mote.exe dist\Mote-Windows\
+copy build-native-ninja\web dist\Mote-Windows\web -Recurse
+copy build-native-ninja\fonts dist\Mote-Windows\fonts -Recurse
+copy "$env:WEBVIEW2_SDK\build\native\x64\WebView2Loader.dll" dist\Mote-Windows\
 mkdir dist\Mote-Windows\samples
 copy resources\samples\welcome.md dist\Mote-Windows\samples\
 copy resources\samples\sample-diagram.png dist\Mote-Windows\samples\
 mkdir dist\Mote-Windows\licenses
 copy resources\fonts\OFL.txt dist\Mote-Windows\licenses\JetBrainsMono-OFL.txt
 copy LICENSE dist\Mote-Windows\licenses\LICENSE-AGPL-3.0.txt
+Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip -Force
 ```
 
-然后在**没装过 Qt 的 Windows 机器**上解压 zip，双击 `Mote.exe`，
-按第 3 节清单逐项确认。
+然后在干净 Windows 机器上解压 zip，双击 `Mote.exe`，按第 3 节清单逐项确认。
 
 ### 2.4 Windows 注意事项
 
-- **MSVC 构建**依赖 VC++ 2015-2022 x64 运行库（`vcruntime140.dll`、`msvcp140.dll` 等），
-  目标机器没装时程序会启动失败。两种解决方式：
-  1. 目标机器安装微软官方「VC++ 2015-2022 Redistributable (x64)」；
-  2. 改用 MinGW 套件构建（`windeployqt` 会带上 `libgcc_s_seh-1.dll`、
-     `libstdc++-6.dll`、`libwinpthread-1.dll`），真正做到拷贝即用。
-- 程序图标通过 `resources/win/app.rc`（`RC_FILE`）嵌入 exe，`.rc` 与 `app.ico` 同目录；
-  若某些环境 rc 找不到图标，可把 `app.rc` 里的 `"app.ico"` 改成绝对路径。
+- **静态 CRT**：CMake 用 `/MT` 链接 MSVC 运行库，目标机器不需要额外安装
+  VC++ Redistributable。
+- 程序图标与文件版本由 CMake 从 `platform/win/app.rc.in` 生成 `app.rc` 后编译进 exe，
+  图标取自 `resources/win/app.ico`，版本号取自仓库根 `VERSION.txt`，都不需要手工同步。
+- WebView2 运行时由目标机器提供（Evergreen），不随包分发；缺运行时时应用会提示安装。
 - 未做代码签名，SmartScreen 可能提示「Windows 已保护你的电脑」，
   点「更多信息 → 仍要运行」即可。
-- 若用 MinGW 且出现 `nmake` 找不到的错误，请确认设置了 `USE_MINGW=1`。
 
 ---
 
 ## 3. 交付前自检清单（两个平台通用）
 
-- [ ] 解压后直接双击启动，无「缺少 DLL / Qt 平台插件」报错
+- [ ] 解压后直接双击启动，无「缺少 DLL / WebView2 运行时」报错
 - [ ] 打开 `samples/welcome.md`：标题、列表、代码块底色、表格边框、图片均正常
 - [ ] 代码块按围栏语言着色（关键字/字符串/注释/数字/函数/类型名），无语言标识的代码块保持纯文本
 - [ ] 代码块与行内代码使用 JetBrains Mono 字形（不需系统预装），包内 `licenses/` 含 OFL 授权
@@ -746,38 +721,29 @@ copy LICENSE dist\Mote-Windows\licenses\LICENSE-AGPL-3.0.txt
 
 ## 4. 资源与路径策略
 
-> qrc 资源、图标与字体对两条路径相同；凡涉及 `QTextDocument` / `QTextBrowser` 的条目只适用于
-> **旧 Qt 文本引擎**（`MOTE_LEGACY_QT=1` 时启用，实现位于 `src/previewview.*`、
-> `src/codehighlighter.*`）。默认路径是 WebView 架构，见 `docs/WEBVIEW-ARCHITECTURE.md`。
-
-- 图标、样式表、内置示例文档都通过 `resources/resources.qrc` 编进可执行文件，
-  运行时用 `:/icons/...`、`:/styles/app.qss`、`:/samples/welcome.md` 访问，**不依赖外部路径**。
-- （旧引擎）打开的 md 文档以**该文件所在目录**作为基地址（`QTextDocument::setBaseUrl`），
-  因此文档里的相对图片路径在打包后依然能解析。WebView 路径对应的是页内 `<base href>`。
-- 内置示例文档的基地址是 `qrc:/samples/`，示例图片也一并打包在 qrc 中。
-- Windows 的 exe 图标走 `.rc` + `RC_FILE`；macOS 的 `.app` 图标走 `ICON = app.icns`
-  与自定义 `Info.plist`（`CFBundleIconFile`）。
-- （旧引擎）代码高亮的语言标识直接来自 Qt 的 markdown 导入结果（`QTextBlockFormat` 的
-  `BlockCodeLanguage` 属性），由自写的 `src/codehighlighter.cpp` 逐行扫描着色，
-  **没有引入任何第三方 Markdown 解析或高亮库**；找不到标识或语言不认识时不着色。
-  WebView 路径用 `resources/web/editor.js` 里自写的着色器，同样不依赖第三方库。
-- 代码字体 JetBrains Mono 以 `.ttf` 形式放在 `resources/fonts/`（Light / Regular / Bold）
-  并由 qrc 编入可执行文件，运行时不依赖系统已安装字体；`OFL.txt` 同时随 qrc 与发布目录
-  的 `licenses/` 提供。回退链为 JetBrains Mono → Menlo → SF Mono → 系统等宽，
-  改动字体时不要破坏这条链。
-- （旧引擎）预览文档先在脱离视图的 `QTextDocument` 上完成解析、样式与高亮，再一次性
-  `setDocument()` 交给 `QTextBrowser`。不要把这些格式操作改回“边挂载边修改”，
-  否则大文档会因反复重排慢到数秒（见 1.6）。
+- 前端只有一份：`resources/web/`（`editor.html` / `editor.css` / `editor.js`）。
+  构建时 CMake 把它拷进 macOS bundle 的 `Contents/Resources/web/`，Windows 则拷到 exe 同级的
+  `web/`；运行时不依赖仓库路径。
+- 内置示例 `resources/samples/welcome.md` 同样随构建拷入；发布包额外在包内保留
+  `samples/` 与 `licenses/`，方便用户直接打开示例。
+- 图标：macOS 用 `resources/icons/app.icns`（`MACOSX_PACKAGE_LOCATION Resources`），
+  Windows 用 `platform/win/app.rc.in` 引用 `resources/win/app.ico`，版本号字段由 CMake 填充。
+- 代码字体 JetBrains Mono 以 `.ttf` 形式放在 `resources/fonts/`，构建时拷进产物，
+  运行时不依赖系统已安装字体；`OFL.txt` 随发布目录的 `licenses/` 提供。
+  回退链为 JetBrains Mono → Menlo → SF Mono → 系统等宽，改动字体时不要破坏这条链。
+- 语法高亮与块模型全部在 `resources/web/editor.js`，不依赖第三方解析/高亮库；
+  分层与消息协议见 `docs/WEBVIEW-ARCHITECTURE.md`。
 
 ---
 
 ## 5. 未能完成 / 受限的部分
 
-1. **Windows 包未在本机复现**：本机是 macOS，没有 MSVC/MinGW 与 `windeployqt`，
+1. **Windows 包未在本机复现**：本机是 macOS，没有 MSVC，
    无法交叉编译。产物已由 Windows 机器按第 2 节脚本构建并校验，本机未重复构建。
 2. **仅 arm64 架构**：macOS 包只包含 arm64 切片，Intel Mac 需要重新构建。
-3. **未做 Apple 公证（notarization）**：只有 Ad-hoc 签名，从网络下载的 zip / dmg
-   首次打开可能被 Gatekeeper 拦截，需要右键「打开」或去掉 quarantine 属性（见 1.14）。
+3. **未做 Apple 公证（notarization）**：没有 Developer ID 证书时只有 Ad-hoc 签名，
+   从网络下载的 zip / dmg 首次打开可能被 Gatekeeper 拦截，需要右键「打开」或去掉
+   quarantine 属性（见 1.14 的历史记录）。
 4. **拖拽打开**：功能已实现（`dragEnterEvent`/`dropEvent`），但当前环境无法用自动化
    模拟真实的 Finder 拖放；其余打开方式（文件对话框、命令行传入路径）已实际验证。
 5. **导出 PDF 未提供**（本批次实测结论，不是遗漏）：WebKit 在 macOS 上只给两条路，都不满足
@@ -792,7 +758,7 @@ copy LICENSE dist\Mote-Windows\licenses\LICENSE-AGPL-3.0.txt
    
    结论：不做半成品。若以后要做，可行方向是拿导出好的自包含 HTML 交给系统打印面板由用户
    「存储为 PDF」，而不是绕开用户在应用内静默生成。
-6. **链接的复制验证方式**：`Cmd+A`/`Cmd+C` 在 WKWebView + Qt 的外壳里不会产生选区（历史遗留），
+6. **链接的复制验证方式**：`Cmd+A`/`Cmd+C` 在 WKWebView 外壳里不会产生选区（历史遗留），
    因此链接的「复制出标准 Markdown」走产品自身的 `copy` 处理器 + 合成 `DataTransfer` 读取
    `text/plain` 验证；真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 
@@ -800,9 +766,8 @@ copy LICENSE dist\Mote-Windows\licenses\LICENSE-AGPL-3.0.txt
 
 ## 6. Windows 原生薄外壳（阶段 B）打包与基线
 
-**这一节是 Windows 的默认发布路径**：产物 `dist/Mote-Windows/` 与 `dist/Mote-Windows.zip`，
-不含 Qt。Qt 打包（`package_windows.bat` + `build_installer.ps1`/`mote.iss`）保留为
-回退与对照路径，两边不要同时打到同一个目录。
+**这一节是 Windows 的发布路径**：产物 `dist/Mote-Windows/` 与 `dist/Mote-Windows.zip`，
+不含 Qt。
 
 ### 6.1 打包
 
@@ -813,7 +778,7 @@ powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 ```
 
 - 默认构建目录 `build-native-ninja`（可用 `-BuildDir` 覆盖），`-SkipBuild` 跳过编译。
-- 默认产物名 `Mote-Windows`（可用 `-OutName` 覆盖；与 Qt 包并存时传 `-OutName Mote-Windows-native`）。
+- 默认产物名 `Mote-Windows`（可用 `-OutName` 覆盖）。
 - 产物 `dist/Mote-Windows/`：`Mote.exe`、`WebView2Loader.dll`、`web/`、`fonts/`、
   `samples/`、`licenses/`；同名 zip。
 - 自检：产物内不得出现 `Qt6*.dll` 与 `platforms/qwindows.dll`；`dumpbin /dependents`

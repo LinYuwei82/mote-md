@@ -8,7 +8,7 @@
 namespace mote {
 
 // 前端消息用的最小 JSON 实现：只需要对象/数组/字符串/数字/布尔/空。
-// 不引第三方库，Qt 构建与原生构建共用同一份解析，保证两端协议完全一致。
+// 不引第三方库，macOS 与 Windows 共用同一份解析，保证两端协议完全一致。
 class JsonValue
 {
 public:
