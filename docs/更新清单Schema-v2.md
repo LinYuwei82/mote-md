@@ -22,6 +22,9 @@
 > 2026-11-19：DevCard 1.2.8 已发布——WebView 内没有 Ed25519，远端清单改由本地服务端
 > `POST /api/version/verify` 验签后再提供 `artifacts`（见第四节），修复「下载更新包 /
 > 安装并重启」在没有本地清单时永远置灰的问题。
+> 2026-11-19：`manifest_v2.py resign` 扩展为可改 `notes_url`（`--notes-url`），
+> 补发说明页无需重新打包；三份线上清单（devcard 1.2.8、xiaotu 1.0.3、mote 1.0.4）
+> 现均含该字段。工具改动已通过 `sync_guard.sh` 同步到另外两个仓库。
 > 日期：2026-11-19
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 > 背景：三款产品均在内测期、无存量用户，趁此窗口把清单格式一次统一，
@@ -233,6 +236,29 @@ guard 按此规则校验命名，清理脚本按 `<product>-<version>` 前缀分
 由 `sync_guard.sh` 一并同步（guard 与 manifest_v2 同一脚本维护）。
 三个发布脚本调用它生成并签名 manifest.json，不再各自 printf 拼 JSON
 （Mote 在 v2 之前用 windows.json 手工拼接且未签名，切换时已一并补上）。
+
+改完本文件必须跑 `bash tools/release/sync_guard.sh`：它会先跑两个自检，
+再把 `guard.py` / `manifest_v2.py` 拷到同级仓库并重算两份 `.sha256`。
+
+### 8.1 事后修改已发布的清单
+
+`resign` 子命令用于**不重新打包**、只改单个字段并整体重签，两个场景：
+
+```bash
+# 灰度放量：只改 rollout_percent
+python3 tools/release/manifest_v2.py resign --manifest dist/manifest.json \
+  --key ~/.config/mote-updates/ed25519_seed.b64 --rollout 60
+
+# 补发/更换说明页：只改 notes_url（自动刷新 updated_at）
+python3 tools/release/manifest_v2.py resign --manifest dist/manifest.json \
+  --key ~/.config/mote-updates/ed25519_seed.b64 \
+  --notes-url https://dl.xiaotu.online/mote/release-notes-1.0.4.html
+```
+
+约束：输入必须是已签名清单（拒绝半成品）；`--notes-url` 必须是绝对
+`http(s)`；版本、产物 URL / size / sha256、`build` 等字段一律保持原样；
+写完自动用私钥推导的公钥自验签。`--platform` 可选
+`all` / `macos` / `windows`，默认 `all`。
 
 ## 九、改动清单
 

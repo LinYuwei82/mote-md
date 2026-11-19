@@ -157,6 +157,10 @@ https://dl.xiaotu.online/mote/release-notes-1.0.4.html
 > 截至 2026-11-19，三份线上清单的 `notes_url` 均已就位：
 > devcard 1.2.8、xiaotu 1.0.3、mote 1.0.4（其中 xiaotu / mote 两份为补传后重签）。
 > 客户端在 `notes_url` 非空时显示「查看完整更新说明…」/「查看更新详情」，为空则不出按钮。
+>
+> 补发说明页不必重新打包：`manifest_v2.py resign --notes-url <绝对地址>` 只改该字段
+> 并整体重签（自动刷新 `updated_at`，产物字段原样保留），完整四步见
+> [发布工作流 §9.1](./发布工作流.md)。清单因此会变大约 100 字节，属正常现象。
 
 ## 五、官网网页（`xiaotu-site` 桶 / ECS）
 

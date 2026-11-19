@@ -13,9 +13,14 @@
 #   oss://<bucket>/mote/mote-<ver>-macos-arm64.dmg            长缓存 immutable（v2 命名）
 #   oss://<bucket>/mote/updates/stable/appcast.xml             60 秒缓存
 #   oss://<bucket>/mote/updates/stable/manifest.json           60 秒缓存
+#   oss://<bucket>/mote/release-notes-<ver>.html               3600 秒缓存（仓库存在说明页时）
 # 对外地址：
 #   https://dl.xiaotu.online/mote/updates/stable/appcast.xml    ← Info.plist SUFeedURL
 #   https://dl.xiaotu.online/mote/updates/stable/manifest.json  ← 自研检查读取
+#   https://dl.xiaotu.online/mote/release-notes-<ver>.html      ← 清单 notes_url
+#
+# 说明页：未传 NOTES_URL 时自动检测 docs/release-notes-<ver>.html，上传并写进清单；
+#         传了 NOTES_URL 则以传入的绝对地址为准（页面需自行保证可访问）。
 #
 # 依赖：Sparkle 发行包里的 bin/sign_update、python3 + oss2、spctl
 #
