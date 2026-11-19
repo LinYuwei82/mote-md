@@ -120,6 +120,11 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > `VERSION.txt`。2026-11-19 修复清单 `build` 错位（发布时刻 vs 编译时刻）后，1.0.4 按构建号一致重发。
 > 同一补丁顺带补齐发布说明：`mote/release-notes-1.0.4.html`（5,951 字节）已上传，
 > 清单两个平台段均写入 `notes_url` 并重新签名（`updated_at=2026-11-19T02:04:48Z`）。
+>
+> 注意 1.0.4 的 DMG 只有 750,328 字节：该次 macOS 构建时 `resources/Sparkle.framework`
+> 不在位，CMake 仅告警并继续，产物不含 framework（`.app` 约 2 MB）。这类包能正常运行，
+> 但「下载并安装」会退回打开浏览器下载；带 framework 的构建约 1.7 MB。发布前请确认
+> framework 已放回 `resources/`，见 README 的打包说明。
 
 ## 四、PDF 手册与发布说明
 
@@ -132,9 +137,6 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | `mote/manual.pdf` | 8,140,873 | `application/pdf` | `public, max-age=86400` |
 | `mote/release-notes-1.0.4.html` | 5,951 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.3.html` | 5,410 | `text/html; charset=utf-8` | `public, max-age=3600` |
-| `mote/release-notes-1.0.2.html` | 5,664 | `text/html; charset=utf-8` | `public, max-age=3600` |
-| `mote/release-notes-1.0.1.html` | 7,453 | `text/html; charset=utf-8` | `public, max-age=3600` |
-| `mote/release-notes-1.0.0.html` | 9,184 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.2.html` | 5,664 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.1.html` | 7,453 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.0.html` | 9,184 | `text/html; charset=utf-8` | `public, max-age=3600` |

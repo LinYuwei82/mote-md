@@ -67,7 +67,9 @@ dist/Mote-macOS-native-<版本>.dmg
     └── Applications -> /Applications          # 拖进去即安装
 ```
 
-- 当前体积：`.app` 约 4.1 MB（含 Sparkle.framework），DMG 约 1.7 MB
+- 当前体积：带 `Sparkle.framework` 时 `.app` 约 4.1 MB、DMG 约 1.7 MB；缺 framework 时
+  `.app` 约 2 MB、DMG 约 750 KB（1.0.4 线上包即此类：应用内更新退回浏览器下载）。
+  打包前请把 framework 放到 `resources/`，否则 CMake 只警告并继续构建。
 - 可执行文件架构：`arm64`（Apple Silicon 原生，Intel 机器不可直接运行）
 - Bundle ID：`com.mote.Mote`
 - 版本号读自仓库根 `VERSION.txt`，由 CMake 填进 `Info.plist`
