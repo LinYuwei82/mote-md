@@ -13,10 +13,14 @@
 > 二进制里却是「编译时刻」，清单永远比安装包新，客户端反复提示同一版本。
 > 现由构建步骤把 `MOTE_BUILD` 传给发布步骤，`build` 必须等于二进制内的值（见 3.4）；
 > mote 1.0.4 按此规则重发。
+> 2026-11-19：小兔 1.0.3（macOS build `202611181448`）起，macOS 的「是否有更新 / 待安装 /
+> 验证期 / 恢复模式」全部按 `version` 判定。此前 `platforms.macos.build` 恒为 `0`，却被拿去
+> 和本地日期构建号比较，导致 macOS 更新入口实际不可用；现在 macOS 段的 `build` 仅作占位，
+> 不参与任何判定（见第 6 节）。
 > 2026-11-19：DevCard 1.2.8 已发布——WebView 内没有 Ed25519，远端清单改由本地服务端
 > `POST /api/version/verify` 验签后再提供 `artifacts`（见第四节），修复「下载更新包 /
 > 安装并重启」在没有本地清单时永远置灰的问题。
-> 日期：2026-11-18
+> 日期：2026-11-19
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 > 背景：三款产品均在内测期、无存量用户，趁此窗口把清单格式一次统一，
 > 不做长期双写过渡（旧内测版重装或自动升一次即可）。
@@ -56,11 +60,11 @@
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `version` | string | 是 | semver，如 `1.0.2`；平台间版本独立递增 |
-| `build` | int | 是 | Windows 构建号，必须等于二进制内编译时的 `MOTE_BUILD`（如 `202611181542`），见 3.4；macOS 无构建号填 `0` |
+| `build` | int | 是 | Windows 构建号：小兔 `XIAOTU_BUILD`、Mote `MOTE_BUILD`，必须等于二进制内编译时的值（如 `202611181542`），见 3.4；macOS 固定 `0`，不参与任何更新判定 |
 | `min_os` | string | 是 | 如 `14.0` / `10.0` |
 | `notes_url` | string | 否 | 发布说明页，绝对 https 地址；客户端「查看更新详情」直接打开；缺省不发 |
 | `rollout_percent` | int | 否 | 0–100，缺省 `100`（灰度用） |
-| `mandatory` | bool | 是 | 强制更新开关（现仅小兔使用） |
+| `mandatory` | bool | 否 | 强制更新开关；缺省为 `false`。发布脚本只在传 `--mandatory` 时写入，当前三份线上清单均无此字段 |
 | `mandatory_deadline` | string | 否 | ISO 8601 UTC |
 | `mandatory_reason` | string | 否 | |
 | `artifacts` | object | 是 | 见 3.3 |
@@ -68,7 +72,9 @@
 > `notes_url` 由发布脚本写入：小兔与 DevCard 的脚本会在仓库存在
 > `docs/release-notes-<版本>.html` 时连同产物一起上传并填入该字段；Mote 的 Windows 脚本
 > 同样自动检测，macOS 脚本只接受 `NOTES_URL`（说明页需先手工上传）。缺页则不写，避免客户端出现死链。
-> 小兔 1.0.3 与 devcard 1.2.8 都带了发行说明；mote 1.0.4 没有，所以线上 mote 清单不含该字段。
+> 当前线上只有 devcard 1.2.8 带该字段。小兔 1.0.3 的说明页已在仓库
+> （`docs/release-notes-1.0.3.html`），但该次发布早于自动上传逻辑，线上文件与清单字段都还没有，
+> 需在下个版本发布时补齐；mote 1.0.4 没有说明页，清单同样不含该字段。
 > 小兔 1.0.3 起，Windows 更新卡片在 `notes_url` 非空时显示「查看更新详情」，
 > 调用系统默认浏览器打开；该字段为空则按钮不出现。
 
@@ -88,12 +94,12 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 
 ### 3.4 构建号一致性（Windows 必读）
 
-`build` 不是「发布时刻」的流水号，而是**编译进二进制**的 `MOTE_BUILD`：
+`build` 不是「发布时刻」的流水号，而是**编译进二进制**的构建号（小兔 `XIAOTU_BUILD`、Mote `MOTE_BUILD`）：
 
 | 环节 | 取值 |
 |---|---|
-| 构建（configure） | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>`：写进 CMakeCache，同时编进 `Mote.exe` |
-| 打包 / 发布 | 从 CMakeCache 读同一个值（Actions 由构建步骤经 `MOTE_BUILD_STAMP` 传递），写进 `manifest.json` |
+| 构建（configure） | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>` / `-DXIAOTU_BUILD=<UTC yyyyMMddHHmm>`：写进 CMakeCache，同时编进 `Mote.exe` / `Xiaotu Inventory` |
+| 打包 / 发布 | 从 CMakeCache 读同一个值（Mote 的 Actions 由构建步骤经 `MOTE_BUILD_STAMP` 传递；小兔本地发布用 `BUILD=<同一值> tools/package/publish_windows.sh`），写进 `manifest.json` |
 
 两者不一致的后果：
 
@@ -104,6 +110,11 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 约束：`publish_windows.ps1` 未显式传 `-Build` 时从 `build-native-ninja/CMakeCache.txt`
 读取编译值，读不到直接失败，不再退回当前时间；`release-windows.yml` 会把构建步骤
 实际生效的值传给发布步骤。发布后按[发布工作流](./发布工作流.md) 第 6 节核对。
+
+**DevCard 例外**：其 Windows 客户端没有可靠的本机构建号（版本资源第 4 段恒 `0`），
+本地服务端按 `0` 处理并跳过同版本 `build` 比较（见 `dev_card_cpp/server/src/server.cpp`
+的 `available` 判定）。因此 devcard 同版本重发不会提示更新，修复只能升 `version`；
+清单里的 `build` 仅作记录与排查锚点。
 
 ## 四、签名规则
 
@@ -177,9 +188,13 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 ## 六、客户端解析规则
 
 1. 只取 `platforms.<自己的平台>`，忽略另一平台与一切未知字段。
-2. 更新判定：macOS 只比 `version`；Windows 先比 `version`，同版本再比 `build`
-   （`build` 小于等于本机 → 无更新，沿用小兔现状）。所以清单里的 `build` 必须与
-   安装包内编译时的 `MOTE_BUILD` 逐位相同，否则同版本会反复提示，见 3.4。
+2. 更新判定：
+   - macOS：只比 `version`，`build` 固定 `0` 且不参与任何判定。小兔 1.0.3 起，
+     「是否有更新 / 待安装 / 验证期 / 恢复模式」全部按版本号；Mote、DevCard 的 macOS 壳同口径。
+   - Windows：小兔与 Mote 先比 `version`，同版本再比 `build`（`build` 小于等于本机 → 无更新），
+     清单 `build` 必须与安装包内编译值逐位相同，否则同版本会反复提示，见 3.4；
+     DevCard 没有本机构建号，同版本不比 `build`，一律视为无更新。
+   - 修复只能靠递增 `version`；构建号只在「同版本重发也要让客户端感知」时有意义（小兔 / Mote）。
 3. 产物选择：Windows 安装版读 `artifacts.setup`，绿色包读 `artifacts.portable`；
    macOS 读 `artifacts.dmg`。
 4. 校验顺序：

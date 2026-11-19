@@ -50,8 +50,8 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 | 对象 | 大小 | Content-Type | Cache-Control |
 |---|---|---|---|
-| `devcard/updates/stable/manifest.json` | 1,420 B | `application/json` | `no-cache, max-age=60` |
-| `devcard/updates/stable/appcast.xml` | 1,277 B | `application/xml` | `no-cache, max-age=60` |
+| `devcard/updates/stable/manifest.json` | 1,420 B | `application/json; charset=utf-8` | `no-cache, max-age=60` |
+| `devcard/updates/stable/appcast.xml` | 1,277 B | `application/xml; charset=utf-8` | `no-cache, max-age=60` |
 | `xiaotu/updates/stable/manifest.json` | 1,253 B | `application/json` | `no-cache, max-age=60` |
 | `xiaotu/updates/stable/appcast.xml` | 714 B | `application/rss+xml` | `no-cache, max-age=60` |
 | `mote/updates/stable/manifest.json` | 1,278 B | `application/json` | `no-cache, max-age=60` |
@@ -59,7 +59,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 > v1 清单（`latest.json` / `windows.json`）已删除，v2 清单与 appcast 是 updates/ 目录下仅有的内容。
 
-> 清单统一 60 秒缓存，发布后最多 1 分钟生效。`appcast.xml` 的 Content-Type 小兔与 Mote 是 `rss+xml`、DevCard 是 `xml`，均能被 Sparkle 正常解析。
+> 清单统一 60 秒缓存，发布后最多 1 分钟生效。`appcast.xml` 的 Content-Type 小兔与 Mote 是 `application/rss+xml`、DevCard 是 `application/xml; charset=utf-8`（两个 json 也是 DevCard 带 charset），均能被 Sparkle 正常解析。
 > 三个产品的清单与 appcast 现在都是 `no-cache, max-age=60`（DevCard 自 1.2.8 起对齐）。
 
 ## 三、安装包：dmg / exe / zip
@@ -94,8 +94,11 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 > Windows 1.0.3（build `202611190001`）与 macOS 1.0.3 均已按 v2 发布：
 > 壳内地址为 `https://dl.xiaotu.online/xiaotu/updates/stable/manifest.json`。
-> 该版修复 Windows 更新链路（下载静默失败、检查结果被打回、安装无响应），
-> 并新增发行说明 `xiaotu/release-notes-1.0.3.html`（3,986 字节）。
+> 该版修复 Windows 更新链路（下载静默失败、检查结果被打回、安装无响应）；
+> macOS 侧自 1.0.3 起把「是否有更新 / 待安装 / 验证期 / 恢复模式」全部改为按 `version`
+> 判定（`platforms.macos.build` 固定 `0`），此前按构建号比较，更新入口实际不可用。
+> 发行说明 `xiaotu/release-notes-1.0.3.html` 已在仓库（3,986 字节），但该次发布早于
+> 自动上传逻辑，线上 404、清单也没有 `notes_url`，下个版本重发时补齐。
 > dmg 卷名自 1.0.2 起改用英文 `Xiaotu Inventory`（中文卷名在自动化环境
 > 会被 TCC 拦截，见 `make_dmg.sh` 注释）。1.0.2 的 3 个包仍可访问，回滚可直接复用。
 
@@ -123,7 +126,6 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | `devcard/manual.pdf` | 5,563,312 | `application/pdf` | `public, max-age=86400` |
 | `devcard/release-notes-1.2.8.html` | 4,592 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `xiaotu/manual.pdf` | 3,702,580 | `application/pdf` | `public, max-age=86400` |
-| `xiaotu/release-notes-1.0.3.html` | 3,986 | `text/html; charset=utf-8` | `no-cache` |
 | `mote/manual.pdf` | 8,140,873 | `application/pdf` | `public, max-age=86400` |
 | `mote/release-notes-1.0.3.html` | 5,410 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.2.html` | 5,664 | `text/html; charset=utf-8` | `public, max-age=3600` |
@@ -146,7 +148,7 @@ https://dl.xiaotu.online/mote/release-notes-1.0.3.html
 > 缺页则不写该字段，避免客户端出现死链。PDF 手册仍是手工上传。
 >
 > 小兔 1.0.3 起，Windows 更新卡片在 `notes_url` 非空时显示「查看更新详情」，
-> 调用系统默认浏览器打开；为空则按钮不出现。
+> 调用系统默认浏览器打开；为空则按钮不出现（当前线上小兔清单无该字段，按钮不显示）。
 
 ## 五、官网网页（`xiaotu-site` 桶 / ECS）
 
@@ -214,10 +216,10 @@ https://xiaotu.online/                      # ECS（备案中）
 | 对象类型 | Cache-Control | Content-Type |
 |---|---|---|
 | dmg / exe / zip | `public, max-age=31536000, immutable` | dmg/exe `application/octet-stream`，zip `application/zip` |
-| manifest.json / appcast.xml | `no-cache, max-age=60` | `application/json` / `application/rss+xml`（DevCard 为 `application/xml`） |
+| manifest.json / appcast.xml | `no-cache, max-age=60` | `application/json` / `application/rss+xml`；DevCard 为 `application/json; charset=utf-8` / `application/xml; charset=utf-8` |
 | `*.dmg.edSignature` | `public, max-age=300` | `text/plain; charset=utf-8` |
 | manual.pdf | `public, max-age=86400` | `application/pdf` |
-| release-notes-*.html | `public, max-age=3600`（小兔为 `no-cache`，由 `publish_oss.sh` 上传） | `text/html; charset=utf-8` |
+| release-notes-*.html | `public, max-age=3600`；小兔由 `publish_oss.sh` 上传（1.0.3 的尚未上传，下个版本补） | `text/html; charset=utf-8` |
 | 网页 HTML / 404 | `no-cache` | `text/html; charset=utf-8` |
 | 网页 CSS / JS / 图片 | `public, max-age=604800` | 按扩展名 |
 | logs/ | 无 | `application/octet-stream` |
