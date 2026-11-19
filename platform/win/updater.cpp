@@ -50,6 +50,20 @@ namespace mote::win {
 
 namespace {
 
+// ---- 二进制内构建号标记（供 guard.py 二次校验）
+//
+// 发布脚本从 CMakeCache 读出 MOTE_BUILD 写入清单，
+// guard.py 上传前扫描绿色包 / setup.exe 里的 EXE 字节，比对清单 build 与
+// 本机构建号一致——防止脚本读错 CMakeCache 导致同版本反复提示。
+// 这里放一条不会被 LTO 扔掉的静态字符串 "MOTE_BUILD=<digits>"。
+#ifndef MOTE_BUILD_STR
+#define STRINGIFY_(x) #x
+#define STRINGIFY(x) STRINGIFY_(x)
+#define MOTE_BUILD_STR STRINGIFY(MOTE_BUILD)
+#endif
+constexpr const char kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR;
+constexpr const char *const kBuildStampRef = kBuildStamp;  // 防优化器丢弃
+
 // 与 macOS 的 SUFeedURL 同源：v2 统一清单放在 updates/stable/manifest.json
 constexpr wchar_t kDefaultManifestUrl[] =
     L"https://dl.xiaotu.online/mote/updates/stable/manifest.json";
