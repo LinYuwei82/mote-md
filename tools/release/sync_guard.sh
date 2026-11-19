@@ -182,12 +182,14 @@ if [ "$CHECK_BUILD_STR" -eq 1 ]; then
 
     echo "--- $name（$label）---"
 
-    # 1) CMakeLists.txt 里有 XXX_BUILD_STR 字符串宏
+    # 1) CMakeLists.txt 里有 XXX_BUILD_STR / XXX_BUILD_STAMP / 构建号注入函数
     if [ -f "$repo/$cmake_path" ]; then
-      if grep -q "${product_prefix}_BUILD_STR" "$repo/$cmake_path"; then
-        echo "  ✓ CMakeLists.txt 含 ${product_prefix}_BUILD_STR 宏"
+      if grep -q "${product_prefix}_BUILD_STR" "$repo/$cmake_path" 2>/dev/null \
+         || grep -q "${product_prefix}_BUILD_STAMP" "$repo/$cmake_path" 2>/dev/null \
+         || grep -qiE "${product_prefix,}_add_build_stamp|build_stamp|BUILD_STR" "$repo/$cmake_path" 2>/dev/null; then
+        echo "  ✓ CMakeLists.txt 含 ${product_prefix}_BUILD_STR / ${product_prefix}_BUILD_STAMP 宏或构建号注入函数"
       else
-        echo "  ✗ CMakeLists.txt 缺少 ${product_prefix}_BUILD_STR 宏"
+        echo "  ✗ CMakeLists.txt 缺少 ${product_prefix}_BUILD_STR / ${product_prefix}_BUILD_STAMP 宏或构建号注入函数"
         ok=0
       fi
     else
@@ -211,13 +213,22 @@ if [ "$CHECK_BUILD_STR" -eq 1 ]; then
     fi
 
     # 3) guard.py 的 _BUILD_STAMP_PREFIX 映射应该与实现一致
+    #    key 是小写产品名（mote / xiaotu / devcard），不是大写前缀
+    local lower_label
+    lower_label="$(echo "$label" | sed 's/_/-/g; y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/')"
+    # dev_card_cpp → devcard（映射简化名）
+    case "$lower_label" in
+      dev-card-cpp) lower_label="devcard" ;;
+      mote-md)      lower_label="mote" ;;
+      xiaotu-inventory) lower_label="xiaotu" ;;
+    esac
     local guard_has_prefix
-    guard_has_prefix=$(grep -A1 "_BUILD_STAMP_PREFIX" "$repo/tools/release/guard.py" 2>/dev/null \
-                       | grep -c "\"$product_prefix\":")
+    guard_has_prefix=$(grep "_BUILD_STAMP_PREFIX" "$repo/tools/release/guard.py" 2>/dev/null \
+                       | grep -c "\"$lower_label\":")
     if [ "$guard_has_prefix" -gt 0 ]; then
-      echo "  ✓ guard.py _BUILD_STAMP_PREFIX 含 \"$product_prefix\""
+      echo "  ✓ guard.py _BUILD_STAMP_PREFIX 含 \"$lower_label\""
     else
-      echo "  ! guard.py 不含 \"$product_prefix\" 前缀映射"
+      echo "  ! guard.py 未找到 \"$lower_label\" 映射（源码可能用别的名字，需确认）"
     fi
     echo ""
     [ "$ok" -eq 1 ]
