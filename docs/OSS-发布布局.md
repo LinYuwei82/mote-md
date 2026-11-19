@@ -296,7 +296,7 @@ python3 tools/release/guard.py verify-live --product xiaotu --kind win \
   --file <setup.exe> --zip <portable.zip>
 ```
 
-它统一校验：产品/通道、文件名（v1 或 v2 规则）、版本单调、同名覆盖风险、清单字段与 SHA256、
+它统一校验：产品/通道、文件名（**仅 v2 规则**，v1 命名已于 2026-11-18 全量删除）、版本单调、同名覆盖风险、清单字段与 SHA256、
 线上 Content-Type，以及 dmg / 绿色包内嵌的更新地址。
 
 #### Windows BUILD_STR 机制（2026-11-19 上线）
