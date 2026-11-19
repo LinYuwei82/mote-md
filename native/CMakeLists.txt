@@ -189,6 +189,27 @@ else()
   # 为浏览器下载（2026-11-19 mote 1.0.4 即因此重发）。默认 WARNING 兼容开发机本地跑不
   # 起来 Sparkle 的场景；发布脚本 / CI 传 -DMOTE_STRICT_BUILD=ON 升级为 FATAL_ERROR。
   set(MOTE_SPARKLE_FRAMEWORK "${MOTE_REPO_ROOT}/resources/Sparkle.framework")
+
+  # Sparkle 2.x 的 tarball 缺 Versions/Current 符号链接（已知缺陷）。
+  # 顶层链接 Sparkle -> Versions/Current/Sparkle 如果 Current 不存在会整体断链。
+  # 这里自动探测 Versions 下唯一的版本子目录（如 B / C / D …），创建 Current -> <letter> 链接。
+  # 这样任何人在任何新机器 setup Sparkle 都不用手动操作。
+  if(IS_DIRECTORY "${MOTE_SPARKLE_FRAMEWORK}" AND
+     NOT EXISTS "${MOTE_SPARKLE_FRAMEWORK}/Versions/Current" AND
+     IS_DIRECTORY "${MOTE_SPARKLE_FRAMEWORK}/Versions")
+    file(GLOB SPARKLE_VERSIONS RELATIVE "${MOTE_SPARKLE_FRAMEWORK}/Versions"
+         "${MOTE_SPARKLE_FRAMEWORK}/Versions/*")
+    list(FILTER SPARKLE_VERSIONS EXCLUDE REGEX "^Current$")
+    list(LENGTH SPARKLE_VERSIONS SPARKLE_VER_COUNT)
+    if(SPARKLE_VER_COUNT EQUAL 1)
+      list(GET SPARKLE_VERSIONS 0 SPARKLE_VER)
+      message(STATUS "Sparkle.framework: 自动补建 Versions/Current -> ${SPARKLE_VER} 符号链接（Sparkle tarball 已知缺陷）")
+      file(CREATE_LINK "${SPARKLE_VER}" "${MOTE_SPARKLE_FRAMEWORK}/Versions/Current" SYMBOLIC)
+    elseif(SPARKLE_VER_COUNT GREATER 1)
+      message(WARNING "Sparkle.framework Versions 下有多个目录：${SPARKLE_VERSIONS}，请手动指定 Current")
+    endif()
+  endif()
+
   if(NOT EXISTS "${MOTE_SPARKLE_FRAMEWORK}/Sparkle")
     if(MOTE_STRICT_BUILD)
       message(FATAL_ERROR
