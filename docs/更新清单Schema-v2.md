@@ -30,7 +30,8 @@
 > 2026-11-19：`manifest_v2.py resign` 扩展为可改 `notes_url`（`--notes-url`），
 > 补发说明页无需重新打包；三份线上清单（devcard 1.2.8、xiaotu 1.0.3、mote 1.0.4）
 > 现均含该字段。工具改动已通过 `sync_guard.sh` 同步到另外两个仓库。
-> 日期：2026-11-19
+> 2026-11-20：DevCard BUILD_STR 双宏落地（`DEVCARD_BUILD_STAMP=<int>` + `DEVCARD_BUILD_STAMP_STR="<int>"`），guard.py 对三产品做相同的 BUILD_STR 二次校验不再跳过 DevCard，selftest 补 DevCard 正向用例；sync_guard.sh `--check-build-str` 覆盖 DevCard；DevCard 本地验证工具 verify_build_stamp.ps1（8/8 PASS）；三仓库新增 UTF-8 BOM 三道闸（`.gitattributes` + `tools/hooks/pre-commit` + `setup-hooks.ps1`）。
+> 日期：2026-11-20
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 > 背景：三款产品均在内测期、无存量用户，趁此窗口把清单格式一次统一，
 > 不做长期双写过渡（旧内测版重装或自动升一次即可）。
@@ -104,13 +105,15 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 
 ### 3.4 构建号一致性（Windows 必读）
 
-`build` 不是「发布时刻」的流水号，而是**编译进二进制**的构建号（小兔 `XIAOTU_BUILD`、Mote `MOTE_BUILD`、DevCard `DEVCARD_BUILD`）：
+`build` 不是「发布时刻」的流水号，而是**编译进二进制**的构建号。三产品注入机制统一，但宏名略有差异：
 
-| 环节 | 取值 |
-|---|---|
-| 构建（configure） | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>` / `-DXIAOTU_BUILD=<UTC yyyyMMddHHmm>` / `-DDEVCARD_BUILD=<UTC yyyyMMddHHmm>`：写进 CMakeCache，同时编进各自的 Windows 二进制 |
-| BUILD_STR（2026-11-19 上线） | CMake 同时注入**字符串宏** `-DMOTE_BUILD_STR="..."` / `-DXIAOTU_BUILD_STR="..."`，壳源码放 `kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR;` 静态字符串进 .rdata 段 |
-| 打包 / 发布 | 从 CMakeCache 读同一个值（小兔本地发布脚本自动读，Mote / DevCard 的 Actions 由构建步骤经 `<PRODUCT>_BUILD_STAMP` 传递），写进 `manifest.json` |
+| 产品 | 整数宏（CMake configure 直接注入，写进 CMakeCache） | 字符串宏（壳源码拼接 BUILD_STR 用） | 壳源码 BUILD_STR 位置 |
+|---|---|---|---|
+| Mote | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>` | `-DMOTE_BUILD_STR="<UTC>"`（顶层 CMakeLists.txt 直接注入） | `platform/win/updater.cpp`：`constexpr kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR` |
+| 小兔 | `-DXIAOTU_BUILD=<UTC>` | `-DXIAOTU_BUILD_STR="<UTC>"`（顶层 CMakeLists.txt 直接注入） | `shell/win/updater_win.cpp`：`constexpr kBuildStamp[] = "XIAOTU_BUILD=" XIAOTU_BUILD_STR` |
+| DevCard | `-DDEVCARD_BUILD_STAMP=<UTC>`（函数注入） | `-DDEVCARD_BUILD_STAMP_STR="<UTC>"`（`cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数同时注入双宏） | `shell/win/main.cpp`：`constexpr kBuildStamp[] = "DEVCARD_BUILD_STAMP=" DEVCARD_BUILD_STAMP_STR` |
+
+DevCard 双宏原因：core 模块里的 `compiled_build_number()` 需要纯整数宏做 `static_cast<uint64_t>`；shell 里的 BUILD_STR 需要字符串宏做 C++ 字符串字面量拼接。**分开注入、各司其职，缺一不可**。guard.py 统一搜索的前缀是 `b"DEVCARD_BUILD_STAMP="`。
 
 三者不一致的后果：
 
@@ -130,9 +133,9 @@ setup.exe  ──→ innounp 解包壳  ──→ 同上
 | 场景 | guard.py 行为 |
 |---|---|
 | zip + setup 同时存在 | 只扫 zip（壳是同一份编译产物，等价）；setup 那条跳过 `✓ setup.exe 同源于已校验的绿色包` |
-| 只有 zip | 解包 zip → 扫 shell.exe → 比对 |
-| 只有 setup | innounp 解包 ISCC 安装包 → 扫内部 shell.exe → 比对 |
-| DevCard | `_BUILD_STAMP_PREFIX["devcard"] = None`，整个 check 跳过（正确） |
+| 只有 zip | 解包 zip → 扫壳 EXE（Mote `Mote.exe` / 小兔 `xiaotu-shell.exe` / DevCard `DevCard.exe`） → 比对 |
+| 只有 setup | innounp 解包 ISCC 安装包 → 扫内部壳 EXE → 比对 |
+| 三产品统一前缀 | `_BUILD_STAMP_PREFIX = {"mote": b"MOTE_BUILD=", "xiaotu": b"XIAOTU_BUILD=", "devcard": b"DEVCARD_BUILD_STAMP="}`，不再跳过 DevCard |
 
 比对不一致 → **阻断发布**（ExitCode 1，`die()`），再也不会出现"清单 build 大于安装包内值"的事故。
 
@@ -151,12 +154,13 @@ setup.exe 是 Inno Setup 6 压缩包，直接读字节找不到内部壳 EXE。g
 读不到直接失败，不再退回当前时间；`release-windows.yml` 会把构建步骤
 实际生效的值传给发布步骤。发布后按[发布工作流](./发布工作流.md) 第 6 节核对。
 
-**DevCard 已补齐（2026-11-19）**：此前 DevCard Windows 客户端没有可靠的本机构建号
-（版本资源第 4 段恒 `0`），同版本不比 `build`、修复只能升 `version`。现通过 CMake
-`DEVCARD_BUILD` 选项 → `devcard_add_build_stamp()` 函数 → 所有 target 注入
-`-DDEVCARD_BUILD_STAMP=<UTC>`，运行时 `compiled_build_number()` 条件编译返回注入值
-（未注入时回退 0，自动跳过 build 比较，向后兼容）。与小兔 / Mote 全链路对齐，
-发布脚本保证 CMake 注入值 = 清单 build = 发布参数三端一致。
+**DevCard 与小兔 / Mote 全链路对齐（2026-11-20 最终完成）**：此前 DevCard Windows 客户端没有可靠的本机构建号（版本资源第 4 段恒 `0`），同版本不比 `build`、修复只能升 `version`。现通过 `cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数，同时注入两个独立宏：
+- `DEVCARD_BUILD_STAMP=<UTC>`（整数宏，`core` 里 `static_cast<uint64_t>` 用）
+- `DEVCARD_BUILD_STAMP_STR="<UTC>"`（字符串宏，`shell/win/main.cpp` 里拼接 `"DEVCARD_BUILD_STAMP=" DEVCARD_BUILD_STAMP_STR` 进 BUILD_STR 静态字符串）
+
+guard.py 2026-11-20 起对三产品做相同的 BUILD_STR 二次校验，`_BUILD_STAMP_PREFIX["devcard"] = b"DEVCARD_BUILD_STAMP="`，selftest 也补了 DevCard 正向用例（绿色包 `DevCard.exe` 含 `DEVCARD_BUILD_STAMP=<digits>`）。未注入时 `compiled_build_number()` 返回 0，自动跳过 build 比较，向后兼容。
+
+DevCard 本地验证工具：`dev_card_cpp/tools/release/verify_build_stamp.ps1`（249 行，UTF-8 + BOM）覆盖 8 项验证，2026-11-19 命令行 8/8 PASS，每次 DevCard Windows 发版前跑一次即可。
 
 ## 四、签名规则
 

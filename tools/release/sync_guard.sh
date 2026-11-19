@@ -196,14 +196,14 @@ if [ "$CHECK_BUILD_STR" -eq 1 ]; then
       echo "  ! CMakeLists.txt 不存在（跳过）"
     fi
 
-    # 2) 壳源码里有 kBuildStamp 静态字符串
+    # 2) 壳源码里有 kBuildStamp 静态字符串（三产品统一 pattern：kBuildStamp[]）
     if [ -n "$shell_src" ] && [ -f "$repo/$shell_src" ]; then
-      if grep -q "kBuildStamp\[\].*${product_prefix}_BUILD_STR" "$repo/$shell_src"; then
+      if grep -q "kBuildStamp\[\]" "$repo/$shell_src"; then
         echo "  ✓ 壳源码含 kBuildStamp"
-      elif grep -q "constexpr.*${product_prefix}_BUILD=" "$repo/$shell_src"; then
+      elif grep -qE "constexpr.*_BUILD(_STAMP)?=" "$repo/$shell_src"; then
         echo "  ✓ 壳源码含 BUILD stamp 字符串"
       else
-        echo "  ✗ 壳源码缺少 ${product_prefix}_BUILD= 静态标记"
+        echo "  ✗ 壳源码缺少 kBuildStamp / BUILD stamp 标记"
         ok=0
       fi
     elif [ -n "$shell_src" ]; then
@@ -252,12 +252,12 @@ if [ "$CHECK_BUILD_STR" -eq 1 ]; then
     echo "! 找不到 xiaotu-inventory 仓库，跳过"
   fi
 
-  # DevCard：无独立 updater 壳，_BUILD_STAMP_PREFIX="devcard": None 是正确的
+  # DevCard：shell/win/main.cpp 有 kBuildStamp（"DEVCARD_BUILD_STAMP=<digits>"），
+  # 双宏由 cmake/devcard_version.cmake 的 devcard_add_build_stamp() 函数注入
+  # （DEVCARD_BUILD_STAMP=<int> + DEVCARD_BUILD_STAMP_STR="<int>"）。
   if [ -d "$MOTE_ROOT/../dev_card_cpp" ]; then
-    echo "--- DevCard（dev_card_cpp）---"
-    echo "  · 无独立 updater_win 壳，_BUILD_STAMP_PREFIX=\"devcard\": None 正确"
-    echo "  ✓ 跳过 BUILD_STR 检查"
-    echo ""
+    check_build_str_compliance "$MOTE_ROOT/../dev_card_cpp" "DevCard" "DEVCARD" \
+      "cmake/devcard_version.cmake" "shell/win/main.cpp" || any_fail=1
   else
     echo "! 找不到 dev_card_cpp 仓库，跳过"
   fi

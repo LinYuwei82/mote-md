@@ -1,6 +1,6 @@
 # OSS 发布布局（安装包 / 更新清单 / 手册 / 官网）
 
-> 更新日期：2026-11-19（末尾更新 2026-11-19：BUILD_STR 机制上线，guard.py 新增二进制内 build 号二次校验 + innounp 解包 setup.exe）
+> 更新日期：2026-11-20（末尾更新 2026-11-20：DevCard BUILD_STR 双宏落地 + guard.py selftest 补充 DevCard 正向用例 + sync_guard.sh --check-build-str 覆盖 DevCard；三仓库新增 UTF-8 BOM 三道闸）
 > 数据来源：`oss://xiaotu-update`、`oss://xiaotu-site` 线上对象与元数据实测
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 >
@@ -307,13 +307,13 @@ guard.py 在 v2 preflight 里新增了**二进制内 build 号二次校验**：
 
 | 组件 | 改动 |
 |---|---|
-| CMakeLists.txt | 加 `-DXIAOTU_BUILD_STR=<UTC>` / `-DMOTE_BUILD_STR=<UTC>` 字符串宏 |
-| 壳源码 | 放 `constexpr const char kBuildStamp[] = "XIAOTU_BUILD=" XIAOTU_BUILD_STR;` 进 .rdata 段 |
-| guard.py | `_read_exe_bytes` 解包 zip（绿色包）或用 innounp 解包 setup.exe（ISCC 安装包），搜 BUILD 标记 |
+| CMake 注入 | Mote / 小兔：`-DMOTE_BUILD=<int>` + `-DMOTE_BUILD_STR="<int>"`（顶层 CMakeLists.txt 直接注入）；DevCard：`cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数注入 `-DDEVCARD_BUILD_STAMP=<int>` + `-DDEVCARD_BUILD_STAMP_STR="<int>"`（双宏，整数宏给 core 用、字符串宏给 shell 拼接用） |
+| 壳源码 | 三产品统一模式：`constexpr const char kBuildStamp[] = "<PREFIX>=" <PREFIX>_STR;` 进 .rdata 段。Mote `platform/win/updater.cpp`、小兔 `shell/win/updater_win.cpp`、DevCard `shell/win/main.cpp` 均已落地 |
+| guard.py | `_BUILD_STAMP_PREFIX = {"mote": b"MOTE_BUILD=", "xiaotu": b"XIAOTU_BUILD=", "devcard": b"DEVCARD_BUILD_STAMP="}`；`_read_exe_bytes` 解包 zip（绿色包）或用 innounp 解包 setup.exe（ISCC 安装包），搜对应前缀 |
 
 zip 和 setup.exe 里的壳是**同一份编译产物**：两者同时存在时 guard.py 只扫 zip，setup.exe 那条跳过（`✓ setup.exe 同源于已校验的绿色包`）。只有 setup.exe 单独出现时才走 innounp 解包。
 
-**DevCard 无独立 updater 壳**，guard.py 里 `_BUILD_STAMP_PREFIX["devcard"] = None`，整个 BUILD_STR check 跳过——正确。
+DevCard 2026-11-20 与小兔 / Mote 全链路对齐：guard.py 对三产品做相同的 BUILD_STR 二次校验，不再跳过。selftest 已覆盖 DevCard 正向用例（绿色包内 `DevCard.exe` 含 `DEVCARD_BUILD_STAMP=<digits>`）。
 
 #### innounp：解包 ISCC setup.exe
 
@@ -345,11 +345,23 @@ bash mote/tools/release/sync_guard.sh --local-only # 只跑 mote 本地 selftest
 bash mote/tools/release/sync_guard.sh --check-build-str  # 检查三仓库 BUILD_STR 合规性
 ```
 
-`--check-build-str`（2026-11-19 新增）会逐个验证：
-1. CMakeLists.txt 是否含 `XXX_BUILD_STR` 宏
-2. 壳源码是否含 `kBuildStamp` 静态字符串
-3. guard.py `_BUILD_STAMP_PREFIX` 映射是否正确
-DevCard 无独立壳，打印"跳过 BUILD_STR 检查"即合规。
+`--check-build-str` 会逐个验证：
+1. CMake 配置是否含构建号注入（Mote / 小兔顶层 CMakeLists.txt 的 `XXX_BUILD_STR` 宏；DevCard `cmake/devcard_version.cmake` 的 `devcard_add_build_stamp()` 函数）
+2. 壳源码是否含 `kBuildStamp[]` 静态字符串（Mote `platform/win/updater.cpp`、小兔 `shell/win/updater_win.cpp`、DevCard `shell/win/main.cpp`）
+3. guard.py `_BUILD_STAMP_PREFIX` 映射是否与实现一致
+DevCard 2026-11-20 起不再跳过，与另外两产品同口径检查。
+
+#### UTF-8 BOM 三道闸（2026-11-20，三仓库同步上线）
+
+PowerShell 5 在 Windows 上只读 UTF-8 + BOM（`\xef\xbb\xbf`）的 `.ps1`；无 BOM 的 UTF-8 会被当 GBK 读，中文字面量断裂导致脚本崩溃。三层防御：
+
+| 层 | 文件 | 作用 |
+|---|---|---|
+| 检出时 | `.gitattributes`：`*.ps1 text eol=crlf working-tree-encoding=UTF-8` | 统一换行与编码声明（git 层面的软约束） |
+| 提交时 | `tools/hooks/pre-commit`（bash） + `tools/hooks/setup-hooks.ps1` | 扫描所有 staged `.ps1`，前 3 字节不是 `EF BB BF` 直接阻断提交并给出修复命令；`git config core.hooksPath tools/hooks` 一次配置、持续生效 |
+| 发布时 | `publish_windows.ps1`（三仓库） | 执行过程中遇到编码异常会主动报错，作为运行时兜底 |
+
+> 核心约束：**仓库根 `.gitattributes`**（三仓库各一份）+ **tools/hooks/ 目录**（三仓库各一份，setup-hooks.ps1 含 UTF-8 BOM 自验证）。新机器首次 clone 后跑一次 `powershell -ExecutionPolicy Bypass -File tools/hooks/setup-hooks.ps1` 即可启用 pre-commit hook。
 
 ## 九、注意事项
 
