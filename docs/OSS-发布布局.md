@@ -1,6 +1,6 @@
 # OSS 发布布局（安装包 / 更新清单 / 手册 / 官网）
 
-> 更新日期：2026-11-19
+> 更新日期：2026-11-19（末尾更新 2026-11-19：BUILD_STR 机制上线，guard.py 新增二进制内 build 号二次校验 + innounp 解包 setup.exe）
 > 数据来源：`oss://xiaotu-update`、`oss://xiaotu-site` 线上对象与元数据实测
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 >
@@ -223,7 +223,8 @@ https://xiaotu.online/                      # ECS（备案中）
 | 仓库 / 脚本 | 上传对象 |
 |---|---|
 | `xiaotu-inventory/tools/package/publish_oss.sh` | `xiaotu/xiaotu-<ver>-macos-arm64.dmg`、`xiaotu/updates/stable/manifest.json`、`xiaotu/updates/stable/appcast.xml`、`xiaotu/release-notes-<ver>.html`（存在时） |
-| `xiaotu-inventory/tools/package/publish_windows.sh` | `xiaotu/xiaotu-<ver>-win64-setup.exe`、`xiaotu/xiaotu-<ver>-win64-portable.zip`、`xiaotu/updates/stable/manifest.json`、`xiaotu/release-notes-<ver>.html`（存在时） |
+| `xiaotu-inventory/tools/package/publish_windows.sh`（Mac 侧，遗留） | `xiaotu/xiaotu-<ver>-win64-setup.exe`、`xiaotu/xiaotu-<ver>-win64-portable.zip`、`xiaotu/updates/stable/manifest.json`、`xiaotu/release-notes-<ver>.html`（存在时） |
+| `xiaotu-inventory/tools/package/publish_windows.ps1`（Windows 原生，自 2026-11-19 起推荐） | 同 `.sh`，Windows 构建机可直接执行，无需拷贝回 Mac。支持 `-Build`（自动从 CMakeCache 读）、`-SkipUpload`、`-NotesOnly` |
 | `dev_card_cpp/tools/release/publish_macos.sh` | `devcard/devcard-<ver>-macos-arm64.dmg`（+ `.edSignature`）、`devcard/updates/stable/appcast.xml`、`devcard/updates/stable/manifest.json`、`devcard/release-notes-<ver>.html`（存在时） |
 | `dev_card_cpp/tools/release/publish_windows.ps1` | `devcard/devcard-<ver>-win64-setup.exe`、`devcard/devcard-<ver>-win64-portable.zip`、`devcard/updates/stable/manifest.json`、`devcard/release-notes-<ver>.html`（存在时） |
 | `mote/tools/release/publish_macos.sh` | `mote/mote-<ver>-macos-arm64.dmg`、`mote/updates/stable/appcast.xml`、`mote/updates/stable/manifest.json`、`mote/release-notes-<ver>.html`（存在时） |
@@ -232,9 +233,16 @@ https://xiaotu.online/                      # ECS（备案中）
 | `mote/tools/release/deploy_site.sh` | 本地 `web/` 的 21 个文件 → ECS `/var/www/xiaotu` |
 | 手工 | `<product>/manual.pdf`、README 等 |
 
-> Mote 的 `publish_macos.sh` 自 2026-11-19 起与 Windows 脚本同口径：检测到
-> `docs/release-notes-<版本>.html` 就上传并写入 `notes_url`，显式传 `NOTES_URL` 时
-> 以传入值为准（说明页需自行保证可访问）。此前 `1.0.0`–`1.0.3` 的说明页是手工上传的。
+> **小兔 Windows 发布路径选择**：2026-11-19 新增 `publish_windows.ps1` 后，Windows 构建机有两条路：
+>
+> - **选项 A**（推荐）：在 Windows 本机执行 `publish_windows.ps1`，需要签名私钥 PEM
+>   （`~/.config/xiaotu-updates/update_signing_2026.pem` 或 CI 环境变量 `XIAOTU_UPDATE_SIGNING_KEY`）
+> - **选项 B**（遗留）：把 setup.exe + zip 拷回 Mac，走 `publish_windows.sh`
+>
+> 两条路径功能等价，都走同一套 guard.py preflight / verify-live 门禁。
+> 小兔仓库 `.github/workflows/release-windows.yml` 也已升级：打安装包后自动
+> 部署 innounp（见 8.2），guard.py preflight 能正确从 setup.exe 里解包壳 EXE
+> 做 BUILD_STR 二次校验。
 
 ## 七、缓存与 Content-Type 规则
 
@@ -282,18 +290,66 @@ bash mote/tools/release/deploy_site.sh                 # → xiaotu.online（ECS
 发布脚本会在上传前自动调用 `preflight`、上传后自动调用 `verify-live`：
 
 ```bash
-python3 tools/release/guard.py selftest      # CI 每次跑
+python3 tools/release/guard.py selftest      # CI 每次跑（46 项）
 python3 tools/release/guard.py preflight --product xiaotu --kind mac --file <dmg>
 python3 tools/release/guard.py verify-live --product xiaotu --kind win \
   --file <setup.exe> --zip <portable.zip>
 ```
 
-它统一校验：产品/通道、文件名、版本单调、同名覆盖风险、清单字段与 SHA256、
-线上 Content-Type，以及 dmg / 绿色包内嵌的更新地址。DevCard 与小兔的 CI
-都有 `release-guard` 作业，阻止规则被改坏。
+它统一校验：产品/通道、文件名（v1 或 v2 规则）、版本单调、同名覆盖风险、清单字段与 SHA256、
+线上 Content-Type，以及 dmg / 绿色包内嵌的更新地址。
+
+#### Windows BUILD_STR 机制（2026-11-19 上线）
+
+guard.py 在 v2 preflight 里新增了**二进制内 build 号二次校验**：
+从绿色包 zip 或 setup.exe 里解包壳 EXE，搜 `XIAOTU_BUILD=<digits>` / `MOTE_BUILD=<digits>`
+静态字符串，与命令行 `--build` 参数比对。不一致直接阻断发布。
+
+| 组件 | 改动 |
+|---|---|
+| CMakeLists.txt | 加 `-DXIAOTU_BUILD_STR=<UTC>` / `-DMOTE_BUILD_STR=<UTC>` 字符串宏 |
+| 壳源码 | 放 `constexpr const char kBuildStamp[] = "XIAOTU_BUILD=" XIAOTU_BUILD_STR;` 进 .rdata 段 |
+| guard.py | `_read_exe_bytes` 解包 zip（绿色包）或用 innounp 解包 setup.exe（ISCC 安装包），搜 BUILD 标记 |
+
+zip 和 setup.exe 里的壳是**同一份编译产物**：两者同时存在时 guard.py 只扫 zip，setup.exe 那条跳过（`✓ setup.exe 同源于已校验的绿色包`）。只有 setup.exe 单独出现时才走 innounp 解包。
+
+**DevCard 无独立 updater 壳**，guard.py 里 `_BUILD_STAMP_PREFIX["devcard"] = None`，整个 BUILD_STR check 跳过——正确。
+
+#### innounp：解包 ISCC setup.exe
+
+setup.exe 是 Inno Setup 6 压缩包，直接读字节找不到内部壳 EXE。
+guard.py 用 **innounp**（Inno Setup 官方维护的解包程序）提取：
+
+```bash
+innounp -x -y "-d<临时目录>" <setup.exe>
+# 临时目录里 rglob 找 xiaotu-shell.exe / Mote.exe
+```
+
+| 项 | 说明 |
+|---|---|
+| 原版 innounp 0.50 | innounp.sourceforge.net，支持 ISCC ≤ 6.1 |
+| innounp-2 fork 2.70.1 | github.com/jrathlev/InnoUnpacker-Windows-GUI，支持 ISCC **6.7+**（当前版本） |
+| 部署位置 | guard.py `_find_innounp()` 按顺序找：PATH → `~/.local-bin` → guard.py 同目录 → ISCC 安装目录 |
+| CI 部署 | 小兔 / Mote 的 GitHub Actions `release-windows.yml` 在打安装包后自动下载到 `~/.local-bin` |
+
+> **为什么不用 ISCC.exe 静默安装**：之前试过让 setup.exe `/VERYSILENT /DIR=<tmp>` 来自解压，
+> 是个 hack（注册表里留痕迹、可能触发杀软、CI 无 GUI 子系统时可能卡住）。
+> innounp 是正规解包工具，纯文件操作，干净无副作用。
 
 改 `guard.py` 后必须用 `mote/tools/release/sync_guard.sh` 同步三份并更新各自的
 `guard.sha256`；CI 会先执行 `sha256sum -c`，单仓库私自改动会直接失败。
+
+```bash
+bash mote/tools/release/sync_guard.sh              # 同步 guard.py + manifest_v2.py + .sha256
+bash mote/tools/release/sync_guard.sh --local-only # 只跑 mote 本地 selftest + 重算 sha256
+bash mote/tools/release/sync_guard.sh --check-build-str  # 检查三仓库 BUILD_STR 合规性
+```
+
+`--check-build-str`（2026-11-19 新增）会逐个验证：
+1. CMakeLists.txt 是否含 `XXX_BUILD_STR` 宏
+2. 壳源码是否含 `kBuildStamp` 静态字符串
+3. guard.py `_BUILD_STAMP_PREFIX` 映射是否正确
+DevCard 无独立壳，打印"跳过 BUILD_STR 检查"即合规。
 
 ## 九、注意事项
 

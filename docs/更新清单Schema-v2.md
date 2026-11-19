@@ -109,13 +109,43 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 | 环节 | 取值 |
 |---|---|
 | 构建（configure） | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>` / `-DXIAOTU_BUILD=<UTC yyyyMMddHHmm>` / `-DDEVCARD_BUILD=<UTC yyyyMMddHHmm>`：写进 CMakeCache，同时编进各自的 Windows 二进制 |
-| 打包 / 发布 | 从 CMakeCache 读同一个值（Mote / DevCard 的 Actions 由构建步骤经 `<PRODUCT>_BUILD_STAMP` 传递；小兔本地发布用 `BUILD=<同一值> tools/package/publish_windows.sh`），写进 `manifest.json` |
+| BUILD_STR（2026-11-19 上线） | CMake 同时注入**字符串宏** `-DMOTE_BUILD_STR="..."` / `-DXIAOTU_BUILD_STR="..."`，壳源码放 `kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR;` 静态字符串进 .rdata 段 |
+| 打包 / 发布 | 从 CMakeCache 读同一个值（小兔本地发布脚本自动读，Mote / DevCard 的 Actions 由构建步骤经 `<PRODUCT>_BUILD_STAMP` 传递），写进 `manifest.json` |
 
 三者不一致的后果：
 
 - 清单 `build` **大于**安装包内的值：客户端同版本时判定「有新版本」，装完本机值没变，
   下次检测继续提示——表现为「已经是 1.0.4，却一直提示更新 1.0.4」；
 - 清单 `build` **小于**安装包内的值：该构建永远收不到更新提示。
+
+#### BUILD_STR 二次校验（guard.py preflight 自动执行）
+
+2026-11-19 起 guard.py 在 preflight 里新增**二进制内 build 号二次校验**：
+
+```
+绿色包 zip  ──→ _read_exe_bytes  ──→ 搜 b"MOTE_BUILD=(\d+)"  ──→ 与 --build 参数比对
+setup.exe  ──→ innounp 解包壳  ──→ 同上
+```
+
+| 场景 | guard.py 行为 |
+|---|---|
+| zip + setup 同时存在 | 只扫 zip（壳是同一份编译产物，等价）；setup 那条跳过 `✓ setup.exe 同源于已校验的绿色包` |
+| 只有 zip | 解包 zip → 扫 shell.exe → 比对 |
+| 只有 setup | innounp 解包 ISCC 安装包 → 扫内部 shell.exe → 比对 |
+| DevCard | `_BUILD_STAMP_PREFIX["devcard"] = None`，整个 check 跳过（正确） |
+
+比对不一致 → **阻断发布**（ExitCode 1，`die()`），再也不会出现"清单 build 大于安装包内值"的事故。
+
+#### innounp：解包 ISCC setup.exe
+
+setup.exe 是 Inno Setup 6 压缩包，直接读字节找不到内部壳 EXE。guard.py 用 **innounp** 解包：
+
+| 项 | 说明 |
+|---|---|
+| 原版 innounp 0.50 | innounp.sourceforge.net，支持 ISCC ≤ 6.1 |
+| innounp-2 fork 2.70.1 | github.com/jrathlev/InnoUnpacker-Windows-GUI，支持 ISCC **6.7+** |
+| guard.py 查找顺序 | PATH → `~/.local-bin` → guard.py 同目录 → ISCC 安装目录 |
+| CI 部署 | 小兔 / Mote `release-windows.yml` 打安装包后自动下载 innounp-2 到 `~/.local-bin` |
 
 约束：`publish_windows.ps1` 未显式传 `-Build` 时从 `CMakeCache.txt` 读取编译值，
 读不到直接失败，不再退回当前时间；`release-windows.yml` 会把构建步骤
