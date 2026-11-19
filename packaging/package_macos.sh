@@ -175,12 +175,30 @@ if [ "$SKIP_SIGN" -eq 1 ]; then
     echo "==> 5/${TOTAL} 跳过签名（--skip-sign）"
 elif [ -n "$SIGN_IDENTITY" ]; then
     echo "==> 5/${TOTAL} Developer ID 签名：${SIGN_IDENTITY}"
-    # Sparkle.framework 通过 ditto 拷进 bundle（已解开 symlink），
-    # 可以用 --deep 一次签完整个 .app（codesign 不会再报 bundle format ambiguous）
-    codesign --force --deep \
-        --sign "Developer ID Application: ${SIGN_IDENTITY}" \
-        --options runtime \
-        "$APP_PATH"
+    # entitlements：禁用 sandbox（Sparkle 自动更新要求 bundle 可写）
+    ENTITLEMENTS="$ROOT/packaging/entitlements.plist"
+    if [ ! -f "$ENTITLEMENTS" ]; then
+        echo "错误：entitlements plist 不存在 $ENTITLEMENTS" >&2
+        exit 1
+    fi
+    # 签名前再清一次扩展属性（install_name_tool 可能引入新的 xattr）
+    xattr -cr "$APP_PATH"
+    xattr -d com.apple.FinderInfo "$APP_PATH" 2>/dev/null || true
+    xattr -d "com.apple.fileprovider.fpfs#P" "$APP_PATH" 2>/dev/null || true
+
+    # 新版 codesign：分步嵌套签名（先签子 framework 内部所有嵌套 bundle，再签 .app 主体）
+    # Sparkle.framework 内含 Updater.app、XPCServices 等多个嵌套 bundle，--deep 一次签完
+    SIGN_NAME="Developer ID Application: ${SIGN_IDENTITY}"
+    SPARKLE_FW="$APP_PATH/Contents/Frameworks/Sparkle.framework"
+    if [ -d "$SPARKLE_FW" ]; then
+        echo "    签 Sparkle.framework（--deep 覆盖 Updater.app + XPCServices）..."
+        codesign --force --sign "$SIGN_NAME" --options runtime --timestamp \
+            --entitlements "$ENTITLEMENTS" --deep "$SPARKLE_FW"
+        codesign --verify --deep --strict "$SPARKLE_FW" || { echo "Sparkle.framework 签名验证失败"; exit 1; }
+    fi
+    echo "    签 .app 主体..."
+    codesign --force --sign "$SIGN_NAME" --options runtime --timestamp \
+        --entitlements "$ENTITLEMENTS" "$APP_PATH"
 else
     echo "==> 5/${TOTAL} Developer ID 证书未找到，fallback 到 ad-hoc 签名"
     echo "    提示：钥匙串里需要有 'Developer ID Application: ...' 证书才能通过公证"
@@ -231,13 +249,30 @@ hdiutil create -volname "$APP_NAME" -srcfolder "$NOTARY_DMG_STAGE" \
     -ov -format UDZO -fs HFS+ "$NOTARY_DMG" >/dev/null
 hdiutil verify "$NOTARY_DMG" >/dev/null
 
+# DMG 签名（Developer ID 签名的 DMG 让 mount 更顺畅，公证也更稳）
+if [ "$SKIP_SIGN" -ne 1 ] && [ -n "$SIGN_IDENTITY" ]; then
+    codesign --force --sign "Developer ID Application: ${SIGN_IDENTITY}" --timestamp "$NOTARY_DMG"
+fi
+
 if [ "$DO_NOTARIZE" -eq 1 ]; then
+    NOTARY_PROFILE="${MOTE_NOTARY_PROFILE:-mote-notary}"
     echo "==> 7/${TOTAL} 提交 DMG 公证（xcrun notarytool submit --wait）..."
-    echo "    凭据钥匙串配置：mote-notary"
+    echo "    凭据钥匙串配置：$NOTARY_PROFILE"
     echo "    提交文件：$NOTARY_DMG"
+
+    # 提前检测 profile 是否在 Keychain 中存在
+    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" 2>&1 | head -1 | grep -qi "error"; then
+        echo "错误：notarytool keychain profile '$NOTARY_PROFILE' 不存在" >&2
+        echo "      需要先运行：" >&2
+        echo "        xcrun notarytool store-credentials '$NOTARY_PROFILE' \\" >&2
+        echo "          --apple-id <your@appleid.com> --team-id BMCUC4B6XX --password <app-specific-password>" >&2
+        echo "      或者用 MOTE_NOTARY_PROFILE 环境变量指定已存在的 profile 名" >&2
+        exit 1
+    fi
+
     NOTARY_LOG="$NOTARY_STAGE/notary.log"
     xcrun notarytool submit "$NOTARY_DMG" \
-        --keychain-profile "mote-notary" \
+        --keychain-profile "$NOTARY_PROFILE" \
         --wait --timeout 900 2>&1 | tee "$NOTARY_LOG"
     echo
 
