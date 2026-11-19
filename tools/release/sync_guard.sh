@@ -169,7 +169,6 @@ echo "  cd $MOTE_ROOT && git add tools/release/guard.py tools/release/guard.sha2
 echo "  cd $MOTE_ROOT/../xiaotu-inventory && git add tools/release/guard.py tools/release/guard.sha256"
 echo "  cd $MOTE_ROOT/../dev_card_cpp && git add tools/release/guard.py tools/release/guard.sha256"
 exit 0
-fi
 
 # ============================================================================
 # --check-build-str：检查三仓库 BUILD_STR 合规性
