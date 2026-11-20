@@ -38,7 +38,7 @@
 构建：
 
 ```bash
-cmake -S native -B build/release
+cmake -S native --preset macos-release
 cmake --build build/release
 ctest --test-dir build/release                   # core 单测，无需 GUI
 
@@ -81,7 +81,7 @@ configure 阶段会自动探测 `Versions/` 下唯一子目录（如 `B`）并�
 ```bat
 set WEBVIEW2_SDK=C:\dev\webview2sdk\pkg
 :: 在 "x64 Native Tools Command Prompt for VS 2022" 里执行，保证 cl.exe 在 PATH
-cmake -S native -B build/windows -G Ninja
+cmake -S native --preset windows-release
 cmake --build build/windows
 ctest --test-dir build/windows                     :: core 单测，无需 -C
 ```

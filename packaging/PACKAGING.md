@@ -39,7 +39,7 @@ bash tools/package/package_macos.sh --dmg    # 额外产出一个拖拽安装式
 1. 在仓库内 `build/release/` 做 Release 构建（每次打包前清空重建）；签名/打包暂存在
    `$TMPDIR`，避免工程位于 iCloud「文稿」目录时 FinderInfo 扩展属性导致 `codesign`
    报 `resource fork, Finder information ... not allowed`；
-2. `cmake -S native` + 构建（Release，C++20）；
+2. `cmake -S native --preset macos-release` + 构建（Release，C++20）；
 3. 依赖自检：可执行文件不得链接 Qt；
 4. `strip` 调试符号、删除包内指向 `/opt/homebrew`、`/usr/local` 的 rpath、
    清理扩展属性并做**全包外部路径自检**；
@@ -636,7 +636,7 @@ bash tools/package/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mot
 
 ```powershell
 $env:WEBVIEW2_SDK = "C:\dev\webview2sdk\pkg"
-cmake -S native -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S native --preset windows-release
 cmake --build build/windows
 powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 ```
@@ -680,7 +680,7 @@ powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 
 ```powershell
 $env:WEBVIEW2_SDK = "C:\path\to\Microsoft.Web.WebView2\pkg"
-cmake -S native -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S native --preset windows-release
 cmake --build build/windows
 
 mkdir dist\Mote-Windows

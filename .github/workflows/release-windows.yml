@@ -115,7 +115,7 @@ jobs:
           # 参数整体加引号：不引号时 PowerShell 会把 -DMOTE_BUILD=$build 原样传给 cmake
           # -DMOTE_RELEASE_BUILD=ON：发布构建，缺 Sparkle.framework 或缺构建号时 FATAL_ERROR
           $buildHashArg = if ($buildHash) { "-DMOTE_BUILD_HASH=$buildHash" } else { "" }
-          cmake -S native -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release "-DMOTE_BUILD=$build" $buildHashArg -DMOTE_RELEASE_BUILD=ON
+          cmake -S native --preset windows-release "-DMOTE_BUILD=$build" $buildHashArg -DMOTE_RELEASE_BUILD=ON
           $cache = Get-Content build/windows/CMakeCache.txt -Raw
           $stamped = [regex]::Match($cache, 'MOTE_BUILD:[A-Z]+=(\d+)').Groups[1].Value
           Write-Host "cache 中的构建号: $stamped"

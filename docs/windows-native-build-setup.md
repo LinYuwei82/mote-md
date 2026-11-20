@@ -176,7 +176,7 @@ cd D:\projects\mote-md
 $env:WEBVIEW2_SDK = "C:/dev/webview2sdk/pkg"
 
 # 3) configure
-cmake -S native -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S native --preset windows-release
 
 # 4) build
 cmake --build build/windows

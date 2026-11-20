@@ -105,11 +105,10 @@ echo "构建号：${BUILD_NUMBER}（来源 ${BUILD_SOURCE}）"
 # MOTE_RELEASE_BUILD=ON：发布构建门禁——MOTE_BUILD 不能是占位值，且
 # resources/Sparkle.framework 缺失时 FATAL_ERROR，防止最终 DMG 缺自动更新 framework
 # 退化为浏览器下载（2026-11-19 mote 1.0.4 即因此重发）
-cmake -S "$ROOT/native" -B "$BUILD_DIR" \
-  -DCMAKE_BUILD_TYPE=Release \
+cmake -S "$ROOT/native" --preset macos-release \
   -DMOTE_BUILD="$BUILD_NUMBER" \
   -DMOTE_RELEASE_BUILD=ON
-cmake --build "$BUILD_DIR" --config Release -j"$(sysctl -n hw.ncpu)"
+cmake --build "$BUILD_DIR" -j"$(sysctl -n hw.ncpu)"
 APP_PATH="$BUILD_DIR/${APP_NAME}.app"
 [ -d "$APP_PATH" ] || { echo "错误：构建失败，未生成 $APP_PATH"; exit 1; }
 

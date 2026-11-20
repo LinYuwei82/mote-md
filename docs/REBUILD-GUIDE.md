@@ -211,7 +211,7 @@ docs/                     架构、决策、验收、发行说明
 依赖：macOS 14+、Xcode CLT、CMake 3.25+（不需要 Qt）。
 
 ```bash
-cmake -S native -B build/release && cmake --build build/release
+cmake -S native --preset macos-release && cmake --build build/release
 bash tools/package/package_macos.sh --dmg --clean-dist
 ```
 

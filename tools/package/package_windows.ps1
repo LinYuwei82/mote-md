@@ -44,7 +44,7 @@ if (-not $SkipBuild) {
         Write-Host "构建号：$Build（来源 -Build）"
     }
     # -DMOTE_RELEASE_BUILD=ON：发布态门禁（占位构建号 / 缺 Sparkle 等直接 FATAL）
-    cmake -S (Join-Path $root "native") -B $BuildDir `
+    cmake -S (Join-Path $root "native") --preset windows-release `
         -DMOTE_BUILD="$Build" -DMOTE_RELEASE_BUILD=ON | Out-Host
     if ($LASTEXITCODE -ne 0) { Fail "cmake configure 失败（退出码 $LASTEXITCODE）" }
     cmake --build $BuildDir | Out-Host

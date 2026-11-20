@@ -85,7 +85,7 @@ git status -sb
 - WebView2 SDK（`WEBVIEW2_SDK` 环境变量指向 NuGet 包解压目录；构建期需要头文件与 `WebView2Loader.dll`）
 - WebView2 Runtime（Win10/11 通常已预装；缺失时从微软官网装 Evergreen Runtime）
 - Git for Windows（自带 OpenSSH；把公钥加到 Gitee）
-- 构建：`cmake -S native -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/windows`
+- 构建：`cmake -S native --preset windows-release && cmake --build build/windows`
 
 完整装机步骤见 [windows-native-build-setup.md](windows-native-build-setup.md)。
 

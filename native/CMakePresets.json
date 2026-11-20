@@ -1,0 +1,30 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "macos-release",
+      "displayName": "macOS Release",
+      "description": "Ninja 单配置；构建目录与 tools/package/package_macos.sh 一致",
+      "generator": "Ninja",
+      "binaryDir": "../build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-release",
+      "displayName": "Windows Release",
+      "description": "Ninja + MSVC；需在已跑 vcvars64 的 x64 Native Tools 终端里使用",
+      "generator": "Ninja",
+      "binaryDir": "../build/windows",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "macos-release", "configurePreset": "macos-release" },
+    { "name": "windows-release", "configurePreset": "windows-release" }
+  ]
+}

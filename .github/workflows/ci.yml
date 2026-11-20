@@ -73,7 +73,7 @@ jobs:
           # 参数整体加引号：不引号时 PowerShell 会把 -DMOTE_BUILD=$build 原样传给 cmake
           # -DMOTE_STRICT_BUILD=ON：Sparkle.framework 缺失时 FATAL_ERROR（macOS 生效，Windows 无害）
           $buildHashArg = if ($buildHash) { "-DMOTE_BUILD_HASH=$buildHash" } else { "" }
-          cmake -S native -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release "-DMOTE_BUILD=$build" $buildHashArg -DMOTE_STRICT_BUILD=ON
+          cmake -S native --preset windows-release "-DMOTE_BUILD=$build" $buildHashArg -DMOTE_STRICT_BUILD=ON
           cmake --build build/windows
 
       - name: 确认构建号已进入 CMake

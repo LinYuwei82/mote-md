@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 # 原生薄外壳：macOS（AppKit + WKWebView）与 Windows（Win32 + WebView2）。
-# 用法：cmake -S native -B build/release && cmake --build build/release
+# 用法：cmake -S native --preset macos-release && cmake --build build/release
 
 if(WIN32)
   project(MoteNative VERSION 0.0.0 LANGUAGES C CXX)
