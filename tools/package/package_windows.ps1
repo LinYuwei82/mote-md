@@ -34,13 +34,13 @@ if (-not $SkipBuild) {
         if (-not $py) { Fail "找不到 python（gen_build.py 需要）；可改用 -Build 显式指定构建号" }
         $genOut = (& $py.Source (Join-Path $root "tools\release\gen_build.py") `
             --product mote --repo-root $root 2>&1 | Select-Object -Last 1)
-        if ($LASTEXITCODE -ne 0 -or "$genOut" -notmatch '^\d{4,}$') {
+        if ($LASTEXITCODE -ne 0 -or "$genOut" -notmatch '^\d+$') {
             Fail "gen_build.py 失败：$genOut（可改用 -Build 显式指定构建号）"
         }
         $Build = "$genOut".Trim()
         Write-Host "构建号：$Build（来源 gen_build.py）"
     } else {
-        if ($Build -notmatch '^\d{4,}$') { Fail "非法构建号：$Build（应为纯数字，如 202611180930）" }
+        if ($Build -notmatch '^\d+$') { Fail "非法构建号：$Build（应为纯数字）" }
         Write-Host "构建号：$Build（来源 -Build）"
     }
     # -DMOTE_RELEASE_BUILD=ON：发布态门禁（占位构建号 / 缺 Sparkle 等直接 FATAL）

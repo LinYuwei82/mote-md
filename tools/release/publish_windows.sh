@@ -40,10 +40,11 @@ VERSION="${VERSION:-$(tr -d '[:space:]' < VERSION.txt)}"
 CHANNEL="${CHANNEL:-stable}"
 case "$CHANNEL" in stable|beta) ;; *) echo "CHANNEL 必须是 stable/beta" >&2; exit 2 ;; esac
 
-# 构建号：自动从 gen_build.py 生成（year*10^12 + git_count，单调递增，自动校验 > 线上）。
+# 构建号：CI 由 release tag 解析传入（build = tag 序号，可为 1 位）；
+# 本地缺省时用 gen_build.py 生成（year*10^12 + git_count，仅开发用）。
 # 用户显式传 BUILD 时优先使用（兼容手动指定场景）。
 if [ -n "${BUILD:-}" ]; then
-  [[ "$BUILD" =~ ^[0-9]{4,}$ ]] || { echo "用户显式传的 BUILD 非法：${BUILD}" >&2; exit 1; }
+  [[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "用户显式传的 BUILD 非法：${BUILD}" >&2; exit 1; }
 else
   BUILD="$(python3 "$REPO_ROOT/tools/release/gen_build.py" \
     --product mote --repo-root "$REPO_ROOT")" || {

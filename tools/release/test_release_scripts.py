@@ -180,9 +180,14 @@ class TestPublishWindows(unittest.TestCase):
         cls.r = Runner()
         cls.script = str(RELEASE / "publish_windows.sh")
 
-    def test_build_must_be_numeric_ge_4(self):
-        self.r.run(self.script, env_override={"BUILD": "12"},
-                   expect_code=1, expect_stderr_contains="用户显式传的 BUILD 非法")
+    def test_build_must_be_numeric(self):
+        """tag 序号从 1 起：1~3 位构建号不得被旧 4 位门槛拒绝。"""
+        result = subprocess.run(
+            [self.script], capture_output=True, text=True,
+            env={**self.r.env, "BUILD": "12", "SKIP_UPLOAD": "true"},
+            cwd=str(REPO), timeout=30,
+        )
+        self.assertNotIn("用户显式传的 BUILD 非法", result.stderr)
         self.r.run(self.script, env_override={"BUILD": "2026abcdef"},
                    expect_code=1, expect_stderr_contains="用户显式传的 BUILD 非法")
 

@@ -135,7 +135,7 @@ if ([string]::IsNullOrWhiteSpace($Build)) {
                 [IO.Compression.ZipFileExtensions]::ExtractToFile($entryForBuild, $tmpExe)
                 try {
                     $ascii = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($tmpExe))
-                    $m = [regex]::Match($ascii, 'MOTE_BUILD=(\d{4,})')
+                    $m = [regex]::Match($ascii, 'MOTE_BUILD=(\d+)')
                     if ($m.Success) { $Build = $m.Groups[1].Value; $BuildSource = "zip 内 Mote.exe" }
                 } finally {
                     Remove-Item $tmpExe -Force -ErrorAction SilentlyContinue
@@ -149,7 +149,7 @@ if ([string]::IsNullOrWhiteSpace($Build)) {
         Fail "无法自动确定构建号：CMakeCache 与 zip 内 Mote.exe 都没有 MOTE_BUILD 标记。请先跑 tools\package\package_windows.ps1（会自动生成构建号并编译），或用 -Build 显式传入"
     }
 }
-if ($Build -notmatch '^\d{4,}$') { Fail "非法构建号：$Build（应为纯数字，如 202611180930）" }
+if ($Build -notmatch '^\d+$') { Fail "非法构建号：$Build（应为纯数字）" }
 
 # 二次验证：和 CMakeCache 里的 MOTE_BUILD 一致（防止 shell 手动传 -Build 与编译值不同步）
 $cachePath = Join-Path $root "build-native-ninja\CMakeCache.txt"

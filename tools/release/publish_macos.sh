@@ -261,7 +261,7 @@ cat > "$APPCAST_LOCAL" <<EOF
     <item>
       <title>Mote $VERSION</title>
       <pubDate>$PUB_DATE</pubDate>
-      <sparkle:version>$VERSION</sparkle:version>
+      <sparkle:version>$BUILD</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>$MIN_OS</sparkle:minimumSystemVersion>
       <enclosure url="$DMG_URL"
