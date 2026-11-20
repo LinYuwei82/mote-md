@@ -35,15 +35,16 @@ VERSION="${VERSION:-$(tr -d '[:space:]' < VERSION.txt)}"
 CHANNEL="${CHANNEL:-stable}"
 case "$CHANNEL" in stable|beta) ;; *) echo "CHANNEL 必须是 stable/beta" >&2; exit 2 ;; esac
 
-BUILD="${BUILD:-}"
-if [ -z "$BUILD" ]; then
-  echo "缺少 BUILD：清单 build 必须等于 Windows 构建时的 -DMOTE_BUILD，否则客户端会反复提示同一版本" >&2
-  echo "用法：BUILD=202611180930 $0" >&2
-  exit 1
+# 构建号：自动从 gen_build.py 生成（year*10^12 + git_count，单调递增，自动校验 > 线上）。
+# 用户显式传 BUILD 时优先使用（兼容手动指定场景）。
+if [ -n "${BUILD:-}" ]; then
+  [[ "$BUILD" =~ ^[0-9]{4,}$ ]] || { echo "用户显式传的 BUILD 非法：${BUILD}" >&2; exit 1; }
+else
+  BUILD="$(python3 "$REPO_ROOT/tools/release/gen_build.py" \
+    --product mote --repo-root "$REPO_ROOT")" || {
+    echo "gen_build.py 失败，无法生成构建号" >&2; exit 1; }
+  echo "build：${BUILD}（来源 gen_build.py）"
 fi
-# bash 3.2（macOS 系统自带）set -u 下 $BUILD 紧接全角括号会把 0xef 当成变量名的一部分报 unbound variable，
-# 必须用 ${BUILD} 显式界定边界。见 tools/release/test_release_scripts.py 相关用例。
-[[ "$BUILD" =~ ^[0-9]{4,}$ ]] || { echo "非法构建号：${BUILD}（应为纯数字，如 202611180930）" >&2; exit 1; }
 
 CDN_DOMAIN="${CDN_DOMAIN:-https://dl.xiaotu.online}"
 PRODUCT_DIR="${PRODUCT_DIR:-mote}"

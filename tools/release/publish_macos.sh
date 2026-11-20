@@ -41,10 +41,16 @@ VERSION="$(tr -d '[:space:]' < VERSION.txt)"
 # 构建号：纯数字、单调递增。必须与 package_macos.sh 构建时注入 Info.plist 的值一致，
 # 否则客户端 Sparkle 版本比较 / 自研清单 build 比对会出问题。
 # 2026-11-20 起：必填（macOS 也要求 build > 0，和 Windows 对齐）。
-BUILD="${MOTE_BUILD:-}"
-[ -n "$BUILD" ] || { echo "必须显式指定 MOTE_BUILD（纯数字、单调递增），例如：
-  MOTE_BUILD=\$(date -u +%Y%m%d%H) tools/release/publish_macos.sh" >&2; exit 1; }
-[[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "MOTE_BUILD 必须是纯数字：$BUILD" >&2; exit 1; }
+# 构建号：自动从 gen_build.py 生成（year*10^12 + git_count，单调递增，自动校验 > 线上）。
+# 用户显式传 MOTE_BUILD 时优先使用（兼容手动指定场景）。
+if [ -n "${MOTE_BUILD:-}" ]; then
+  BUILD="$MOTE_BUILD"
+  [[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "MOTE_BUILD 必须是纯数字：$BUILD" >&2; exit 1; }
+else
+  BUILD="$(python3 "$REPO_ROOT/tools/release/gen_build.py" \
+    --product mote --repo-root "$REPO_ROOT")" || {
+    echo "gen_build.py 失败，无法生成构建号" >&2; exit 1; }
+fi
 echo "版本/构建号：${VERSION} / ${BUILD}"
 
 DMG_PATH="${DMG_PATH:-$REPO_ROOT/dist/Mote-macOS-native-$VERSION.dmg}"
