@@ -4,6 +4,7 @@
 #include "mote/verify_signature.h"
 #include "dialogs.h"
 #include "env.h"
+#include "win_encoding/encoding.h"
 
 #include <bcrypt.h>
 #include <commctrl.h>
@@ -76,30 +77,8 @@ constexpr wchar_t kSkippedValue[] = L"SkippedUpdateVersion";
 // 灰度分桶用的安装实例标识：首次生成后长期复用，保证同一台机器落在同一桶
 constexpr wchar_t kInstallIdValue[] = L"InstallId";
 
-std::wstring utf8_to_wide(const std::string &text)
-{
-    if (text.empty())
-        return std::wstring();
-    const int length = MultiByteToWideChar(CP_UTF8, 0, text.data(),
-                                           static_cast<int>(text.size()), nullptr, 0);
-    std::wstring wide(static_cast<size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
-                        wide.data(), length);
-    return wide;
-}
-
-std::string wide_to_utf8(const std::wstring &text)
-{
-    if (text.empty())
-        return std::string();
-    const int length = WideCharToMultiByte(CP_UTF8, 0, text.data(),
-                                           static_cast<int>(text.size()), nullptr, 0,
-                                           nullptr, nullptr);
-    std::string narrow(static_cast<size_t>(length), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
-                        narrow.data(), length, nullptr, nullptr);
-    return narrow;
-}
+using win_encoding::utf8_to_wide;
+using win_encoding::wide_to_utf8;
 
 // 与 macOS 同名同前缀，方便两端用同一套 MOTE_KEYLOG 诊断口径
 void update_log(const char *format, ...)

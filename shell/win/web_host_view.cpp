@@ -1,6 +1,7 @@
 #include "web_host_view.h"
 
 #include "env.h"
+#include "win_encoding/encoding.h"
 
 #include "core/inject_chunks.h"
 #include "core/js_bridge.h"
@@ -49,8 +50,8 @@ const wchar_t kBridgeScript[] = LR"JS(
 })();
 )JS";
 
-std::wstring utf8_to_wide(const std::string &text);
-std::string wide_to_utf8(const std::wstring &text);
+using win_encoding::utf8_to_wide;
+using win_encoding::wide_to_utf8;
 
 // 单条脚本与单条消息的体积预算：WebView2 在 2MB 量级封顶，
 // 各留一半余量给 JSON 转义与 UTF-8 膨胀（中文每字符 3 字节）。
@@ -96,31 +97,6 @@ std::wstring user_data_directory()
         result = std::wstring(temp) + L"MoteWebView2";
     }
     return result;
-}
-
-std::wstring utf8_to_wide(const std::string &text)
-{
-    if (text.empty())
-        return std::wstring();
-    const int length = MultiByteToWideChar(CP_UTF8, 0, text.data(),
-                                           static_cast<int>(text.size()), nullptr, 0);
-    std::wstring wide(static_cast<size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
-                        wide.data(), length);
-    return wide;
-}
-
-std::string wide_to_utf8(const std::wstring &text)
-{
-    if (text.empty())
-        return std::string();
-    const int length = WideCharToMultiByte(CP_UTF8, 0, text.data(),
-                                           static_cast<int>(text.size()), nullptr, 0,
-                                           nullptr, nullptr);
-    std::string narrow(static_cast<size_t>(length), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
-                        narrow.data(), length, nullptr, nullptr);
-    return narrow;
 }
 
 std::string read_file(const std::wstring &path)

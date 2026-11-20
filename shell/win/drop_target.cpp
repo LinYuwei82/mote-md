@@ -1,6 +1,7 @@
 #include "drop_target.h"
 
 #include "env.h"
+#include "win_encoding/encoding.h"
 
 #include <objbase.h>
 #include <shellapi.h>
@@ -15,18 +16,7 @@ namespace mote::win {
 
 namespace {
 
-std::string wide_to_utf8(const std::wstring &text)
-{
-    if (text.empty())
-        return std::string();
-    const int length = WideCharToMultiByte(CP_UTF8, 0, text.data(),
-                                           static_cast<int>(text.size()), nullptr, 0,
-                                           nullptr, nullptr);
-    std::string narrow(static_cast<size_t>(length), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
-                        narrow.data(), length, nullptr, nullptr);
-    return narrow;
-}
+using win_encoding::wide_to_utf8;
 
 std::vector<std::string> paths_from_data(IDataObject *data)
 {

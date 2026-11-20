@@ -13,6 +13,7 @@
 #include "core/js_bridge.h"
 #include "core/paths.h"
 #include "core/text_encoding.h"
+#include "win_encoding/encoding.h"
 
 #include <shlobj.h>
 #include <shellapi.h>
@@ -48,30 +49,8 @@ constexpr UINT_PTR kEvalTimer = 5;
 // 键盘钩子截获的组合键回到窗口线程后，再用这条消息统一走 perform_command
 constexpr UINT kShortcutMessage = WM_APP + 7;
 
-std::wstring utf8_to_wide(const std::string &text)
-{
-    if (text.empty())
-        return std::wstring();
-    const int length = MultiByteToWideChar(CP_UTF8, 0, text.data(),
-                                           static_cast<int>(text.size()), nullptr, 0);
-    std::wstring wide(static_cast<size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
-                        wide.data(), length);
-    return wide;
-}
-
-std::string wide_to_utf8(const std::wstring &text)
-{
-    if (text.empty())
-        return std::string();
-    const int length = WideCharToMultiByte(CP_UTF8, 0, text.data(),
-                                           static_cast<int>(text.size()), nullptr, 0,
-                                           nullptr, nullptr);
-    std::string narrow(static_cast<size_t>(length), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
-                        narrow.data(), length, nullptr, nullptr);
-    return narrow;
-}
+using win_encoding::utf8_to_wide;
+using win_encoding::wide_to_utf8;
 
 void log_line(const std::string &text)
 {
@@ -135,17 +114,8 @@ bool read_text_file(const std::string &path, std::string *text)
         return false;
     text->assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
     *text = mote::normalizeTextEncoding(*text);
-    if (!mote::isValidUtf8(*text)) {
-        // 老文档常是 GBK 等系统代码页编码：按 CP_ACP 转一道，否则打开就是乱码。
-        const int length = MultiByteToWideChar(CP_ACP, 0, text->data(),
-                                               static_cast<int>(text->size()), nullptr, 0);
-        if (length > 0) {
-            std::wstring wide(static_cast<std::size_t>(length), L'\0');
-            MultiByteToWideChar(CP_ACP, 0, text->data(), static_cast<int>(text->size()),
-                                wide.data(), length);
-            *text = wide_to_utf8(wide);
-        }
-    }
+    // 老文档常是 GBK 等系统代码页编码：非 UTF-8 时按系统代码页兜底，否则打开就是乱码。
+    *text = win_encoding::decode_strict_utf8_or_acp(*text);
     return true;
 }
 

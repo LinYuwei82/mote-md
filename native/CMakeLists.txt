@@ -77,6 +77,11 @@ target_include_directories(mote_core PUBLIC "${MOTE_REPO_ROOT}")
 add_subdirectory("${MOTE_REPO_ROOT}/modules/update"
                  "${CMAKE_CURRENT_BINARY_DIR}/mote_update")
 
+# Windows 编码边界模块（UTF-8 ↔ wide / 路径 / 控制台代码页 / 系统错误文本）。
+# POSIX 侧有等价实现，因此各平台都会编译，只是 Windows 侧才真正被用到。
+add_subdirectory("${MOTE_REPO_ROOT}/modules/win_encoding"
+                 "${CMAKE_CURRENT_BINARY_DIR}/win_encoding")
+
 if(MSVC)
   target_compile_options(mote_core PRIVATE /utf-8 /W4)
 else()
@@ -95,6 +100,16 @@ else()
   target_compile_options(mote_core_tests PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall>")
 endif()
 add_test(NAME mote_core_tests COMMAND mote_core_tests)
+
+# 编码模块单测：跨平台可跑（Windows: Win32；macOS: UTF-8/UTF-32 等价实现）。
+add_executable(win_encoding_tests tests/win_encoding_tests.cpp)
+target_link_libraries(win_encoding_tests PRIVATE win_encoding)
+if(MSVC)
+  target_compile_options(win_encoding_tests PRIVATE /utf-8 /W4)
+else()
+  target_compile_options(win_encoding_tests PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall>")
+endif()
+add_test(NAME win_encoding_tests COMMAND win_encoding_tests)
 
 if(WIN32)
   # ---------------------------------------------------------------- Windows
@@ -137,7 +152,7 @@ if(WIN32)
   target_include_directories(Mote PRIVATE
     "${MOTE_WEBVIEW2_SDK}/build/native/include")
   target_link_libraries(Mote PRIVATE
-    mote_update user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32
+    mote_update win_encoding user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32
     urlmon windowscodecs winhttp bcrypt)
   # Windows 构建号：同版本清单靠 build 判断是否有新构建；默认 0（未知，跳过
   # build 比较仅按 version），发布脚本用 -DMOTE_BUILD=202611180530 覆盖。

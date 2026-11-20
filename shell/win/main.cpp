@@ -1,5 +1,7 @@
 #include "main_window.h"
 
+#include "win_encoding/encoding.h"
+
 #include <commctrl.h>
 #include <objbase.h>
 #include <shellapi.h>
@@ -11,15 +13,9 @@ namespace {
 
 std::string wide_to_utf8(const wchar_t *text)
 {
-    if (!text || !*text)
+    if (!text)
         return std::string();
-    const int length = WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0,
-                                           nullptr, nullptr);
-    if (length <= 1)
-        return std::string();
-    std::string narrow(static_cast<size_t>(length - 1), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, text, -1, narrow.data(), length, nullptr, nullptr);
-    return narrow;
+    return win_encoding::wide_to_utf8(text);
 }
 
 } // namespace

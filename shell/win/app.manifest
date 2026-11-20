@@ -11,9 +11,23 @@
           language="*" />
     </dependentAssembly>
   </dependency>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 / 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
-      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true</dpiAware>
+      <!-- PerMonitorV2：多显示器/缩放切换时窗口与 WebView2 不糊（与 wWinMain 里的
+           运行时声明保持一致，先由清单生效，运行时调用成为无操作）。 -->
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <!-- UTF-8：ANSICodePage 走 UTF-8，getenv / 旧式 ANSI API 返回的中文路径不再按
+           GBK 解释（Windows 10 1903+ 生效，旧系统忽略该节）。 -->
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+      <!-- 数据目录或导出路径超过 260 字符时不失败。 -->
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
     </windowsSettings>
   </application>
 </assembly>

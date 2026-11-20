@@ -1,6 +1,7 @@
 #include "dialogs.h"
 
 #include "env.h"
+#include "win_encoding/encoding.h"
 
 #include <commctrl.h>
 #include <shobjidl.h>
@@ -11,30 +12,8 @@
 
 namespace {
 
-std::wstring utf8_to_wide(const std::string &text)
-{
-    if (text.empty())
-        return std::wstring();
-    const int length = MultiByteToWideChar(CP_UTF8, 0, text.data(),
-                                           static_cast<int>(text.size()), nullptr, 0);
-    std::wstring wide(static_cast<size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
-                        wide.data(), length);
-    return wide;
-}
-
-std::string wide_to_utf8(const std::wstring &text)
-{
-    if (text.empty())
-        return std::string();
-    const int length = WideCharToMultiByte(CP_UTF8, 0, text.data(),
-                                           static_cast<int>(text.size()), nullptr, 0,
-                                           nullptr, nullptr);
-    std::string narrow(static_cast<size_t>(length), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
-                        narrow.data(), length, nullptr, nullptr);
-    return narrow;
-}
+using win_encoding::utf8_to_wide;
+using win_encoding::wide_to_utf8;
 
 void set_folder(IFileDialog *dialog, const std::string &directory)
 {

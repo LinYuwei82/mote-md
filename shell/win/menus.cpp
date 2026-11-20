@@ -1,5 +1,7 @@
 #include "menus.h"
 
+#include "win_encoding/encoding.h"
+
 #include <string>
 #include <utility>
 #include <vector>
@@ -13,17 +15,7 @@ struct ParsedShortcut {
     UINT key = 0;
 };
 
-std::wstring utf8_to_wide(const std::string &text)
-{
-    if (text.empty())
-        return std::wstring();
-    const int length = MultiByteToWideChar(CP_UTF8, 0, text.data(),
-                                           static_cast<int>(text.size()), nullptr, 0);
-    std::wstring wide(static_cast<size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
-                        wide.data(), length);
-    return wide;
-}
+using win_encoding::utf8_to_wide;
 
 bool key_from_token(const std::string &token, UINT *key)
 {
