@@ -65,13 +65,55 @@ if [ -n "$NOTES_URL" ]; then
     *) echo "NOTES_URL 必须是绝对 http(s) 地址：$NOTES_URL" >&2; exit 2 ;;
   esac
 fi
-# 未显式指定时，若仓库里有 docs/release-notes-<版本>.html 就自动带上并上传到
-# <product>/release-notes-<版本>.html；两个平台的清单都写同一个地址。
+# 未显式指定时，优先找 docs/release-notes-<版本>.html；没有 .html 但有 .md 时
+# 自动用 Python markdown 库转成 .html 到 docs/ 目录（客户端浏览器需要 html 渲染）。
+# 两个平台的清单都写同一个 <product>/release-notes-<版本>.html 地址。
 # 没有说明页则不写 notes_url，避免客户端出现死链。
 NOTES_FILE=""
-if [ -z "$NOTES_URL" ] && [ -f "$REPO_ROOT/docs/release-notes-$VERSION.html" ]; then
-  NOTES_FILE="$REPO_ROOT/docs/release-notes-$VERSION.html"
-  NOTES_URL="$CDN_DOMAIN/$PRODUCT_DIR/release-notes-$VERSION.html"
+find_notes_file() {
+  local ver md_file html_file
+  ver="$1"
+  md_file="$REPO_ROOT/docs/release-notes-$ver.md"
+  html_file="$REPO_ROOT/docs/release-notes-$ver.html"
+  # 若 html 不存在，或 html 比 md 旧（用户改了 md 但没删 html），则用 md 重新生成
+  if [ ! -f "$html_file" ] || { [ -f "$md_file" ] && [ "$md_file" -nt "$html_file" ]; }; then
+    if [ -f "$md_file" ]; then
+      if python3 -c 'import markdown' 2>/dev/null; then
+        python3 - "$md_file" "$html_file" <<'PYEOF'
+import markdown, sys
+md_path, html_path = sys.argv[1], sys.argv[2]
+css = """
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+     max-width:720px;margin:40px auto;padding:0 20px;line-height:1.7;color:#222}
+h1{border-bottom:2px solid #eee;padding-bottom:8px}
+h2{margin-top:1.5em;color:#111}
+table{border-collapse:collapse;width:100%;margin:1em 0}
+th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}
+th{background:#f6f8fa}
+code{background:#f0f0f0;padding:1px 6px;border-radius:3px;font-size:.9em}
+pre{background:#f6f8fa;padding:12px 16px;border-radius:6px;overflow-x:auto}
+pre code{background:none;padding:0}
+blockquote{border-left:4px solid #ddd;margin:1em 0;padding:0 16px;color:#666}
+"""
+md = open(md_path, encoding='utf-8').read()
+body = markdown.markdown(md, extensions=['tables','fenced_code'])
+full = f'<!DOCTYPE html><html><head><meta charset="utf-8"><style>{css}</style></head><body>{body}</body></html>'
+open(html_path, 'w', encoding='utf-8').write(full)
+PYEOF
+        echo "  (md → html 自动生成 $html_file)"
+      else
+        echo "⚠️  有 release-notes-$ver.md 但缺 Python markdown 库，跳过转换" >&2
+        return 1
+      fi
+    fi
+  fi
+  [ -f "$html_file" ] && echo "$html_file"
+}
+if [ -z "$NOTES_URL" ]; then
+  NOTES_FILE="$(find_notes_file "$VERSION" || true)"
+  if [ -n "$NOTES_FILE" ]; then
+    NOTES_URL="$CDN_DOMAIN/$PRODUCT_DIR/release-notes-$VERSION.html"
+  fi
 fi
 
 # ---- 定位 sign_update ----
