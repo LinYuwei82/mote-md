@@ -126,6 +126,13 @@ bool parseUpdateManifest(std::string_view text, UpdatePlatform platform, UpdateM
     const double rollout = section->numberAt("rollout_percent", 100.0);
     out.rollout_percent = static_cast<int>(std::clamp(rollout, 0.0, 100.0));
     out.mandatory = section->boolAt("mandatory", false);
+    out.mandatory_deadline = section->stringAt("mandatory_deadline");
+    out.mandatory_reason = section->stringAt("mandatory_reason");
+    if (!out.mandatory) {
+        // 与小兔口径一致：非强制更新不携带期限/原因，避免 UI 误显示升级期限
+        out.mandatory_deadline.clear();
+        out.mandatory_reason.clear();
+    }
 
     const JsonValue *artifacts = section->find("artifacts");
     if (!artifacts || !artifacts->isObject()) {
@@ -178,6 +185,20 @@ int rolloutBucket(std::string_view installId, long long build)
 bool rolloutAllows(int percent, int bucket)
 {
     return bucket >= 0 && bucket < std::clamp(percent, 0, 100);
+}
+
+std::string mandatoryReasonLabel(std::string_view reason)
+{
+    // 与 xiaotu web/app.js 的 mandatoryReasonText、DevCard 前端文案逐字一致
+    if (reason == "SECURITY")
+        return "安全漏洞修复";
+    if (reason == "PROTOCOL")
+        return "协议不兼容";
+    if (reason == "REGULATORY")
+        return "法规或税控要求";
+    if (reason == "MIN_SUPPORTED")
+        return "低于服务端最低支持版本";
+    return std::string();
 }
 
 UpdateDecision decideUpdate(const UpdateManifest &manifest, UpdatePlatform platform,

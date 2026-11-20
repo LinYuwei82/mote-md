@@ -390,6 +390,45 @@ static void testUpdate()
                  "artifacts":{"portable":{"url":"https://x/a.zip"}}}}})json",
         UpdatePlatform::Windows, fullRollout, nullptr));
     CHECK_EQ(fullRollout.rollout_percent, 0);
+
+    // 强制更新：解析 mandatory / 期限 / 原因，并映射固定中文文案
+    UpdateManifest mandatoryManifest;
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"windows":{"version":"2.0.0","mandatory":true,
+                 "mandatory_reason":"SECURITY","mandatory_deadline":"2026-12-01T00:00:00Z",
+                 "artifacts":{"portable":{"url":"https://x/a.zip"}}}}})json",
+        UpdatePlatform::Windows, mandatoryManifest, nullptr));
+    CHECK(mandatoryManifest.mandatory);
+    CHECK_EQ(mandatoryManifest.mandatory_reason, std::string("SECURITY"));
+    CHECK_EQ(mandatoryManifest.mandatory_deadline, std::string("2026-12-01T00:00:00Z"));
+    CHECK_EQ(mote::mandatoryReasonLabel("SECURITY"), std::string("安全漏洞修复"));
+    CHECK_EQ(mote::mandatoryReasonLabel("PROTOCOL"), std::string("协议不兼容"));
+    CHECK_EQ(mote::mandatoryReasonLabel("REGULATORY"), std::string("法规或税控要求"));
+    CHECK_EQ(mote::mandatoryReasonLabel("MIN_SUPPORTED"), std::string("低于服务端最低支持版本"));
+    CHECK(mote::mandatoryReasonLabel("").empty());
+    CHECK(mote::mandatoryReasonLabel("UNKNOWN").empty());
+
+    // 强制更新绕过灰度：rollout_percent=1 且未命中桶也下发
+    UpdateManifest mandatoryRollout;
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"windows":{"version":"2.0.0","build":202611180530,
+                 "rollout_percent":1,"mandatory":true,
+                 "artifacts":{"portable":{"url":"https://x/a.zip"}}}}})json",
+        UpdatePlatform::Windows, mandatoryRollout, nullptr));
+    CHECK(mote::decideUpdate(mandatoryRollout, UpdatePlatform::Windows, "1.0.2", "10.0", 0,
+                             "mote-other-install")
+          == UpdateDecision::Available);
+
+    // 非强制更新不携带期限/原因：解析时清空，避免 UI 误显示
+    UpdateManifest staleMandatory;
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"windows":{"version":"2.0.0","mandatory":false,
+                 "mandatory_reason":"SECURITY","mandatory_deadline":"2026-12-01T00:00:00Z",
+                 "artifacts":{"portable":{"url":"https://x/a.zip"}}}}})json",
+        UpdatePlatform::Windows, staleMandatory, nullptr));
+    CHECK(!staleMandatory.mandatory);
+    CHECK(staleMandatory.mandatory_reason.empty());
+    CHECK(staleMandatory.mandatory_deadline.empty());
 }
 
 // ---- Ed25519 验签：与 tools/release/manifest_v2.py 交叉验证 ----

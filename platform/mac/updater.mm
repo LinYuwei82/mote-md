@@ -309,9 +309,10 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
         break;
     }
 
-    // 后台检查不打扰用户：同一版本提醒过一次后，等下次发布再说
+    // 后台检查不打扰用户：同一版本提醒过一次后，等下次发布再说；
+    // 强制更新不受「稍后」记录限制，每次检查都要提示
     NSString *skipped = [defaults stringForKey:kSkippedVersionKey];
-    if (!interactive && [skipped isEqualToString:MoteString(manifest.version)]) {
+    if (!interactive && !manifest.mandatory && [skipped isEqualToString:MoteString(manifest.version)]) {
         MoteUpdateLog("skip prompt for version=%s", manifest.version.c_str());
         return;
     }
@@ -343,14 +344,29 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
     if (details.count > 0) {
         message = [message stringByAppendingFormat:@"\n%@", [details componentsJoinedByString:@"\n"]];
     }
+    if (manifest.mandatory) {
+        // 强制更新：说明原因与期限，且不提供「稍后」
+        NSMutableString *notice = [NSMutableString stringWithString:@"当前版本必须升级。"];
+        NSString *reason = MoteString(mote::mandatoryReasonLabel(manifest.mandatory_reason));
+        if (reason.length > 0)
+            [notice appendFormat:@"原因：%@。", reason];
+        if (!manifest.mandatory_deadline.empty()) {
+            [notice appendFormat:@"请于 %@ 前完成升级。",
+                                 MoteString(manifest.mandatory_deadline)];
+        }
+        message = [notice stringByAppendingFormat:@"\n\n%@", message];
+    }
     message = [message stringByAppendingString:@"\n\n安装过程会退出并重新打开 Mote。"];
 
     NSAlert *alert = [[NSAlert alloc] init];
-    alert.messageText = [NSString stringWithFormat:@"发现新版本 %@", MoteString(manifest.version)];
+    alert.messageText = manifest.mandatory
+        ? [NSString stringWithFormat:@"必须更新到 %@", MoteString(manifest.version)]
+        : [NSString stringWithFormat:@"发现新版本 %@", MoteString(manifest.version)];
     alert.informativeText = message;
-    alert.alertStyle = NSAlertStyleInformational;
-    [alert addButtonWithTitle:@"下载并安装"];
-    [alert addButtonWithTitle:@"稍后"];
+    alert.alertStyle = manifest.mandatory ? NSAlertStyleCritical : NSAlertStyleInformational;
+    [alert addButtonWithTitle:manifest.mandatory ? @"立即更新" : @"下载并安装"];
+    if (!manifest.mandatory)
+        [alert addButtonWithTitle:@"稍后"];
 
     // notes_url 非空时加一行可点击的「查看完整更新说明…」链接
     if (!manifest.notes_url.empty()) {
@@ -377,7 +393,7 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
 
     [NSApp activateIgnoringOtherApps:YES];
     const NSModalResponse choice = [alert runModal];
-    if (choice != NSAlertFirstButtonReturn) {
+    if (!manifest.mandatory && choice != NSAlertFirstButtonReturn) {
         [NSUserDefaults.standardUserDefaults
             setObject:[NSString stringWithUTF8String:manifest.version.c_str()]
                forKey:kSkippedVersionKey];

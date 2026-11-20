@@ -78,9 +78,9 @@
 | `min_os` | string | 是 | 如 `14.0` / `10.0` |
 | `notes_url` | string | 否 | 发布说明页，绝对 https 地址；客户端「查看更新详情」直接打开；缺省不发 |
 | `rollout_percent` | int | 否 | 0–100，缺省 `100`（灰度用） |
-| `mandatory` | bool | 否 | 强制更新开关；缺省为 `false`。发布脚本只在传 `--mandatory` 时写入，当前三份线上清单均无此字段 |
-| `mandatory_deadline` | string | 否 | ISO 8601 UTC |
-| `mandatory_reason` | string | 否 | |
+| `mandatory` | bool | 否 | 强制更新开关；缺省为 `false`。为 `true` 时跳过灰度与「稍后」，客户端只给「立即更新」，见 6.2。发布脚本只在传 `--mandatory` 时写入，当前三份线上清单均无此字段 |
+| `mandatory_deadline` | string | 否 | ISO 8601 UTC，仅用于提示升级期限，客户端不据此放行，见 6.2 |
+| `mandatory_reason` | string | 否 | `SECURITY` / `PROTOCOL` / `REGULATORY` / `MIN_SUPPORTED` 四类之一；`mandatory` 为 `false` 时客户端解析会清空该字段 |
 | `artifacts` | object | 是 | 见 3.3 |
 
 > `notes_url` 由发布脚本写入：三家脚本都检测仓库里的
@@ -253,7 +253,8 @@ DevCard Windows 发版前验证工具：`dev_card_cpp/tools/release/verify_build
    - macOS：manifest 的 `sha256` 只用于自研预下载；最终安装由 Sparkle 按
      `appcast.xml` **重新下载**并验证其中的 EdDSA 签名，不以 manifest 的 sha256
      作为安装前校验。
-5. `rollout_percent` / `mandatory` 按各客户端现有逻辑消费，schema 层面三家一致。
+5. `rollout_percent` / `mandatory` 的消费口径见 6.1（灰度分桶）与 6.2（强制更新），
+   schema 层面三家一致。
 
 ### 6.1 灰度分桶算法（唯一口径）
 
@@ -274,6 +275,23 @@ DevCard Windows 发版前验证工具：`dev_card_cpp/tools/release/verify_build
 DevCard `core/src/update_manifest.cpp` 的同名函数，Mote
 `modules/update/src/update.cpp` 的 `rolloutBucket` / `rolloutAllows`。
 三处必须逐位一致：改动算法需同一次提交同步三仓库，并更新本节。
+
+### 6.2 强制更新语义（唯一口径）
+
+`mandatory == true` 时三端行为一致（2026-11-20 起 Mote 补齐，此前只有小兔 /
+DevCard 消费）：
+
+1. **判定**：跳过灰度分桶与「稍后/已跳过该版本」记录，只要版本更新就下发；
+2. **提示**：弹窗只保留「立即更新」一个按钮，不提供「稍后」，也不允许直接关闭；
+   用户取消或退出应用，下次检查继续提示；
+3. **原因文案**固定映射四类，客户端不得自行改写：
+   `SECURITY` → 安全漏洞修复，`PROTOCOL` → 协议不兼容，
+   `REGULATORY` → 法规或税控要求，`MIN_SUPPORTED` → 低于服务端最低支持版本；
+   未知值不显示原因，但也不因此判清单无效；
+4. **期限** `mandatory_deadline` 仅作提示（「请于 … 前完成升级」），客户端不据此
+   设宽限期、也不在到期后追加额外动作；
+5. 非强制更新的清单不应携带 `mandatory_deadline` / `mandatory_reason`；
+   客户端解析时会清空，避免 UI 误显示升级期限。
 
 ## 七、安装包命名统一（随 v2 一并执行）
 

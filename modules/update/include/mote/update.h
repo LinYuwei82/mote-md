@@ -35,7 +35,9 @@ struct UpdateManifest
     std::string min_os;       // 可选，最低系统版本，形如 14.0
     std::string notes_url;    // 可选，本次更新的发布说明 URL（release notes 页面）
     int rollout_percent = 100; // 可选，灰度比例 0–100；缺省 100 表示全量
-    bool mandatory = false;    // 可选，强制更新；为 true 时跳过灰度直接下发
+    bool mandatory = false;    // 可选，强制更新；为 true 时跳过灰度与「稍后」
+    std::string mandatory_deadline; // 可选，ISO 8601 UTC，仅用于提示升级期限
+    std::string mandatory_reason;   // 可选，SECURITY / PROTOCOL / REGULATORY / MIN_SUPPORTED
 
     // artifacts.<key>：key 枚举 dmg / setup / portable；未知 key 一律忽略。
     UpdateArtifact dmg;      // macOS 安装包
@@ -67,6 +69,10 @@ int rolloutBucket(std::string_view installId, long long build);
 
 // percent 超出 0–100 时按边界截断；bucket 为负（无 install_id）一律不放行。
 bool rolloutAllows(int percent, int bucket);
+
+// mandatory_reason 四类原因的中文文案（与小兔 / DevCard 客户端一致）；
+// 未知或空串返回空（UI 不显示原因，不因此判清单无效）。
+std::string mandatoryReasonLabel(std::string_view reason);
 
 // 结合当前版本与当前系统版本得出该提示什么。
 // macOS 只比 version；Windows 先比 version，同版本再比 build（build 小于等于
