@@ -268,7 +268,7 @@ hdiutil verify "$NOTARY_DMG" >/dev/null
 codesign --force --sign "Developer ID Application: ${SIGN_IDENTITY}" --timestamp "$NOTARY_DMG"
 
 echo "==> 7/${TOTAL} 提交 DMG 公证（xcrun notarytool submit --wait）..."
-echo "    凭据钥匙串配置：$NOTARY_PROFILE（已前置检查）"
+echo "    凭据钥匙串配置：${NOTARY_PROFILE}（已前置检查）"
 echo "    提交文件：$NOTARY_DMG"
 
 NOTARY_LOG="$NOTARY_STAGE/notary.log"

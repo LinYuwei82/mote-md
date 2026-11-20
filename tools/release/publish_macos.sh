@@ -380,7 +380,7 @@ if [ -d "$DOCS_ROOT" ]; then
   DMG_SIZE=$(stat -f%z "$DMG_PATH" 2>/dev/null || stat -c%s "$DMG_PATH" 2>/dev/null || echo "?")
   DMG_MIB=$(python3 -c "print(f'{int($DMG_SIZE)/1024/1024:.2f}')" 2>/dev/null || echo "?")
   TODAY=$(date '+%Y-%m-%d')
-  echo "  📦 包体实测（版本 $VERSION / $TODAY）"
+  echo "  📦 包体实测（版本 $VERSION / ${TODAY}）"
   echo "     DMG: ${DMG_SIZE}B (${DMG_MIB} MiB)"
 
   WATCH_WORDS="未实现|待补|待处理|TODO|FIXME|缺口|缺失|尚未|计划实现"

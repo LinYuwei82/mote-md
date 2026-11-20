@@ -31,7 +31,7 @@ for arg in "$@"; do
     -h|--help)
       sed -n '2,29p' "$0"
       exit 0 ;;
-    *) echo "未知参数：$arg（可用：--dry-run, --local-only, --check-build-str）" >&2; exit 2 ;;
+    *) echo "未知参数：${arg}（可用：--dry-run, --local-only, --check-build-str）" >&2; exit 2 ;;
   esac
 done
 
@@ -180,7 +180,7 @@ if [ "$CHECK_BUILD_STR" -eq 1 ]; then
     local label
     label="$(basename "$repo")"
 
-    echo "--- $name（$label）---"
+    echo "--- ${name}（${label}）---"
 
     # 1) CMakeLists.txt 里有 XXX_BUILD_STR / XXX_BUILD_STAMP / 构建号注入函数
     if [ -f "$repo/$cmake_path" ]; then
