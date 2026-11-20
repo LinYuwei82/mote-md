@@ -36,7 +36,7 @@ add_library(mote_tweetnacl STATIC
 target_include_directories(mote_tweetnacl PUBLIC
   "${MOTE_REPO_ROOT}/core/third_party/tweetnacl")
 
-# 无平台 API 的核心：macOS 与 Windows 共用
+# 无平台 API 的核心：macOS 与 Windows 共用（业务逻辑，不含自动更新）
 add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/base64.cpp"
   "${MOTE_REPO_ROOT}/core/block_layout.cpp"
@@ -47,11 +47,18 @@ add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/js_bridge.cpp"
   "${MOTE_REPO_ROOT}/core/json.cpp"
   "${MOTE_REPO_ROOT}/core/paths.cpp"
-  "${MOTE_REPO_ROOT}/core/text_encoding.cpp"
+  "${MOTE_REPO_ROOT}/core/text_encoding.cpp")
+target_include_directories(mote_core PUBLIC "${MOTE_REPO_ROOT}")
+
+# 自动更新模块（独立 STATIC library，可被其他项目复用）
+# 依赖 mote_core 的 json / base64（manifest 解析 + base64 编解码）+ tweetnacl（Ed25519 验签）。
+# updater.mm / updater.cpp（平台桥接层）在各自 add_executable 里直接编进主 target，
+# 但它们 link mote_update 拿到版本比较 + 验签能力。
+add_library(mote_update STATIC
   "${MOTE_REPO_ROOT}/core/update.cpp"
   "${MOTE_REPO_ROOT}/core/verify_signature.cpp")
-target_include_directories(mote_core PUBLIC "${MOTE_REPO_ROOT}")
-target_link_libraries(mote_core PUBLIC mote_tweetnacl)
+target_include_directories(mote_update PUBLIC "${MOTE_REPO_ROOT}")
+target_link_libraries(mote_update PUBLIC mote_core mote_tweetnacl)
 
 if(MSVC)
   target_compile_options(mote_core PRIVATE /utf-8 /W4)
@@ -62,7 +69,7 @@ endif()
 # 无窗口单测：cmake --build build-native && ctest --test-dir build-native
 enable_testing()
 add_executable(mote_core_tests tests/core_tests.cpp)
-target_link_libraries(mote_core_tests PRIVATE mote_core)
+target_link_libraries(mote_core_tests PRIVATE mote_update)
 if(MSVC)
   target_compile_options(mote_core_tests PRIVATE /utf-8 /W4)
 else()
@@ -111,7 +118,7 @@ if(WIN32)
   target_include_directories(Mote PRIVATE
     "${MOTE_WEBVIEW2_SDK}/build/native/include")
   target_link_libraries(Mote PRIVATE
-    mote_core user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32
+    mote_update user32 gdi32 ole32 oleaut32 uuid advapi32 shlwapi shell32 comctl32
     urlmon windowscodecs winhttp bcrypt)
   # Windows 构建号：同版本清单靠 build 判断是否有新构建；默认 0（未知，跳过
   # build 比较仅按 version），发布脚本用 -DMOTE_BUILD=202611180530 覆盖。
@@ -312,7 +319,7 @@ else()
     MOTE_BUILD_STR="${MOTE_BUILD_STAMP}")
 
   target_link_libraries(Mote PRIVATE
-    mote_core
+    mote_update
     "-framework Cocoa"
     "-framework WebKit"
     "-framework UniformTypeIdentifiers")
