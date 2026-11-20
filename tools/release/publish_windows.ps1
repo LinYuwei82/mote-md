@@ -1,6 +1,6 @@
 ﻿# Mote · Windows 在线更新发布（OSS 清单 + 绿色包 zip，更新清单 Schema v2）
 #
-# 输入：packaging/package_windows_native.ps1 产出的 dist\Mote-Windows.zip
+# 输入：tools/package/package_windows.ps1 产出的 dist\Mote-Windows.zip
 # 动作：门禁校验 → 生成 Ed25519 签名的 manifest.json（v2）→ 上传 OSS → 线上校验
 #
 # 与 macOS 的 publish_macos.sh 对齐：
@@ -28,7 +28,7 @@
 #
 # -Build 可省略：依次从 build-native-ninja\CMakeCache.txt、zip 内 Mote.exe 的
 # "MOTE_BUILD=<digits>" 标记自动识别，识别后与二进制交叉校验。
-# packaging\package_windows_native.ps1 不传 -Build 时会自动用 gen_build.py 生成，
+# tools\package\package_windows.ps1 不传 -Build 时会自动用 gen_build.py 生成，
 # 因此正常发布流程无需手工指定构建号。
 
 param(
@@ -121,7 +121,7 @@ if ([string]::IsNullOrWhiteSpace($Build)) {
     }
 }
 if ([string]::IsNullOrWhiteSpace($Build)) {
-    # 兜底：直接从产物里的 MOTE_BUILD 标记识别（package_windows_native.ps1 自动注入）
+    # 兜底：直接从产物里的 MOTE_BUILD 标记识别（package_windows.ps1 自动注入）
     if ([string]::IsNullOrWhiteSpace($ZipPath)) { $ZipPath = Join-Path $root "dist\Mote-Windows.zip" }
     if (Test-Path -LiteralPath $ZipPath) {
         Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -146,7 +146,7 @@ if ([string]::IsNullOrWhiteSpace($Build)) {
         }
     }
     if ([string]::IsNullOrWhiteSpace($Build)) {
-        Fail "无法自动确定构建号：CMakeCache 与 zip 内 Mote.exe 都没有 MOTE_BUILD 标记。请先跑 packaging\package_windows_native.ps1（会自动生成构建号并编译），或用 -Build 显式传入"
+        Fail "无法自动确定构建号：CMakeCache 与 zip 内 Mote.exe 都没有 MOTE_BUILD 标记。请先跑 tools\package\package_windows.ps1（会自动生成构建号并编译），或用 -Build 显式传入"
     }
 }
 if ($Build -notmatch '^\d{4,}$') { Fail "非法构建号：$Build（应为纯数字，如 202611180930）" }
@@ -183,7 +183,7 @@ if (-not (Test-Path -LiteralPath $signKeyPath)) {
 
 if (-not $ZipPath) { $ZipPath = Join-Path $root "dist\Mote-Windows.zip" }
 if (-not (Test-Path $ZipPath)) {
-    Fail "zip 不存在：$ZipPath（先跑 packaging\package_windows_native.ps1）"
+    Fail "zip 不存在：$ZipPath（先跑 tools\package\package_windows.ps1）"
 }
 $ZipFull = (Resolve-Path $ZipPath).Path
 

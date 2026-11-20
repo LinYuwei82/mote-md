@@ -86,7 +86,7 @@ native/CMakeLists.txt          # if(APPLE) / elseif(WIN32) 两套 target
 - **运行时**：启动时 `GetAvailableCoreWebView2BrowserVersionString` 检测；缺失则弹窗并给出 Evergreen Runtime 下载地址，不随包分发内核。
 - **版本**：CMake 从 `Mote.pro` 读 `VERSION`，生成 `app.rc`（图标、`FileVersion`、`ProductVersion`），去掉手工同步。
 - **产物**：`dist/Mote-Windows/`：`Mote.exe`、`WebView2Loader.dll`、`web/`、`fonts/`、`samples/`、`licenses/`；同名 zip。已按默认产物发布（不再带 `-native` 后缀）；Qt 路径保留为回退，并存时给原生脚本传 `-OutName Mote-Windows-native`。
-- **自检**：新增 `packaging/package_windows_native.ps1` 或扩展现有 bat：检查产物目录无 `Qt6*.dll`、无 `platforms/qwindows.dll`；`dumpbin /dependents` 只允许系统 DLL + `WebView2Loader.dll`。
+- **自检**：新增 `tools/package/package_windows.ps1` 或扩展现有 bat：检查产物目录无 `Qt6*.dll`、无 `platforms/qwindows.dll`；`dumpbin /dependents` 只允许系统 DLL + `WebView2Loader.dll`。
 
 ## 8. 里程碑
 

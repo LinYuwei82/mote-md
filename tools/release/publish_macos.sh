@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Mote · macOS 在线更新发布（OSS 清单 + Sparkle 安装，更新清单 Schema v2）
 #
-# 输入：已用 Developer ID 签名并通过公证的 DMG（packaging/package_macos.sh 产出）
+# 输入：已用 Developer ID 签名并通过公证的 DMG（tools/package/package_macos.sh 产出）
 # 动作：EdDSA 签名 → 生成 appcast.xml 与 manifest.json（v2）→ 上传 dl.xiaotu.online → 校验线上可读
 #
 # 两个清单的分工：

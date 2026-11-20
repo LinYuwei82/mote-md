@@ -42,7 +42,7 @@
 
 ## 依赖自检
 
-`packaging/package_macos.sh --native --dmg` 的最终扫描：
+`tools/package/package_macos.sh --native --dmg` 的最终扫描：
 
 ```
 Mach-O 文件数：1
@@ -93,7 +93,7 @@ cmake -S native -B build-native && cmake --build build-native
 ctest --test-dir build-native
 
 # 原生出包（zip + DMG）
-bash packaging/package_macos.sh --native --dmg
+bash tools/package/package_macos.sh --native --dmg
 
 # 本机自检
 bash tools/preflight.sh --native

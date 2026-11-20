@@ -1,6 +1,6 @@
 ﻿# Windows 原生薄外壳打包
 # 用法：在已加载 MSVC 环境的 PowerShell 中执行
-#   powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+#   powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 # 产物：dist\Mote-Windows\ 与 dist\Mote-Windows.zip（Windows 发布包）
 
 param(
@@ -11,7 +11,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (-not $BuildDir) { $BuildDir = Join-Path $root "build-native-ninja" }
 $dist = Join-Path $root "dist"
 $out = Join-Path $dist $OutName

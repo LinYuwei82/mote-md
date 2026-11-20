@@ -1,5 +1,5 @@
 ﻿# 构建 Windows 安装包（Inno Setup 6）
-# 前置：先运行 packaging\package_windows_native.ps1 生成 dist\Mote-Windows（原生外壳绿色版）
+# 前置：先运行 tools\package\package_windows.ps1 生成 dist\Mote-Windows（原生外壳绿色版）
 # 用法：powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 
 $ErrorActionPreference = "Stop"
@@ -17,7 +17,7 @@ if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
 
 $greenDir = Join-Path $root "dist\Mote-Windows"
 if (-not (Test-Path $greenDir)) {
-    throw "缺少绿色版目录 dist\Mote-Windows，请先运行 packaging\package_windows_native.ps1"
+    throw "缺少绿色版目录 dist\Mote-Windows，请先运行 tools\package\package_windows.ps1"
 }
 
 # 「装得上、跑不起来」是这里代价最高的错误：WebView2Loader 或页面资源缺任何一个，
@@ -32,7 +32,7 @@ $requiredFiles = @(
 foreach ($rel in $requiredFiles) {
     $full = Join-Path $greenDir $rel
     if (-not (Test-Path -LiteralPath $full -PathType Leaf)) {
-        throw "绿色版缺少运行必需文件：$rel（$full）。请重新运行 packaging\package_windows_native.ps1"
+        throw "绿色版缺少运行必需文件：$rel（$full）。请重新运行 tools\package\package_windows.ps1"
     }
 }
 

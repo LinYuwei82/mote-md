@@ -8,7 +8,7 @@
 1. **Windows 包必须在 Windows 上构建**。本机是 macOS，没有 MSVC，也无法交叉编译；
    macOS 上打出的 `dist/Mote-macOS-native.zip` 里是 arm64 的 `.app`，Windows 用不了。
 2. 整个流程只有一条主线：**只带源码去 Windows → 装 Build Tools / CMake / WebView2 SDK
-   → 跑 `packaging\package_windows_native.ps1` → 拿 `dist\Mote-Windows.zip`（可选再跑
+   → 跑 `tools\package\package_windows.ps1` → 拿 `dist\Mote-Windows.zip`（可选再跑
    `packaging\build_installer.ps1` 出安装版）→
    在干净的 Windows 机器上验证**。
 3. Windows 包不链接、也不分发 Qt：外壳是 Win32 + WebView2，只依赖系统组件与
@@ -34,7 +34,7 @@ $env:WEBVIEW2_SDK = "C:\dev\webview2sdk\pkg"
 cd C:\dev\Mote
 cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build-native-ninja
-powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 ```
 
 产物：`dist\Mote-Windows\` 与 `dist\Mote-Windows.zip`。
@@ -50,7 +50,7 @@ powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
 | `platform/` | **必须** | `mac/` 在 Windows 不编译，但 CMake 会按平台分支，带上更省事 |
 | `resources/` | **必须** | 前端页面、字体、示例、`win/` 图标资源 |
 | `VERSION.txt`、`LICENSE` | **必须** | 版本号唯一来源与许可证 |
-| `packaging/package_windows_native.ps1` | **必须** | Windows 打包脚本本体 |
+| `tools/package/package_windows.ps1` | **必须** | Windows 打包脚本本体 |
 | `packaging/build_installer.ps1`、`packaging/mote.iss` | 需安装包时 | Inno Setup 安装版构建（版本读 `VERSION.txt`） |
 | `packaging/PACKAGING.md`、本文件 | 建议 | 交付说明与本文档，方便 Windows 侧照着核对 |
 | `tools/make_icon.py` | 可选 | 只在重新生成图标时用，且依赖 macOS 的 `iconutil` |
@@ -128,7 +128,7 @@ macOS 侧如有未推送的提交，先 `git push` 再 clone；双机协作流�
 
 ```powershell
 $env:WEBVIEW2_SDK = "C:\dev\webview2sdk\pkg"
-powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 ```
 
 脚本按 6 步执行：
@@ -210,7 +210,7 @@ exe 只链接系统 DLL；WebView2 运行时由目标机器提供（Evergreen）
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
 | 窗口空白 / 提示缺 WebView2 | 目标机器没有 Evergreen Runtime | 安装 WebView2 Runtime 后重试 |
-| 提示缺 `WebView2Loader.dll` | 打包时没复制 Loader | 重新跑 `package_windows_native.ps1`（确认 `WEBVIEW2_SDK`） |
+| 提示缺 `WebView2Loader.dll` | 打包时没复制 Loader | 重新跑 `package_windows.ps1`（确认 `WEBVIEW2_SDK`） |
 | SmartScreen「Windows 已保护你的电脑」 | 未签名 | 点「更多信息 → 仍要运行」；正式发布需购买代码签名证书 |
 | `cmake --build` 失败 | 没在 MSVC 环境，或 `WEBVIEW2_SDK` 未设置 | 在 VS 开发者环境重开 PowerShell，按第 3 节核对 |
 | 第 2 步清理失败 | `dist` 里有正在运行的 `Mote.exe` 或被资源管理器占用 | 关闭占用后重试 |

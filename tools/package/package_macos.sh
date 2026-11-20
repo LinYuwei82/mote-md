@@ -1,9 +1,9 @@
 #!/bin/bash
 # macOS 打包脚本：编译 -> 检查依赖 -> 清理扩展属性 -> Developer ID 签名 -> 公证 -> 打 zip/DMG
 # 用法：
-#   bash packaging/package_macos.sh                 # AppKit + CMake 构建 + Developer ID 签名 + 公证
-#   bash packaging/package_macos.sh --dmg           # 额外出 dist/Mote-macOS-native-<版本>.dmg（拖拽安装）+ DMG 公证
-#   bash packaging/package_macos.sh --clean-dist    # 先清空 dist/（默认保留其它旧产物）
+#   bash tools/package/package_macos.sh                 # AppKit + CMake 构建 + Developer ID 签名 + 公证
+#   bash tools/package/package_macos.sh --dmg           # 额外出 dist/Mote-macOS-native-<版本>.dmg（拖拽安装）+ DMG 公证
+#   bash tools/package/package_macos.sh --clean-dist    # 先清空 dist/（默认保留其它旧产物）
 #
 # 硬门禁（2026-11-20 起生效）：签名 + 公证是发布硬性前提，不满足直接 exit 1。
 #   - 钥匙串里必须有 Developer ID Application 证书，否则 fail
@@ -21,7 +21,7 @@ for arg in "$@"; do
         --dmg) WITH_DMG=1 ;;
         --clean-dist) CLEAN_DIST=1 ;;
         -h|--help)
-            echo "用法: bash packaging/package_macos.sh [--dmg] [--clean-dist]"
+            echo "用法: bash tools/package/package_macos.sh [--dmg] [--clean-dist]"
             echo "  --dmg         在 zip 之外再产出一个拖拽安装式 DMG（卷标 Mote，UDZO 压缩）"
             echo "  --clean-dist  先清空 dist/（默认只覆盖同名产物，保留 dist 里的其它文件）"
             echo ""
@@ -59,7 +59,7 @@ if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" 2>&1 | head -1 
 fi
 echo "公证 profile：${NOTARY_PROFILE} ✓"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_NAME="Mote"
 # 构建/签名放在非同步目录：工程若位于 iCloud“文稿”等 FileProvider 目录，
 # 系统会反复给 .app 加 FinderInfo 扩展属性，导致 codesign 失败。

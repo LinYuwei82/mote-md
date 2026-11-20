@@ -28,7 +28,7 @@ cd $env:USERPROFILE\dev\mote-md
 git config user.name  "你的名字"      # 仓库级，只影响这一个 clone，见 1.2
 git config user.email "你的邮箱"
 git status -sb
-git ls-files --eol packaging/package_macos.sh tools/release/publish_windows.ps1
+git ls-files --eol tools/package/package_macos.sh tools/release/publish_windows.ps1
 ```
 
 没装 Git 先看 1.1；走 HTTPS + 令牌把第一行的地址换成 `https://gitee.com/lin-yuwei168/mote-md.git`，见第 3 节。
@@ -229,13 +229,13 @@ git fetch origin; git rev-parse origin/main; git rev-parse HEAD    # 两个哈�
 仓库里正好有两类被 `.gitattributes` 钉死的脚本，用它们验收最直接：
 
 ```powershell
-git ls-files --eol packaging/package_macos.sh tools/release/publish_windows.ps1
+git ls-files --eol tools/package/package_macos.sh tools/release/publish_windows.ps1
 ```
 
 期望输出（`w/` 是工作区，才是真正要看的）：
 
 ```
-i/lf    w/lf      attr/text eol=lf      	packaging/package_macos.sh
+i/lf    w/lf      attr/text eol=lf      	tools/package/package_macos.sh
 i/lf    w/crlf    attr/text=auto        	tools/release/publish_windows.ps1
 ```
 
@@ -260,7 +260,7 @@ function Test-Eol([string]$p) {
   "{0,-38} CR={1,-5} LF={2,-5} -> {3}" -f $p, $cr, $lf,
     $(if ($cr -eq 0) { "LF" } elseif ($cr -eq $lf) { "CRLF" } else { "混合(异常)" })
 }
-Test-Eol packaging/package_macos.sh              # 期望 LF
+Test-Eol tools/package/package_macos.sh              # 期望 LF
 Test-Eol tools/release/publish_windows.ps1        # Windows 上期望 CRLF
 ```
 
@@ -397,7 +397,7 @@ git rebase --continue
 ```powershell
 git status -sb                       # 干净、没有 "rebase in progress"
 git log --oneline -3
-git ls-files --eol packaging/package_macos.sh tools/release/publish_windows.ps1   # 行尾没被弄坏
+git ls-files --eol tools/package/package_macos.sh tools/release/publish_windows.ps1   # 行尾没被弄坏
 ```
 
 改了前端（`resources/web/*`）或 C++（`core/*`、`platform/*`）的话，在对应的平台上重新编译、跑一遍再推。
@@ -417,7 +417,7 @@ WebView2 Runtime；那套步骤在 [WINDOWS-FROM-MACOS.md](WINDOWS-FROM-MACOS.md
 
 1. **前端资源在构建时拷进产物**，改 `resources/web/*` 后需要在各自平台重新构建才能看到效果；
    Mac 侧验证过的改动，Windows 侧不重新编译就不会体现——这不是同步问题，别误判成「没拉到代码」。
-2. **`dist/` 不进仓库**，所以 Windows 需要的包必须在本机用 `package_windows_native.ps1` 重新打；
+2. **`dist/` 不进仓库**，所以 Windows 需要的包必须在本机用 `package_windows.ps1` 重新打；
    不要把 `dist/Mote-macOS-native.zip` 拷过去用（里面是 arm64 的 `.app`）。
 
 ---

@@ -352,7 +352,7 @@ python3 tools/release/manifest_v2.py resign --manifest dist/manifest.json \
 | 位置 | 改动 |
 |---|---|
 | `mote/tools/release/manifest_v2.py`（新） | 统一生成 + 签名 + 本地验签，三仓库同步 |
-| 三家发布脚本（`publish_macos.sh` / `publish_oss.sh` / `publish_windows.*`） | 改调 manifest_v2.py，上传 `manifest.json` |
+| 三家发布脚本（`publish_macos.sh` / `publish_windows.*`） | 改调 manifest_v2.py，上传 `manifest.json` |
 | `guard.py` | preflight/verify-live 增加 v2 检查（schema、签名、命名、URL 一致性） |
 | 下载页 `site.js` | 改读 `manifest.json`，取 `platforms.*.version` |
 | 小兔客户端 | 解析 v2（读 `platforms.windows`）+ 内嵌 URL 换 manifest.json |

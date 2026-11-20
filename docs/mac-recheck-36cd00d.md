@@ -30,7 +30,7 @@ git log -1 --format='%H %s'   # 期望 36cd00d 编辑（共享层）：复制 HT
 
 构建（任选其一）：
 
-- `packaging/package_macos.sh`（仓库内的正式打包流程）；
+- `tools/package/package_macos.sh`（仓库内的正式打包流程）；
 - 或你自己的 Mac 构建流程（`qmake` + `make` / Qt Creator），只要能产出可运行的 Mote.app。
 
 要求：**构建通过**，记录命令、完整输出尾部与产物路径（例如 `dist/Mote.app`）。构建失败即整轮失败，先修构建再谈功能。

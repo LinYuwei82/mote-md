@@ -96,7 +96,7 @@ jobs:
 
       - name: 打绿色包
         shell: pwsh
-        run: ./packaging/package_windows_native.ps1 -SkipBuild
+        run: ./tools/package/package_windows.ps1 -SkipBuild
 
       - name: 打安装包
         if: ${{ inputs.skip_setup != true }}

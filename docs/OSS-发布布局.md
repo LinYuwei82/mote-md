@@ -119,7 +119,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > 清单 `platforms.macos.build` 自 1.0.6 起由 `gen_build.py` 写入真实值），此前按构建号比较，更新入口实际不可用。
 > 发行说明 `xiaotu/release-notes-1.0.6.html` 已于 2026-11-19 补传，清单已含 `notes_url`。
 > dmg 卷名自 1.0.2 起改用英文 `Xiaotu Inventory`（中文卷名在自动化环境
-> 会被 TCC 拦截，见 `make_dmg.sh` 注释）。
+> 会被 TCC 拦截，见 `package_macos.sh` 注释）。
 
 ### 3.3 Mote（macOS 当前 1.0.6，Windows 当前 1.0.6）
 
@@ -158,7 +158,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 > `mote/release-notes-1.0.4.html`、`xiaotu/release-notes-1.0.3.html`、`xiaotu/release-notes-1.0.2.html`
 > 已于 2026-11-19 随 1.0.3 / 1.0.4 全套从 OSS 删除。
-> 发布脚本（Mote / DevCard 的 `publish_macos.sh`、小兔的 `publish_oss.sh`）检测
+> 发布脚本（Mote / DevCard 的 `publish_macos.sh`、小兔的 `publish_macos.sh`）检测
 > 仓库里的 `docs/release-notes-<版本>.html`，存在才一并上传并写入清单 `notes_url`；
 > 缺 `.html` 则不写该字段。
 >
@@ -219,9 +219,9 @@ https://xiaotu.online/                      # ECS（备案中）
 
 | 仓库 / 脚本 | 上传对象 |
 |---|---|
-| `xiaotu-inventory/tools/package/publish_oss.sh` | `xiaotu/xiaotu-<ver>-macos-arm64.dmg`、`xiaotu/updates/stable/manifest.json`、`xiaotu/updates/stable/appcast.xml`、`xiaotu/release-notes-<ver>.html`（存在时） |
-| `xiaotu-inventory/tools/package/publish_windows.sh`（Mac 侧，遗留） | `xiaotu/xiaotu-<ver>-win64-setup.exe`、`xiaotu/xiaotu-<ver>-win64-portable.zip`、`xiaotu/updates/stable/manifest.json`、`xiaotu/release-notes-<ver>.html`（存在时） |
-| `xiaotu-inventory/tools/package/publish_windows.ps1`（Windows 原生，自 2026-11-19 起推荐） | 同 `.sh`，Windows 构建机可直接执行，无需拷贝回 Mac。支持 `-Build`（自动从 CMakeCache 读）、`-SkipUpload`、`-NotesOnly` |
+| `xiaotu-inventory/tools/release/publish_macos.sh` | `xiaotu/xiaotu-<ver>-macos-arm64.dmg`、`xiaotu/updates/stable/manifest.json`、`xiaotu/updates/stable/appcast.xml`、`xiaotu/release-notes-<ver>.html`（存在时） |
+| `xiaotu-inventory/tools/release/publish_windows.sh`（Mac 侧，遗留） | `xiaotu/xiaotu-<ver>-win64-setup.exe`、`xiaotu/xiaotu-<ver>-win64-portable.zip`、`xiaotu/updates/stable/manifest.json`、`xiaotu/release-notes-<ver>.html`（存在时） |
+| `xiaotu-inventory/tools/release/publish_windows.ps1`（Windows 原生，自 2026-11-19 起推荐） | 同 `.sh`，Windows 构建机可直接执行，无需拷贝回 Mac。支持 `-Build`（自动从 CMakeCache 读）、`-SkipUpload`、`-NotesOnly` |
 | `dev_card_cpp/tools/release/publish_macos.sh` | `devcard/devcard-<ver>-macos-arm64.dmg`（+ `.edSignature`）、`devcard/updates/stable/appcast.xml`、`devcard/updates/stable/manifest.json`、`devcard/release-notes-<ver>.html`（存在时） |
 | `dev_card_cpp/tools/release/publish_windows.ps1` | `devcard/devcard-<ver>-win64-setup.exe`、`devcard/devcard-<ver>-win64-portable.zip`、`devcard/updates/stable/manifest.json`、`devcard/release-notes-<ver>.html`（存在时） |
 | `mote/tools/release/publish_macos.sh` | `mote/mote-<ver>-macos-arm64.dmg`、`mote/updates/stable/appcast.xml`、`mote/updates/stable/manifest.json`、`mote/release-notes-<ver>.html`（存在时） |
@@ -258,8 +258,8 @@ https://xiaotu.online/                      # ECS（备案中）
 
 ```bash
 # 小兔
-xiaotu-inventory/tools/package/publish_oss.sh          # macOS
-xiaotu-inventory/tools/package/publish_windows.sh      # Windows
+xiaotu-inventory/tools/release/publish_macos.sh          # macOS
+xiaotu-inventory/tools/release/publish_windows.sh      # Windows
 
 # DevCard（一条命令：出包 → 签名 → 公证 → 清单 → 上传）
 dev_card_cpp/tools/release/publish_macos.sh

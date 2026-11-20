@@ -221,7 +221,7 @@ git rev-parse HEAD
 **7.3 行尾**
 
 ```powershell
-git ls-files --eol packaging/package_macos.sh tools/release/publish_windows.ps1
+git ls-files --eol tools/package/package_macos.sh tools/release/publish_windows.ps1
 ```
 
 成功：第一行含 `w/lf`（`package_macos.sh`），第二行含 `w/crlf`（`publish_windows.ps1`）；两行 `i/` 都是 `i/lf`。
@@ -424,7 +424,7 @@ git config --global --unset core.autocrlf
 git stash push -m "wonky-eol"
 git rm --cached -r .
 git reset --hard
-git ls-files --eol packaging/package_macos.sh tools/release/publish_windows.ps1
+git ls-files --eol tools/package/package_macos.sh tools/release/publish_windows.ps1
 ```
 
 成功：`.sh` 是 `w/lf`、`.ps1` 是 `w/crlf`，`git status -sb` 干净。

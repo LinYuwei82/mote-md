@@ -81,7 +81,7 @@ resources/
   fonts/                  JetBrains Mono（Light/Regular/Bold）+ OFL
   icons/ samples/         图标、内置示例
   win/                    Windows 图标资源（app.ico）
-packaging/                package_macos.sh / package_windows_native.ps1 / PACKAGING.md
+packaging/                package_macos.sh / package_windows.ps1 / PACKAGING.md
 tools/preflight.sh        干净目录构建 + 启动冒烟（macOS）
 docs/                     架构、决策、验收、发行说明
 ```
@@ -212,7 +212,7 @@ docs/                     架构、决策、验收、发行说明
 
 ```bash
 cmake -S native -B build-native && cmake --build build-native
-bash packaging/package_macos.sh --dmg --clean-dist
+bash tools/package/package_macos.sh --dmg --clean-dist
 ```
 
 脚本固定七步：影子构建 → 依赖自检（不得链接 Qt）→ 去 rpath/strip → 签名/公证 → 做 DMG → 组装 zip → 外部路径自检。
@@ -222,7 +222,7 @@ bash packaging/package_macos.sh --dmg --clean-dist
 
 ### 8.2 Windows
 
-`packaging/package_windows_native.ps1` 出绿色版 `dist/Mote-Windows.zip`（exe + `WebView2Loader.dll` + `web/` + `fonts/`）；
+`tools/package/package_windows.ps1` 出绿色版 `dist/Mote-Windows.zip`（exe + `WebView2Loader.dll` + `web/` + `fonts/`）；
 `packaging/build_installer.ps1` 用 Inno Setup 6 出安装版 `dist/Mote-Setup-<版本>.exe`。
 WebView2 SDK（NuGet 1.0.2903.40）放在仓库外，用 `WEBVIEW2_SDK` 覆盖路径。
 
@@ -550,7 +550,7 @@ function mountBlocks(blocks) {
 
 ## 15. 打包坑点详解（macOS / Windows）
 
-本节细化第 10 节 G 组（P30–P35）。打包是「代码都对、包一跑就崩」的高发区，建议直接照抄 `packaging/package_macos.sh`、`packaging/package_windows.bat`、`packaging/mote.iss` 的处理顺序。
+本节细化第 10 节 G 组（P30–P35）。打包是「代码都对、包一跑就崩」的高发区，建议直接照抄 `tools/package/package_macos.sh`、`packaging/package_windows.bat`、`packaging/mote.iss` 的处理顺序。
 
 ### 15.1 macOS
 

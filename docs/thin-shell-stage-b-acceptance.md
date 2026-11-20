@@ -54,7 +54,7 @@
    `WM_IME_*`，组合键也只截 `Ctrl+V`，其余按键全部交给 WebView2。
 4. **干净机验证**：无 VS/Qt 的机器解压即用、以及缺 WebView2 Runtime 时的提示，
    尚未在真实干净机跑过。
-5. ~~**正式产物切换**~~（已完成，2026-11-14）：`package_windows_native.ps1` 的默认
+5. ~~**正式产物切换**~~（已完成，2026-11-14）：`package_windows.ps1` 的默认
    产物名改为 `Mote-Windows`，Windows 默认发布包即原生产物；Qt 脚本保留为回退，
    两边并存时给原生脚本传 `-OutName Mote-Windows-native`。
 

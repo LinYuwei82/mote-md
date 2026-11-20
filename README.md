@@ -49,7 +49,7 @@ open build-native/Mote.app                       # 或直接运行
 一键打包（构建 + Developer ID 签名 + 公证 + zip/DMG + 依赖自检）：
 
 ```bash
-bash packaging/package_macos.sh --dmg
+bash tools/package/package_macos.sh --dmg
 # 产物：dist/Mote-macOS-native.zip / dist/Mote-macOS-native-*.dmg
 # 体积约 4.1 MB（.app，含 Sparkle.framework） / DMG 约 1.7 MB
 ```
@@ -91,7 +91,7 @@ Ninja 是单配置生成器：产物直接在 `build-native-win\`，没有 Debug
 打包（产物 `dist/Mote-Windows/` 与 `dist/Mote-Windows.zip`，不含 Qt）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 # 可选安装包（Inno Setup 6）：产物 dist\Mote-Setup-<版本>.exe
 powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 ```
@@ -116,7 +116,7 @@ powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 | Windows 安装包（exe，可选） | `mote/mote-<version>-win64-setup.exe` |
 
 ```bash
-bash packaging/package_macos.sh --dmg   # 签名 + 公证 + DMG
+bash tools/package/package_macos.sh --dmg   # 签名 + 公证 + DMG
 bash tools/release/publish_macos.sh                  # 公证门禁 → EdDSA 签名 → appcast + manifest.json → 上传 → 线上校验
 ```
 
@@ -126,7 +126,7 @@ bash tools/release/publish_macos.sh                  # 公证门禁 → EdDSA �
 脚本不再自动上传）。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1   # 校验 → SHA256 → manifest.json → 上传 zip/安装包/清单 → 线上校验
 ```
 

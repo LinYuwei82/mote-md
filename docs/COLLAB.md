@@ -18,8 +18,8 @@ git clone git@gitee.com:lin-yuwei168/mote-md.git
 
 平台专属文件可以两边同时改：
 
-- macOS：`platform/mac/*`、`packaging/package_macos.sh`
-- Windows：`platform/win/*`、`packaging/package_windows_native.ps1`、`packaging/build_installer.ps1` 与 `packaging/mote.iss`（安装包）
+- macOS：`platform/mac/*`、`tools/package/package_macos.sh`
+- Windows：`platform/win/*`、`tools/package/package_windows.ps1`、`packaging/build_installer.ps1` 与 `packaging/mote.iss`（安装包）
 
 **共享处同一时间只允许一台机器改**：
 
@@ -58,7 +58,7 @@ git status -sb
 
 发版顺序固定，不跳步：
 
-1. Mac 跑打包（`packaging/package_macos.sh`）；
+1. Mac 跑打包（`tools/package/package_macos.sh`）；
 2. Windows 跑打包；
 3. 两个产物都成功；
 4. 才在 `main` 上打 `vX.Y.Z` 并推；

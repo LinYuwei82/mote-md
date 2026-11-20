@@ -30,8 +30,8 @@ Markdown 查看/编辑桌面程序，不链接 Qt。
 ### 1.2 一键打包
 
 ```bash
-bash packaging/package_macos.sh          # 只产出 zip
-bash packaging/package_macos.sh --dmg    # 额外产出一个拖拽安装式 DMG
+bash tools/package/package_macos.sh          # 只产出 zip
+bash tools/package/package_macos.sh --dmg    # 额外产出一个拖拽安装式 DMG
 ```
 
 脚本依次完成：
@@ -236,7 +236,7 @@ dist/Mote-macOS-native-<版本>.dmg
 ### 1.10 新架构（Qt 外壳 + 系统 WKWebView）打包与验证
 
 架构说明见 [docs/WEBVIEW-ARCHITECTURE.md](../docs/WEBVIEW-ARCHITECTURE.md)。打包脚本
-未变，仍然是 `bash packaging/package_macos.sh`。
+未变，仍然是 `bash tools/package/package_macos.sh`。
 
 | 项目 | 结果 |
 | --- | --- |
@@ -534,7 +534,7 @@ PDF 导出的可行性评估见 §5 第 5 条（结论：不提供，理由是�
 ### 1.14 DMG 分发：拖拽安装（2026-11-10，最终包）
 
 ```bash
-bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-macOS-0.3.0.dmg
+bash tools/package/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-macOS-0.3.0.dmg
 ```
 
 > 文件名自 0.2.0 起带版本号：版本读自构建产物的 `Info.plist`（qmake 用 `Mote.pro` 的
@@ -637,7 +637,7 @@ bash packaging/package_macos.sh --dmg     # 在 zip 之外再产出 dist/Mote-ma
 $env:WEBVIEW2_SDK = "C:\dev\webview2sdk\pkg"
 cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build-native-ninja
-powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 ```
 
 脚本会：
@@ -789,7 +789,7 @@ Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip 
 在已加载 MSVC 2022 x64 环境的 PowerShell 中：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File packaging\package_windows_native.ps1
+powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 ```
 
 - 默认构建目录 `build-native-ninja`（可用 `-BuildDir` 覆盖），`-SkipBuild` 跳过编译。
