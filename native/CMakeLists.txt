@@ -19,6 +19,15 @@ if(NOT MOTE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
   message(FATAL_ERROR "无法从 VERSION.txt 读取版本号")
 endif()
 
+# 发布/出包构建开关：与 xiaotu / devcard 的 *_RELEASE_BUILD 同一语义。
+# MOTE_STRICT_BUILD 是历史名字，保留为兼容别名；两个平台分支共用这一处定义。
+option(MOTE_RELEASE_BUILD "发布/出包构建：MOTE_BUILD 必须显式提供且不能是占位值" OFF)
+if(MOTE_STRICT_BUILD)
+  set(MOTE_RELEASE_BUILD ON)
+  message(DEPRECATION "MOTE_STRICT_BUILD 已并入 MOTE_RELEASE_BUILD，请改用 -DMOTE_RELEASE_BUILD=ON")
+endif()
+set(MOTE_DEFAULT_BUILD "999999999")
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
@@ -135,18 +144,20 @@ if(WIN32)
   # 留一条 "MOTE_BUILD=<digits>" 的可搜索 pattern——guard.py preflight 发布
   # 时会 grep 绿色包/安装包里的 Mote.exe，与 --build 参数比对，防止清单 build
   # 与编译值不一致导致客户端反复提示同一版本（2026-11-19 mote 1.0.4 即因此重发）。
-  # Windows 构建号（与 macOS 侧完全一致的门禁体系）
+  # Windows 构建号（与 macOS 侧完全一致的门禁体系；开关与默认值在文件顶部统一定义）
   # 统一用 tools/release/gen_build.py 生成（保证 > 线上 manifest.json 的 build 最大值）。
-  set(MOTE_DEFAULT_BUILD "999999999")
   if(NOT MOTE_BUILD)
+    if(MOTE_RELEASE_BUILD)
+      message(FATAL_ERROR "发布/出包构建必须显式指定 -DMOTE_BUILD=<build>，推荐：\n  MOTE_BUILD=$(python3 tools/release/gen_build.py --product mote --repo-root .)\n  cmake -B build -DMOTE_RELEASE_BUILD=ON -DMOTE_BUILD=${MOTE_BUILD} ...")
+    endif()
     set(MOTE_BUILD "${MOTE_DEFAULT_BUILD}")
     message(WARNING "MOTE_BUILD 未设置，回退到开发占位值 ${MOTE_BUILD}（仅适合本地开发，发布请显式传 -DMOTE_BUILD=<build>，推荐 gen_build.py 生成）")
   endif()
   if(NOT MOTE_BUILD MATCHES "^[0-9]+$")
     message(FATAL_ERROR "MOTE_BUILD 必须是纯数字：${MOTE_BUILD}")
   endif()
-  if(MOTE_STRICT_BUILD AND MOTE_BUILD STREQUAL MOTE_DEFAULT_BUILD)
-    message(FATAL_ERROR "发布构建（MOTE_STRICT_BUILD=ON）不能使用开发默认构建号 ${MOTE_DEFAULT_BUILD}，请用 gen_build.py 生成")
+  if(MOTE_RELEASE_BUILD AND MOTE_BUILD STREQUAL MOTE_DEFAULT_BUILD)
+    message(FATAL_ERROR "发布构建（MOTE_RELEASE_BUILD=ON）不能使用开发默认构建号 ${MOTE_DEFAULT_BUILD}，请用 gen_build.py 生成")
   endif()
   if(NOT MOTE_BUILD_HASH)
     set(MOTE_BUILD_HASH "")
@@ -222,7 +233,7 @@ else()
   # Sparkle 自动更新（纯 Sparkle 方案：Info.plist 键 + framework 拷贝 + 一行初始化）
   # 历史踩坑：检测到缺失时只 WARNING 继续构建，最终 DMG 缺 framework → 自动更新退化
   # 为浏览器下载（2026-11-19 mote 1.0.4 即因此重发）。默认 WARNING 兼容开发机本地跑不
-  # 起来 Sparkle 的场景；发布脚本 / CI 传 -DMOTE_STRICT_BUILD=ON 升级为 FATAL_ERROR。
+  # 起来 Sparkle 的场景；发布脚本 / CI 传 -DMOTE_RELEASE_BUILD=ON 升级为 FATAL_ERROR。
   set(MOTE_SPARKLE_FRAMEWORK "${MOTE_REPO_ROOT}/resources/Sparkle.framework")
 
   # Sparkle 2.x 的 tarball 缺 Versions/Current 符号链接（已知缺陷）。
@@ -246,9 +257,9 @@ else()
   endif()
 
   if(NOT EXISTS "${MOTE_SPARKLE_FRAMEWORK}/Sparkle")
-    if(MOTE_STRICT_BUILD)
+    if(MOTE_RELEASE_BUILD)
       message(FATAL_ERROR
-        "MOTE_STRICT_BUILD=ON 但未找到 Sparkle.framework（期望在 ${MOTE_SPARKLE_FRAMEWORK}）。"
+        "MOTE_RELEASE_BUILD=ON 但未找到 Sparkle.framework（期望在 ${MOTE_SPARKLE_FRAMEWORK}）。"
         "发布流程要求 Sparkle.framework 必须存在，否则自动更新将退化为打开浏览器下载。"
         "下载：https://github.com/sparkle-project/Sparkle/releases")
     else()
@@ -301,17 +312,19 @@ else()
   # macOS 也注入 MOTE_BUILD / MOTE_BUILD_STR / MOTE_BUILD_HASH（和 Windows 完全对齐）
   # updater.mm 里读 MOTE_BUILD_STR 做同版本 build 比较；
   # 缺失时（开发态直接 cmake）回退到开发默认值，WARNING 提示不可发布；
-  # 纯数字校验 + STRICT_BUILD=ON 时非零双保险（和小兔 XIAOTU_RELEASE_BUILD=ON 对齐）。
-  set(MOTE_DEFAULT_BUILD "999999999")
+  # 纯数字校验 + MOTE_RELEASE_BUILD=ON 时非零双保险（和小兔 XIAOTU_RELEASE_BUILD=ON 对齐）。
   if(NOT MOTE_BUILD)
+    if(MOTE_RELEASE_BUILD)
+      message(FATAL_ERROR "发布/出包构建必须显式指定 -DMOTE_BUILD=<build>，推荐：\n  MOTE_BUILD=$(python3 tools/release/gen_build.py --product mote --repo-root .)")
+    endif()
     set(MOTE_BUILD "${MOTE_DEFAULT_BUILD}")
     message(WARNING "MOTE_BUILD 未设置，回退到开发占位值 ${MOTE_BUILD}（仅适合本地开发，发布请显式传 -DMOTE_BUILD=<build>，推荐 gen_build.py 生成）")
   endif()
   if(NOT MOTE_BUILD MATCHES "^[0-9]+$")
     message(FATAL_ERROR "MOTE_BUILD 必须是纯数字：${MOTE_BUILD}")
   endif()
-  if(MOTE_STRICT_BUILD AND MOTE_BUILD STREQUAL MOTE_DEFAULT_BUILD)
-    message(FATAL_ERROR "发布构建（MOTE_STRICT_BUILD=ON）不能使用开发默认构建号 ${MOTE_DEFAULT_BUILD}")
+  if(MOTE_RELEASE_BUILD AND MOTE_BUILD STREQUAL MOTE_DEFAULT_BUILD)
+    message(FATAL_ERROR "发布构建（MOTE_RELEASE_BUILD=ON）不能使用开发默认构建号 ${MOTE_DEFAULT_BUILD}")
   endif()
   if(NOT MOTE_BUILD_HASH)
     set(MOTE_BUILD_HASH "")

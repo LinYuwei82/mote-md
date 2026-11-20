@@ -58,9 +58,9 @@ mkdir -p "$BUILD_DIR" || { red "无法创建 $BUILD_DIR"; exit 1; }
 LOG="$BUILD_DIR/build.log"
 JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 (
-    # -DMOTE_STRICT_BUILD=ON：Sparkle.framework 缺失时 FATAL_ERROR，
+    # -DMOTE_RELEASE_BUILD=ON：Sparkle.framework 缺失时 FATAL_ERROR，
     # 防止残缺产物（2026-11-19 mote 1.0.4 即因此重发）
-    cmake -S "$ROOT/native" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DMOTE_STRICT_BUILD=ON \
+    cmake -S "$ROOT/native" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DMOTE_RELEASE_BUILD=ON \
         && cmake --build "$BUILD_DIR" --config Release -j"$JOBS"
 ) > "$LOG" 2>&1
 

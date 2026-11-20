@@ -87,24 +87,27 @@ mkdir -p "$DIST_DIR"
 echo "==> 2/${TOTAL} cmake + build (Release)"
 # 构建号：纯数字、单调递增。CMake 接收 -DMOTE_BUILD，注入 Info.plist CFBundleVersion，
 # 与 CFBundleShortVersionString（= VERSION.txt）分离——符合 Sparkle 2.7+ 规范。
-# 2026-11-20 起：发布脚本强制要求，缺失即失败。
+# 2026-11-20 起与小兔 / DevCard 一致：显式 MOTE_BUILD 优先，未给则用 gen_build.py 自动生成。
 BUILD_NUMBER="${MOTE_BUILD:-}"
+BUILD_SOURCE="MOTE_BUILD 环境变量"
 if [ -z "$BUILD_NUMBER" ]; then
-  echo "错误：打包必须显式设置 MOTE_BUILD（纯数字、单调递增），例如：" >&2
-  echo "  MOTE_BUILD=\$(date -u +%Y%m%d%H) packaging/package_macos.sh" >&2
-  exit 1
+  BUILD_NUMBER="$(python3 "$ROOT/tools/release/gen_build.py" \
+    --product mote --repo-root "$ROOT")" \
+    || { echo "gen_build.py 失败，无法生成构建号" >&2; exit 1; }
+  BUILD_SOURCE="gen_build.py"
 fi
 case "$BUILD_NUMBER" in
   *[!0-9]*|"") echo "错误：MOTE_BUILD 必须是纯数字：$BUILD_NUMBER" >&2; exit 1 ;;
 esac
-echo "构建号：${BUILD_NUMBER}（来源 MOTE_BUILD 环境变量）"
+echo "构建号：${BUILD_NUMBER}（来源 ${BUILD_SOURCE}）"
 
-# MOTE_STRICT_BUILD=ON：resources/Sparkle.framework 缺失时 FATAL_ERROR，
-# 防止最终 DMG 缺自动更新 framework 退化为浏览器下载（2026-11-19 mote 1.0.4 即因此重发）
+# MOTE_RELEASE_BUILD=ON：发布构建门禁——MOTE_BUILD 不能是占位值，且
+# resources/Sparkle.framework 缺失时 FATAL_ERROR，防止最终 DMG 缺自动更新 framework
+# 退化为浏览器下载（2026-11-19 mote 1.0.4 即因此重发）
 cmake -S "$ROOT/native" -B "$BUILD_DIR" \
   -DCMAKE_BUILD_TYPE=Release \
   -DMOTE_BUILD="$BUILD_NUMBER" \
-  -DMOTE_STRICT_BUILD=ON
+  -DMOTE_RELEASE_BUILD=ON
 cmake --build "$BUILD_DIR" --config Release -j"$(sysctl -n hw.ncpu)"
 APP_PATH="$BUILD_DIR/${APP_NAME}.app"
 [ -d "$APP_PATH" ] || { echo "错误：构建失败，未生成 $APP_PATH"; exit 1; }

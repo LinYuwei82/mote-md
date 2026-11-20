@@ -132,7 +132,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | ZIP | `mote/mote-1.0.6-win64-portable.zip` | 693,311 | `application/zip` |
 
 > 线上清单当前 `windows.build = 202611191435`（macOS 的 `build` 固定 `0`）。
-> Mote macOS 端 CMake configure 默认开启 `MOTE_STRICT_BUILD=ON`（CI / 发布脚本必开）：
+> Mote macOS 端 CMake configure 默认开启 `MOTE_RELEASE_BUILD=ON`（CI / 发布脚本必开；旧名 `MOTE_STRICT_BUILD` 仍兼容）：
 > `resources/Sparkle.framework` 缺失时 FATAL_ERROR 硬拦截；Sparkle 2.x tarball 已知
 > 缺陷（缺 `Versions/Current` 符号链接）由 configure 自动补建，新机器 setup 无需手动。
 > 发布脚本（`package_macos.sh` / `publish_macos.sh`）各加一层硬门禁：
