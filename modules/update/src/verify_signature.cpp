@@ -1,4 +1,4 @@
-#include "core/verify_signature.h"
+#include "mote/verify_signature.h"
 
 #include "core/base64.h"
 #include "core/json.h"

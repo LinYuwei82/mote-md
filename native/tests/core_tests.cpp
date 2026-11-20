@@ -12,8 +12,8 @@
 #include "core/json.h"
 #include "core/paths.h"
 #include "core/text_encoding.h"
-#include "core/update.h"
-#include "core/verify_signature.h"
+#include "mote/update.h"
+#include "mote/verify_signature.h"
 
 #include <chrono>
 #include <cstdio>

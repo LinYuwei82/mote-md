@@ -50,15 +50,10 @@ add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/text_encoding.cpp")
 target_include_directories(mote_core PUBLIC "${MOTE_REPO_ROOT}")
 
-# 自动更新模块（独立 STATIC library，可被其他项目复用）
-# 依赖 mote_core 的 json / base64（manifest 解析 + base64 编解码）+ tweetnacl（Ed25519 验签）。
-# updater.mm / updater.cpp（平台桥接层）在各自 add_executable 里直接编进主 target，
-# 但它们 link mote_update 拿到版本比较 + 验签能力。
-add_library(mote_update STATIC
-  "${MOTE_REPO_ROOT}/core/update.cpp"
-  "${MOTE_REPO_ROOT}/core/verify_signature.cpp")
-target_include_directories(mote_update PUBLIC "${MOTE_REPO_ROOT}")
-target_link_libraries(mote_update PUBLIC mote_core mote_tweetnacl)
+# 自动更新模块（物理独立目录 modules/update/，内部有自己的 CMakeLists.txt）
+# 头文件暴露在 modules/update/include/mote/，外部 #include "mote/update.h" 即可。
+add_subdirectory("${MOTE_REPO_ROOT}/modules/update"
+                 "${CMAKE_CURRENT_BINARY_DIR}/mote_update")
 
 if(MSVC)
   target_compile_options(mote_core PRIVATE /utf-8 /W4)

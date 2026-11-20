@@ -1,7 +1,7 @@
 #import "updater.h"
 
-#include "core/update.h"
-#include "core/verify_signature.h"
+#include "mote/update.h"
+#include "mote/verify_signature.h"
 
 #include <cstdarg>
 #include <cstdio>
