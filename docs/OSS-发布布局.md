@@ -99,25 +99,25 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > macOS 段 build 固定 0，跨平台清单必须同时含 `platforms.macos` + `platforms.windows`
 > （`guard.py preflight` 强制，缺失任一 die 拦截）。
 
-### 3.2 小兔进销存（macOS 当前 1.0.3，Windows 当前 1.0.3）
+### 3.2 小兔进销存（macOS 当前 1.0.6，Windows 当前 1.0.6）
 
-当前版本（v2 命名，`dl.xiaotu.online/xiaotu/`，2026-11-18 15:20 发布）：
+当前版本（v2 命名，`dl.xiaotu.online/xiaotu/`，2026-11-19 发布）：
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
-| DMG | `xiaotu/xiaotu-1.0.3-macos-arm64.dmg` | 6,399,447 | `application/octet-stream` |
-| EXE | `xiaotu/xiaotu-1.0.3-win64-setup.exe` | 3,818,978 | `application/octet-stream` |
-| ZIP | `xiaotu/xiaotu-1.0.3-win64-portable.zip` | 2,512,094 | `application/zip` |
+| DMG | `xiaotu/xiaotu-1.0.6-macos-arm64.dmg` | 6,392,837 | `application/octet-stream` |
+| EXE | `xiaotu/xiaotu-1.0.6-win64-setup.exe` | 3,823,063 | `application/octet-stream` |
+| ZIP | `xiaotu/xiaotu-1.0.6-win64-portable.zip` | 2,519,073 | `application/zip` |
 
-> Windows 1.0.3（build `202611190001`）与 macOS 1.0.3 均已按 v2 发布：
+> Windows 1.0.6（build `202611191417`）与 macOS 1.0.6 均已按 v2 发布：
 > 壳内地址为 `https://dl.xiaotu.online/xiaotu/updates/stable/manifest.json`。
-> 该版修复 Windows 更新链路（下载静默失败、检查结果被打回、安装无响应）；
+> 该版为三产品对齐后的首个统一切换版本：包体从 0.9.0 的 2.84 MiB 增至 6.09 MiB（Sparkle.framework 嵌入）；
+> Windows 前端 bridge 已接入（`chrome.webview.hostObjects.updater_win`），应用内下载带百分比进度与 3 次自动重试。
 > macOS 侧自 1.0.3 起把「是否有更新 / 待安装 / 验证期 / 恢复模式」全部改为按 `version`
 > 判定（`platforms.macos.build` 固定 `0`），此前按构建号比较，更新入口实际不可用。
-> 发行说明 `xiaotu/release-notes-1.0.3.html` 已于 2026-11-19 补传（3,886 字节，
-> `public, max-age=3600`），清单已重签并写入 `notes_url`。
+> 发行说明 `xiaotu/release-notes-1.0.6.html` 已于 2026-11-19 补传，清单已含 `notes_url`。
 > dmg 卷名自 1.0.2 起改用英文 `Xiaotu Inventory`（中文卷名在自动化环境
-> 会被 TCC 拦截，见 `make_dmg.sh` 注释）。1.0.2 的 3 个包仍可访问，回滚可直接复用。
+> 会被 TCC 拦截，见 `make_dmg.sh` 注释）。
 
 ### 3.3 Mote（macOS 当前 1.0.6，Windows 当前 1.0.6）
 
@@ -146,35 +146,23 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | `devcard/manual.pdf` | 5,563,312 | `application/pdf` | `public, max-age=86400` |
 | `devcard/release-notes-1.2.8.html` | 4,592 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `xiaotu/manual.pdf` | 3,702,580 | `application/pdf` | `public, max-age=86400` |
-| `xiaotu/release-notes-1.0.3.html` | 3,886 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/manual.pdf` | 8,140,873 | `application/pdf` | `public, max-age=86400` |
 | `mote/release-notes-1.0.3.html` | 5,410 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.2.html` | 5,664 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.1.html` | 7,453 | `text/html; charset=utf-8` | `public, max-age=3600` |
 | `mote/release-notes-1.0.0.html` | 9,184 | `text/html; charset=utf-8` | `public, max-age=3600` |
 
-> `mote/release-notes-1.0.4.html` 已于 2026-11-19 随 1.0.3 / 1.0.4 全套从 OSS 删除；
-> 发布脚本不再自动上传该版本说明页（已清理），且 1.0.5 / 1.0.6 线上清单均未写
-> `notes_url`（`docs/` 下暂无对应说明页）。
-
-公网地址：
-
-```
-https://dl.xiaotu.online/devcard/manual.pdf
-https://dl.xiaotu.online/xiaotu/manual.pdf
-https://dl.xiaotu.online/mote/manual.pdf
-https://dl.xiaotu.online/mote/release-notes-1.0.4.html
-```
-
-> 发布说明随发布自动上传：三家发布脚本（Mote 的 `publish_macos.sh` / `publish_windows.sh`、
-> 小兔的 `publish_oss.sh` / `publish_windows.sh`、DevCard 的 `publish_macos.sh` /
-> `publish_windows.ps1`）都检测仓库里的 `docs/release-notes-<版本>.html`，存在就一并上传，
-> 并把 `<product>/release-notes-<版本>.html` 写进清单 `notes_url`；缺页则不写该字段，
-> 避免客户端出现死链。PDF 手册仍是手工上传。
+> `mote/release-notes-1.0.4.html`、`xiaotu/release-notes-1.0.3.html`、`xiaotu/release-notes-1.0.2.html`
+> 已于 2026-11-19 随 1.0.3 / 1.0.4 全套从 OSS 删除。
+> 发布脚本（Mote / DevCard 的 `publish_macos.sh`、小兔的 `publish_oss.sh`）检测
+> 仓库里的 `docs/release-notes-<版本>.html`，存在才一并上传并写入清单 `notes_url`；
+> 缺 `.html` 则不写该字段。
 >
-> 截至 2026-11-19，三份线上清单的 `notes_url` 均已就位：
-> devcard 1.2.8、xiaotu 1.0.3、mote 1.0.4（其中 xiaotu / mote 两份为补传后重签）。
-> 客户端在 `notes_url` 非空时显示「查看完整更新说明…」/「查看更新详情」，为空则不出按钮。
+> **⚠️ 当前三产品最新版本的 `notes_url` 全部缺失**：
+> 仓库里只存了 `.md`（小兔 `release-notes-1.0.6.md`、Mote `release-notes-1.0.6.md`、
+> DevCard `release-notes-1.3.0.md`），未转成 `.html`，发布脚本因此未检测到、未上传、
+> 未写入清单。客户端在 `notes_url` 为空时不显示「查看完整更新说明…」按钮。
+> 这是本轮对齐后发现的新缺口——需把三份 `.md` 转 `.html`、上传 OSS、`manifest_v2.py resign --notes-url` 重签清单。
 >
 > 补发说明页不必重新打包：`manifest_v2.py resign --notes-url <绝对地址>` 只改该字段
 > 并整体重签（自动刷新 `updated_at`，产物字段原样保留），完整四步见

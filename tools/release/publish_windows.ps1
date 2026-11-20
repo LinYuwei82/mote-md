@@ -231,7 +231,8 @@ Write-Host ""
 Write-Host "[3.5/6] 发布门禁（guard，v2）"
 $guardArgs = @(
     "--product", $ProductDir, "--kind", "win", "--channel", $Channel,
-    "--schema", "v2", "--manifest", $manifestPath, "--pub-hex", $PubHex, "--build", $Build
+    # 注：guard.py 已移除 --schema 参数（强制 v2），不再需要传
+    "--manifest", $manifestPath, "--pub-hex", $PubHex, "--build", $Build
 )
 if ($SetupFull) {
     $guardArgs += @("--file", $SetupFull, "--name", $V2SetupName,

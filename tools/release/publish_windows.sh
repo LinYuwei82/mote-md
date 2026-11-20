@@ -149,7 +149,7 @@ GUARD_PY="${GUARD_PY:-$REPO_ROOT/tools/release/guard.py}"
 GUARD_ARGS=(
   --product "$PRODUCT_DIR" --kind win --channel "$CHANNEL"
   --manifest "$MANIFEST_LOCAL" --pub-hex "$PUB_HEX" --build "$BUILD"
-# 注：不再传 --schema v2；guard.py 已硬编码 schema=v2（v1 清单 2026-11-18 全量删除）
+# 注：guard.py 已移除 --schema 参数（argparse 无此选项），强制 v2
 )
 if [ -n "$SETUP_PATH" ] && [ -f "$SETUP_PATH" ]; then
   GUARD_ARGS+=(--file "$SETUP_PATH" --name "$V2_SETUP_NAME"

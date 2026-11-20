@@ -7,7 +7,8 @@
 # 两个清单的分工：
 #   appcast.xml    给 Sparkle 用：下载地址 + EdDSA 签名，Sparkle 验签后才安装（不在 v2 范围）
 #   manifest.json  统一 Schema v2 清单：platforms.macos + Ed25519 签名（见 docs/更新清单Schema-v2.md）
-# 本脚本不再生成 latest.json，旧内测客户端按切换方案重装或经 Sparkle 升级。
+# v1 清单（latest.json / windows.json）已于 2026-11-18 全量删除；
+# 本脚本只生成 manifest.json（v2）+ appcast.xml。
 #
 # 目录约定（与 index.html 现有下载路径同源）：
 #   oss://<bucket>/mote/mote-<ver>-macos-arm64.dmg            长缓存 immutable（v2 命名）
@@ -244,7 +245,7 @@ GUARD_ARGS=(
   --product "$PRODUCT_DIR" --kind mac --channel "$CHANNEL"
   --file "$DMG_PATH" --name "$V2_DMG_NAME"
   --manifest "$MANIFEST_LOCAL" --pub-hex "$PUB_HEX"
-# 注：不再传 --schema v2；guard.py 已硬编码 schema=v2（v1 清单 2026-11-18 全量删除）
+# 注：guard.py 已移除 --schema 参数（argparse 无此选项），强制 v2
 )
 [ "$SKIP_UPLOAD" = "true" ] && GUARD_ARGS+=(--offline)
 echo ""
