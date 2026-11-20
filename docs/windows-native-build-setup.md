@@ -191,7 +191,7 @@ ctest --test-dir build-native-ninja --output-on-failure
 说明：
 
 - 工程根是 `native/`，不是仓库根；版本号自动从仓库根 `VERSION.txt` 读。
-- `-G Ninja` 省略时会退回 VS 生成器（需要 MSBuild），同样能编，但命令要加 `--config Release`。想用多配置生成器时改成 `cmake -S native -B build-native-win -A x64`。
+- `-G Ninja` 省略时会退回 VS 生成器（需要 MSBuild）。工程把多配置生成器收敛为单一配置：只生成 `MOTE_BUILD_CONFIG`（默认 Release），不会同时出现 Debug/Release 两套，命令需带 `--config Release`、`ctest` 需 `-C Release`。想免掉这两个参数就用 Ninja（单配置生成器）。
 - 运行库是静态链接（`/MT`），目标机不需要 VC++ 可再发行包。
 
 ## 8. 跑通的判断依据

@@ -80,11 +80,13 @@ configure 阶段会自动探测 `Versions/` 下唯一子目录（如 `B`）并�
 
 ```bat
 set WEBVIEW2_SDK=C:\dev\webview2sdk\pkg
-cmake -S native -B build-native-win -A x64
-cmake --build build-native-win --config Release
+:: 在 "x64 Native Tools Command Prompt for VS 2022" 里执行，保证 cl.exe 在 PATH
+cmake -S native -B build-native-win -G Ninja
+cmake --build build-native-win
+ctest --test-dir build-native-win                  :: core 单测，无需 -C
 ```
 
-用 Ninja 时：`cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build-native-ninja`，产物在 `build-native-ninja\`。
+Ninja 是单配置生成器：产物直接在 `build-native-win\`，没有 Debug/Release 子目录，`ctest` 也不需要 `-C`。若坚持用 Visual Studio 生成器，工程已收敛为单一配置——`cmake -S native -B build-native-vs -A x64` 只会生成 Release（Debug 等多余配置不出现），命令需带 `--config Release` / `ctest -C Release`；要换配置用 `-DMOTE_BUILD_CONFIG=Debug`。
 
 打包（产物 `dist/Mote-Windows/` 与 `dist/Mote-Windows.zip`，不含 Qt）：
 

@@ -23,6 +23,15 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
+# 多配置生成器（Visual Studio / Xcode）收敛为单配置：项目里只生成这一个配置，
+# Debug / RelWithDebInfo 之类的多余配置直接不出现，构建目录里也不会留下它们。
+if(CMAKE_CONFIGURATION_TYPES)
+  set(MOTE_BUILD_CONFIG "Release" CACHE STRING
+      "多配置生成器（VS/Xcode）只保留的单一配置：Release / RelWithDebInfo / Debug")
+  set(CMAKE_CONFIGURATION_TYPES "${MOTE_BUILD_CONFIG}" CACHE STRING
+      "多配置生成器只保留 ${MOTE_BUILD_CONFIG}" FORCE)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
