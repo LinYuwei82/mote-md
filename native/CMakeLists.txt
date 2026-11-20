@@ -273,6 +273,17 @@ else()
     "$<$<COMPILE_LANGUAGE:CXX>:-Wall>"
     "$<$<COMPILE_LANGUAGE:OBJCXX>:-Wall>")
 
+  # macOS 也注入 MOTE_BUILD / MOTE_BUILD_STR（和 Windows 对齐）
+  # updater.mm 里读 MOTE_BUILD_STR 做同版本 build 比较；
+  # 缺失时（开发态直接 cmake）默认 "0"，不阻断编译。
+  if(NOT MOTE_BUILD)
+    set(MOTE_BUILD "0")
+  endif()
+  target_compile_definitions(Mote PRIVATE
+    MOTE_VERSION="${MOTE_VERSION}"
+    MOTE_BUILD=${MOTE_BUILD}
+    MOTE_BUILD_STR="${MOTE_BUILD}")
+
   target_link_libraries(Mote PRIVATE
     mote_core
     "-framework Cocoa"
@@ -295,7 +306,7 @@ else()
   set_target_properties(Mote PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "Mote"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.mote.Mote"
-    MACOSX_BUNDLE_BUNDLE_VERSION "${MOTE_VERSION}"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${MOTE_BUILD}"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${MOTE_VERSION}"
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
 

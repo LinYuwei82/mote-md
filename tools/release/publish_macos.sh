@@ -38,6 +38,15 @@ cd "$REPO_ROOT"
 VERSION="$(tr -d '[:space:]' < VERSION.txt)"
 [ -n "$VERSION" ] || { echo "无法从 VERSION.txt 读取版本号" >&2; exit 1; }
 
+# 构建号：纯数字、单调递增。必须与 package_macos.sh 构建时注入 Info.plist 的值一致，
+# 否则客户端 Sparkle 版本比较 / 自研清单 build 比对会出问题。
+# 2026-11-20 起：必填（macOS 也要求 build > 0，和 Windows 对齐）。
+BUILD="${MOTE_BUILD:-}"
+[ -n "$BUILD" ] || { echo "必须显式指定 MOTE_BUILD（纯数字、单调递增），例如：
+  MOTE_BUILD=\$(date -u +%Y%m%d%H) tools/release/publish_macos.sh" >&2; exit 1; }
+[[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "MOTE_BUILD 必须是纯数字：$BUILD" >&2; exit 1; }
+echo "版本/构建号：${VERSION} / ${BUILD}"
+
 DMG_PATH="${DMG_PATH:-$REPO_ROOT/dist/Mote-macOS-native-$VERSION.dmg}"
 [ -f "$DMG_PATH" ] || { echo "DMG 不存在：$DMG_PATH" >&2; exit 1; }
 
@@ -253,6 +262,7 @@ MANIFEST_ARGS=(
   --channel "$CHANNEL"
   --platform macos
   --version "$VERSION"
+  --build "$BUILD"
   --min-os "$MIN_OS"
   --artifact "dmg=$DMG_PATH"
   --key "$SIGN_KEY"
