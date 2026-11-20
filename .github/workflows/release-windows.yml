@@ -107,7 +107,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { $buildHash = "" }
           Write-Host "构建号: $build  hash: $buildHash"
           # 构建前先校验版本 / 构建号递增（对照线上清单）
-          $channel = '${{ inputs.channel }}'
+          $channel = '${{ inputs.channel || 'stable' }}'
           if (-not $channel) { $channel = 'stable' }
           python tools\release\check_version_bump.py --product mote --build $build `
             --manifest-url "https://dl.xiaotu.online/mote/updates/$channel/manifest.json"
@@ -171,9 +171,9 @@ jobs:
           python -m pip install --quiet oss2
           $dry = '${{ inputs.dry_run }}' -eq 'true'
           if ('${{ inputs.skip_setup }}' -eq 'true') {
-            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }} -Build $env:MOTE_BUILD_STAMP -SetupPath '不存在.exe' -SkipUpload:$dry
+            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel || 'stable' }} -Build $env:MOTE_BUILD_STAMP -SetupPath '不存在.exe' -SkipUpload:$dry
           } else {
-            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel }} -Build $env:MOTE_BUILD_STAMP -SkipUpload:$dry
+            ./tools/release/publish_windows.ps1 -Channel ${{ inputs.channel || 'stable' }} -Build $env:MOTE_BUILD_STAMP -SkipUpload:$dry
           }
 
       - name: 上传构建产物（留档）
