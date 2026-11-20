@@ -273,16 +273,28 @@ else()
     "$<$<COMPILE_LANGUAGE:CXX>:-Wall>"
     "$<$<COMPILE_LANGUAGE:OBJCXX>:-Wall>")
 
-  # macOS 也注入 MOTE_BUILD / MOTE_BUILD_STR（和 Windows 对齐）
+  # macOS 也注入 MOTE_BUILD / MOTE_BUILD_STR / MOTE_BUILD_HASH（和 Windows 完全对齐）
   # updater.mm 里读 MOTE_BUILD_STR 做同版本 build 比较；
   # 缺失时（开发态直接 cmake）默认 "0"，不阻断编译。
+  # MOTE_STRICT_BUILD=ON（发布构建）时强制 MOTE_BUILD != 0，和 shell 层硬门禁双保险。
   if(NOT MOTE_BUILD)
     set(MOTE_BUILD "0")
+  endif()
+  if(NOT MOTE_BUILD_HASH)
+    set(MOTE_BUILD_HASH "")
+  endif()
+  if(MOTE_BUILD_HASH)
+    set(MOTE_BUILD_STAMP "${MOTE_BUILD}-${MOTE_BUILD_HASH}")
+  else()
+    set(MOTE_BUILD_STAMP "${MOTE_BUILD}")
+  endif()
+  if(MOTE_STRICT_BUILD AND MOTE_BUILD STREQUAL "0")
+    message(FATAL_ERROR "发布构建（MOTE_STRICT_BUILD=ON）必须显式指定 -DMOTE_BUILD=<纯数字构建号>")
   endif()
   target_compile_definitions(Mote PRIVATE
     MOTE_VERSION="${MOTE_VERSION}"
     MOTE_BUILD=${MOTE_BUILD}
-    MOTE_BUILD_STR="${MOTE_BUILD}")
+    MOTE_BUILD_STR="${MOTE_BUILD_STAMP}")
 
   target_link_libraries(Mote PRIVATE
     mote_core
