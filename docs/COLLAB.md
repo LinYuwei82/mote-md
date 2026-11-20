@@ -18,7 +18,7 @@ git clone git@gitee.com:lin-yuwei168/mote-md.git
 
 平台专属文件可以两边同时改：
 
-- macOS：`platform/mac/*`、`packaging/package_macos.sh`、`packaging/sign_macos.sh`
+- macOS：`platform/mac/*`、`packaging/package_macos.sh`
 - Windows：`platform/win/*`、`packaging/package_windows_native.ps1`、`packaging/build_installer.ps1` 与 `packaging/mote.iss`（安装包）
 
 **共享处同一时间只允许一台机器改**：
