@@ -137,31 +137,18 @@ fi
 # ---- 灰度与强制更新（可选，默认全量 + 非强制）----
 # ROLLOUT_PERCENT=1..100：只对命中分桶的客户端下发（算法见 docs/更新清单Schema-v2.md §6.1）
 # MANDATORY=1：强制更新，必须给 MANDATORY_REASON 四类之一；MANDATORY_DEADLINE 可选（ISO 8601 UTC）
-ROLLOUT_PERCENT="${ROLLOUT_PERCENT:-100}"
-MANDATORY="${MANDATORY:-0}"
-MANDATORY_REASON="${MANDATORY_REASON:-}"
-MANDATORY_DEADLINE="${MANDATORY_DEADLINE:-}"
-if ! [[ "$ROLLOUT_PERCENT" =~ ^[0-9]+$ ]] \
-   || (( ROLLOUT_PERCENT < 1 || ROLLOUT_PERCENT > 100 )); then
-  echo "ROLLOUT_PERCENT 必须是 1–100 的整数：$ROLLOUT_PERCENT" >&2; exit 2
-fi
-case "$MANDATORY" in
-  0|1) ;;
-  *) echo "MANDATORY 只能是 0 或 1：$MANDATORY" >&2; exit 2 ;;
-esac
-if [ "$MANDATORY" = "1" ]; then
-  case "$MANDATORY_REASON" in
-    SECURITY|PROTOCOL|REGULATORY|MIN_SUPPORTED) ;;
-    *) echo "MANDATORY=1 时必须指定 MANDATORY_REASON（SECURITY/PROTOCOL/REGULATORY/MIN_SUPPORTED）" >&2; exit 2 ;;
-  esac
-  if [ -n "$MANDATORY_DEADLINE" ] \
-     && ! [[ "$MANDATORY_DEADLINE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
-    echo "MANDATORY_DEADLINE 必须是 ISO 8601 UTC（如 2026-12-01T00:00:00Z）" >&2; exit 2
-  fi
+# 校验在 tools/release/publish_args.py（三仓库共享，由 sync_guard.sh 同步），这里只收集参数
+PUBLISH_ARGS_SH="$(python3 "$REPO_ROOT/tools/release/publish_args.py" validate \
+  --product mote \
+  --rollout "${ROLLOUT_PERCENT:-100}" \
+  --mandatory "${MANDATORY:-0}" \
+  --mandatory-reason "${MANDATORY_REASON:-}" \
+  --mandatory-deadline "${MANDATORY_DEADLINE:-}" \
+  --emit sh)" || exit 2
+eval "$PUBLISH_ARGS_SH"
+if [ "$MANDATORY_ON" = "1" ]; then
   echo "更新策略：灰度 ${ROLLOUT_PERCENT}%（分桶见文档 §6.1）· 强制更新（${MANDATORY_REASON}${MANDATORY_DEADLINE:+，截止 ${MANDATORY_DEADLINE}}）"
 else
-  [ -z "$MANDATORY_REASON$MANDATORY_DEADLINE" ] || {
-    echo "MANDATORY_REASON / MANDATORY_DEADLINE 只在 MANDATORY=1 时有效" >&2; exit 2; }
   echo "更新策略：灰度 ${ROLLOUT_PERCENT}% · 非强制"
 fi
 
@@ -310,7 +297,7 @@ MANIFEST_ARGS=(
 )
 [ -n "$NOTES_URL" ] && MANIFEST_ARGS+=(--notes-url "$NOTES_URL")
 MANIFEST_ARGS+=(--rollout "$ROLLOUT_PERCENT")
-if [ "$MANDATORY" = "1" ]; then
+if [ "$MANDATORY_ON" = "1" ]; then
   MANIFEST_ARGS+=(--mandatory --mandatory-reason "$MANDATORY_REASON")
   [ -n "$MANDATORY_DEADLINE" ] && MANIFEST_ARGS+=(--mandatory-deadline "$MANDATORY_DEADLINE")
 fi

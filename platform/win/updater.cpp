@@ -881,13 +881,17 @@ bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarge
     const std::wstring size = human_size(target.size);
     if (!size.empty())
         content += L"\n安装包大小：" + size;
+    const bool force = mandatoryActive(manifest, std::time(nullptr));
     if (manifest.mandatory) {
-        // 强制更新：说明原因与期限，且不提供「稍后」
+        // 强制更新：原因始终显示；期限在截止前提示「到期后不能跳过」，到期后直接强制
         const std::string reason = mandatoryReasonLabel(manifest.mandatory_reason);
         if (!reason.empty())
             content += L"\n升级原因：" + utf8_to_wide(reason);
-        if (!manifest.mandatory_deadline.empty())
+        if (!manifest.mandatory_deadline.empty()) {
             content += L"\n升级期限：" + utf8_to_wide(manifest.mandatory_deadline);
+            if (!force)
+                content += L"（到期后将无法跳过）";
+        }
     }
     content += target.installer
         ? L"\n\n当前是安装版：将下载安装包、验签并校验 SHA256 后静默安装并重启。"
@@ -901,17 +905,17 @@ bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarge
         has_notes = true;
     }
 
-    const std::wstring title = manifest.mandatory
+    const std::wstring title = force
         ? L"必须更新到 " + utf8_to_wide(manifest.version)
         : L"发现新版本 " + utf8_to_wide(manifest.version);
 
     TASKDIALOGCONFIG config = {};
     config.cbSize = sizeof(config);
     config.hwndParent = hwnd;
-    // 强制更新不给关闭按钮：用户只能立即更新
+    // 强制生效后不给关闭按钮：用户只能立即更新
     config.dwFlags = TDF_POSITION_RELATIVE_TO_WINDOW
         | (has_notes ? TDF_ENABLE_HYPERLINKS : 0)
-        | (manifest.mandatory ? 0 : TDF_ALLOW_DIALOG_CANCELLATION);
+        | (force ? 0 : TDF_ALLOW_DIALOG_CANCELLATION);
     config.pszWindowTitle = L"Mote";
     config.pszMainIcon = TD_INFORMATION_ICON;
     config.pszMainInstruction = title.c_str();
@@ -924,8 +928,8 @@ bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarge
         {1001, L"下载更新"},
         {1002, L"稍后"},
     };
-    config.pButtons = manifest.mandatory ? mandatory_buttons : buttons;
-    config.cButtons = manifest.mandatory ? ARRAYSIZE(mandatory_buttons) : ARRAYSIZE(buttons);
+    config.pButtons = force ? mandatory_buttons : buttons;
+    config.cButtons = force ? ARRAYSIZE(mandatory_buttons) : ARRAYSIZE(buttons);
 
     int pressed = 0;
     if (FAILED(TaskDialogIndirect(&config, &pressed, nullptr, nullptr))) {
@@ -933,7 +937,7 @@ bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarge
         std::wstring plain = plain_content;
         if (!manifest.notes_url.empty())
             plain += L"\n\n更新说明：" + utf8_to_wide(manifest.notes_url);
-        if (manifest.mandatory)
+        if (force)
             return MessageBoxW(hwnd, plain.c_str(), title.c_str(),
                                MB_OK | MB_ICONWARNING) == IDOK;
         return MessageBoxW(hwnd, plain.c_str(), title.c_str(),
@@ -995,11 +999,11 @@ void show_result(HWND hwnd, const CheckResult &result)
                    target.installer ? 1 : 0);
 
     // 后台检查不打扰用户：同一版本点过「稍后」后，等下次发布再说；
-    // 强制更新不受「稍后」记录限制，每次检查都要提示
+    // 强制更新到期后不受「稍后」记录限制，每次检查都要提示（截止前仍可稍后）
     const std::wstring skipped = reg_read_string(kSkippedValue);
     const std::wstring latest = utf8_to_wide(result.manifest.version);
-    if (!result.interactive && !result.manifest.mandatory && !skipped.empty()
-        && skipped == latest) {
+    if (!result.interactive && !mandatoryActive(result.manifest, std::time(nullptr))
+        && !skipped.empty() && skipped == latest) {
         if (log_enabled())
             update_log("skip prompt for version=%s", result.manifest.version.c_str());
         return;

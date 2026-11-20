@@ -201,6 +201,56 @@ std::string mandatoryReasonLabel(std::string_view reason)
     return std::string();
 }
 
+bool parseIso8601Utc(std::string_view text, std::time_t *out)
+{
+    if (text.size() != 20 || text[4] != '-' || text[7] != '-' || text[10] != 'T'
+        || text[13] != ':' || text[16] != ':' || text[19] != 'Z')
+        return false;
+    auto read = [&](std::size_t pos, std::size_t len, int *value) {
+        int result = 0;
+        for (std::size_t i = 0; i < len; ++i) {
+            const char c = text[pos + i];
+            if (c < '0' || c > '9')
+                return false;
+            result = result * 10 + (c - '0');
+        }
+        *value = result;
+        return true;
+    };
+    int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+    if (!read(0, 4, &year) || !read(5, 2, &month) || !read(8, 2, &day)
+        || !read(11, 2, &hour) || !read(14, 2, &minute) || !read(17, 2, &second))
+        return false;
+    if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59
+        || second > 60)
+        return false;
+
+    // days_from_civil（Howard Hinnant）：纯整数换算，避开 timegm / _mkgmtime 的平台差异
+    const int y = year - (month <= 2 ? 1 : 0);
+    const int era = (y >= 0 ? y : y - 399) / 400;
+    const unsigned yoe = static_cast<unsigned>(y - era * 400);
+    const unsigned doy =
+        (153u * static_cast<unsigned>(month + (month > 2 ? -3 : 9)) + 2u) / 5u
+        + static_cast<unsigned>(day - 1);
+    const unsigned doe = yoe * 365u + yoe / 4u - yoe / 100u + doy;
+    const long long days =
+        static_cast<long long>(era) * 146097 + static_cast<long long>(doe) - 719468;
+    if (out)
+        *out = static_cast<std::time_t>(days * 86400 + hour * 3600 + minute * 60 + second);
+    return true;
+}
+
+bool mandatoryActive(const UpdateManifest &manifest, std::time_t now)
+{
+    if (!manifest.mandatory)
+        return false;
+    std::time_t deadline = 0;
+    if (manifest.mandatory_deadline.empty()
+        || !parseIso8601Utc(manifest.mandatory_deadline, &deadline))
+        return true; // 没写期限或期限非法：按既有的「立即强制」行为，避免被绕过
+    return now >= deadline;
+}
+
 UpdateDecision decideUpdate(const UpdateManifest &manifest, UpdatePlatform platform,
                             std::string_view currentVersion, std::string_view currentOs,
                             long long currentBuild, std::string_view installId)

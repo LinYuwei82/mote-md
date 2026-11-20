@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ctime>
 #include <string>
 #include <string_view>
 
@@ -73,6 +74,14 @@ bool rolloutAllows(int percent, int bucket);
 // mandatory_reason 四类原因的中文文案（与小兔 / DevCard 客户端一致）；
 // 未知或空串返回空（UI 不显示原因，不因此判清单无效）。
 std::string mandatoryReasonLabel(std::string_view reason);
+
+// 解析 ISO 8601 UTC（YYYY-MM-DDTHH:MM:SSZ）为 Unix 时间戳；格式非法返回 false。
+bool parseIso8601Utc(std::string_view text, std::time_t *out);
+
+// 强制更新是否已生效：未设期限 → 立即强制；设了期限 → 到期才强制
+// （截止前仍可稍后）；期限非法按「已到期」处理，避免格式问题被绕过。
+// mandatory 为 false 时恒为 false。三端（小兔 / DevCard / Mote）同一口径。
+bool mandatoryActive(const UpdateManifest &manifest, std::time_t now);
 
 // 结合当前版本与当前系统版本得出该提示什么。
 // macOS 只比 version；Windows 先比 version，同版本再比 build（build 小于等于

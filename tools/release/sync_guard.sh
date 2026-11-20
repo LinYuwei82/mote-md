@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 把 mote 的 guard.py 与 manifest_v2.py 同步到另外两个仓库，并更新各自的 sha256 校验文件。
+# 把 mote 的 guard.py / manifest_v2.py / publish_args.py 同步到另外两个仓库，并更新各自的 sha256 校验文件。
 #
 # 设计：
 #   mote 是三仓库共用的单一规则源（"主本"）。三个产物（guard.py / manifest_v2.py /
@@ -41,6 +41,7 @@ SRC_DIR="$MOTE_ROOT/tools/release"
 SYNC_FILES=(
   "guard.py guard.sha256"
   "manifest_v2.py manifest_v2.sha256"
+  "publish_args.py publish_args.sha256"
 )
 
 # 默认同级目录；可用 PEERS 环境变量覆盖（跨机器开发场景）
@@ -54,7 +55,7 @@ else
 fi
 
 # 校验主本文件
-for f in guard.py manifest_v2.py; do
+for f in guard.py manifest_v2.py publish_args.py; do
   [ -f "$SRC_DIR/$f" ] || { echo "缺少 $SRC_DIR/$f" >&2; exit 2; }
 done
 # 校验 peer 目录（local-only 时跳过）
@@ -76,6 +77,7 @@ echo ""
 echo "① 主本 selftest"
 python3 "$SRC_DIR/guard.py" selftest  > /dev/null
 python3 "$SRC_DIR/manifest_v2.py" selftest > /dev/null
+python3 "$SRC_DIR/publish_args.py" selftest > /dev/null
 echo "   ✓ mote selftest 通过"
 echo ""
 
@@ -145,6 +147,7 @@ sync_repo() {
   # selftest 确保同步后 peer 仍能跑
   python3 "$repo/tools/release/guard.py" selftest  > /dev/null
   python3 "$repo/tools/release/manifest_v2.py" selftest > /dev/null
+  python3 "$repo/tools/release/publish_args.py" selftest > /dev/null
 
   echo "   ✓ $label"
 }
@@ -162,12 +165,18 @@ if [ "$LOCAL_ONLY" -eq 0 ]; then
 fi
 
 echo "========== 完成 =========="
-echo "guard.py / manifest_v2.py 已同步，三个仓库 selftest 全部通过。"
+echo "guard.py / manifest_v2.py / publish_args.py 已同步，三个仓库 selftest 全部通过。"
 echo ""
 echo "下一步建议（需要你手动做）："
-echo "  cd $MOTE_ROOT && git add tools/release/guard.py tools/release/guard.sha256"
-echo "  cd $MOTE_ROOT/../xiaotu-inventory && git add tools/release/guard.py tools/release/guard.sha256"
-echo "  cd $MOTE_ROOT/../dev_card_cpp && git add tools/release/guard.py tools/release/guard.sha256"
+echo "  cd $MOTE_ROOT && git add tools/release/guard.py tools/release/guard.sha256 \\"
+echo "    tools/release/manifest_v2.py tools/release/manifest_v2.sha256 \\"
+echo "    tools/release/publish_args.py tools/release/publish_args.sha256"
+echo "  cd $MOTE_ROOT/../xiaotu-inventory && git add tools/release/guard.py tools/release/guard.sha256 \\"
+echo "    tools/release/manifest_v2.py tools/release/manifest_v2.sha256 \\"
+echo "    tools/release/publish_args.py tools/release/publish_args.sha256"
+echo "  cd $MOTE_ROOT/../dev_card_cpp && git add tools/release/guard.py tools/release/guard.sha256 \\"
+echo "    tools/release/manifest_v2.py tools/release/manifest_v2.sha256 \\"
+echo "    tools/release/publish_args.py tools/release/publish_args.sha256"
 exit 0
 
 # ============================================================================

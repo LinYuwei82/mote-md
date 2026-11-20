@@ -408,6 +408,30 @@ static void testUpdate()
     CHECK(mote::mandatoryReasonLabel("").empty());
     CHECK(mote::mandatoryReasonLabel("UNKNOWN").empty());
 
+    // 期限解析与「到期才强制」：未到期可稍后，到期/无期限立即强制
+    std::time_t epoch = -1;
+    CHECK(mote::parseIso8601Utc("1970-01-01T00:00:00Z", &epoch));
+    CHECK(epoch == 0);
+    CHECK(mote::parseIso8601Utc("2026-12-01T00:00:00Z", &epoch));
+    CHECK(epoch == 1796083200);
+    CHECK(mote::parseIso8601Utc("2024-02-29T12:30:45Z", &epoch)); // 闰日
+    CHECK(epoch == 1709209845);
+    CHECK(!mote::parseIso8601Utc("2026-12-01", &epoch));
+    CHECK(!mote::parseIso8601Utc("2026-12-01T00:00:00+08:00", &epoch));
+    CHECK(!mote::parseIso8601Utc("2026-13-01T00:00:00Z", &epoch));
+    CHECK(mote::mandatoryActive(mandatoryManifest, 1796083199) == false); // 截止前 1 秒
+    CHECK(mote::mandatoryActive(mandatoryManifest, 1796083200) == true);  // 到点即强制
+    CHECK(mote::mandatoryActive(mandatoryManifest, 1796083201) == true);
+
+    UpdateManifest noDeadline;
+    noDeadline.mandatory = true;
+    CHECK(mote::mandatoryActive(noDeadline, 0) == true); // 没期限：立即强制，保持旧行为
+    noDeadline.mandatory_deadline = "not-a-date";
+    CHECK(mote::mandatoryActive(noDeadline, 0) == true); // 期限非法：按已到期处理
+    noDeadline.mandatory = false;
+    noDeadline.mandatory_deadline.clear();
+    CHECK(mote::mandatoryActive(noDeadline, 2000000000) == false);
+
     // 强制更新绕过灰度：rollout_percent=1 且未命中桶也下发
     UpdateManifest mandatoryRollout;
     CHECK(mote::parseUpdateManifest(
