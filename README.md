@@ -51,13 +51,26 @@ open build-native/Mote.app                       # 或直接运行
 ```bash
 bash packaging/package_macos.sh --dmg
 # 产物：dist/Mote-macOS-native.zip / dist/Mote-macOS-native-*.dmg
-# 体积取决于是否带 Sparkle：带 framework 时 .app 约 4.1 MB、DMG 约 1.7 MB；
-# 缺 framework 时 .app 约 2 MB、DMG 约 750 KB，但应用内更新会退回浏览器下载
+# 体积约 4.1 MB（.app，含 Sparkle.framework） / DMG 约 1.7 MB
 ```
 
-> 打正式包前先把 `Sparkle.framework` 放到 `resources/`（该目录不入库）。CMake 找不到时只发
-> 警告并继续构建，产物体积明显变小；这类包能跑，但 macOS 端「下载并安装」会改为打开浏览器
-> 下载，无法自动替换应用。
+**发布前有三层门禁（2026-11-19 起），杜绝 1.0.4 残缺 DMG 回归：**
+
+| 层 | 位置 | 行为 |
+|---|---|---|
+| configure | CMakeLists.txt `-DMOTE_STRICT_BUILD=ON` | Sparkle.framework 缺失 → **FATAL_ERROR** |
+| configure 自动修复 | CMakeLists.txt（macOS 分支） | Sparkle 2.x tarball 缺 `Versions/Current` 符号链接 → 自动探测并补建 |
+| 打包脚本 | `package_macos.sh` | `.app/Contents/Frameworks/Sparkle.framework` 必须存在 + `.app ≥ 1024 KB` → exit 1 |
+| 发布脚本 | `publish_macos.sh` | DMG 内同样双保险 |
+
+Sparkle 2.x tarball（如 `Sparkle-2.7.0.tar.xz`）已知缺陷：顶层符号链接
+`Sparkle -> Versions/Current/Sparkle` 存在，但 `Versions/Current` 本身缺失。
+configure 阶段会自动探测 `Versions/` 下唯一子目录（如 `B`）并补建
+`Current -> B`，**新机器 setup 不用再手动 `ln -sfn B Current`**——CMake 自动处理。
+
+开发机本地开发如果没有 Sparkle，可以不加 `-DMOTE_STRICT_BUILD=ON`，configure
+只会 WARNING 并继续；产物缺 framework 时应用内更新会退回浏览器下载。
+**CI 和正式发布脚本一律传 `-DMOTE_STRICT_BUILD=ON`**。
 
 `tools/preflight.sh` 可在干净构建后跑一次启动冒烟。
 
@@ -182,7 +195,7 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 - **仅 arm64**：macOS 包只含 arm64 切片，Intel Mac 需自行重新构建。
 - **发布包需 Developer ID + 公证**：正式产物由 `package_macos.sh` 签名并公证；跳过公证（`--skip-notarize`）的包只适合本机验证，不适合分发。
 - **更新包强制 EdDSA 验签**：Sparkle 2 不接受只签 Developer ID 的更新包；签名私钥只在发布机上，丢失后无法为已发布版本续签。
-- **macOS 包只依赖系统框架**：带 Sparkle.framework 时 `.app` 约 4.1 MB、DMG 约 1.7 MB；缺 framework 时约 2 MB / 750 KB（1.0.4 线上包即后者），WebKit 由系统提供。
+- **macOS 包只依赖系统框架**：正式发布一律带 Sparkle.framework（`.app` 约 4.1 MB、DMG 约 1.7 MB），由 `MOTE_STRICT_BUILD=ON` + `package_macos.sh` / `publish_macos.sh` 三层门禁硬拦截缺 framework 的产物；WebKit 由系统提供。
 - **源码模式无语法高亮**：`Cmd+E` 下是纯文本编辑区。
 - **查找/替换不跨块**：可以在所有块之间跳转命中，但单个命中不会跨越块边界或行内标记。
 - **上下方向键不跨块**：跨块移动光标需鼠标点击。
@@ -190,7 +203,7 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 - **链接跳转**：`Cmd+Click` 外部链接（http/https/mailto）与相对路径的 `.md`；**锚点链接**（`#标题`）按 GitHub 风格的 slug 在文档内跳转（中文保留、去标点、空格转 `-`，重名标题依次加 `-1`、`-2`），未命中时状态栏提示「未找到对应标题」；**图片**按 `img` 渲染，没有 `<a>` 包裹，`Cmd+Click` 不触发任何跳转（相对路径图片仍按文档目录正常显示与导出内嵌）。
 - **导出 HTML 是「网页快照」**：单文件、无外部依赖、无脚本；导出后不提供任何交互（链接仍可点，但任务复选框是静态图形）。
 - **导出能力两端已对齐**：macOS 与 Windows 的 PDF、HTML 导出均已实现并验收；分页切点由各自 WebView 引擎决定。
-- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；当前双平台均为 1.0.4（Windows build `202611181542`），更早的 `0.3.10` 升级路径不再逐一冒烟；**1.0.4 的 macOS 包是缺 Sparkle 的构建（DMG 750 KB、`.app` 约 2 MB），应用内更新会退回浏览器下载**，1.0.5 起需带 framework 再发一次；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证（Windows 现在会对可重试错误自动重试 3 次）；Windows 安装版静默安装并自动重启，绿色版下载校验后提示、自动退出并打开所在目录，由用户解压覆盖。
+- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；当前双平台均为 1.0.6（Windows build `202611191435`），更早的 `0.3.10`、`1.0.3`、`1.0.4` 的 OSS 包已清理，升级路径不再逐一冒烟；**1.0.4 的 macOS 包曾因缺 Sparkle.framework（DMG 750 KB）导致应用内更新退回浏览器下载**，该残缺包已从 OSS 删除，且 `MOTE_STRICT_BUILD=ON` + 打包/发布脚本三层门禁硬拦截缺 framework 的产物，后续不会再出现同类包；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证（Windows 现在会对可重试错误自动重试 3 次）；Windows 安装版静默安装并自动重启，绿色版下载校验后提示、自动退出并打开所在目录，由用户解压覆盖。
 - **OSS 在中国香港**：国内下载偏慢；备案完成后把回源迁到国内桶，`dl.xiaotu.online` 域名不变，已安装客户端无需改动。
 - **任务复选框的复制**：复制处理器剔除隐藏标记；脚本用 `DataTransfer` 走产品同一条 `copy` 处理逻辑验证，真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 - 目录在源码模式下隐藏；正在编辑的块在重排前标题高亮可能滞后一帧。

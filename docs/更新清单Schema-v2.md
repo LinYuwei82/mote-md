@@ -3,12 +3,15 @@
 > 状态：**迁移完成**（2026-11-18 全量上线并退役 v1）。
 > 全链路完成：生成器 `manifest_v2.py`、guard v2 检查、三仓库发布脚本、
 > 三个客户端解析 + Ed25519 验签、下载页改读 manifest.json；
-> 新内测版已发布：当前线上为 mote 1.0.4（Windows build `202611181542`）、
+> 新内测版已发布：当前线上为 mote 1.0.6（Windows build `202611191435`）、
 > xiaotu 1.0.3（build `202611190001`）、devcard 1.2.8（build `202611181646`）。
 > 升级链路实测全绿后，v1 清单（`latest.json` / `windows.json`）已全部删除
-> （`appcast.xml` 永久保留）。
-> 2026-11-19：按清单/appcast 白名单清理过一次历史安装包（116 MB）；之后发布的
-> 上一版（devcard 1.2.6/1.2.7、xiaotu 1.0.2）仍保留在桶内供回滚。
+> （`appcast.xml` 永久保留）。`guard.py --schema v1` 参数已于 2026-11-19 移除，
+> 强制 v2。
+> 2026-11-19：按清单/appcast 白名单清理过一次历史安装包（116 MB）；同日再清
+> mote 1.0.3 / 1.0.4 全套（8 个对象，10 MB）。mote 1.0.4 macOS DMG 是缺
+> Sparkle.framework 的残缺包（750 KB），清理后彻底消除误伤可能。
+> devcard 1.2.6 / 1.2.7、xiaotu 1.0.2 的包仍保留在桶内供回滚。
 > 2026-11-19：修复 Windows 清单 `build` 错位——发布脚本原先取「发布时刻」，
 > 二进制里却是「编译时刻」，清单永远比安装包新，客户端反复提示同一版本。
 > 现由构建步骤把 `MOTE_BUILD` 传给发布步骤，`build` 必须等于二进制内的值（见 3.4）；
@@ -181,7 +184,7 @@ DevCard Windows 发版前验证工具：`dev_card_cpp/tools/release/verify_build
   原文交回 `POST /api/version/verify`，服务端用内嵌公钥验签后才返回 `artifacts`
   （WebView 自身无法验签，不能让它直接采信远端资产）。验签失败一律放弃本次更新。
 
-## 五、完整示例（mote 1.0.4，取自线上实际清单，`signature` 省略）
+## 五、完整示例（mote 1.0.6，取自线上实际清单，`signature` 省略）
 
 ```json
 {
@@ -189,49 +192,48 @@ DevCard Windows 发版前验证工具：`dev_card_cpp/tools/release/verify_build
   "product": "mote",
   "channel": "stable",
   "key_id": "2026-11",
-  "updated_at": "2026-11-19T02:04:48Z",
+  "updated_at": "2026-11-20T00:50:41Z",
   "platforms": {
     "macos": {
-      "version": "1.0.4",
+      "version": "1.0.6",
       "build": 0,
       "min_os": "14.0",
       "rollout_percent": 100,
-      "notes_url": "https://dl.xiaotu.online/mote/release-notes-1.0.4.html",
       "artifacts": {
         "dmg": {
-          "url": "https://dl.xiaotu.online/mote/mote-1.0.4-macos-arm64.dmg",
-          "size": 750328,
-          "sha256": "2f04e3f8b740bb85b38a09be5b2e93fb34df90feec8d035336633d0234299124"
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.6-macos-arm64.dmg",
+          "size": 1829951,
+          "sha256": "5b0e132b6c42df7bf82cc8ea777efccb472a301cd1b8c052874413fea6eb533e"
         }
       }
     },
     "windows": {
-      "version": "1.0.4",
-      "build": 202611181542,
+      "version": "1.0.6",
+      "build": 202611191435,
       "min_os": "10.0",
       "rollout_percent": 100,
-      "notes_url": "https://dl.xiaotu.online/mote/release-notes-1.0.4.html",
       "artifacts": {
         "portable": {
-          "url": "https://dl.xiaotu.online/mote/mote-1.0.4-win64-portable.zip",
-          "size": 717845,
-          "sha256": "01c928b5637af0e7a1494baa12810ed80612d7ec3849b84344b7f2a7308ed363"
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.6-win64-portable.zip",
+          "size": 693311,
+          "sha256": "3dcb3c1416eeb526480590749bfd640a330735d43040d2a8bc7ccf154d7ca84f"
         },
         "setup": {
-          "url": "https://dl.xiaotu.online/mote/mote-1.0.4-win64-setup.exe",
-          "size": 2666670,
-          "sha256": "7bc1db2b5dbfec2ff19cda47fb529608f9f3c8a436eb4164d17a231ef20e1d1d"
+          "url": "https://dl.xiaotu.online/mote/mote-1.0.6-win64-setup.exe",
+          "size": 2662393,
+          "sha256": "e4267f169244147084c504e4809b6c117d43b66e9633281563974116a5ee6395"
         }
       }
     }
   },
-  "signature": "（生成时计算，线上为 88 字符 base64）"
+  "signature": "dmV+aBBh7qutNLgMmb5Gj7lR9lBMyZit7Ev4C7aUag8RDLM7VAqaVKhdgWp160Ly9Ese40UQpN/2jS0pRCnkBA=="
 }
 ```
 
-> 示例取自 2026-11-19 补页重签后的线上清单：两个平台段写同一个说明页地址，
-> 客户端据此显示「查看完整更新说明…」。仓库里存在
-> `docs/release-notes-<版本>.html` 时发布脚本会自动上传并填入该字段；缺页则不写。
+> 示例取自线上 1.0.6 清单（签名保留完整值）。与 1.0.4 残缺 DMG（750 KB、缺
+> Sparkle.framework）不同，1.0.6 DMG 含完整 Sparkle.framework（`.app` 约 4.2 MB），
+> macOS 端自动更新恢复正常。`notes_url` 本版未写（`docs/release-notes-1.0.6.html`
+> 暂缺），客户端不显示「查看更新详情」按钮。
 
 ## 六、客户端解析规则
 
