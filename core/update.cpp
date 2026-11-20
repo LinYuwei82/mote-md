@@ -178,10 +178,10 @@ UpdateDecision decideUpdate(const UpdateManifest &manifest, UpdatePlatform platf
     if (comparison < 0)
         return UpdateDecision::UpToDate;
     if (comparison == 0) {
-        if (platform == UpdatePlatform::Macos)
-            return UpdateDecision::UpToDate; // macOS 无构建号，同版本即无更新
-        // Windows：同版本再比构建号；本机构建号未知（MOTE_BUILD=0）时跳过，
-        // 仅按 version 判定
+        // Windows / macOS：同版本再比构建号
+        // Windows 和 macOS 现在都有 build（MOTE_BUILD compile_def + Info.plist CFBundleVersion）；
+        // 本机 build 未知（<=0）时跳过，仅按 version 判定。
+        // 2026-11-20 起：macOS 也支持同版本重发靠 build 区分（之前 macOS 直接 return UpToDate）。
         if (currentBuild <= 0 || manifest.build <= currentBuild)
             return UpdateDecision::UpToDate;
     }

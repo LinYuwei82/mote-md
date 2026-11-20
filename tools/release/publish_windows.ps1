@@ -87,7 +87,24 @@ if ([string]::IsNullOrWhiteSpace($Build)) {
     }
 }
 if ($Build -notmatch '^\d{4,}$') { Fail "非法构建号：$Build（应为纯数字，如 202611180930）" }
-Write-Host "构建号：$Build"
+
+# 二次验证：和 CMakeCache 里的 MOTE_BUILD 一致（防止 shell 手动传 -Build 与编译值不同步）
+$cachePath = Join-Path $root "build-native-ninja\CMakeCache.txt"
+if (Test-Path -LiteralPath $cachePath) {
+    $cacheText = Get-Content -LiteralPath $cachePath -Raw
+    $cachedMatch = [regex]::Match($cacheText, 'MOTE_BUILD:[A-Z]+=(\d+)')
+    if ($cachedMatch.Success) {
+        $cachedBuild = $cachedMatch.Groups[1].Value
+        if ($cachedBuild -ne $Build) {
+            Fail "-Build $Build 与编译时 CMakeCache MOTE_BUILD=$cachedBuild 不一致；请保持同步（或清理 build 目录重编）"
+        }
+        Write-Host "构建号：$Build（CMakeCache 一致 ✓）"
+    } else {
+        Write-Host "构建号：$Build（CMakeCache 未找到 MOTE_BUILD，跳过二次验证）"
+    }
+} else {
+    Write-Host "构建号：$Build（无 CMakeCache，跳过二次验证）"
+}
 
 # 签名种子：环境变量优先（CI），其次本地种子文件
 $signKeyPath = $null

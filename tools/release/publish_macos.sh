@@ -53,9 +53,9 @@ DMG_PATH="${DMG_PATH:-$REPO_ROOT/dist/Mote-macOS-native-$VERSION.dmg}"
 SIGN_KEY="${SIGN_KEY:-$HOME/.config/mote-updates/ed25519_seed.b64}"
 [ -f "$SIGN_KEY" ] || { echo "更新签名私钥不存在：$SIGN_KEY" >&2; exit 1; }
 
-# Sparkle（appcast EdDSA）与清单 v2（Ed25519）是两把独立密钥，不得混用
-SPARKLE_KEY="${SPARKLE_KEY:-$HOME/.config/mote-updates/sparkle_ed25519_seed.b64}"
-[ -f "$SPARKLE_KEY" ] || { echo "Sparkle 签名私钥不存在：$SPARKLE_KEY" >&2; exit 1; }
+# Sparkle appcast 签名复用 SIGN_KEY（与 v2 清单共用同一把 Ed25519 key）
+# ← 2026-11-20 起合并，对齐小兔方案；之前 manifest + Sparkle 各一把独立密钥已废弃。
+SPARKLE_KEY="$SIGN_KEY"
 
 CHANNEL="${CHANNEL:-stable}"
 case "$CHANNEL" in stable|beta) ;; *) echo "CHANNEL 必须是 stable/beta" >&2; exit 2 ;; esac

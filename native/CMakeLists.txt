@@ -120,8 +120,17 @@ if(WIN32)
   # 留一条 "MOTE_BUILD=<digits>" 的可搜索 pattern——guard.py preflight 发布
   # 时会 grep 绿色包/安装包里的 Mote.exe，与 --build 参数比对，防止清单 build
   # 与编译值不一致导致客户端反复提示同一版本（2026-11-19 mote 1.0.4 即因此重发）。
+  # Windows 构建号（与 macOS 侧完全一致的门禁体系）
+  set(MOTE_DEFAULT_BUILD "2026111301")
   if(NOT MOTE_BUILD)
-    set(MOTE_BUILD "0")
+    set(MOTE_BUILD "${MOTE_DEFAULT_BUILD}")
+    message(WARNING "MOTE_BUILD 未设置，回退到开发默认值 ${MOTE_BUILD}（仅适合本地开发，发布请显式传 -DMOTE_BUILD=<纯数字>）")
+  endif()
+  if(NOT MOTE_BUILD MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "MOTE_BUILD 必须是纯数字：${MOTE_BUILD}")
+  endif()
+  if(MOTE_STRICT_BUILD AND MOTE_BUILD STREQUAL MOTE_DEFAULT_BUILD)
+    message(FATAL_ERROR "发布构建（MOTE_STRICT_BUILD=ON）不能使用开发默认构建号 ${MOTE_DEFAULT_BUILD}")
   endif()
   if(NOT MOTE_BUILD_HASH)
     set(MOTE_BUILD_HASH "")
@@ -275,10 +284,18 @@ else()
 
   # macOS 也注入 MOTE_BUILD / MOTE_BUILD_STR / MOTE_BUILD_HASH（和 Windows 完全对齐）
   # updater.mm 里读 MOTE_BUILD_STR 做同版本 build 比较；
-  # 缺失时（开发态直接 cmake）默认 "0"，不阻断编译。
-  # MOTE_STRICT_BUILD=ON（发布构建）时强制 MOTE_BUILD != 0，和 shell 层硬门禁双保险。
+  # 缺失时（开发态直接 cmake）回退到开发默认值，WARNING 提示不可发布；
+  # 纯数字校验 + STRICT_BUILD=ON 时非零双保险（和小兔 XIAOTU_RELEASE_BUILD=ON 对齐）。
+  set(MOTE_DEFAULT_BUILD "2026111301")
   if(NOT MOTE_BUILD)
-    set(MOTE_BUILD "0")
+    set(MOTE_BUILD "${MOTE_DEFAULT_BUILD}")
+    message(WARNING "MOTE_BUILD 未设置，回退到开发默认值 ${MOTE_BUILD}（仅适合本地开发，发布请显式传 -DMOTE_BUILD=<纯数字>）")
+  endif()
+  if(NOT MOTE_BUILD MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "MOTE_BUILD 必须是纯数字：${MOTE_BUILD}")
+  endif()
+  if(MOTE_STRICT_BUILD AND MOTE_BUILD STREQUAL MOTE_DEFAULT_BUILD)
+    message(FATAL_ERROR "发布构建（MOTE_STRICT_BUILD=ON）不能使用开发默认构建号 ${MOTE_DEFAULT_BUILD}")
   endif()
   if(NOT MOTE_BUILD_HASH)
     set(MOTE_BUILD_HASH "")
@@ -287,9 +304,6 @@ else()
     set(MOTE_BUILD_STAMP "${MOTE_BUILD}-${MOTE_BUILD_HASH}")
   else()
     set(MOTE_BUILD_STAMP "${MOTE_BUILD}")
-  endif()
-  if(MOTE_STRICT_BUILD AND MOTE_BUILD STREQUAL "0")
-    message(FATAL_ERROR "发布构建（MOTE_STRICT_BUILD=ON）必须显式指定 -DMOTE_BUILD=<纯数字构建号>")
   endif()
   target_compile_definitions(Mote PRIVATE
     MOTE_VERSION="${MOTE_VERSION}"
