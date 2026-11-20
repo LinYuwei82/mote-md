@@ -44,6 +44,7 @@ SYNC_FILES=(
   "publish_args.py publish_args.sha256"
   "gen_build.py gen_build.sha256"
   "update_compare_vectors.json update_compare_vectors.sha256"
+  "release_tag.py release_tag.sha256"
 )
 
 # 默认同级目录；可用 PEERS 环境变量覆盖（跨机器开发场景）
