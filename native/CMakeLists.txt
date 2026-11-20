@@ -377,3 +377,7 @@ else()
       COMMENT "Copy Sparkle.framework into .app bundle (symlinks resolved)")
   endif()
 endif()
+
+# 只对本次配置生效：避免缓存把发布态带到同一目录后续的开发构建
+# （与 xiaotu / devcard 的 *_RELEASE_BUILD 处理一致）。
+unset(MOTE_RELEASE_BUILD CACHE)

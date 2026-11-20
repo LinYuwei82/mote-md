@@ -15,11 +15,13 @@
 #   oss://<bucket>/mote/updates/stable/manifest.json
 #
 # 构建号：v2 清单 windows 平台必须带 build（客户端同版本比对构建号）。它必须等于
-# Windows 侧编译时的 -DMOTE_BUILD，因此这里**要求显式传入 BUILD**，不再用当前时间
-# 兜底：清单比安装包「新」会让客户端反复提示同一版本、装完照旧。
+# Windows 侧编译时的 -DMOTE_BUILD，默认由 tools/release/gen_build.py 自动生成（与
+# packaging/package_windows_native.ps1 同一来源，保证与二进制一致）；显式传 BUILD
+# 时优先使用。口径与小兔 / DevCard 的 Windows 发布脚本一致。
 #
 # 用法：
-#   BUILD=202611180930 tools/release/publish_windows.sh      # 从 dist/ 自动找 zip
+#   tools/release/publish_windows.sh                          # build 号自动生成，从 dist/ 自动找 zip
+#   BUILD=202611180930 tools/release/publish_windows.sh       # 显式指定 build 号
 #   BUILD=202611180930 ZIP_PATH=/path/to/portable.zip \
 #   SETUP_PATH=/path/to/setup.exe tools/release/publish_windows.sh
 #   BUILD=202611180930 NOTES_URL=https://... tools/release/publish_windows.sh
