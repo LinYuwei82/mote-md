@@ -1,6 +1,6 @@
 # mote_update：自动更新模块（独立 STATIC library）
 #
-# 职责：版本比较（decideUpdate）+ manifest v2 Ed25519 验签。
+# 职责：版本比较（decideUpdate）、灰度分桶（sha256）+ manifest v2 Ed25519 验签。
 # 平台桥接层（platform/mac/updater.mm、platform/win/updater.cpp）link 本 target
 # 拿到这两个能力。本 target 不依赖任何平台 API，可跨项目复用。
 #
@@ -9,6 +9,7 @@
 
 add_library(mote_update STATIC
   "${CMAKE_CURRENT_SOURCE_DIR}/src/update.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/sha256.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/verify_signature.cpp")
 
 # 暴露 include/mote/ 给外部项目（#include "mote/update.h"）

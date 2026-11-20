@@ -1,7 +1,9 @@
 #include "mote/update.h"
 
 #include "core/json.h"
+#include "mote/sha256.h"
 
+#include <algorithm>
 #include <cctype>
 #include <limits>
 #include <vector>
@@ -120,6 +122,11 @@ bool parseUpdateManifest(std::string_view text, UpdatePlatform platform, UpdateM
     out.min_os = section->stringAt("min_os");
     out.notes_url = section->stringAt("notes_url");
 
+    // 灰度：缺省全量；越界值按边界截断，宁可全量也不因一个坏字段让整份清单失效
+    const double rollout = section->numberAt("rollout_percent", 100.0);
+    out.rollout_percent = static_cast<int>(std::clamp(rollout, 0.0, 100.0));
+    out.mandatory = section->boolAt("mandatory", false);
+
     const JsonValue *artifacts = section->find("artifacts");
     if (!artifacts || !artifacts->isObject()) {
         setError(error, "更新清单缺少 artifacts");
@@ -157,9 +164,25 @@ int compareVersions(std::string_view left, std::string_view right)
     return 0;
 }
 
+int rolloutBucket(std::string_view installId, long long build)
+{
+    const std::string material = std::string(installId) + ":" + std::to_string(build);
+    const std::array<std::uint8_t, 32> digest = sha256Digest(material);
+    const std::uint32_t value = (static_cast<std::uint32_t>(digest[0]) << 24)
+        | (static_cast<std::uint32_t>(digest[1]) << 16)
+        | (static_cast<std::uint32_t>(digest[2]) << 8)
+        | static_cast<std::uint32_t>(digest[3]);
+    return static_cast<int>(value % 100u);
+}
+
+bool rolloutAllows(int percent, int bucket)
+{
+    return bucket >= 0 && bucket < std::clamp(percent, 0, 100);
+}
+
 UpdateDecision decideUpdate(const UpdateManifest &manifest, UpdatePlatform platform,
                             std::string_view currentVersion, std::string_view currentOs,
-                            long long currentBuild)
+                            long long currentBuild, std::string_view installId)
 {
     if (manifest.version.empty())
         return UpdateDecision::Invalid;
@@ -187,6 +210,12 @@ UpdateDecision decideUpdate(const UpdateManifest &manifest, UpdatePlatform platf
     }
     if (!manifest.min_os.empty() && compareVersions(currentOs, manifest.min_os) < 0)
         return UpdateDecision::UnsupportedSystem;
+
+    // 灰度分批：mandatory 直接放行；未提供 install_id 的调用方保持旧行为（不灰度）
+    if (!manifest.mandatory && !installId.empty()
+        && !rolloutAllows(manifest.rollout_percent, rolloutBucket(installId, manifest.build)))
+        return UpdateDecision::RolloutHold;
+
     return UpdateDecision::Available;
 }
 

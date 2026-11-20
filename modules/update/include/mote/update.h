@@ -34,6 +34,8 @@ struct UpdateManifest
     long long build = 0;      // 构建号；macOS 恒为 0，Windows 同版本时参与比较
     std::string min_os;       // 可选，最低系统版本，形如 14.0
     std::string notes_url;    // 可选，本次更新的发布说明 URL（release notes 页面）
+    int rollout_percent = 100; // 可选，灰度比例 0–100；缺省 100 表示全量
+    bool mandatory = false;    // 可选，强制更新；为 true 时跳过灰度直接下发
 
     // artifacts.<key>：key 枚举 dmg / setup / portable；未知 key 一律忽略。
     UpdateArtifact dmg;      // macOS 安装包
@@ -55,15 +57,28 @@ enum class UpdateDecision {
     UpToDate,          // 当前版本已经不比清单旧
     Available,         // 有新版本可安装
     UnsupportedSystem, // 有新版本，但当前系统低于 min_os
+    RolloutHold,       // 有新版本，但本机不在本轮灰度范围
 };
+
+// 灰度分桶：SHA-256(install_id + ":" + build) 取前 4 字节按大端拼成 uint32，
+// 再对 100 取模。小兔 / DevCard / Mote 三仓库唯一口径，任何一端改动都必须同步
+// 另两端与文档（见 docs/更新清单Schema-v2.md 6.1）。
+int rolloutBucket(std::string_view installId, long long build);
+
+// percent 超出 0–100 时按边界截断；bucket 为负（无 install_id）一律不放行。
+bool rolloutAllows(int percent, int bucket);
 
 // 结合当前版本与当前系统版本得出该提示什么。
 // macOS 只比 version；Windows 先比 version，同版本再比 build（build 小于等于
 // 本机 → 无更新）。currentBuild 是本机构建号，来自编译期宏 MOTE_BUILD（见
 // native/CMakeLists.txt；0 表示未知，此时跳过 build 比较仅按 version），
 // macOS 恒传 0。
+//
+// installId 是本机安装实例标识（首次检查更新时生成并持久化）：非空时参与
+// 灰度分桶，命中 rollout_percent 才返回 Available，否则 RolloutHold；
+// 为空则跳过灰度（兼容尚未接入 install_id 的旧调用方）。
 UpdateDecision decideUpdate(const UpdateManifest &manifest, UpdatePlatform platform,
                             std::string_view currentVersion, std::string_view currentOs,
-                            long long currentBuild);
+                            long long currentBuild, std::string_view installId = {});
 
 } // namespace mote

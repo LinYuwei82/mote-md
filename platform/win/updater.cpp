@@ -73,6 +73,8 @@ constexpr int kRequestTimeoutMs = 15 * 1000;
 constexpr wchar_t kRegKey[] = L"Software\\Mote";
 constexpr wchar_t kLastCheckValue[] = L"LastUpdateCheck";
 constexpr wchar_t kSkippedValue[] = L"SkippedUpdateVersion";
+// 灰度分桶用的安装实例标识：首次生成后长期复用，保证同一台机器落在同一桶
+constexpr wchar_t kInstallIdValue[] = L"InstallId";
 
 std::wstring utf8_to_wide(const std::string &text)
 {
@@ -193,6 +195,34 @@ bool reg_delete_value(const wchar_t *name)
     const bool ok = RegDeleteValueW(key, name) == ERROR_SUCCESS;
     RegCloseKey(key);
     return ok;
+}
+
+// 生成 32 位十六进制随机串作为 install_id（系统 CSPRNG，无需 COM 初始化）。
+// 失败返回空串：此时跳过灰度，只影响能否参与分批，不阻断更新主流程。
+std::string new_install_id()
+{
+    unsigned char bytes[16] = {};
+    if (BCryptGenRandom(nullptr, bytes, sizeof(bytes), BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0)
+        return std::string();
+    static const char kHex[] = "0123456789abcdef";
+    std::string id;
+    id.reserve(sizeof(bytes) * 2);
+    for (const unsigned char byte : bytes) {
+        id.push_back(kHex[byte >> 4]);
+        id.push_back(kHex[byte & 0x0f]);
+    }
+    return id;
+}
+
+std::string install_id()
+{
+    const std::wstring stored = reg_read_string(kInstallIdValue);
+    if (!stored.empty())
+        return wide_to_utf8(stored);
+    const std::string created = new_install_id();
+    if (!created.empty())
+        reg_write_string(kInstallIdValue, utf8_to_wide(created));
+    return created;
 }
 
 class InternetHandle
@@ -819,7 +849,8 @@ void check_in_background(HWND hwnd, bool interactive)
                 result->ok = true;
                 // 同版本时按构建号比较：本机 build 来自编译期宏 MOTE_BUILD
                 result->decision = decideUpdate(result->manifest, UpdatePlatform::Windows,
-                                                MOTE_VERSION, current_os_version(), MOTE_BUILD);
+                                                MOTE_VERSION, current_os_version(), MOTE_BUILD,
+                                                install_id());
             }
         }
 
@@ -926,6 +957,15 @@ void show_result(HWND hwnd, const CheckResult &result)
                       "最新版本 " + result.manifest.version + " 需要 Windows "
                           + (result.manifest.min_os.empty() ? "10" : result.manifest.min_os)
                           + " 或更高。");
+        return;
+    case UpdateDecision::RolloutHold:
+        // 灰度分批：后台静默等待下一轮，用户主动检查时说明原因
+        if (log_enabled())
+            update_log("rollout hold: version=%s percent=%d", result.manifest.version.c_str(),
+                       result.manifest.rollout_percent);
+        if (result.interactive)
+            MoteAlert(hwnd, L"暂无可用更新",
+                      "新版本 " + result.manifest.version + " 正在分批推送中，请稍后再试。");
         return;
     case UpdateDecision::Available:
         break;

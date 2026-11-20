@@ -255,6 +255,26 @@ DevCard Windows 发版前验证工具：`dev_card_cpp/tools/release/verify_build
      作为安装前校验。
 5. `rollout_percent` / `mandatory` 按各客户端现有逻辑消费，schema 层面三家一致。
 
+### 6.1 灰度分桶算法（唯一口径）
+
+三产品共用同一算法，输入只有客户端 `install_id` 与清单 `platforms.<平台>.build`：
+
+1. `material = install_id + ":" + 十进制 build`（无空格，UTF-8 字节）；
+2. `digest = SHA-256(material)`；
+3. `bucket = big_endian_uint32(digest[0..3]) % 100`，取值固定 `0–99`；
+4. 命中条件：`mandatory == true`，或 `bucket < clamp(rollout_percent, 0, 100)`。
+   未命中即不下发本次更新（客户端提示「暂无可用更新」/ 后台静默等待下一轮）。
+
+`install_id` 由客户端首次检查更新时生成并持久化，此后不变：Windows 存
+`HKCU\Software\Mote\InstallId`（16 字节系统 CSPRNG，32 位十六进制），macOS 存
+`NSUserDefaults` 的 `MoteInstallId`（UUID 字符串）。因此同一台机器对同一 `build`
+的桶位固定，放量只需递增 `rollout_percent`，不会出现「抽中又被收回」。
+
+参考实现：小兔 `core/src/update.cpp` 的 `rollout_bucket` / `rollout_allows`，
+DevCard `core/src/update_manifest.cpp` 的同名函数，Mote
+`modules/update/src/update.cpp` 的 `rolloutBucket` / `rolloutAllows`。
+三处必须逐位一致：改动算法需同一次提交同步三仓库，并更新本节。
+
 ## 七、安装包命名统一（随 v2 一并执行）
 
 规则：小写、连字符分隔，`<product>-<version>-<os>-<arch>-<type>.<ext>`。

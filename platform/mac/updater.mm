@@ -19,6 +19,8 @@ const NSTimeInterval kRequestTimeout = 15.0;
 
 NSString *const kLastCheckAtKey = @"MoteLastUpdateCheckAt";
 NSString *const kSkippedVersionKey = @"MoteSkippedUpdateVersion";
+// 灰度分桶用的安装实例标识：首次生成后长期复用，保证同一台机器落在同一桶
+NSString *const kInstallIdKey = @"MoteInstallId";
 
 bool MoteUpdateLogEnabled()
 {
@@ -51,6 +53,18 @@ NSString *MoteCurrentOsVersion()
     const NSOperatingSystemVersion version = NSProcessInfo.processInfo.operatingSystemVersion;
     return [NSString stringWithFormat:@"%ld.%ld", (long)version.majorVersion,
                                       (long)version.minorVersion];
+}
+
+// 安装实例标识（灰度分桶用）：首次生成 UUID 后写入 NSUserDefaults 长期复用。
+NSString *MoteInstallId()
+{
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    NSString *identifier = [defaults stringForKey:kInstallIdKey];
+    if (identifier.length == 0) {
+        identifier = NSUUID.UUID.UUIDString;
+        [defaults setObject:identifier forKey:kInstallIdKey];
+    }
+    return identifier;
 }
 
 // manifest.json（v2 统一清单）与 appcast.xml 同目录，从 SUFeedURL 推导，
@@ -254,9 +268,10 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
 
     const std::string currentVersion(MoteCurrentVersion().UTF8String);
     const std::string currentOs(MoteCurrentOsVersion().UTF8String);
-    // macOS 无构建号，恒传 0：只比 version
+    const std::string installId(MoteInstallId().UTF8String);
+    // macOS 无构建号，恒传 0：只比 version；灰度按清单里的 build 分桶
     const mote::UpdateDecision decision = mote::decideUpdate(
-        manifest, mote::UpdatePlatform::Macos, currentVersion, currentOs, 0);
+        manifest, mote::UpdatePlatform::Macos, currentVersion, currentOs, 0, installId);
     MoteUpdateLog("current=%s latest=%s os=%s decision=%d", currentVersion.c_str(),
                   manifest.version.c_str(), currentOs.c_str(), static_cast<int>(decision));
 
@@ -278,6 +293,16 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
                          [NSString stringWithFormat:@"最新版本 %@ 需要 macOS %@ 或更高。",
                                                     MoteString(manifest.version),
                                                     MoteString(manifest.min_os)]);
+        }
+        return;
+    case mote::UpdateDecision::RolloutHold:
+        // 灰度分批：后台静默等待下一轮，用户主动检查时说明原因
+        MoteUpdateLog("rollout hold: version=%s percent=%d", manifest.version.c_str(),
+                      manifest.rollout_percent);
+        if (interactive) {
+            MoteRunAlert(@"暂无可用更新",
+                         [NSString stringWithFormat:@"新版本 %@ 正在分批推送中，请稍后再试。",
+                                                    MoteString(manifest.version)]);
         }
         return;
     case mote::UpdateDecision::Available:

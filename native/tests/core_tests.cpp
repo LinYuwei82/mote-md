@@ -325,6 +325,71 @@ static void testUpdate()
           == UpdateDecision::Invalid);
     CHECK(mote::decideUpdate(UpdateManifest{}, UpdatePlatform::Windows, "1.0.1", "10.0", 0)
           == UpdateDecision::Invalid);
+
+    // 灰度分桶：SHA-256(install_id + ":" + build) 取前 4 字节大端 % 100。
+    // 向量与 xiaotu / devcard 同输入同结果（唯一口径，见 docs 6.1）。
+    CHECK_EQ(mote::rolloutBucket("mote-test-install", 202611180530), 7);
+    CHECK_EQ(mote::rolloutBucket("mote-other-install", 202611180530), 36);
+    CHECK(mote::rolloutAllows(100, 99));
+    CHECK(mote::rolloutAllows(8, 7));
+    CHECK(!mote::rolloutAllows(7, 7));
+    CHECK(!mote::rolloutAllows(100, -1)); // 无 install_id 的桶不放行
+    CHECK(mote::rolloutAllows(150, 99));  // 越界按 100 截断
+    CHECK(!mote::rolloutAllows(-1, 0));
+
+    // 灰度清单：解析 rollout_percent / mandatory
+    UpdateManifest rolloutManifest;
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"windows":{"version":"1.0.2","build":202611180530,
+                 "rollout_percent":8,"artifacts":{"portable":{"url":"https://x/a.zip"}}}}})json",
+        UpdatePlatform::Windows, rolloutManifest, nullptr));
+    CHECK_EQ(rolloutManifest.rollout_percent, 8);
+    CHECK(!rolloutManifest.mandatory);
+
+    // 命中灰度（bucket 7 < 8）→ 可更新；未命中 → RolloutHold
+    CHECK(mote::decideUpdate(rolloutManifest, UpdatePlatform::Windows, "1.0.1", "10.0",
+                             202611180000, "mote-test-install")
+          == UpdateDecision::Available);
+    CHECK(mote::decideUpdate(rolloutManifest, UpdatePlatform::Windows, "1.0.1", "10.0",
+                             202611180000, "mote-other-install")
+          == UpdateDecision::RolloutHold);
+    // 未提供 install_id：跳过灰度，保持旧行为
+    CHECK(mote::decideUpdate(rolloutManifest, UpdatePlatform::Windows, "1.0.1", "10.0",
+                             202611180000)
+          == UpdateDecision::Available);
+
+    // rollout_percent=100 全量放行
+    UpdateManifest fullRollout;
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"windows":{"version":"1.0.2","build":202611180530,
+                 "rollout_percent":100,"artifacts":{"portable":{"url":"https://x/a.zip"}}}}})json",
+        UpdatePlatform::Windows, fullRollout, nullptr));
+    CHECK(mote::decideUpdate(fullRollout, UpdatePlatform::Windows, "1.0.1", "10.0", 0,
+                             "mote-other-install")
+          == UpdateDecision::Available);
+
+    // mandatory 绕过灰度
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"windows":{"version":"1.0.2","build":202611180530,
+                 "rollout_percent":1,"mandatory":true,
+                 "artifacts":{"portable":{"url":"https://x/a.zip"}}}}})json",
+        UpdatePlatform::Windows, fullRollout, nullptr));
+    CHECK(fullRollout.mandatory);
+    CHECK(mote::decideUpdate(fullRollout, UpdatePlatform::Windows, "1.0.1", "10.0", 0,
+                             "mote-other-install")
+          == UpdateDecision::Available);
+
+    // 越界 rollout_percent 按边界截断，不让坏字段使整份清单失效
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"windows":{"version":"1.0.2","rollout_percent":150,
+                 "artifacts":{"portable":{"url":"https://x/a.zip"}}}}})json",
+        UpdatePlatform::Windows, fullRollout, nullptr));
+    CHECK_EQ(fullRollout.rollout_percent, 100);
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"windows":{"version":"1.0.2","rollout_percent":-5,
+                 "artifacts":{"portable":{"url":"https://x/a.zip"}}}}})json",
+        UpdatePlatform::Windows, fullRollout, nullptr));
+    CHECK_EQ(fullRollout.rollout_percent, 0);
 }
 
 // ---- Ed25519 验签：与 tools/release/manifest_v2.py 交叉验证 ----
