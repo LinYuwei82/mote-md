@@ -350,7 +350,7 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
 
     // 关掉 WebView2 自带的 HTML5 外部拖放：开着时 Chromium 会占用子窗口的
     // IDropTarget，宿主注册的文件拖放收不到 Drop（拖进来毫无反应）。
-    // 编辑器页面本身不需要 HTML5 拖放，文件拖放统一走 platform/win/drop_target。
+    // 编辑器页面本身不需要 HTML5 拖放，文件拖放统一走 shell/win/drop_target。
     Microsoft::WRL::ComPtr<ICoreWebView2Controller4> controller4;
     if (SUCCEEDED(controller_.As(&controller4)) && controller4)
         controller4->put_AllowExternalDrop(FALSE);

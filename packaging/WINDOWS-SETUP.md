@@ -400,7 +400,7 @@ git log --oneline -3
 git ls-files --eol tools/package/package_macos.sh tools/release/publish_windows.ps1   # 行尾没被弄坏
 ```
 
-改了前端（`resources/web/*`）或 C++（`core/*`、`platform/*`）的话，在对应的平台上重新编译、跑一遍再推。
+改了前端（`resources/web/*`）或 C++（`core/*`、`shell/*`）的话，在对应的平台上重新编译、跑一遍再推。
 
 ---
 

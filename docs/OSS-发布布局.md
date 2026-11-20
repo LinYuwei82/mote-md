@@ -305,7 +305,7 @@ guard.py 在 v2 preflight 里新增了**二进制内 build 号二次校验**：
 | 组件 | 改动 |
 |---|---|
 | CMake 注入 | Mote：`native/CMakeLists.txt` 一处注入 `-DMOTE_BUILD=<int>` + `-DMOTE_BUILD_STR="<int>"`；小兔：顶层只校验 `XIAOTU_BUILD` 必填，实际注入分散在 `shell/win/CMakeLists.txt` 给 updater、`core/CMakeLists.txt` 给 core；DevCard：`cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数注入 `-DDEVCARD_BUILD=<int>` + `-DDEVCARD_BUILD_STR="<int>"`（双宏，整数宏给 core 用、字符串宏给 shell 拼接用） |
-| 壳源码 | 三产品统一模式：`constexpr const char kBuildStamp[] = "<PREFIX>=" <PREFIX>_STR;` 进 .rdata 段。Mote `platform/win/updater.cpp`、小兔 `shell/win/updater_win.cpp`、DevCard `shell/win/main.cpp` 均已落地 |
+| 壳源码 | 三产品统一模式：`constexpr const char kBuildStamp[] = "<PREFIX>=" <PREFIX>_STR;` 进 .rdata 段。Mote `shell/win/updater_win.cpp`、小兔 `shell/win/updater_win.cpp`、DevCard `shell/win/main.cpp` 均已落地 |
 | guard.py | `_BUILD_STAMP_PREFIX = {"mote": b"MOTE_BUILD=", "xiaotu": b"XIAOTU_BUILD=", "devcard": b"DEVCARD_BUILD="}`；`_read_exe_bytes` 解包 zip（绿色包）或用 innounp 解包 setup.exe（ISCC 安装包），搜对应前缀 |
 
 zip 和 setup.exe 里的壳是**同一份编译产物**：两者同时存在时 guard.py 只扫 zip，setup.exe 那条跳过（`✓ setup.exe 同源于已校验的绿色包`）。只有 setup.exe 单独出现时才走 innounp 解包。
@@ -344,7 +344,7 @@ bash mote/tools/release/sync_guard.sh --check-build-str  # 检查三仓库 BUILD
 
 `--check-build-str` 会逐个验证：
 1. CMake 配置是否含构建号注入（Mote / 小兔顶层 CMakeLists.txt 的 `XXX_BUILD_STR` 宏；DevCard `cmake/devcard_version.cmake` 的 `devcard_add_build_stamp()` 函数）
-2. 壳源码是否含 `kBuildStamp[]` 静态字符串（Mote `platform/win/updater.cpp`、小兔 `shell/win/updater_win.cpp`、DevCard `shell/win/main.cpp`）
+2. 壳源码是否含 `kBuildStamp[]` 静态字符串（Mote `shell/win/updater_win.cpp`、小兔 `shell/win/updater_win.cpp`、DevCard `shell/win/main.cpp`）
 3. guard.py `_BUILD_STAMP_PREFIX` 映射是否与实现一致
 DevCard 2026-11-20 起不再跳过，与另外两产品同口径检查。
 

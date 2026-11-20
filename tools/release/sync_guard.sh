@@ -257,9 +257,9 @@ if [ "$CHECK_BUILD_STR" -eq 1 ]; then
 
   local any_fail=0
 
-  # Mote：native/CMakeLists.txt + platform/win/updater.cpp
+  # Mote：native/CMakeLists.txt + shell/win/updater_win.cpp
   check_build_str_compliance "$MOTE_ROOT" "Mote" "MOTE" \
-    "native/CMakeLists.txt" "platform/win/updater.cpp" || any_fail=1
+    "native/CMakeLists.txt" "shell/win/updater_win.cpp" || any_fail=1
 
   # Xiaotu：shell/win/CMakeLists.txt + shell/win/updater_win.cpp
   if [ -d "$MOTE_ROOT/../xiaotu-inventory" ]; then

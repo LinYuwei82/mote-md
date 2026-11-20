@@ -28,7 +28,7 @@ core/                     无 Qt、无平台 API，两个构建共享
   command_table.*         菜单命令表（id / 标题 / 快捷键 / 启用条件）
   export_*.{h,cpp}        PDF/HTML 导出调度（平台实现注入）
   paths.*                 文档目录、临时页面路径
-platform/mac/             ObjC++ 外壳，只有它碰 AppKit
+shell/mac/               ObjC++ 外壳，只有它碰 AppKit
   main.mm                 NSApplication 启动
   app_delegate.mm         生命周期、菜单安装、单实例
   main_window.mm          NSWindow、标题/脏标记、状态栏容器
@@ -116,7 +116,7 @@ public:
 
 | 现有文件 | 处理 |
 |---|---|
-| `macwebview.mm`（825 行） | WKWebView 配置、消息桥、按键 monitor、PDF 抓取与拼页 → 迁到 `platform/mac/`，约 60–70% 逻辑保留 |
+| `macwebview.mm`（825 行） | WKWebView 配置、消息桥、按键 monitor、PDF 抓取与拼页 → 迁到 `shell/mac/`，约 60–70% 逻辑保留 |
 | `webviewbase.cpp`（520 行） | 消息分发、图片落盘、拖放判定 → 改写成 `core/`，去掉 QString/QFile/QDir/QJson |
 | `webwindow.cpp`（1053 行） | 仅保留流程参考；菜单/对话框/导出选择器全部重写为 AppKit |
 | `main.cpp`（79 行） | 入口与字体加载重写；字体改由 CSS `@font-face` 指向包内字体 |

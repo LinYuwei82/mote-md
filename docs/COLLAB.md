@@ -18,15 +18,15 @@ git clone git@gitee.com:lin-yuwei168/mote-md.git
 
 平台专属文件可以两边同时改：
 
-- macOS：`platform/mac/*`、`tools/package/package_macos.sh`
-- Windows：`platform/win/*`、`tools/package/package_windows.ps1`、`packaging/build_installer.ps1` 与 `packaging/mote.iss`（安装包）
+- macOS：`shell/mac/*`、`tools/package/package_macos.sh`
+- Windows：`shell/win/*`、`tools/package/package_windows.ps1`、`packaging/build_installer.ps1` 与 `packaging/mote.iss`（安装包）
 
 **共享处同一时间只允许一台机器改**：
 
 - `core/*`（协议、状态机、菜单表、图片落盘、分片切分、更新判定）
 - `resources/web/*`（`editor.js` / `editor.css` / `editor.html`）
 - `native/CMakeLists.txt`、`VERSION.txt`
-- 其它两端共用的外壳与接口：`platform/*` 里的公共头文件
+- 其它两端共用的外壳与接口：`shell/*` 里的公共头文件
 
 规矩：改之前先 `git pull`；这台机器把改动合入 `main` 之前，另一台不得动同一处。必须并行时先约定到文件级范围（例如一边只改 `editor.js` 的查找部分，另一边只改 CSS），避免同一文件双写。
 

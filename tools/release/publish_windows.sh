@@ -5,7 +5,7 @@
 # 动作：生成 Ed25519 签名的 manifest.json（v2）→ 上传 dl.xiaotu.online → 线上门禁
 #
 # 与 macOS 的分工：
-#   Windows 不用 Sparkle，客户端（platform/win/updater.cpp）自己读 manifest.json、
+#   Windows 不用 Sparkle，客户端（shell/win/updater_win.cpp）自己读 manifest.json、
 #   验 Ed25519 签名、下载、校验 SHA256、静默安装 / 提示手动替换。
 #   artifacts.setup 存在时优先安装版静默升级；否则回落到 artifacts.portable 绿色包。
 #

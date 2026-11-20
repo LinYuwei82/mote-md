@@ -1,4 +1,4 @@
-#include "updater.h"
+#include "updater_win.h"
 
 #include "mote/update.h"
 #include "mote/verify_signature.h"

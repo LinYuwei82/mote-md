@@ -27,7 +27,7 @@
 
 | 方案 | 做法 | 包体 | 风险 | 结论 |
 |---|---|---|---|---|
-| A. Win32/C++ 薄外壳 | 新 `platform/win/`，消息/菜单接 `core/` | 约 1–2 MB exe + Loader，无 Qt DLL | Win32 UI 与 IME 细节 | **推荐** |
+| A. Win32/C++ 薄外壳 | 新 `shell/win/`，消息/菜单接 `core/` | 约 1–2 MB exe + Loader，无 Qt DLL | Win32 UI 与 IME 细节 | **推荐** |
 | B. Qt 外壳接 core | 保留 Qt，只替换协议层 | 仍带 Qt DLL，约 40 MB+ | 低 | 只作为过渡对照，不解决包体 |
 | C. WPF/WinUI + WebView2 | .NET 外壳，core 走 C ABI | 需 .NET 运行时或自包含数十 MB | 跨语言边界、构建链 | 不推荐 |
 
@@ -37,8 +37,8 @@
 
 ```
 core/                          # 两端共用，阶段 A 已就绪
-platform/mac/                  # 现有，不改
-platform/win/
+shell/mac/                     # 现有，不改
+shell/win/
   main.cpp                     # WinMain、消息循环、COM 初始化
   main_window.h/.cpp           # 窗口、文档状态、打开/保存/确认、标题
   menus.h/.cpp                 # core 命令表 → HMENU + 加速键
@@ -128,7 +128,7 @@ native/CMakeLists.txt          # if(APPLE) / elseif(WIN32) 两套 target
 - **快捷键冲突**：`Alt` 菜单键、`Ctrl+Z/Y`、`Ctrl+Shift+Z` 与页面按键可能双触发；`AcceleratorKeyPressed` 统一按命令表分发后双触发已消除，Chromium 层先消费的两条组合键由键盘钩子兜底（见 8.2）。
 - **PDF 差异**：PrintToPdf 的分页由引擎决定，与 mac 的切点排页不同；用同一长文档比对页数与首末页截图，差异写进验收记录。
 - **WebView2 版本**：`PrintToPdf` 需要 Runtime 108+；低于此版本明确报错。
-- **回退**：新外壳只存在于 `platform/win/` 与 CMake 的 WIN32 分支；Qt Windows 构建与 `package_windows.bat` 保持可用，删分支即可回退。
+- **回退**：新外壳只存在于 `shell/win/` 与 CMake 的 WIN32 分支；Qt Windows 构建与 `package_windows.bat` 保持可用，删分支即可回退。
 
 ## 10. 验收标准
 

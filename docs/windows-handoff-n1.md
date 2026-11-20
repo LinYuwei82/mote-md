@@ -7,7 +7,7 @@
 - 仓库：`mote`
 - 分支：`native-shell`
 - 基线：N1 `fa9cb9b`；N2 `4de6776`（以 `git log -1` 为准，本文档自身的提交在其后）
-- 不要修改 `main`、`platform/mac/`、`core/` 的既有行为
+- 不要修改 `main`、`shell/mac/`、`core/` 的既有行为
 - 不要运行 Windows 打包（原生打包在 N5，当前 `packaging/package_windows.bat` 仍是 Qt 流程）
 - 所有改动只提交到 `native-shell`
 
@@ -161,5 +161,5 @@ build-native-win\Release\Mote.exe
 ## 9. 参考
 
 - 设计与里程碑：[`thin-shell-stage-b.md`](thin-shell-stage-b.md)
-- N1 代码：[`platform/win/main_window.cpp`](../platform/win/main_window.cpp)、[`web_host_view.cpp`](../platform/win/web_host_view.cpp)、[`dialogs.cpp`](../platform/win/dialogs.cpp)
-- macOS 对照实现：[`platform/mac/main_window.mm`](../platform/mac/main_window.mm)
+- N1 代码：[`shell/win/main_window.cpp`](../shell/win/main_window.cpp)、[`web_host_view.cpp`](../shell/win/web_host_view.cpp)、[`dialogs.cpp`](../shell/win/dialogs.cpp)
+- macOS 对照实现：[`shell/mac/main_window.mm`](../shell/mac/main_window.mm)

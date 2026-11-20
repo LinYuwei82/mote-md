@@ -72,8 +72,8 @@ core/
   command_table           菜单唯一来源
   inject_chunks           大文档分片切分（UTF-8 安全）
   update                  更新清单解析、版本比较与升级判定
-platform/mac/             AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
-platform/win/             Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
+shell/mac/               AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
+shell/win/               Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
 resources/
   web/editor.html         唯一页面骨架（两个占位符）
   web/editor.css          全部样式（含打印与 PDF 清理）
@@ -153,7 +153,7 @@ docs/                     架构、决策、验收、发行说明
 
 ## 6. 平台宿主实现要点
 
-### 6.1 macOS（`platform/mac/web_host_view.mm`）
+### 6.1 macOS（`shell/mac/web_host_view.mm`）
 
 1. 用 `WKWebView` + `loadFileURL:allowingReadAccessToURL:` 加载隐藏临时页面（P01）。
 2. `WKScriptMessageHandler` 收 `NSDictionary` → `NSJSONSerialization` → JSON 字符串 → `core/json` 解析。
@@ -162,7 +162,7 @@ docs/                     架构、决策、验收、发行说明
 5. **PDF**：见第 7 节。
 6. 诊断：`MOTE_KEYLOG`、`MOTE_EVAL`、`MOTE_SNAPSHOT`、`MOTE_PDF_AS`、`MOTE_EXPORT_AS`。
 
-### 6.2 Windows（`platform/win/web_host_view.cpp`）
+### 6.2 Windows（`shell/win/web_host_view.cpp`）
 
 1. `WebView2Loader.dll` 必须与 exe 同级；CMake 的 POST_BUILD 步骤负责复制，不能写死构建子目录（P33）。
 2. 文档创建前用 `AddScriptToExecuteOnDocumentCreated` 注入消息桥，`editor.js` 一加载就会 `post ready`，桥必须先生效。

@@ -222,8 +222,8 @@ core/                    无平台 API 的共享核心
   command_table          菜单唯一来源
   inject_chunks          大文档分片切分（UTF-8 安全）
   update                 更新清单解析、版本比较与升级判定（两端共用，不碰网络）
-platform/mac/            AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
-platform/win/            Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
+shell/mac/               AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
+shell/win/               Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
 resources/
   web/                   前端编辑器（editor.html / editor.css / editor.js，唯一一份）
   fonts/                 JetBrains Mono（Light）与 OFL.txt

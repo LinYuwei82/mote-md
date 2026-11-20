@@ -6,7 +6,7 @@
 #include "html_export.h"
 #include "menus.h"
 #include "pdf_export.h"
-#include "updater.h"
+#include "updater_win.h"
 #include "web_host_view.h"
 
 #include "core/editor_controller.h"
@@ -43,7 +43,7 @@ constexpr int kMinHeight = 520;
 constexpr UINT_PTR kStartupCommandTimer = 1;
 constexpr UINT_PTR kSnapshotTimer = 2;
 constexpr UINT_PTR kDropProbeTimer = 3;
-// 5 起避开 updater.cpp 的 kUpdateTimer（4），否则 WM_TIMER 会被先匹配走
+// 5 起避开 updater_win.cpp 的 kUpdateTimer（4），否则 WM_TIMER 会被先匹配走
 constexpr UINT_PTR kEvalTimer = 5;
 // 键盘钩子截获的组合键回到窗口线程后，再用这条消息统一走 perform_command
 constexpr UINT kShortcutMessage = WM_APP + 7;

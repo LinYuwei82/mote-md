@@ -19,7 +19,7 @@
 |---|---|
 | `7424e85` | 阶段 A 设计稿 |
 | `9a1f934` | CMake + AppKit + WKWebView 骨架 |
-| `5a2352b` | 平台源码移到 `platform/mac/` |
+| `5a2352b` | 平台源码移到 `shell/mac/` |
 | `437086b` | `core/`：JSON 协议、消息分发、图片落盘、脏标记 + 单测 |
 | `6df4afc` | 菜单命令表（33 个命令） |
 | `d3fb3a0` | 外壳接入 controller：菜单、打开/保存、未保存确认、标题脏标记 |
@@ -74,11 +74,11 @@ Qt 链接：0 行（原生构建应为 0）
 - 剪贴板复制/剪切/粘贴走 AppKit 响应链，与 Qt 版 macwebview 的既有做法一致
 - 命令表新增“全选”，Qt 菜单尚未消费该表，Windows 侧行为未变
 - 源码模式下禁用导出 PDF；其余导出命令已可用
-- `core/export_*` 未单独成文件：导出调度在 `EditorController` 与平台层，PDF/HTML 落盘在 `platform/mac/`
+- `core/export_*` 未单独成文件：导出调度在 `EditorController` 与平台层，PDF/HTML 落盘在 `shell/mac/`
 
 ## 回退
 
-原生外壳完全在 `native-shell` 分支与 `native/`、`platform/mac/`、`core/` 中，不影响 `main` 的 Qt 发布链路。删除分支即可回退。
+原生外壳完全在 `native-shell` 分支与 `native/`、`shell/mac/`、`core/` 中，不影响 `main` 的 Qt 发布链路。删除分支即可回退。
 
 ## 后续（阶段 B）
 

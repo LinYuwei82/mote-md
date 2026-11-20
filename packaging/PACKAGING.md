@@ -702,7 +702,7 @@ Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip 
 
 - **静态 CRT**：CMake 用 `/MT` 链接 MSVC 运行库，目标机器不需要额外安装
   VC++ Redistributable。
-- 程序图标与文件版本由 CMake 从 `platform/win/app.rc.in` 生成 `app.rc` 后编译进 exe，
+- 程序图标与文件版本由 CMake 从 `shell/win/app.rc.in` 生成 `app.rc` 后编译进 exe，
   图标取自 `resources/win/app.ico`，版本号取自仓库根 `VERSION.txt`，都不需要手工同步。
 - WebView2 运行时由目标机器提供（Evergreen），不随包分发；缺运行时时应用会提示安装。
 - 未做代码签名，SmartScreen 可能提示「Windows 已保护你的电脑」，
@@ -742,7 +742,7 @@ Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip 
 - 内置示例 `resources/samples/welcome.md` 同样随构建拷入；发布包额外在包内保留
   `samples/` 与 `licenses/`，方便用户直接打开示例。
 - 图标：macOS 用 `resources/icons/app.icns`（`MACOSX_PACKAGE_LOCATION Resources`），
-  Windows 用 `platform/win/app.rc.in` 引用 `resources/win/app.ico`，版本号字段由 CMake 填充。
+  Windows 用 `shell/win/app.rc.in` 引用 `resources/win/app.ico`，版本号字段由 CMake 填充。
 - 代码字体 JetBrains Mono 以 `.ttf` 形式放在 `resources/fonts/`，构建时拷进产物，
   运行时不依赖系统已安装字体；`OFL.txt` 随发布目录的 `licenses/` 提供。
   回退链为 JetBrains Mono → Menlo → SF Mono → 系统等宽，改动字体时不要破坏这条链。

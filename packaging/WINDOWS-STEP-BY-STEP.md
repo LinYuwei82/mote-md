@@ -164,7 +164,7 @@ git clone https://gitee.com/lin-yuwei168/mote-md.git "$env:USERPROFILE\dev\mote-
 Get-ChildItem "$env:USERPROFILE\dev\mote-md"
 ```
 
-能看到 `native`、`core`、`platform`、`resources`、`packaging`。
+能看到 `native`、`core`、`shell`、`resources`、`packaging`。
 
 报 `fatal: destination path ... already exists` → 第三段第 5 条。
 
@@ -239,7 +239,7 @@ $b=[IO.File]::ReadAllBytes("tools\release\publish_windows.ps1"); "CR=$(( $b -eq 
 
 Trae → **文件 → 打开文件夹** → 选 `C:\Users\<你>\dev\mote-md` → 信任该文件夹。
 
-成功：左侧资源树出现 `native` / `core` / `platform` / `resources` / `packaging`；`Ctrl+P` 输入 `WINDOWS-SETUP` 能打开对应文档。
+成功：左侧资源树出现 `native` / `core` / `shell` / `resources` / `packaging`；`Ctrl+P` 输入 `WINDOWS-SETUP` 能打开对应文档。
 
 检查终端：Trae 里新开的终端右下角应显示 **PowerShell**。
 若是 `WSL` / `bash`，那是另一套环境——SSH 密钥、凭据管理器、行尾规则都不通，切回 PowerShell 再用。

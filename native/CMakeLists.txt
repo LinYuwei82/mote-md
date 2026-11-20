@@ -10,8 +10,8 @@ else()
 endif()
 
 get_filename_component(MOTE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
-set(MOTE_PLATFORM_MAC "${MOTE_REPO_ROOT}/platform/mac")
-set(MOTE_PLATFORM_WIN "${MOTE_REPO_ROOT}/platform/win")
+set(MOTE_SHELL_MAC "${MOTE_REPO_ROOT}/shell/mac")
+set(MOTE_SHELL_WIN "${MOTE_REPO_ROOT}/shell/win")
 
 # 版本号唯一来源：仓库根的 VERSION.txt（单行 x.y.z）
 file(STRINGS "${MOTE_REPO_ROOT}/VERSION.txt" MOTE_VERSION LIMIT_COUNT 1)
@@ -116,22 +116,22 @@ if(WIN32)
   set(MOTE_WIN_ICON "${MOTE_REPO_ROOT}/resources/win/app.ico")
   # rc.exe 以 .rc 所在目录解析相对路径：把图标拷到生成目录，避免绝对路径转义
   configure_file("${MOTE_WIN_ICON}" "${CMAKE_CURRENT_BINARY_DIR}/app.ico" COPYONLY)
-  configure_file("${MOTE_PLATFORM_WIN}/app.manifest" "${CMAKE_CURRENT_BINARY_DIR}/app.manifest" COPYONLY)
+  configure_file("${MOTE_SHELL_WIN}/app.manifest" "${CMAKE_CURRENT_BINARY_DIR}/app.manifest" COPYONLY)
   configure_file(
-    "${MOTE_PLATFORM_WIN}/app.rc.in"
+    "${MOTE_SHELL_WIN}/app.rc.in"
     "${CMAKE_CURRENT_BINARY_DIR}/app.rc"
     @ONLY)
 
   add_executable(Mote WIN32
-    "${MOTE_PLATFORM_WIN}/main.cpp"
-    "${MOTE_PLATFORM_WIN}/main_window.cpp"
-    "${MOTE_PLATFORM_WIN}/menus.cpp"
-    "${MOTE_PLATFORM_WIN}/drop_target.cpp"
-    "${MOTE_PLATFORM_WIN}/dialogs.cpp"
-    "${MOTE_PLATFORM_WIN}/html_export.cpp"
-    "${MOTE_PLATFORM_WIN}/pdf_export.cpp"
-    "${MOTE_PLATFORM_WIN}/updater.cpp"
-    "${MOTE_PLATFORM_WIN}/web_host_view.cpp"
+    "${MOTE_SHELL_WIN}/main.cpp"
+    "${MOTE_SHELL_WIN}/main_window.cpp"
+    "${MOTE_SHELL_WIN}/menus.cpp"
+    "${MOTE_SHELL_WIN}/drop_target.cpp"
+    "${MOTE_SHELL_WIN}/dialogs.cpp"
+    "${MOTE_SHELL_WIN}/html_export.cpp"
+    "${MOTE_SHELL_WIN}/pdf_export.cpp"
+    "${MOTE_SHELL_WIN}/updater_win.cpp"
+    "${MOTE_SHELL_WIN}/web_host_view.cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
 
   target_include_directories(Mote PRIVATE
@@ -142,7 +142,7 @@ if(WIN32)
   # Windows 构建号：同版本清单靠 build 判断是否有新构建；默认 0（未知，跳过
   # build 比较仅按 version），发布脚本用 -DMOTE_BUILD=202611180530 覆盖。
   # 同时以字符串形式注入 MOTE_BUILD_STR（纯前 12 位数字，保持客户端整数比较兼容）
-  # 和 MOTE_BUILD_HASH（短 git hash，可选，用于发布追溯）。updater.cpp 会在二进制里
+  # 和 MOTE_BUILD_HASH（短 git hash，可选，用于发布追溯）。updater_win.cpp 会在二进制里
   # 留一条 "MOTE_BUILD=<digits>" 的可搜索 pattern——guard.py preflight 发布
   # 时会 grep 绿色包/安装包里的 Mote.exe，与 --build 参数比对，防止清单 build
   # 与编译值不一致导致客户端反复提示同一版本（2026-11-19 mote 1.0.4 即因此重发）。
@@ -284,19 +284,19 @@ else()
 
   set(MOTE_EXECUTABLE_NAME "Mote")
   configure_file(
-    "${MOTE_PLATFORM_MAC}/Info.plist.in"
+    "${MOTE_SHELL_MAC}/Info.plist.in"
     "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
     @ONLY)
 
   add_executable(Mote MACOSX_BUNDLE
-    ${MOTE_PLATFORM_MAC}/main.mm
-    ${MOTE_PLATFORM_MAC}/main_window.mm
-    ${MOTE_PLATFORM_MAC}/menus.mm
-    ${MOTE_PLATFORM_MAC}/dialogs.mm
-    ${MOTE_PLATFORM_MAC}/pdf_export.mm
-    ${MOTE_PLATFORM_MAC}/html_export.mm
-    ${MOTE_PLATFORM_MAC}/updater.mm
-    ${MOTE_PLATFORM_MAC}/web_host_view.mm
+    ${MOTE_SHELL_MAC}/main.mm
+    ${MOTE_SHELL_MAC}/main_window.mm
+    ${MOTE_SHELL_MAC}/menus.mm
+    ${MOTE_SHELL_MAC}/dialogs.mm
+    ${MOTE_SHELL_MAC}/pdf_export.mm
+    ${MOTE_SHELL_MAC}/html_export.mm
+    ${MOTE_SHELL_MAC}/updater.mm
+    ${MOTE_SHELL_MAC}/web_host_view.mm
     ${MOTE_WEB_FILES}
     ${MOTE_FONT_FILES}
     ${MOTE_SAMPLE_FILES}

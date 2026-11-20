@@ -47,7 +47,7 @@ powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 | --- | --- | --- |
 | `native/` | **必须** | CMake 工程入口（版本号读仓库根 `VERSION.txt`） |
 | `core/` | **必须** | 两端共用的核心与单测 |
-| `platform/` | **必须** | `mac/` 在 Windows 不编译，但 CMake 会按平台分支，带上更省事 |
+| `shell/` | **必须** | `mac/` 在 Windows 不编译，但 CMake 会按平台分支，带上更省事 |
 | `resources/` | **必须** | 前端页面、字体、示例、`win/` 图标资源 |
 | `VERSION.txt`、`LICENSE` | **必须** | 版本号唯一来源与许可证 |
 | `tools/package/package_windows.ps1` | **必须** | Windows 打包脚本本体 |
