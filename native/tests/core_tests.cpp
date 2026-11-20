@@ -650,8 +650,9 @@ static void testVerifySignature()
     CHECK(!mote::verifyUpdateManifestSignature("[1,2]", kTestPublicKey, &error));
     CHECK(!mote::canonicalUpdateManifestBytes("[1,2]", &canonical, &error));
 
-    // 生产 trust anchor 是 32 字节
-    CHECK(sizeof(mote::kUpdateManifestPublicKey) == 32);
+    // 生产 trust anchor 是 32 字节（Ed25519 公钥固定长度，编译期约束）
+    static_assert(sizeof(mote::kUpdateManifestPublicKey) == 32,
+                  "kUpdateManifestPublicKey must be 32 bytes");
 }
 
 static void testBase64()
