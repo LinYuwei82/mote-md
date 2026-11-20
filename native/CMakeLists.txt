@@ -349,6 +349,9 @@ else()
     target_link_libraries(Mote PRIVATE
       "-F${MOTE_REPO_ROOT}/resources"
       "-framework Sparkle")
+    # Sparkle 2 的头文件以 <Sparkle/Sparkle.h> 引入（与小兔 / DevCard 一致），
+    # 编译期同样需要 framework 搜索路径，否则 __has_include 判不到
+    target_compile_options(Mote PRIVATE "-F${MOTE_REPO_ROOT}/resources")
     # Sparkle 的 install name 是 @rpath/Sparkle.framework/...，必须给出 rpath，
     # 否则运行时 dyld 报 "no LC_RPATH's found" 直接起不来
     target_link_options(Mote PRIVATE

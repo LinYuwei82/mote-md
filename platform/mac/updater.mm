@@ -8,6 +8,16 @@
 #include <cstdlib>
 #include <string>
 
+// Sparkle 2（与小兔 / DevCard 同一套接法）：客户端只用它做下载、验签与替换，
+// 「有没有新版本」由下面的自研 manifest 检查决定，不用 Sparkle 自己的 UI。
+// 未链接 Sparkle 的构建（本地开发）保留浏览器下载兜底。
+#if __has_include(<Sparkle/Sparkle.h>)
+#import <Sparkle/Sparkle.h>
+#define MOTE_HAS_SPARKLE 1
+#else
+#define MOTE_HAS_SPARKLE 0
+#endif
+
 namespace {
 
 // 检查节奏由自研模块决定：启动后延迟一次，之后每 24 小时一次
@@ -116,34 +126,18 @@ void MoteRunAlert(NSString *title, NSString *message)
     [alert runModal];
 }
 
-// 用户同意安装后交给 Sparkle：它自己读 appcast、验 EdDSA 签名、下载并替换。
-// 没有 Sparkle.framework 时退回浏览器下载，保证仍能手动升级。
-void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
-{
-    Class updaterClass = NSClassFromString(@"SUUpdater");
-    if (updaterClass) {
-        MoteUpdateLog("install via Sparkle version=%s", manifest.version.c_str());
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-        // sharedUpdater 是单例；checkForUpdates: 的参数是菜单发送者，这里为 nil
-        [[updaterClass performSelector:@selector(sharedUpdater)]
-            performSelector:@selector(checkForUpdates:)
-                 withObject:nil];
-#pragma clang diagnostic pop
-        return;
-    }
-
-    NSString *url = MoteString(manifest.dmg.url);
-    if (url.length > 0)
-        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
-    MoteRunAlert(@"未安装 Sparkle",
-                 @"当前构建缺少 Sparkle.framework，已为你打开更新包下载地址，请手动安装。");
-}
-
 } // namespace
+
+#if MOTE_HAS_SPARKLE
+@interface MoteUpdater () <SPUUpdaterDelegate>
+@end
+#endif
 
 @implementation MoteUpdater {
     BOOL _started;
+#if MOTE_HAS_SPARKLE
+    SPUStandardUpdaterController *_sparkleController;
+#endif
 }
 
 + (instancetype)sharedUpdater
@@ -269,9 +263,10 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
     const std::string currentVersion(MoteCurrentVersion().UTF8String);
     const std::string currentOs(MoteCurrentOsVersion().UTF8String);
     const std::string installId(MoteInstallId().UTF8String);
-    // macOS 无构建号，恒传 0：只比 version；灰度按清单里的 build 分桶
+    // 本机构建号用编译期内嵌的 MOTE_BUILD（与 Info.plist 的 CFBundleVersion 同源），
+    // 同版本重发时靠它区分，避免装完仍反复提示同一版本
     const mote::UpdateDecision decision = mote::decideUpdate(
-        manifest, mote::UpdatePlatform::Macos, currentVersion, currentOs, 0, installId);
+        manifest, mote::UpdatePlatform::Macos, currentVersion, currentOs, MOTE_BUILD, installId);
     MoteUpdateLog("current=%s latest=%s os=%s decision=%d", currentVersion.c_str(),
                   manifest.version.c_str(), currentOs.c_str(), static_cast<int>(decision));
 
@@ -409,7 +404,59 @@ void MoteInstallWithSparkle(const mote::UpdateManifest &manifest)
     }
 
     [NSUserDefaults.standardUserDefaults removeObjectForKey:kSkippedVersionKey];
-    MoteInstallWithSparkle(manifest);
+    [self installWithManifest:manifest];
 }
+
+- (void)installWithManifest:(const mote::UpdateManifest &)manifest
+{
+#if MOTE_HAS_SPARKLE
+    // 清单检查已经确认有新版本，这里只让 Sparkle 走 appcast → 验签 → 下载 → 替换
+    MoteUpdateLog("install via Sparkle version=%s", manifest.version.c_str());
+    [[[self sparkleController] updater] checkForUpdates];
+#else
+    MoteUpdateLog("Sparkle 未链接，退回浏览器下载 version=%s", manifest.version.c_str());
+    NSString *url = MoteString(manifest.dmg.url);
+    if (url.length > 0)
+        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
+    MoteRunAlert(@"未安装 Sparkle",
+                 @"当前构建缺少 Sparkle.framework，已为你打开更新包下载地址，请手动安装。");
+#endif
+}
+
+#if MOTE_HAS_SPARKLE
+- (SPUStandardUpdaterController *)sparkleController
+{
+    if (_sparkleController == nil) {
+        _sparkleController =
+            [[SPUStandardUpdaterController alloc] initWithStartingUpdater:YES
+                                                        updaterDelegate:self
+                                                     userDriverDelegate:nil];
+    }
+    return _sparkleController;
+}
+
+// 与小兔 / DevCard 一致：更新 UI 由自研清单链路负责，Sparkle 的默认弹窗全部静音，
+// 它只负责下载、验签与替换。
+- (void)updater:(SPUUpdater *)updater didNotFindUpdate:(NSError *)error
+{
+    (void)updater;
+    (void)error;
+}
+
+- (void)updaterUserDidCancel:(SPUUpdater *)updater error:(NSError *)error
+{
+    (void)updater;
+    (void)error;
+}
+
+- (void)updater:(SPUUpdater *)updater
+    didFinishUpdateCycleForUpdate:(SPUStandardUpdaterController *)updaterController
+                            error:(NSError *)error
+{
+    (void)updater;
+    (void)updaterController;
+    (void)error;
+}
+#endif
 
 @end

@@ -131,7 +131,9 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | EXE | `mote/mote-1.0.6-win64-setup.exe` | 2,662,393 | `application/octet-stream` |
 | ZIP | `mote/mote-1.0.6-win64-portable.zip` | 693,311 | `application/zip` |
 
-> 线上清单当前 `windows.build = 202611191435`（macOS 的 `build` 固定 `0`）。
+> 线上清单当前 `windows.build = 202611191435`，`macos.build` 同样由 `gen_build.py` 生成。
+> macOS 客户端自 2026-11-20 起把编译期 `MOTE_BUILD`（与 Info.plist `CFBundleVersion` 同源）
+> 传给更新判定：同版本重发按 build 区分，口径与小兔 / DevCard 一致。
 > Mote macOS 端 CMake configure 默认开启 `MOTE_RELEASE_BUILD=ON`（CI / 发布脚本必开；旧名 `MOTE_STRICT_BUILD` 仍兼容）：
 > `resources/Sparkle.framework` 缺失时 FATAL_ERROR 硬拦截；Sparkle 2.x tarball 已知
 > 缺陷（缺 `Versions/Current` 符号链接）由 configure 自动补建，新机器 setup 无需手动。
