@@ -160,8 +160,15 @@ trap - EXIT
 echo ""
 echo "===== ② EdDSA 签名"
 SIG_ATTRS="$("$SIGN_UPDATE" -f "$SPARKLE_KEY" "$DMG_PATH")"
-ED_SIG="$(echo "$SIG_ATTRS" | sed -E 's/.*edSignature="([^"]+)".*/\1/')"
-[ -n "$ED_SIG" ] || { echo "签名失败" >&2; exit 1; }
+# 只取含 edSignature="..." 的那一行；忽略工具可能附带的调试行（历史事故：
+# 调试行被拼进 appcast.xml，Sparkle 验签失败，应用内更新报「此更新未正确签名」）
+ED_SIG="$(printf '%s\n' "$SIG_ATTRS" | sed -n 's/.*edSignature="\([^"]*\)".*/\1/p' | tail -1)"
+[ -n "$ED_SIG" ] || { echo "签名失败：sign_update 输出中未找到 edSignature" >&2; exit 1; }
+# Ed25519 签名固定 64 字节 → base64 固定 88 字符；不是 88 说明解析到了脏数据
+case "${#ED_SIG}" in
+  88) ;;
+  *) echo "签名长度异常：${#ED_SIG} 字符（应为 88），拒绝继续" >&2; exit 1 ;;
+esac
 echo "  edSignature 长度：${#ED_SIG} 字符"
 
 # ---- ③ 生成 appcast.xml ----
