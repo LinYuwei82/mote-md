@@ -22,6 +22,8 @@
 #include <fstream>
 #include <set>
 #include <sstream>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -276,7 +278,7 @@ static void testUpdate()
     CHECK_EQ(mote::compareVersions("0.3.5-beta", "0.3.5"), 0);
     CHECK_EQ(mote::compareVersions("0.3", "0.3.1"), -1);
 
-    // 判定：macOS 只比 version（currentBuild 不参与）
+    // 判定：macOS 同版本也参与 build 比较（三仓统一口径）
     UpdateManifest macAvailable;
     CHECK(mote::parseUpdateManifest(
         R"json({"platforms":{"macos":{"version":"1.0.1","min_os":"14.0",
@@ -292,6 +294,48 @@ static void testUpdate()
           == UpdateDecision::UpToDate);
     CHECK(mote::decideUpdate(macAvailable, UpdatePlatform::Macos, "1.0.0", "13.6", 0)
           == UpdateDecision::UnsupportedSystem);
+    // 同版本重发：远端 build 更大才提示（与另两仓共用向量表）
+    UpdateManifest macBuild;
+    CHECK(mote::parseUpdateManifest(
+        R"json({"platforms":{"macos":{"version":"1.0.1","build":2026112002,"min_os":"14.0",
+                 "artifacts":{"dmg":{"url":"https://x/a.dmg"}}}}})json",
+        UpdatePlatform::Macos, macBuild, nullptr));
+    CHECK(mote::decideUpdate(macBuild, UpdatePlatform::Macos, "1.0.1", "14.0", 2026112001)
+          == UpdateDecision::Available);
+    CHECK(mote::decideUpdate(macBuild, UpdatePlatform::Macos, "1.0.1", "14.0", 2026112002)
+          == UpdateDecision::UpToDate);
+    CHECK(mote::decideUpdate(macBuild, UpdatePlatform::Macos, "1.0.1", "14.0", 0)
+          == UpdateDecision::UpToDate);
+#ifdef MOTE_UPDATE_VECTORS
+    {
+      std::ifstream in(MOTE_UPDATE_VECTORS);
+      CHECK(in.good());
+      std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+      mote::JsonValue vectors;
+      CHECK(mote::parseJson(text, vectors));
+      const auto &cases = vectors.asObject().at("cases").asArray();
+      for (const auto &item : cases) {
+        const auto &obj = item.asObject();
+        const long long remoteBuild =
+            static_cast<long long>(obj.at("remote_build").asNumber());
+        const long long localBuild =
+            static_cast<long long>(obj.at("local_build").asNumber());
+        const std::string body =
+            R"json({"platforms":{"macos":{"version":")json" +
+            obj.at("remote_version").asString() + R"json(","build":)json" +
+            std::to_string(remoteBuild) +
+            R"json(,"min_os":"0.0","artifacts":{"dmg":{"url":"https://x/a.dmg"}}}}})json";
+        UpdateManifest fromVectors;
+        CHECK(mote::parseUpdateManifest(body, UpdatePlatform::Macos, fromVectors, nullptr));
+        const bool expected = obj.at("newer").asBool();
+        const bool actual =
+            mote::decideUpdate(fromVectors, UpdatePlatform::Macos,
+                               obj.at("local_version").asString(), "10.0", localBuild) ==
+            UpdateDecision::Available;
+        CHECK(actual == expected);
+      }
+    }
+#endif
     // 没有 min_os 时不对系统版本设限
     UpdateManifest macAnyOs;
     CHECK(mote::parseUpdateManifest(

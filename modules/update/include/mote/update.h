@@ -84,10 +84,9 @@ bool parseIso8601Utc(std::string_view text, std::time_t *out);
 bool mandatoryActive(const UpdateManifest &manifest, std::time_t now);
 
 // 结合当前版本与当前系统版本得出该提示什么。
-// macOS 只比 version；Windows 先比 version，同版本再比 build（build 小于等于
+// macOS 与 Windows 同一口径：先比 version，同版本再比 build（build 小于等于
 // 本机 → 无更新）。currentBuild 是本机构建号，来自编译期宏 MOTE_BUILD（见
-// native/CMakeLists.txt；0 表示未知，此时跳过 build 比较仅按 version），
-// macOS 恒传 0。
+// native/CMakeLists.txt；0 表示未知，此时跳过 build 比较仅按 version）。
 //
 // installId 是本机安装实例标识（首次检查更新时生成并持久化）：非空时参与
 // 灰度分桶，命中 rollout_percent 才返回 Available，否则 RolloutHold；

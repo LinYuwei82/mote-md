@@ -87,6 +87,8 @@ endif()
 enable_testing()
 add_executable(mote_core_tests tests/core_tests.cpp)
 target_link_libraries(mote_core_tests PRIVATE mote_update)
+target_compile_definitions(mote_core_tests PRIVATE
+  MOTE_UPDATE_VECTORS="${CMAKE_CURRENT_SOURCE_DIR}/../tools/release/update_compare_vectors.json")
 if(MSVC)
   target_compile_options(mote_core_tests PRIVATE /utf-8 /W4)
 else()
