@@ -96,8 +96,9 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > （三产品同口径，`_BUILD_STAMP_PREFIX` 映射已补齐）。
 > 发布脚本（本地 `publish_windows.ps1 -Build N` 或 GitHub Actions）保证三端同值：
 > CMake 注入 = 清单 build = 发布参数。
-> macOS 段 build 固定 0，跨平台清单必须同时含 `platforms.macos` + `platforms.windows`
-> （`guard.py preflight` 强制，缺失任一 die 拦截）。
+> macOS 段 build 与 Windows 同源（`gen_build.py` 取号，两平台同值；`guard.py preflight`
+> 校验同版本两平台 build 一致，单平台热修需 `--allow-build-drift`），
+> 跨平台清单必须同时含 `platforms.macos` + `platforms.windows`（`guard.py preflight` 强制，缺失任一 die 拦截）。
 
 ### 3.2 小兔进销存（macOS 当前 1.0.6，Windows 当前 1.0.6）
 
@@ -114,7 +115,8 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > 该版为三产品对齐后的首个统一切换版本：包体从 0.9.0 的 2.84 MiB 增至 6.09 MiB（Sparkle.framework 嵌入）；
 > Windows 前端 bridge 已接入（`chrome.webview.hostObjects.updater_win`），应用内下载带百分比进度与 3 次自动重试。
 > macOS 侧自 1.0.3 起把「是否有更新 / 待安装 / 验证期 / 恢复模式」全部改为按 `version`
-> 判定（`platforms.macos.build` 固定 `0`），此前按构建号比较，更新入口实际不可用。
+> 判定（`build` 不参与 macOS 的更新判定，仅用于 Sparkle appcast、灰度分桶与诊断；
+> 清单 `platforms.macos.build` 自 1.0.6 起由 `gen_build.py` 写入真实值），此前按构建号比较，更新入口实际不可用。
 > 发行说明 `xiaotu/release-notes-1.0.6.html` 已于 2026-11-19 补传，清单已含 `notes_url`。
 > dmg 卷名自 1.0.2 起改用英文 `Xiaotu Inventory`（中文卷名在自动化环境
 > 会被 TCC 拦截，见 `make_dmg.sh` 注释）。
@@ -361,7 +363,7 @@ PowerShell 5 在 Windows 上只读 UTF-8 + BOM（`\xef\xbb\xbf`）的 `.ps1`；�
 1. **安装包是 `immutable`**：正常发版必须升版本号；只有修复清单错误而同版本重发时才覆盖同名对象（CNAME 直连、无 CDN，源站立即换字节），重发后核对 SHA256 已变化。`Cache-Control` 只影响客户端侧缓存。
 2. **清单生效**：源站上传即生效；客户端可能因 `max-age=60` 缓存最多 1 分钟，验证时等 1 分钟或加时间戳。下载页版本号由 `site.js` 自动读取，无需改 HTML。
 3. **发布脚本会校验产物**：Mote 校验 dmg 内 `SUFeedURL` 与 appcast 地址一致；guard（v2）校验绿色包内壳 exe 含当前 `manifest.json` 地址、清单 Ed25519 签名与产物 SHA256；不一致直接拒绝上传。
-4. **三个产品已全部迁移到 v2**：当前版本 mote 1.0.6（build `202611191435`，macOS build 固定 0）、xiaotu 1.0.3（build `202611190001`）、devcard 1.2.8（build `202611181646`）。mote 1.0.3 / 1.0.4 全套已于 2026-11-19 从 OSS 清理（8 个对象 10 MB），其余历史保留（devcard 1.2.6/1.2.7、xiaotu 1.0.2）供回滚。
+4. **三个产品已全部迁移到 v2**：当前版本 mote 1.0.6（build `202611191435`，macOS 段在下次 macOS 发布后写入同源 build）、xiaotu 1.0.3（build `202611190001`）、devcard 1.2.8（build `202611181646`）。mote 1.0.3 / 1.0.4 全套已于 2026-11-19 从 OSS 清理（8 个对象 10 MB），其余历史保留（devcard 1.2.6/1.2.7、xiaotu 1.0.2）供回滚。
 5. **历史安装包未完全清零**：devcard 1.2.6 / 1.2.7、xiaotu 1.0.2 的包仍在桶内，作为回滚保留；`manual.pdf`、`release-notes-*.html`、`manifest.json`、`appcast.xml` 长期保留。
 6. `dl.xiaotu.online/logs/` 下是 OSS 每小时访问日志，属系统产出，不在发布范围内。
 7. 桶根的 `devcard/`、`mote/`、`xiaotu/updates/` 等是控制台创建的 0 字节目录占位对象，可忽略。
