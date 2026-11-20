@@ -270,9 +270,9 @@ if [ "$CHECK_BUILD_STR" -eq 1 ]; then
     echo "! 找不到 xiaotu-inventory 仓库，跳过"
   fi
 
-  # DevCard：shell/win/main.cpp 有 kBuildStamp（"DEVCARD_BUILD_STAMP=<digits>"），
+  # DevCard：shell/win/main.cpp 有 kBuildStamp（"DEVCARD_BUILD=<digits>"），
   # 双宏由 cmake/devcard_version.cmake 的 devcard_add_build_stamp() 函数注入
-  # （DEVCARD_BUILD_STAMP=<int> + DEVCARD_BUILD_STAMP_STR="<int>"）。
+  # （DEVCARD_BUILD=<int> + DEVCARD_BUILD_STR="<int>"）。
   if [ -d "$MOTE_ROOT/../dev_card_cpp" ]; then
     check_build_str_compliance "$MOTE_ROOT/../dev_card_cpp" "DevCard" "DEVCARD" \
       "cmake/devcard_version.cmake" "shell/win/main.cpp" || any_fail=1

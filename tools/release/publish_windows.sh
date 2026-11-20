@@ -14,19 +14,19 @@
 #   oss://<bucket>/mote/mote-<ver>-win64-setup.exe   （可选）
 #   oss://<bucket>/mote/updates/stable/manifest.json
 #
-# 构建号：v2 清单 windows 平台必须带 build（客户端同版本比对构建号）。它必须等于
-# Windows 侧编译时的 -DMOTE_BUILD，默认由 tools/release/gen_build.py 自动生成（与
-# tools/package/package_windows.ps1 同一来源，保证与二进制一致）；显式传 BUILD
-# 时优先使用。口径与小兔 / DevCard 的 Windows 发布脚本一致。
+# 构建号：v2 清单 windows 平台必须带 build（客户端同版本比对构建号）。正式发布时
+# build = tag v<semver>+<seq> 的序号（从 1 起，无固定基数），必须等于 Windows 侧
+# 编译时的 -DMOTE_BUILD；发布时应显式传 BUILD=<seq>。未传时用 gen_build.py 兜底，
+# 仅供本地试打包，不能作为正式发布号。
 #
 # 用法：
-#   tools/release/publish_windows.sh                          # build 号自动生成，从 dist/ 自动找 zip
-#   BUILD=202611180930 tools/release/publish_windows.sh       # 显式指定 build 号
-#   BUILD=202611180930 ZIP_PATH=/path/to/portable.zip \
+#   tools/release/publish_windows.sh                          # 未传 BUILD 时用 gen_build.py 兜底（仅试打包）
+#   BUILD=42 tools/release/publish_windows.sh                 # 正式发布：显式指定 build（= tag 序号）
+#   BUILD=42 ZIP_PATH=/path/to/portable.zip \
 #   SETUP_PATH=/path/to/setup.exe tools/release/publish_windows.sh
-#   BUILD=202611180930 NOTES_URL=https://... tools/release/publish_windows.sh
-#   BUILD=202611180930 ROLLOUT_PERCENT=10 tools/release/publish_windows.sh
-#   BUILD=202611180930 MANDATORY=1 MANDATORY_REASON=SECURITY \
+#   BUILD=42 NOTES_URL=https://... tools/release/publish_windows.sh
+#   BUILD=42 ROLLOUT_PERCENT=10 tools/release/publish_windows.sh
+#   BUILD=42 MANDATORY=1 MANDATORY_REASON=SECURITY \
 #     tools/release/publish_windows.sh
 
 set -euo pipefail

@@ -43,8 +43,8 @@ VERSION="$(tr -d '[:space:]' < VERSION.txt)"
 
 # 构建号：纯数字、单调递增。必须与 package_macos.sh 构建时注入 Info.plist 的值一致，
 # 否则客户端 Sparkle 版本比较 / 自研清单 build 比对会出问题。
-# 构建号：显式 MOTE_BUILD 优先，未给则自动从 gen_build.py 生成
-# （year*10^12 + git_count，单调递增，自动校验 > 线上）。
+# 正式发布：build 取 tag v<semver>+<seq> 的序号（从 1 起，无固定基数），应显式传 MOTE_BUILD=<seq>。
+# 未传 MOTE_BUILD 时用 gen_build.py 兜底（year*10^12 + git_count），仅供本地试打包，不可作为正式发布号。
 if [ -n "${MOTE_BUILD:-}" ]; then
   BUILD="$MOTE_BUILD"
   [[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "MOTE_BUILD 必须是纯数字：$BUILD" >&2; exit 1; }

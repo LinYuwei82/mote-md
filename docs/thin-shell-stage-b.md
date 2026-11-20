@@ -1,5 +1,11 @@
 # 阶段 B 设计稿：Windows 去 Qt（原生薄外壳 + WebView2）
 
+> 历史归档：命令与路径可能已过时，勿照做。
+>
+> **当前做法**：阶段 B 已完成，Windows 已去 Qt，版本号唯一来源是仓库根 `VERSION.txt`（不再是 `Mote.pro`）。
+> 构建：`cmake -S native --preset windows-release` → `build/windows`，`cmake --build build/windows`；
+> 打包：`tools/package/package_windows.ps1` → `dist/Mote-Windows/` + `dist/Mote-Windows.zip`。
+
 前置：阶段 A 已把 macOS 换成 AppKit 薄外壳，页面协议、菜单表、图片落盘与脏标记收敛到无 Qt 的 `core/`。本稿只讨论 Windows，macOS 与 `main` 发布链路不动。
 
 ## 1. 目标
@@ -7,7 +13,7 @@
 - Windows 产物不再链接 Qt，与 macOS 共用 `core/`、`resources/web/` 与同一套页面消息协议
 - 保留 0.3.4 的全部行为：编辑、打开/保存、未保存确认、拖放、目录/源码/缩放、PDF/HTML 导出、状态栏
 - 产物只依赖系统 WebView2 Evergreen Runtime，不分发浏览器内核
-- 构建与 macOS 一样用 CMake，版本号仍以 `Mote.pro` 的 `VERSION` 为唯一来源
+- 构建与 macOS 一样用 CMake，版本号仍以仓库根 `VERSION.txt` 为唯一来源
 
 **非目标**：重写编辑器前端、改视觉设计、动 macOS 代码、支持 Windows 7、去掉 WebView2 依赖、统一安装器品牌。
 

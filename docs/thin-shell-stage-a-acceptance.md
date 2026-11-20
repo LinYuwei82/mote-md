@@ -1,5 +1,11 @@
 # 阶段 A 验收记录：macOS 原生薄外壳
 
+> 历史归档：命令与路径可能已过时，勿照做。
+>
+> **当前做法**：构建 `cmake -S native --preset macos-release && cmake --build build/release`；
+> 打包 `tools/package/package_macos.sh`（`--dmg` 额外产出 `dist/Mote-macOS-native-<版本>.dmg`）。
+> 下文的 `.app`/DMG 体积与当时的构建命令是验收时快照。
+
 对应设计稿 [`thin-shell-stage-a.md`](thin-shell-stage-a.md)。范围仅 macOS；Windows 继续用 Qt 构建，未做改动。
 
 ## 结论
@@ -26,7 +32,7 @@
 | `3676182` | 原生拖放与 MOTE_* 诊断钩子 |
 | `96ebb21` | PDF/HTML 导出、状态栏移进前端 |
 | `de78870` | core 状态栏脚本片段 |
-| `533baae` | 打包 `--native`、Qt 链接自检、preflight `--native` |
+| `533baae` | 打包脚本原生模式（当时参数 `--native`，现已移除）、Qt 链接自检、preflight 原生模式 |
 
 `main` 与发布历史未改动，`v0.3.4` 标签未重打。
 
@@ -42,7 +48,7 @@
 
 ## 依赖自检
 
-`tools/package/package_macos.sh --native --dmg` 的最终扫描：
+`tools/package/package_macos.sh --dmg` 的最终扫描（当时还带 `--native`，该参数已移除）：
 
 ```
 Mach-O 文件数：1
@@ -56,8 +62,8 @@ Qt 链接：0 行（原生构建应为 0）
 
 | 项 | 方式 | 结果 |
 |---|---|---|
-| core 单测 | `ctest --test-dir build-native` | 269 项断言通过 |
-| 启动冒烟 | `tools/preflight.sh --native` | `{"textLen":3064,"blocks":34,"imgs":1,"moteApi":true}` |
+| core 单测 | `ctest --test-dir build/release` | 269 项断言通过 |
+| 启动冒烟 | `tools/preflight.sh` | `{"textLen":3064,"blocks":34,"imgs":1,"moteApi":true}` |
 | 打开文档 | 命令行参数 + 截图 | 标题、正文、状态栏正确 |
 | 拖放 `.md` | `MOTE_DROP` | 走未保存确认后打开 |
 | 拖放图片 | `MOTE_DROP` | 写入 `assets/`，页面插入并渲染 |
@@ -83,18 +89,18 @@ Qt 链接：0 行（原生构建应为 0）
 ## 后续（阶段 B）
 
 - Windows 去 Qt 或让 Qt 外壳消费 `core/`（二选一，需单独设计）
-- 版本号统一来自 `Mote.pro` 的 `VERSION`，发布时同步 `app.rc`/安装器
+- 版本号统一来自仓库根 `VERSION.txt`，发布时同步 `app.rc`/安装器（当时取自 `Mote.pro` 的 `VERSION`）
 
 ## 常用命令
 
 ```bash
 # 开发构建
-cmake -S native -B build-native && cmake --build build-native
-ctest --test-dir build-native
+cmake -S native --preset macos-release && cmake --build build/release
+ctest --test-dir build/release
 
 # 原生出包（zip + DMG）
-bash tools/package/package_macos.sh --native --dmg
+bash tools/package/package_macos.sh --dmg
 
 # 本机自检
-bash tools/preflight.sh --native
+bash tools/preflight.sh
 ```

@@ -61,15 +61,15 @@ git status -sb
 1. Mac 跑打包（`tools/package/package_macos.sh`）；
 2. Windows 跑打包；
 3. 两个产物都成功；
-4. 才在 `main` 上打 `vX.Y.Z` 并推；
-5. 另一台 `git pull` 对齐。
+4. 才在 `main` 上打 `v<semver>+<seq>` 并推（`python3 tools/release/release_tag.py create --version <x.y.z> --push`，`build = seq`）；
+5. 另一台 `git pull` 对齐并 fetch tag。
 
 版本号以仓库根 `VERSION.txt` 为准：CMake 读它填 `Info.plist`、Windows 资源版本与 DMG 文件名，
 `resources/win/app.rc` 由 CMake 从 `app.rc.in` 生成，不需要手工同步。
 
 ## 6. 已知事故记录
 
-- **2026-11：Windows 侧的改动让 macOS 编译失败**——`src/macwebview.mm` 里一个匿名命名空间漏了闭合大括号。Windows 构建根本不编译这个文件，本机一路全绿；macOS 拉下来直接编译失败。教训：动跨平台共享层（`src/webviewbase.*`、`src/webpage.*`、`Mote.pro` 等，均已于 2026-11-19 随 Qt 路径删除）必须在两台机器上都编过，不能只看本机通过。`tools/preflight.sh` 就是为这条准备的。
+- **2026-11：Windows 侧的改动让 macOS 编译失败**——`shell/mac/` 下一个匿名命名空间漏了闭合大括号（当时还在旧的 Qt 路径 `src/macwebview.mm`，该文件已随 Qt 路径删除）。Windows 构建根本不编译这个文件，本机一路全绿；macOS 拉下来直接编译失败。教训：动跨平台共享层（`core/*`、`resources/web/*`、`shell/*` 公共头文件）必须在两台机器上都编过，不能只看本机通过。`tools/preflight.sh` 就是为这条准备的。
 
 ## 冲突处理（最简）
 

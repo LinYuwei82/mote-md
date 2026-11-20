@@ -1,5 +1,11 @@
 # Windows 对接说明：合并 `win/paste-fallback` 与 `mac/clipboard-followups`
 
+> 历史归档：命令与路径可能已过时，勿照做。
+>
+> 该合并已完成；文中 `src/webviewbase.cpp` 等 Qt 路径已删除，当前对应实现位于
+> `shell/win/`（剪贴板命令在 `web_host_view.cpp`）与 `resources/web/editor.js`。
+> 第 2 节的三条不变量仍然有效。
+
 这份说明给 Windows 那台用。目的只有一个：把 `win/paste-fallback` 合进 `mac/clipboard-followups` 时，`resources/web/editor.js` 里 `clipboardPaste` 的块外分支只能保留一份实现，且必须同时满足两边的目标。
 
 先读结论：
@@ -12,15 +18,15 @@
 |---|---|---|
 | `mac/clipboard-followups` | `a1ff0fc` | 块外粘贴撤销不再残留空块 |
 | `win/paste-fallback` | `23b6711` | 块外空白区粘贴回退到补段落块 |
-| `win/paste-fallback` | `baa9b22` | 文件列表剪贴板不再当文本粘贴（`src/webviewbase.cpp`，与本次冲突无关） |
+| `win/paste-fallback` | `baa9b22` | 文件列表剪贴板不再当文本粘贴（当时的 `src/webviewbase.cpp`，该文件已删除，与本次冲突无关） |
 
-两条分支的共同祖先都是 `7170de7`，`baa9b22` 只改 `src/webviewbase.cpp`，可以干净合入；冲突只在 `23b6711` 与 `a1ff0fc` 之间。
+两条分支的共同祖先都是 `7170de7`，`baa9b22` 只改当时已删除的 `src/webviewbase.cpp`，可以干净合入；冲突只在 `23b6711` 与 `a1ff0fc` 之间。
 
 ---
 
 ## 1. 背景与冲突点
 
-`clipboardPaste(text)` 是 Windows 才走的入口：`src/webviewbase.cpp` 的 `clipboardCommand()` 读系统剪贴板，文本类内容通过 `evaluateJs("window.mote.clipboardPaste(...)")` 送进页面。macOS 不走这里，走的是 `document` 上的 `paste` 监听。
+`clipboardPaste(text)` 是 Windows 才走的入口：当时 `src/webviewbase.cpp`（现为 `shell/win/web_host_view.cpp`）的 `clipboardCommand()` 读系统剪贴板，文本类内容通过 `evaluateJs("window.mote.clipboardPaste(...)")` 送进页面。macOS 不走这里，走的是 `document` 上的 `paste` 监听。
 
 两块代码的分工不同，所以两边都得改：
 

@@ -1,5 +1,12 @@
 # 阶段 A 设计稿：macOS 原生薄外壳（Windows 暂留 Qt）
 
+> 历史归档：命令与路径可能已过时，勿照做。
+>
+> **当前做法**：阶段 A 已完成并合入，两平台都已去 Qt。构建入口为
+> `cmake -S native --preset macos-release` → `build/release`、`cmake -S native --preset windows-release` → `build/windows`，
+> 构建命令 `cmake --build build/release|build/windows`；打包用 `tools/package/package_macos.sh` /
+> `tools/package/package_windows.ps1`。下文“Windows 暂留 Qt”“`Mote.pro`”等均为当时状态。
+
 ## 1. 目标
 
 - macOS 端去掉 Qt：`Mote.app` 从 49MB 降到约 2MB，DMG 从 24MB 降到约 1.5MB
@@ -91,7 +98,7 @@ public:
 };
 ```
 
-方法集与现有 [webview.h](file:///Users/lin/Projects/mote/src/webview.h) 一一对应，只把 `QString/QUrl` 换成 `std::string`、信号换成 `std::function` 回调（`ready / dirtyChanged / statsChanged / saveRequested / openRequested / exportHtmlReady / pdfExportFinished / ...`）。
+方法集与当时的 `src/webview.h`（现对应 `core/editor_controller.h`）一一对应，只把 `QString/QUrl` 换成 `std::string`、信号换成 `std::function` 回调（`ready / dirtyChanged / statsChanged / saveRequested / openRequested / exportHtmlReady / pdfExportFinished / ...`）。
 
 ### 4.3 关键不变量（迁移时必须保留）
 

@@ -7,9 +7,9 @@
 ### 1. 从 Qt 原生文本引擎改为「原生外壳 + 系统 WebView」
 
 - **问题**：早期用 `QTextDocument`/自绘做编辑器（`backup/` 里留有快照），排版能力与 Markdown 语义（表格、代码块、行内标记）都要自己实现，维护成本高。
-- **选择**：Qt 只做窗口、菜单、文件与打包；正文交给系统 WebView（macOS 为 WKWebView，Windows 计划 WebView2），用 HTML/CSS 渲染 Markdown。
+- **选择**：早期由 Qt 只做窗口、菜单、文件与打包；正文交给系统 WebView（macOS 为 WKWebView，Windows 为 WebView2），用 HTML/CSS 渲染 Markdown。
 - **理由**：排版、选择、输入法、滚动交给系统内核；前端可以用成熟的 HTML/CSS 表达块结构，迭代速度远高于自绘。重构后正文层为零第三方前端依赖（无框架、无 bundler）。
-- **代价**：包体积受 Qt 制约，与架构无关。当前 zip 30,919,184 字节（约 30 MB，与 `dist/` 现有一致），解压 75 MB，其中 `libicudata` 约 32 MB、Qt 框架约 18 MB（见 `packaging/PACKAGING.md`）。想压到 40 MB 以内需要换不带 ICU 的 Qt 构建，尚未做。
+- **代价**：历史 Qt 包体积较大（`libicudata` 约 32 MB、Qt 框架约 18 MB）。**2026-11-19 起 Qt 代码与打包链已整体删除**，当前为 AppKit/Win32 + 系统 WebView 的原生外壳：macOS `.app` 约 4.1 MB、DMG 约 1.7 MB，Windows 绿色包 zip 约 0.7 MB；不再受 Qt 体积制约。
 - **与 Typora 的体积对比**：立项时以 Typora 作为体积参照，但仓库内没有保留当时的对比数字，**未验证**；当前可引用的只有上面这组实测值。
 
 ### 2. 行内编辑的「零位移」
@@ -57,7 +57,7 @@
 ### 8. 快捷键必须注册原生菜单
 
 - **问题**：macOS 的 NSMenu 在网页 `keydown` 之前消费 key equivalent；`Cmd+Z` 甚至会走 responder chain 的 `undo:`，绕开页面。
-- **选择**：所有会在 WebView 内生效的组合键都注册成原生 QAction（撤销/重做另接 `NSEvent` local monitor）。
+- **选择**：所有会在 WebView 内生效的组合键都注册成原生菜单项（macOS `NSMenuItem`，撤销/重做另接 `NSEvent` local monitor）。
 - **理由**：否则「菜单里有、按了没反应」；`Cmd+Shift+Z` 还曾被匹配到「撤销」项（NSMenu 匹配字母时忽略 Shift）。
 - **代价**：菜单项与前端处理逻辑要成对维护；新增快捷键必须检查与现有项是否重复（`MOTE_KEYLOG=1` 会打印全表）。
 
@@ -71,7 +71,7 @@
 ### 10. 工程迁移出 iCloud 与行尾统一
 
 - **问题**：工程原先放在 iCloud「文稿」目录，构建产物每次都会触发同步，影子构建也被拖慢；双机协作还需要统一行尾。
-- **选择**：迁到 `/Users/lin/Projects/mote`；构建放 `$TMPDIR/mote-build`；新增 `.gitattributes`（`* text=auto`、`*.sh eol=lf`、`*.bat/*.cmd eol=crlf`、图片与字体标 `-text`）。
+- **选择**：迁到 `/Users/lin/Projects/mote`；构建统一走 Ninja preset（macOS `build/release`、Windows `build/windows`，见 `native/CMakePresets.json`）；新增 `.gitattributes`（`* text=auto`、`*.sh eol=lf`、`*.bat/*.cmd eol=crlf`、图片与字体标 `-text`）。
 - **理由**：仓库与构建都离开同步目录后，打包稳定且不产生同步噪声；行尾规则让 Windows 克隆拿到 CRLF 的批处理与 LF 的脚本。
 - **代价**：迁移后旧的绝对路径脚本需要改（已改）；`.gitattributes` 生效后 Windows 侧首次检出会出现行尾差异，属预期。
 
@@ -97,8 +97,8 @@
 
 ## 四、分支命名与归属
 
-- **平台专属工作**用 `win/<主题>`、`mac/<主题>`。平台专属文件包括 `src/webview_win*`、`Mote.pro` 的 `win32`/`macx` 作用域、`src/macwebview*`，以及 `packaging/` 下各平台脚本（`package_macos.sh`、`package_windows.bat`、`macos/`、`build_installer.ps1`、`mote.iss`、`setup_windows.ps1`）。
-- **共享代码**（`resources/web/editor.js`、`resources/web/editor.css`、`src/webview.h`、`src/webviewbase*`、`src/webpage*`、`src/webwindow*`、`resources/` 其余内容）的改动可以落在任一功能分支上，但提交信息里要写明「共享层」。
+- **平台专属工作**用 `win/<主题>`、`mac/<主题>`。平台专属文件包括 `shell/win/*`、`shell/mac/*`、`tools/package/package_macos.sh`、`tools/package/package_windows.ps1`，以及 `packaging/` 下的安装包资源（`build_installer.ps1`、`mote.iss`、`macos/` 等）。
+- **共享代码**（`core/*`、`resources/web/editor.js`、`resources/web/editor.css`、`native/CMakeLists.txt`、`resources/` 其余内容）的改动可以落在任一功能分支上，但提交信息里要写明「共享层」。
 - 一条分支上如果混入了另一平台机器的提交，**合并前在 PR 描述里注明**，不通过改写历史来「纠正」。
 - **现状记录（2026-11-11）**：`mac/clipboard` 上除 Mac 侧三笔外，还包含 Windows 机器提交的 `64c8780`、`aa561f9` 两笔共享层修复；内容不涉及 Windows 专属文件，按上述规则处理、不改写历史。
 
@@ -107,10 +107,13 @@
 本节自本提交起生效，不追溯既往：早于本节的提交不要求补写「共享层」，也不要求补建 `win/*` 分支。
 
 - **豁免一**：`mac/clipboard` 的 `ec6d40f`、`7816b7f`、`78f9b79`、`64c8780`、`aa561f9` 五笔未标注「共享层」，不改写历史。
-- **豁免二**：`v0.3.0` 及之前的 Windows 专属改动（`webview_win*`、`Mote.pro` 的 `win32` 作用域、Windows 打包脚本，如 `526904c`、`780d307`、`db1e4b5`、`54df37e`、`378df1d` 等）直接落在 `main`，不追补分支。
+- **豁免二**：`v0.3.0` 及之前的 Windows 专属改动（当时的 `webview_win*`、`Mote.pro` 的 `win32` 作用域、Windows 打包脚本，如 `526904c`、`780d307`、`db1e4b5`、`54df37e`、`378df1d` 等）直接落在 `main`，不追补分支；相关文件已随 Qt 路径删除，此处仅为历史路径。
 - 从下一次 Windows 专属改动起，须新开 `win/<主题>`；共享层改动落在任一功能分支时，须在提交信息写「共享层」。
 
-## 五、0.3.1 的 tag 与后续改动归属
+## 五、0.3.1 的 tag 与后续改动归属（历史）
+
+> 2026-11 起新发布的 tag 统一为 `v<semver>+<seq>`（`build = seq`，从 1 起，无固定基数；
+> `tools/release/release_tag.py create --push`）。本节记录的是旧 `v0.3.1` tag 的处理，不再作为新 tag 规则。
 
 - **`v0.3.1` 保持现状（2026-11-11 决定）**：tag 为 annotated，指向 `bbc0369`；当时 `main` 的 HEAD 是 `c2a3afb`，两者只差发行说明里 macOS 校验值的大小写（纯文档改动，产物零差异）。因此不删除、不重打、也不把 tag 挪到 `c2a3afb`——已发布的引用不轻易改写。
 - **`mac/clipboard-followups` 留到 0.3.2**：该分支上的 `a9f0aa9`（复制保留行内代码反引号）与 `35205c8`（多行粘贴保留换行）是 0.3.1 打包之后的新改动，不并入 0.3.1，也不在 `v0.3.1` 覆盖范围内，待下个版本一并发布。

@@ -1,5 +1,11 @@
 # 阶段 B（Windows 原生外壳）验收记录
 
+> 历史归档：命令与路径可能已过时，勿照做。
+>
+> **当前做法**：构建 `cmake -S native --preset windows-release && cmake --build build/windows`；
+> 打包 `tools/package/package_windows.ps1`，安装包 `packaging/build_installer.ps1`。
+> 下文为 2026-11-14 的验收快照。
+
 日期：2026-11-14
 分支：`native-shell`
 环境：Windows / MSVC 14.44 x64 / CMake + Ninja / WebView2 Runtime 157.0.4341.46
@@ -27,7 +33,7 @@
 | 导出 HTML | 通过 | 含图文档 391 KB，`img src` 全为 data URI；缺图计数并提示；本地路径只留在 `data-raw` 原文 |
 | 导出 PDF | 通过 | 23.7 KB md → PDF 23.3 KB / 6 页；非法目录失败弹「导出失败」，两次均还原 `pdf-export` 类 |
 | 打包 | 通过 | exe 632,832 + loader 165,968 字节，zip 607,489 字节；依赖仅系统 DLL，无 Qt |
-| 版本信息 | 通过 | 文件/产品版本 0.3.4，自动取自 `Mote.pro` |
+| 版本信息 | 通过 | 文件/产品版本 0.3.4，当时自动取自 `Mote.pro`（现为仓库根 `VERSION.txt`） |
 | 快照基线 | 通过 | `MOTE_EVAL` 44 blocks、`cjk=909 words=345`；PNG 1180×800 / 105,464 字节 |
 | 原子保存 | 通过 | 正常保存 / 另存为后覆盖均成功，无 `.tmp-*` 残留；目标被 `FileShare.Read` 占用时弹「保存失败」，原文件不变 |
 | `MOTE_DROP` | 通过 | 拖 `.md` 直接打开目标、原文件不变；拖 56×34 PNG 落到同级 `assets/`，插入 `![](assets/probe.png)` |

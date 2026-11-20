@@ -1,5 +1,11 @@
 # Windows N1 实机验证交接单
 
+> 历史归档：命令与路径可能已过时，勿照做。
+>
+> **当前做法**：Windows 构建走 `cmake -S native --preset windows-release` → `build/windows`，
+> 构建命令 `cmake --build build/windows`；产物 `build/windows/Mote.exe`（Ninja 单配置，无 `Release/` 子目录）。
+> 打包用 `tools/package/package_windows.ps1`。下文 N1/N2 的命令与目录是当时的交接快照。
+
 给在 Windows 上验证阶段 B N1 的同事。macOS 侧已实现并验证，Windows 代码尚未在本机编译过，这份清单是唯一的验收依据。
 
 ## 1. 代码与边界
@@ -8,7 +14,7 @@
 - 分支：`native-shell`
 - 基线：N1 `fa9cb9b`；N2 `4de6776`（以 `git log -1` 为准，本文档自身的提交在其后）
 - 不要修改 `main`、`shell/mac/`、`core/` 的既有行为
-- 不要运行 Windows 打包（原生打包在 N5，当前 `packaging/package_windows.bat` 仍是 Qt 流程）
+- 不要运行 Windows 打包（当时原生打包在 N5，Qt 流程已删除；当前打包脚本为 `tools/package/package_windows.ps1`）
 - 所有改动只提交到 `native-shell`
 
 ## 2. 环境
@@ -28,15 +34,15 @@ CMake 会在 configure 阶段检查 `%WEBVIEW2_SDK%\build\native\include\WebView
 ```bat
 cd /d <仓库路径>
 set WEBVIEW2_SDK=C:\dev\webview2sdk\pkg
-cmake -S native -B build-native-win -A x64
-cmake --build build-native-win --config Release
-build-native-win\Release\Mote.exe "C:\path\带空格 的中文.md"
+cmake -S native --preset windows-release
+cmake --build build/windows
+build\windows\Mote.exe "C:\path\带空格 的中文.md"
 ```
 
 构建后应自动生成：
 
 ```
-build-native-win\Release\
+build\windows\
   Mote.exe
   WebView2Loader.dll
   web\editor.html / editor.css / editor.js
@@ -44,7 +50,7 @@ build-native-win\Release\
   samples\welcome.md
 ```
 
-若缺少 `web\` 或 `WebView2Loader.dll`，先检查 CMake 第 92 行附近的拷贝命令是否执行。
+若缺少 `web\` 或 `WebView2Loader.dll`，检查 CMake 的资源拷贝规则是否执行。
 
 ## 4. 冒烟清单
 
@@ -145,7 +151,7 @@ NATIVE save <path>
 set MOTE_COMMAND=togglesource
 set MOTE_KEYLOG=1
 set MOTE_LOG=%TEMP%\mote.log
-build-native-win\Release\Mote.exe
+build\windows\Mote.exe
 ```
 
 页面就绪约 700ms 后执行一次指定命令。可用值：`new`、`open`、`save`、`saveas`、`exporthtml`、`exportpdf`、`toggletoc`、`togglesource`、`toggledark`、`followsystem`、`zoomin`、`zoomout`、`zoomreset`。

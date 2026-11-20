@@ -1,9 +1,13 @@
 # Mote 架构：外壳 + 系统 WebView
 
+> 历史归档：命令与路径可能已过时，勿照做。
+>
+> **当前实现**：`shell/mac/`（AppKit + WKWebView）与 `shell/win/`（Win32 + WebView2），
+> 共享核心在 `core/`；构建走 `native/CMakePresets.json` 的 `macos-release` / `windows-release`。
+> 分层与职责以 [技术方案](技术方案.md) 第 2、3 节为准。
+>
 > **历史说明（2026-11-19）**：本文写于 Qt 外壳时代，文中的 `src/webview.h`、
 > `src/macwebview.mm`、`src/webview_win.cpp` 等文件已随 Qt 路径删除。
-> 当前实现是 `shell/mac/`（AppKit + WKWebView）与 `shell/win/`（Win32 + WebView2），
-> 共享核心在 `core/`；分层与职责以 [技术方案](技术方案.md) 第 2、3 节为准。
 > 下面的块模型、消息协议与前端约定仍然有效。
 
 状态：MVP 已跑通（打开 → 编辑 → 保存 → 未保存提示），并已补齐代码块语法高亮与

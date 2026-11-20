@@ -1,5 +1,11 @@
 # mote 空行折叠修复 · 手工验证清单
 
+> 历史归档：命令与路径可能已过时，勿照做。
+>
+> **当前做法**：macOS `cmake -S native --preset macos-release && cmake --build build/release`；
+> Windows `cmake -S native --preset windows-release && cmake --build build/windows`。
+> 下面的用例本身仍可作为回归清单使用。
+
 **适用改动**：让块与块之间的空行数量在保存后保持原样（此前固定拼 `\n\n`，连续多个空行会被归并）。
 **状态**：改动已落地——core 层纯函数 `core/block_layout.*`（`68fa133`）与前端 `resources/web/editor.js`（`4bb2046`）。Windows 上已用 7 组文档跑「载入 → 保存」字节级往返，全部一致；本清单余下的交互项（选区、查找、undo/redo、双平台）仍未手工验证。
 **依据**：[`WEBVIEW-ARCHITECTURE.md`](WEBVIEW-ARCHITECTURE.md) 的「3.1 唯一数据源与块模型」与「5. 明确降级 / 延后」。
@@ -11,8 +17,8 @@
 
 | 项 | 做法 |
 |---|---|
-| macOS 构建 | `cmake -S native -B build/release && cmake --build build/release`，产物在 `build/release/` |
-| Windows 构建 | 推送后取 GitHub Actions 的 CI 产物，或本地 `cmake -S native -B build/windows -G Ninja -DMOTE_BUILD=<时间戳>` |
+| macOS 构建 | `cmake -S native --preset macos-release && cmake --build build/release`，产物在 `build/release/` |
+| Windows 构建 | 推送后取 GitHub Actions 的 CI 产物，或本地 `cmake -S native --preset windows-release && cmake --build build/windows` |
 | 测试文档 | 新建 `blank-lines.md`，内容按下面各用例填写；另存一份副本用于比对 |
 | 字节级比对 | macOS：`cat -A blank-lines.md`（行尾 `$`，空行是一行只有 `$`）；或 `python3 -c "print(open('blank-lines.md','rb').read().count(b'\n\n\n'))"` |
 | 保存前后对比 | 保存前 `cp blank-lines.md before.md`，保存后 `diff before.md blank-lines.md`，期望无输出 |

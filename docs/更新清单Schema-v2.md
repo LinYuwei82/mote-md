@@ -3,8 +3,10 @@
 > 状态：**迁移完成**（2026-11-18 全量上线并退役 v1）。
 > 全链路完成：生成器 `manifest_v2.py`、guard v2 检查、三仓库发布脚本、
 > 三个客户端解析 + Ed25519 验签、下载页改读 manifest.json；
-> 新内测版已发布：当前线上为 mote 1.0.6（Windows build `202611191435`）、
+> 新内测版已发布：当前线上为 mote 1.0.6（Windows build 为旧编号 `202611191435`）、
 > xiaotu 1.0.3（build `202611190001`）、devcard 1.2.8（build `202611181646`）。
+> **构建号口径（当前）**：正式发布的 tag 为 `v<semver>+<seq>`，`build = seq`
+> （从 1 起、无固定基数）；下面的日期构建号只出现在历史发布记录里。
 > 升级链路实测全绿后，v1 清单（`latest.json` / `windows.json`）已全部删除
 > （`appcast.xml` 永久保留）。`guard.py --schema v1` 参数已于 2026-11-19 移除，
 > 强制 v2。
@@ -18,8 +20,9 @@
 > mote 1.0.4 按此规则重发。
 > 2026-11-19：小兔 1.0.3（macOS build `202611181448`）起，macOS 的「是否有更新 / 待安装 /
 > 验证期 / 恢复模式」全部按 `version` 判定。此前 `platforms.macos.build` 恒为 `0`，却被拿去
-> 和本地日期构建号比较，导致 macOS 更新入口实际不可用；现在 macOS 段的 `build` 仅作占位，
-> 不参与任何判定（见第 6 节）。
+> 和本地日期构建号比较，导致 macOS 更新入口实际不可用；当时把 macOS 段的 `build` 仅作占位。
+> **2026-11-20 起 Mote macOS 也注入真实 `MOTE_BUILD`，同版本重发可按 build 区分；
+> 当前两端判定口径一致（先比 version，同版本再比 build）。**
 > 2026-11-19：小兔 1.0.3 的发行说明页已补传（`xiaotu/release-notes-1.0.3.html`，3,886 字节），
 > 清单已重签并在 `platforms.macos` / `platforms.windows` 写入 `notes_url`。
 > 2026-11-19：DevCard 1.2.8 已发布——WebView 内没有 Ed25519，远端清单改由本地服务端
@@ -33,7 +36,7 @@
 > 2026-11-19：`manifest_v2.py resign` 扩展为可改 `notes_url`（`--notes-url`），
 > 补发说明页无需重新打包；三份线上清单（devcard 1.2.8、xiaotu 1.0.3、mote 1.0.4）
 > 现均含该字段。工具改动已通过 `sync_guard.sh` 同步到另外两个仓库。
-> 2026-11-20：DevCard BUILD_STR 双宏落地（`DEVCARD_BUILD_STAMP=<int>` + `DEVCARD_BUILD_STAMP_STR="<int>"`），guard.py 对三产品做相同的 BUILD_STR 二次校验不再跳过 DevCard，selftest 补 DevCard 正向用例；sync_guard.sh `--check-build-str` 覆盖 DevCard；DevCard Windows 发版前验证工具 `verify_build_stamp.ps1`（零依赖 PowerShell 5，7 PASS + T7 SKIP，见[发布工作流 §4.1](./发布工作流.md#devcard-windows-构建号注入验证步骤每次发版前必跑)）；三仓库新增 UTF-8 BOM 三道闸（`.gitattributes` + `tools/hooks/pre-commit` + `setup-hooks.ps1`）。
+> 2026-11-20：DevCard BUILD_STR 双宏落地（`DEVCARD_BUILD=<int>` + `DEVCARD_BUILD_STR="<int>"`），guard.py 对三产品做相同的 BUILD_STR 二次校验不再跳过 DevCard，selftest 补 DevCard 正向用例；sync_guard.sh `--check-build-str` 覆盖 DevCard；DevCard Windows 发版前验证工具 `verify_build_stamp.ps1`（零依赖 PowerShell 5，7 PASS + T7 SKIP，见[发布工作流 §4.1](./发布工作流.md#devcard-windows-构建号注入验证步骤每次发版前必跑)）；三仓库新增 UTF-8 BOM 三道闸（`.gitattributes` + `tools/hooks/pre-commit` + `setup-hooks.ps1`）。
 > 日期：2026-11-20
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 > 背景：三款产品均在内测期、无存量用户，趁此窗口把清单格式一次统一，
@@ -74,7 +77,7 @@
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `version` | string | 是 | semver，如 `1.0.2`；平台间版本独立递增 |
-| `build` | int | 是 | Windows 构建号：小兔 `XIAOTU_BUILD`、Mote `MOTE_BUILD`、DevCard `DEVCARD_BUILD`，必须等于二进制内编译时的值（如 `202611181542`），见 3.4；macOS 固定 `0`，不参与任何更新判定 |
+| `build` | int | 是 | 两端都由编译期宏注入：小兔 `XIAOTU_BUILD`、Mote `MOTE_BUILD`、DevCard `DEVCARD_BUILD`，必须等于二进制内编译时的值，见 3.4。正式发布取 tag `v<semver>+<seq>` 的序号（从 1 起，无固定基数）；客户端同版本时再比 build |
 | `min_os` | string | 是 | 如 `14.0` / `10.0` |
 | `notes_url` | string | 否 | 发布说明页，绝对 https 地址；客户端「查看更新详情」直接打开；缺省不发 |
 | `rollout_percent` | int | 否 | 0–100，缺省 `100`（灰度用） |
@@ -106,17 +109,17 @@ key 枚举：`dmg`（macOS 安装包）/ `setup`（Windows 安装版）/ `portab
 必填规则：`macos.artifacts` 至少含 `dmg`；`windows.artifacts` 至少含 `setup` 或 `portable`。
 客户端遇到未知的 artifacts key / 未知字段一律忽略，保证未来可扩展。
 
-### 3.4 构建号一致性（Windows 必读）
+### 3.4 构建号一致性（两端必读）
 
-`build` 不是「发布时刻」的流水号，而是**编译进二进制**的构建号。三产品注入机制统一，但宏名略有差异：
+`build` 不是「发布时刻」的流水号，而是**发布 tag 的序号**，并且必须原样编译进二进制。三产品注入机制统一，但宏名略有差异：
 
 | 产品 | 整数宏（CMake configure 直接注入，写进 CMakeCache） | 字符串宏（壳源码拼接 BUILD_STR 用） | 壳源码 BUILD_STR 位置 |
 |---|---|---|---|
-| Mote | `-DMOTE_BUILD=<UTC yyyyMMddHHmm>` | `-DMOTE_BUILD_STR="<UTC>"`（`native/CMakeLists.txt` 一处注入） | `shell/win/updater_win.cpp`：`constexpr kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR` |
-| 小兔 | `-DXIAOTU_BUILD=<UTC>` | `-DXIAOTU_BUILD_STR="<UTC>"`（顶层只校验，实际注入分散在 `shell/win/CMakeLists.txt` 给 updater、`core/CMakeLists.txt` 给 core） | `shell/win/updater_win.cpp`：`constexpr kBuildStamp[] = "XIAOTU_BUILD=" XIAOTU_BUILD_STR` |
-| DevCard | `-DDEVCARD_BUILD_STAMP=<UTC>`（函数注入） | `-DDEVCARD_BUILD_STAMP_STR="<UTC>"`（`cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数同时注入双宏） | `shell/win/main.cpp`：`constexpr kBuildStamp[] = "DEVCARD_BUILD_STAMP=" DEVCARD_BUILD_STAMP_STR` |
+| Mote | `-DMOTE_BUILD=<seq>` | `-DMOTE_BUILD_STR="<seq>"`（`native/CMakeLists.txt` 一处注入） | `shell/win/updater_win.cpp`：`constexpr kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR` |
+| 小兔 | `-DXIAOTU_BUILD=<seq>` | `-DXIAOTU_BUILD_STR="<seq>"`（顶层只校验，实际注入分散在 `shell/win/CMakeLists.txt` 给 updater、`core/CMakeLists.txt` 给 core） | `shell/win/updater_win.cpp`：`constexpr kBuildStamp[] = "XIAOTU_BUILD=" XIAOTU_BUILD_STR` |
+| DevCard | `-DDEVCARD_BUILD=<seq>`（函数注入） | `-DDEVCARD_BUILD_STR="<seq>"`（`cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数同时注入双宏） | `shell/win/main.cpp`：`constexpr kBuildStamp[] = "DEVCARD_BUILD=" DEVCARD_BUILD_STR` |
 
-DevCard 双宏原因：core 模块里的 `compiled_build_number()` 需要纯整数宏做 `static_cast<uint64_t>`；shell 里的 BUILD_STR 需要字符串宏做 C++ 字符串字面量拼接。**分开注入、各司其职，缺一不可**。guard.py 统一搜索的前缀是 `b"DEVCARD_BUILD_STAMP="`。
+DevCard 双宏原因：core 模块里的 `compiled_build_number()` 需要纯整数宏做 `static_cast<uint64_t>`；shell 里的 BUILD_STR 需要字符串宏做 C++ 字符串字面量拼接。**分开注入、各司其职，缺一不可**。guard.py 统一搜索的前缀是 `b"DEVCARD_BUILD="`。
 
 三者不一致的后果：
 
@@ -138,7 +141,7 @@ setup.exe  ──→ innounp 解包壳  ──→ 同上
 | zip + setup 同时存在 | 只扫 zip（壳是同一份编译产物，等价）；setup 那条跳过 `✓ setup.exe 同源于已校验的绿色包` |
 | 只有 zip | 解包 zip → 扫壳 EXE（Mote `Mote.exe` / 小兔 `xiaotu-shell.exe` / DevCard `DevCard.exe`） → 比对 |
 | 只有 setup | innounp 解包 ISCC 安装包 → 扫内部壳 EXE → 比对 |
-| 三产品统一前缀 | `_BUILD_STAMP_PREFIX = {"mote": b"MOTE_BUILD=", "xiaotu": b"XIAOTU_BUILD=", "devcard": b"DEVCARD_BUILD_STAMP="}`，不再跳过 DevCard |
+| 三产品统一前缀 | `_BUILD_STAMP_PREFIX = {"mote": b"MOTE_BUILD=", "xiaotu": b"XIAOTU_BUILD=", "devcard": b"DEVCARD_BUILD="}`，不再跳过 DevCard |
 
 比对不一致 → **阻断发布**（ExitCode 1，`die()`），再也不会出现"清单 build 大于安装包内值"的事故。
 
@@ -158,10 +161,10 @@ setup.exe 是 Inno Setup 6 压缩包，直接读字节找不到内部壳 EXE。g
 实际生效的值传给发布步骤。发布后按[发布工作流](./发布工作流.md) 第 6 节核对。
 
 **DevCard 与小兔 / Mote 全链路对齐（2026-11-20 最终完成）**：此前 DevCard Windows 客户端没有可靠的本机构建号（版本资源第 4 段恒 `0`），同版本不比 `build`、修复只能升 `version`。现通过 `cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数，同时注入两个独立宏：
-- `DEVCARD_BUILD_STAMP=<UTC>`（整数宏，`core` 里 `static_cast<uint64_t>` 用）
-- `DEVCARD_BUILD_STAMP_STR="<UTC>"`（字符串宏，`shell/win/main.cpp` 里拼接 `"DEVCARD_BUILD_STAMP=" DEVCARD_BUILD_STAMP_STR` 进 BUILD_STR 静态字符串）
+- `DEVCARD_BUILD=<seq>`（整数宏，`core` 里 `static_cast<uint64_t>` 用）
+- `DEVCARD_BUILD_STR="<seq>"`（字符串宏，`shell/win/main.cpp` 里拼接 `"DEVCARD_BUILD=" DEVCARD_BUILD_STR` 进 BUILD_STR 静态字符串）
 
-guard.py 2026-11-20 起对三产品做相同的 BUILD_STR 二次校验，`_BUILD_STAMP_PREFIX["devcard"] = b"DEVCARD_BUILD_STAMP="`，selftest 也补了 DevCard 正向用例（绿色包 `DevCard.exe` 含 `DEVCARD_BUILD_STAMP=<digits>`）。未注入时 `compiled_build_number()` 返回 0，自动跳过 build 比较，向后兼容。
+guard.py 2026-11-20 起对三产品做相同的 BUILD_STR 二次校验，`_BUILD_STAMP_PREFIX["devcard"] = b"DEVCARD_BUILD="`，selftest 也补了 DevCard 正向用例（绿色包 `DevCard.exe` 含 `DEVCARD_BUILD=<digits>`）。未注入时 `compiled_build_number()` 返回 0，自动跳过 build 比较，向后兼容。
 
 DevCard Windows 发版前验证工具：`dev_card_cpp/tools/release/verify_build_stamp.ps1`（零依赖纯 PowerShell 5，一次性跑通 **cmake 双宏注入 → CMakeCache 落盘 → devcard_core_tests 运行时断言 → DevCard.exe BUILD_STR 字节 grep → 无注入回退链路 → manifest 生成对齐** 6 项验证 + 1 项可选签名验证）。完整运行命令、覆盖项表、实测输出示例见 [发布工作流 §4.1 验证步骤](./发布工作流.md#devcard-windows-构建号注入验证步骤每次发版前必跑)。
 
@@ -230,21 +233,19 @@ DevCard Windows 发版前验证工具：`dev_card_cpp/tools/release/verify_build
 }
 ```
 
-> 示例取自线上 1.0.6 清单（签名保留完整值）。与 1.0.4 残缺 DMG（750 KB、缺
+> 示例取自线上 1.0.6 清单（签名保留完整值；该版生成于旧口径，macOS `build` 仍为 0，
+> 新发布的清单一律两端写真实 `MOTE_BUILD`）。与 1.0.4 残缺 DMG（750 KB、缺
 > Sparkle.framework）不同，1.0.6 DMG 含完整 Sparkle.framework（`.app` 约 4.2 MB），
-> macOS 端自动更新恢复正常。`notes_url` 本版未写（`docs/release-notes-1.0.6.html`
-> 暂缺），客户端不显示「查看更新详情」按钮。
+> macOS 端自动更新恢复正常。生成该清单时 `docs/release-notes-1.0.6.html` 尚未上传，
+> 故 `notes_url` 为空；该页现已补齐，后续发布脚本会自动带上。
 
 ## 六、客户端解析规则
 
 1. 只取 `platforms.<自己的平台>`，忽略另一平台与一切未知字段。
 2. 更新判定：
-   - macOS：只比 `version`，`build` 固定 `0` 且不参与任何判定。三产品 macOS 壳同口径。
-   - Windows：小兔、Mote、DevCard 三产品先比 `version`，同版本再比 `build`
-     （DevCard 2026-11-19 补齐 CMake 注入机制后与小兔 / Mote 对齐，
-     未注入时 `compiled_build_number()` 返回 0 自动跳过 build 比较，向后兼容），
-     清单 `build` 必须与安装包内编译值逐位相同，否则同版本会反复提示，见 3.4。
-   - 修复只能靠递增 `version`；构建号只在「同版本重发也要让客户端感知」时有意义。
+   - macOS 与 Windows 口径一致：先比 `version`，同版本再比 `build`；本机 build 未知（≤0）时跳过 build 比较。
+   - 正式发布的 `build` 取 tag `v<semver>+<seq>` 的序号；清单 `build` 必须与安装包内编译值逐位相同，否则同版本会反复提示，见 3.4。
+   - 同版本重发靠递增序号让客户端感知；需要改变产品版本时仍要递增 `version`。
 3. 产物选择：Windows 安装版读 `artifacts.setup`，绿色包读 `artifacts.portable`；
    macOS 读 `artifacts.dmg`。
 4. 校验顺序：

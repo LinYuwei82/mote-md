@@ -1,14 +1,20 @@
 # Mote 复刻技术方案（交给 AI 的重建手册）
 
+> 历史归档：命令与路径可能已过时，勿照做。
+>
+> **当前做法（先看这里）**：外壳已是纯原生（macOS AppKit + WKWebView，Windows Win32 + WebView2），
+> 目录为 `core/`、`shell/mac/`、`shell/win/`、`resources/web/`、`native/`、`tools/`、`packaging/`、`docs/`。
+> 构建：`cmake -S native --preset macos-release` → `build/release`；`cmake -S native --preset windows-release` → `build/windows`；
+> 构建命令 `cmake --build build/release|build/windows`。打包：`tools/package/package_macos.sh`（`--dmg` 额外出 DMG）、
+> `tools/package/package_windows.ps1`、`packaging/build_installer.ps1`。发布：tag `v<semver>+<seq>`，`build = seq`。
+> 下文写于 Qt 外壳时代，`Mote.pro` / `src/` / qmake / `macdeployqt` 等仅作历史参考；
+> 当前架构以 [技术方案](技术方案.md)、[WEBVIEW-ARCHITECTURE](WEBVIEW-ARCHITECTURE.md)
+> 与 `native/CMakeLists.txt` 为准。
+
 > 目的：让另一个 AI 在不重复试错的前提下，按本文件重建 Mote 这个项目。
 > 结论先行：**外壳是原生实现（macOS：AppKit + WKWebView；Windows：Win32 + WebView2），正文交给系统 WebView；前端是零依赖的原生 JS，靠一套「块模型 + 零位移标记」维持所见即所得；PDF 与复制等平台能力全部回到原生侧实现，不依赖网页 API。**
 >
 > 本文件只写有代码或文档依据的结论。标注「未验证」的条目不要当成设计承诺。
->
-> **历史说明**：本文件主体写于 Qt 外壳时代。Qt 构建路径（`Mote.pro` + `src/`）已于
-> 2026-11-19 删除，文中涉及 qmake / macdeployqt / `src/` 的段落仅作历史参考；
-> 当前架构与构建方式以 [技术方案](技术方案.md)、[WEBVIEW-ARCHITECTURE](WEBVIEW-ARCHITECTURE.md)
-> 与 `native/CMakeLists.txt` 为准。
 
 **目录**：0 产品定义 · 1 验收线 · 2 选型与硬约束 · 3 文件地图 · 4 块模型 · 5 消息协议 · 6 平台宿主 · 7 PDF · 8 构建打包 · 9 调试验证 · 10 坑清单（P01–P39）· 11 重建路线 · 12 禁止事项 · 13 已知限制 · 14 最小骨架 · 15 打包坑点详解
 
@@ -81,7 +87,8 @@ resources/
   fonts/                  JetBrains Mono（Light/Regular/Bold）+ OFL
   icons/ samples/         图标、内置示例
   win/                    Windows 图标资源（app.ico）
-packaging/                package_macos.sh / package_windows.ps1 / PACKAGING.md
+tools/package/             package_macos.sh / package_windows.ps1
+packaging/                 build_installer.ps1 / mote.iss / macos 资源
 tools/preflight.sh        干净目录构建 + 启动冒烟（macOS）
 docs/                     架构、决策、验收、发行说明
 ```
@@ -550,13 +557,13 @@ function mountBlocks(blocks) {
 
 ## 15. 打包坑点详解（macOS / Windows）
 
-本节细化第 10 节 G 组（P30–P35）。打包是「代码都对、包一跑就崩」的高发区，建议直接照抄 `tools/package/package_macos.sh`、`packaging/package_windows.bat`、`packaging/mote.iss` 的处理顺序。
+本节细化第 10 节 G 组（P30–P35）。打包是「代码都对、包一跑就崩」的高发区，建议直接照抄 `tools/package/package_macos.sh`、`tools/package/package_windows.ps1`、`packaging/mote.iss` 的处理顺序。
 
 ### 15.1 macOS
 
 **M01 工程放在 iCloud「文稿」等同步目录，签名必失败**
 FileProvider 会反复给 `.app` 写 `com.apple.FinderInfo`，`codesign` 报 `resource fork, Finder information, or similar detritus not allowed`。
-→ 构建目录、zip 暂存、DMG 暂存全部放 `$TMPDIR`（脚本用 `mote-build` / `mote-stage` / `mote-dmg`）；签名前 `xattr -cr`，并显式删除 `com.apple.FinderInfo` 与 `com.apple.fileprovider.fpfs#P`。
+→ 构建目录固定 `build/release`（每次打包清空重建），zip / DMG 暂存放 `$TMPDIR`（脚本用 `mote-stage` / `mote-dmg`）；签名前 `xattr -cr`，并显式删除 `com.apple.FinderInfo` 与 `com.apple.fileprovider.fpfs#P`。
 
 **M02 标准按钮显示英文**
 `macdeployqt` 不部署 Qt 翻译，`QMessageBox` 的「保存 / 不保存 / 取消」来自 `qtbase_zh_CN.qm`。

@@ -54,11 +54,11 @@ bash tools/package/package_macos.sh --dmg
 # 体积约 4.1 MB（.app，含 Sparkle.framework） / DMG 约 1.7 MB
 ```
 
-**发布前有三层门禁（2026-11-19 起），杜绝 1.0.4 残缺 DMG 回归：**
+**发布前有四层门禁（2026-11-19 起），杜绝 1.0.4 残缺 DMG 回归：**
 
 | 层 | 位置 | 行为 |
 |---|---|---|
-| configure | CMakeLists.txt `-DMOTE_STRICT_BUILD=ON` | Sparkle.framework 缺失 → **FATAL_ERROR** |
+| configure | CMakeLists.txt `-DMOTE_RELEASE_BUILD=ON` | Sparkle.framework 缺失 → **FATAL_ERROR**（旧名 `MOTE_STRICT_BUILD` 仍兼容） |
 | configure 自动修复 | CMakeLists.txt（macOS 分支） | Sparkle 2.x tarball 缺 `Versions/Current` 符号链接 → 自动探测并补建 |
 | 打包脚本 | `package_macos.sh` | `.app/Contents/Frameworks/Sparkle.framework` 必须存在 + `.app ≥ 1024 KB` → exit 1 |
 | 发布脚本 | `publish_macos.sh` | DMG 内同样双保险 |
@@ -68,9 +68,9 @@ Sparkle 2.x tarball（如 `Sparkle-2.7.0.tar.xz`）已知缺陷：顶层符号�
 configure 阶段会自动探测 `Versions/` 下唯一子目录（如 `B`）并补建
 `Current -> B`，**新机器 setup 不用再手动 `ln -sfn B Current`**——CMake 自动处理。
 
-开发机本地开发如果没有 Sparkle，可以不加 `-DMOTE_STRICT_BUILD=ON`，configure
+开发机本地开发如果没有 Sparkle，可以不加 `-DMOTE_RELEASE_BUILD=ON`，configure
 只会 WARNING 并继续；产物缺 framework 时应用内更新会退回浏览器下载。
-**CI 和正式发布脚本一律传 `-DMOTE_STRICT_BUILD=ON`**。
+**CI 和正式发布脚本一律传 `-DMOTE_RELEASE_BUILD=ON`**。
 
 `tools/preflight.sh` 可在干净构建后跑一次启动冒烟。
 
@@ -116,8 +116,8 @@ powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 | Windows 安装包（exe，可选） | `mote/mote-<version>-win64-setup.exe` |
 
 ```bash
-bash tools/package/package_macos.sh --dmg   # 签名 + 公证 + DMG
-bash tools/release/publish_macos.sh                  # 公证门禁 → EdDSA 签名 → appcast + manifest.json → 上传 → 线上校验
+BUILD=<seq> bash tools/package/package_macos.sh --dmg   # seq = tag 序号；签名 + 公证 + DMG
+BUILD=<seq> bash tools/release/publish_macos.sh         # 公证门禁 → EdDSA 签名 → appcast + manifest.json → 上传 → 线上校验
 ```
 
 发布脚本会自动检测 `docs/release-notes-<版本>.html`：存在就上传到
@@ -133,12 +133,24 @@ powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1   # �
 在 macOS 上发布 Windows 包时用等价的 bash 脚本（读同一份 `~/.config/xiaotu-updates/.env`）：
 
 ```bash
-BUILD=<与 Windows 构建时 -DMOTE_BUILD 相同的值> \
+BUILD=<seq> \
   bash tools/release/publish_windows.sh              # 定位产物 → 清单 → 上传 → 线上校验
 ```
 
-- 产物定位：绿色包默认取 `dist/Mote-<版本>-win64-portable.zip`，不存在时回落 `dist/Mote*.zip`；安装包自动找 `dist/*setup*.exe`（也可用 `ZIP_PATH` / `SETUP_PATH` 显式指定）。
-- `BUILD` 必填，且必须等于 Windows 构建时的 `-DMOTE_BUILD`：清单 `build` 比安装包新会让客户端反复提示同一版本。
+**发布号与构建号（2026-11 起）**：正式发布只从 annotated tag `v<semver>+<seq>` 触发，
+`build = seq`（从 1 起，无固定基数，tag 里的 semver 必须等于 `VERSION.txt`）。本地创建并推送 tag：
+
+```bash
+python3 tools/release/release_tag.py create --version <x.y.z> --push   # 自动取下一个序号
+```
+
+CI 用 `release_tag.py parse --ensure-latest` 解析 tag 并注入 `MOTE_BUILD`；GitHub Actions
+手动触发「Windows 发布」时必须显式填写 build。手动打包/发布时要显式传 `MOTE_BUILD=<seq>`
+或 `BUILD=<seq>`，保证清单、二进制与 tag 序号一致；不传时脚本会用 `tools/release/gen_build.py`
+兜底生成，仅供本地试打包，不能当作正式发布号。
+
+- 产物定位：绿色包默认取 `dist/Mote-<版本>-win64-portable.zip`，不存在时回落 `dist/Mote*.zip`（含打包脚本默认的 `dist/Mote-Windows.zip`）；安装包自动找 `dist/Mote-Setup-*.exe`（也可用 `ZIP_PATH` / `SETUP_PATH` 显式指定）。
+- 正式发布必须显式传 `BUILD=<seq>`（seq = tag 序号，与 Windows 构建时的 `-DMOTE_BUILD` 相同）：清单 `build` 比安装包新会让客户端反复提示同一版本。
 - 官网与下载页统一由 `web/` 维护：ECS 用 `deploy_site.sh` 发布，备案前的 OSS 镜像用 `publish_site_oss.sh` 发布。旧的单页 `site/index.html` 与 `publish_site.ps1` 已退役，`dl.xiaotu.online` 根路径只做跳转，不再承载页面。
 - 版本号只改仓库根的 `VERSION.txt`（单行 `x.y.z`），各发布脚本与 CMake 都从那里读。
 - 发布说明页：把 `docs/release-notes-<版本>.html` 放进仓库即可，macOS 与 Windows 发布脚本都会自动上传并写进清单 `notes_url`，客户端弹窗据此显示「查看完整更新说明…」。要指向外部页面时用 `NOTES_URL`（绝对地址）覆盖，此时脚本不再上传本地文件；缺页则不写该字段，老清单与老客户端都不受影响。已发布版本可用 `tools/release/manifest_v2.py resign --notes-url <地址>` 补发，无需重新打包。
@@ -195,9 +207,9 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 ## 已知限制
 
 - **仅 arm64**：macOS 包只含 arm64 切片，Intel Mac 需自行重新构建。
-- **发布包需 Developer ID + 公证**：正式产物由 `package_macos.sh` 签名并公证；跳过公证（`--skip-notarize`）的包只适合本机验证，不适合分发。
+- **发布包需 Developer ID + 公证**：`package_macos.sh` 把签名证书与 notarytool 凭据作为硬性前提，不满足直接失败；已删除 `--skip-sign` / `--skip-notarize` 旁路参数。
 - **更新包强制 EdDSA 验签**：Sparkle 2 不接受只签 Developer ID 的更新包；签名私钥只在发布机上，丢失后无法为已发布版本续签。
-- **macOS 包只依赖系统框架**：正式发布一律带 Sparkle.framework（`.app` 约 4.1 MB、DMG 约 1.7 MB），由 `MOTE_STRICT_BUILD=ON` + `package_macos.sh` / `publish_macos.sh` 三层门禁硬拦截缺 framework 的产物；WebKit 由系统提供。
+- **macOS 包只依赖系统框架**：正式发布一律带 Sparkle.framework（`.app` 约 4.1 MB、DMG 约 1.7 MB），由 `MOTE_RELEASE_BUILD=ON` + `package_macos.sh` / `publish_macos.sh` 多层门禁硬拦截缺 framework 的产物；WebKit 由系统提供。
 - **源码模式无语法高亮**：`Cmd+E` 下是纯文本编辑区。
 - **查找/替换不跨块**：可以在所有块之间跳转命中，但单个命中不会跨越块边界或行内标记。
 - **上下方向键不跨块**：跨块移动光标需鼠标点击。
@@ -205,7 +217,7 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 - **链接跳转**：`Cmd+Click` 外部链接（http/https/mailto）与相对路径的 `.md`；**锚点链接**（`#标题`）按 GitHub 风格的 slug 在文档内跳转（中文保留、去标点、空格转 `-`，重名标题依次加 `-1`、`-2`），未命中时状态栏提示「未找到对应标题」；**图片**按 `img` 渲染，没有 `<a>` 包裹，`Cmd+Click` 不触发任何跳转（相对路径图片仍按文档目录正常显示与导出内嵌）。
 - **导出 HTML 是「网页快照」**：单文件、无外部依赖、无脚本；导出后不提供任何交互（链接仍可点，但任务复选框是静态图形）。
 - **导出能力两端已对齐**：macOS 与 Windows 的 PDF、HTML 导出均已实现并验收；分页切点由各自 WebView 引擎决定。
-- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；当前双平台均为 1.0.6（Windows build `202611191435`），更早的 `0.3.10`、`1.0.3`、`1.0.4` 的 OSS 包已清理，升级路径不再逐一冒烟；**1.0.4 的 macOS 包曾因缺 Sparkle.framework（DMG 750 KB）导致应用内更新退回浏览器下载**，该残缺包已从 OSS 删除，且 `MOTE_STRICT_BUILD=ON` + 打包/发布脚本三层门禁硬拦截缺 framework 的产物，后续不会再出现同类包；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证（Windows 现在会对可重试错误自动重试 3 次）；Windows 安装版静默安装并自动重启，绿色版下载校验后提示、自动退出并打开所在目录，由用户解压覆盖。
+- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；当前双平台均为 1.0.6（Windows build 仍是旧编号 `202611191435`，下个版本起 `build` = tag 序号），更早的 `0.3.10`、`1.0.3`、`1.0.4` 的 OSS 包已清理，升级路径不再逐一冒烟；**1.0.4 的 macOS 包曾因缺 Sparkle.framework（DMG 750 KB）导致应用内更新退回浏览器下载**，该残缺包已从 OSS 删除，且 `MOTE_RELEASE_BUILD=ON` + 打包/发布脚本多层门禁硬拦截缺 framework 的产物，后续不会再出现同类包；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证（Windows 现在会对可重试错误自动重试 3 次）；Windows 安装版静默安装并自动重启，绿色版下载校验后提示、自动退出并打开所在目录，由用户解压覆盖。
 - **OSS 在中国香港**：国内下载偏慢；备案完成后把回源迁到国内桶，`dl.xiaotu.online` 域名不变，已安装客户端无需改动。
 - **任务复选框的复制**：复制处理器剔除隐藏标记；脚本用 `DataTransfer` 走产品同一条 `copy` 处理逻辑验证，真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 - 目录在源码模式下隐藏；正在编辑的块在重排前标题高亮可能滞后一帧。
@@ -221,7 +233,7 @@ core/                    无平台 API 的共享核心
   image_store            assets/ 落盘与重名处理
   command_table          菜单唯一来源
   inject_chunks          大文档分片切分（UTF-8 安全）
-  update                 更新清单解析、版本比较与升级判定（两端共用，不碰网络）
+modules/update/          更新清单解析、版本比较与升级判定（两端共用，不碰网络）
 shell/mac/               AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
 shell/win/               Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
 resources/
@@ -231,7 +243,7 @@ resources/
   samples/               内置示例文档与示例图
   win/                   Windows 资源脚本（图标）
   Sparkle.framework      macOS 更新框架（构建时拷进 bundle，已 gitignore）
-packaging/               打包脚本（macOS / Windows）、Inno Setup 配置、nginx 与证书续期脚本
+packaging/               Inno Setup 配置、公证 entitlements、nginx 与证书续期脚本
 tools/release/           发布脚本：清单生成与签名、双平台发布、官网同步、guard 校验
 web/                     官网静态站（xiaotu.online 的唯一来源，deploy_site.sh 同步到 ECS）
 icon-design/             应用图标设计稿与导出脚本（fonts/ 与 __pycache__/ 不入库）
@@ -247,13 +259,15 @@ VERSION.txt              版本号唯一来源（单行 x.y.z）
 - [docs/发布工作流.md](docs/发布工作流.md)：从打包到 OSS 上线、补发说明页、凭据位置与验收命令
 - [docs/OSS-发布布局.md](docs/OSS-发布布局.md)：三个产品在 OSS 上的对象布局、缓存策略与体积
 - [docs/更新清单Schema-v2.md](docs/更新清单Schema-v2.md)：manifest.json 字段、验签规则与 `resign` 用法
-- [docs/release-notes-1.0.4.html](docs/release-notes-1.0.4.html)：1.0.4 发布说明（Windows 编码识别、构建号修正；线上 `notes_url` 指向此页）
+- [docs/release-notes-1.0.4.html](docs/release-notes-1.0.4.html)：1.0.4 发布说明（Windows 编码识别、构建号修正；当时线上 `notes_url` 指向此页）
 - [docs/release-notes-1.0.3.html](docs/release-notes-1.0.3.html) / [1.0.2](docs/release-notes-1.0.2.html) / [1.0.1](docs/release-notes-1.0.1.html) / [1.0.0](docs/release-notes-1.0.0.html)：1.0 各版发布说明
 - [docs/release-notes-0.3.9.md](docs/release-notes-0.3.9.md) / [docs/release-notes-0.3.10.md](docs/release-notes-0.3.10.md)：0.3.x 近期版本发行说明（Windows 应用内更新、新图标）
-- [docs/thin-shell-stage-a.md](docs/thin-shell-stage-a.md) / [docs/thin-shell-stage-b.md](docs/thin-shell-stage-b.md)：macOS / Windows 薄外壳设计与里程碑
-- [docs/thin-shell-stage-a-acceptance.md](docs/thin-shell-stage-a-acceptance.md) / [docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)：macOS / Windows 原生外壳验收记录
-- [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)：Windows 实机验证交接单
-- [packaging/PACKAGING.md](packaging/PACKAGING.md)：打包、产物、干净环境验证与逐项验收记录
+- [docs/thin-shell-stage-a.md](docs/thin-shell-stage-a.md) / [docs/thin-shell-stage-b.md](docs/thin-shell-stage-b.md)：macOS / Windows 薄外壳设计稿（历史归档）
+- [docs/thin-shell-stage-a-acceptance.md](docs/thin-shell-stage-a-acceptance.md) / [docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)：macOS / Windows 原生外壳验收记录（历史归档）
+- [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)：Windows 实机验证交接单（历史归档）
+- [docs/REBUILD-GUIDE.md](docs/REBUILD-GUIDE.md)：复刻技术手册（主体为 Qt 时代，历史归档）
+- [docs/回滚Runbook.md](docs/回滚Runbook.md)：清单 / appcast / 整版本回退的紧急操作
+- [packaging/PACKAGING.md](packaging/PACKAGING.md)：打包、产物与验收记录（含 Qt 时代历史数据，当前命令以本节与脚本为准）
 - [docs/WEBVIEW-ARCHITECTURE.md](docs/WEBVIEW-ARCHITECTURE.md)：分层、消息协议、按键链路与前端块模型
 - [docs/COLLAB.md](docs/COLLAB.md)：macOS + Windows 双机协作（clone、分工、冲突、Windows 环境）
 - [tools/preflight.sh](tools/preflight.sh)：本机自检（仓库状态 → 独立目录构建 → macOS 启动冒烟）

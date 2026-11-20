@@ -87,7 +87,7 @@ jobs:
 
       - name: 构建原生外壳
         run: |
-          # 构建号：正式发布由 tag v<semver>+<seq> 决定（build = 基数 + 序号）；
+          # 构建号：正式发布由 tag v<semver>+<seq> 决定（build = 序号，从 1 起，无固定基数）；
           # 手动触发必须显式给 build，避免出现不由发布记录决定的构建号。
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
             $parsed = python tools\release\release_tag.py parse --ensure-latest --tag $env:GITHUB_REF_NAME --emit sh

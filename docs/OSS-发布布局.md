@@ -1,6 +1,7 @@
 # OSS 发布布局（安装包 / 更新清单 / 手册 / 官网）
 
 > 更新日期：2026-11-20（末尾更新 2026-11-20：DevCard BUILD_STR 双宏落地 + guard.py selftest 补充 DevCard 正向用例 + sync_guard.sh --check-build-str 覆盖 DevCard；三仓库新增 UTF-8 BOM 三道闸）
+> **当前发布口径**：正式发布从 tag `v<semver>+<seq>` 触发，`build = seq`（从 1 起，无固定基数）；下面带日期的版本号与构建号是发布当时的快照，最新值以线上 `manifest.json` 为准。
 > 数据来源：`oss://xiaotu-update`、`oss://xiaotu-site` 线上对象与元数据实测
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 >
@@ -85,7 +86,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > 1.2.4 只发过 macOS、1.2.5 为过渡版本，二者已于 2026-11-19 清理。
 >
 > DevCard Windows 构建号机制（2026-11-20 与小兔 / Mote 全链路对齐）：
-> CMake configure 传 `-DDEVCARD_BUILD=<UTC yyyyMMddHHmm>`，由
+> CMake configure 传 `-DDEVCARD_BUILD=<tag 序号>`，由
 > `cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数同时注入
 > 两个宏：`DEVCARD_BUILD=<int>` 给 core 用、`DEVCARD_BUILD_STR="<int>"`
 > 给 shell 的 BUILD_STR 拼接用（`shell/win/main.cpp` 里
@@ -96,7 +97,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > （三产品同口径，`_BUILD_STAMP_PREFIX` 映射已补齐）。
 > 发布脚本（本地 `publish_windows.ps1 -Build N` 或 GitHub Actions）保证三端同值：
 > CMake 注入 = 清单 build = 发布参数。
-> macOS 段 build 与 Windows 同源（`gen_build.py` 取号，两平台同值；`guard.py preflight`
+> macOS 段 build 与 Windows 同源（正式发布取 tag `v<semver>+<seq>` 的序号，两平台同值；`guard.py preflight`
 > 校验同版本两平台 build 一致，单平台热修需 `--allow-build-drift`），
 > 跨平台清单必须同时含 `platforms.macos` + `platforms.windows`（`guard.py preflight` 强制，缺失任一 die 拦截）。
 
@@ -116,7 +117,7 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > Windows 前端 bridge 已接入（`chrome.webview.hostObjects.updater_win`），应用内下载带百分比进度与 3 次自动重试。
 > macOS 侧自 1.0.3 起把「是否有更新 / 待安装 / 验证期 / 恢复模式」全部改为按 `version`
 > 判定（`build` 不参与 macOS 的更新判定，仅用于 Sparkle appcast、灰度分桶与诊断；
-> 清单 `platforms.macos.build` 自 1.0.6 起由 `gen_build.py` 写入真实值），此前按构建号比较，更新入口实际不可用。
+> 清单 `platforms.macos.build` 自 1.0.6 起写入真实值），此前按构建号比较，更新入口实际不可用。
 > 发行说明 `xiaotu/release-notes-1.0.6.html` 已于 2026-11-19 补传，清单已含 `notes_url`。
 > dmg 卷名自 1.0.2 起改用英文 `Xiaotu Inventory`（中文卷名在自动化环境
 > 会被 TCC 拦截，见 `package_macos.sh` 注释）。
@@ -131,10 +132,10 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 | EXE | `mote/mote-1.0.6-win64-setup.exe` | 2,662,393 | `application/octet-stream` |
 | ZIP | `mote/mote-1.0.6-win64-portable.zip` | 693,311 | `application/zip` |
 
-> 线上清单当前 `windows.build = 202611191435`，`macos.build` 同样由 `gen_build.py` 生成。
-> macOS 客户端自 2026-11-20 起把编译期 `MOTE_BUILD`（与 Info.plist `CFBundleVersion` 同源）
-> 传给更新判定：同版本重发按 build 区分，口径与小兔 / DevCard 一致。
-> Mote macOS 端 CMake configure 默认开启 `MOTE_RELEASE_BUILD=ON`（CI / 发布脚本必开；旧名 `MOTE_STRICT_BUILD` 仍兼容）：
+> 线上清单里 `windows.build` 是发布当时的旧编号（`202611191435`）；从下一个版本起
+> `build` = tag 序号。macOS 客户端自 2026-11-20 起把编译期 `MOTE_BUILD`（与 Info.plist
+> `CFBundleVersion` 同源）传给更新判定：同版本重发按 build 区分，口径与小兔 / DevCard 一致。
+> Mote 的发布构建由脚本 / CI 显式传 `MOTE_RELEASE_BUILD=ON`（旧名 `MOTE_STRICT_BUILD` 仍兼容）：
 > `resources/Sparkle.framework` 缺失时 FATAL_ERROR 硬拦截；Sparkle 2.x tarball 已知
 > 缺陷（缺 `Versions/Current` 符号链接）由 configure 自动补建，新机器 setup 无需手动。
 > 发布脚本（`package_macos.sh` / `publish_macos.sh`）各加一层硬门禁：
@@ -304,7 +305,7 @@ guard.py 在 v2 preflight 里新增了**二进制内 build 号二次校验**：
 
 | 组件 | 改动 |
 |---|---|
-| CMake 注入 | Mote：`native/CMakeLists.txt` 一处注入 `-DMOTE_BUILD=<int>` + `-DMOTE_BUILD_STR="<int>"`；小兔：顶层只校验 `XIAOTU_BUILD` 必填，实际注入分散在 `shell/win/CMakeLists.txt` 给 updater、`core/CMakeLists.txt` 给 core；DevCard：`cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数注入 `-DDEVCARD_BUILD=<int>` + `-DDEVCARD_BUILD_STR="<int>"`（双宏，整数宏给 core 用、字符串宏给 shell 拼接用） |
+| CMake 注入 | Mote：`native/CMakeLists.txt` 一处注入 `-DMOTE_BUILD=<int>` + `-DMOTE_BUILD_STR="<int>"` + `-DMOTE_BUILD_HASH=<短 commit>`；小兔：顶层只校验 `XIAOTU_BUILD` 必填，实际注入分散在 `shell/win/CMakeLists.txt` 给 updater、`core/CMakeLists.txt` 给 core；DevCard：`cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数注入 `-DDEVCARD_BUILD=<int>` + `-DDEVCARD_BUILD_STR="<int>"`（双宏，整数宏给 core 用、字符串宏给 shell 拼接用） |
 | 壳源码 | 三产品统一模式：`constexpr const char kBuildStamp[] = "<PREFIX>=" <PREFIX>_STR;` 进 .rdata 段。Mote `shell/win/updater_win.cpp`、小兔 `shell/win/updater_win.cpp`、DevCard `shell/win/main.cpp` 均已落地 |
 | guard.py | `_BUILD_STAMP_PREFIX = {"mote": b"MOTE_BUILD=", "xiaotu": b"XIAOTU_BUILD=", "devcard": b"DEVCARD_BUILD="}`；`_read_exe_bytes` 解包 zip（绿色包）或用 innounp 解包 setup.exe（ISCC 安装包），搜对应前缀 |
 
@@ -365,7 +366,7 @@ PowerShell 5 在 Windows 上只读 UTF-8 + BOM（`\xef\xbb\xbf`）的 `.ps1`；�
 1. **安装包是 `immutable`**：正常发版必须升版本号；只有修复清单错误而同版本重发时才覆盖同名对象（CNAME 直连、无 CDN，源站立即换字节），重发后核对 SHA256 已变化。`Cache-Control` 只影响客户端侧缓存。
 2. **清单生效**：源站上传即生效；客户端可能因 `max-age=60` 缓存最多 1 分钟，验证时等 1 分钟或加时间戳。下载页版本号由 `site.js` 自动读取，无需改 HTML。
 3. **发布脚本会校验产物**：Mote 校验 dmg 内 `SUFeedURL` 与 appcast 地址一致；guard（v2）校验绿色包内壳 exe 含当前 `manifest.json` 地址、清单 Ed25519 签名与产物 SHA256；不一致直接拒绝上传。
-4. **三个产品已全部迁移到 v2**：当前版本 mote 1.0.6（build `202611191435`，macOS 段在下次 macOS 发布后写入同源 build）、xiaotu 1.0.3（build `202611190001`）、devcard 1.2.8（build `202611181646`）。mote 1.0.3 / 1.0.4 全套已于 2026-11-19 从 OSS 清理（8 个对象 10 MB），其余历史保留（devcard 1.2.6/1.2.7、xiaotu 1.0.2）供回滚。
+4. **三个产品已全部迁移到 v2**：当前线上版本 / 构建号以各自 `updates/stable/manifest.json` 为准；正式发布的 `build` 取 tag 序号（从 1 起，无固定基数），旧日期编号只保留在历史发布记录中。mote 1.0.3 / 1.0.4 全套已于 2026-11-19 从 OSS 清理（8 个对象 10 MB），其余历史保留（devcard 1.2.6/1.2.7、xiaotu 1.0.2）供回滚。
 5. **历史安装包未完全清零**：devcard 1.2.6 / 1.2.7、xiaotu 1.0.2 的包仍在桶内，作为回滚保留；`manual.pdf`、`release-notes-*.html`、`manifest.json`、`appcast.xml` 长期保留。
 6. `dl.xiaotu.online/logs/` 下是 OSS 每小时访问日志，属系统产出，不在发布范围内。
 7. 桶根的 `devcard/`、`mote/`、`xiaotu/updates/` 等是控制台创建的 0 字节目录占位对象，可忽略。

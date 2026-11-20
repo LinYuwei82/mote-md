@@ -88,7 +88,8 @@ mkdir -p "$DIST_DIR"
 echo "==> 2/${TOTAL} cmake + build (Release)"
 # 构建号：纯数字、单调递增。CMake 接收 -DMOTE_BUILD，注入 Info.plist CFBundleVersion，
 # 与 CFBundleShortVersionString（= VERSION.txt）分离——符合 Sparkle 2.7+ 规范。
-# 2026-11-20 起与小兔 / DevCard 一致：显式 MOTE_BUILD 优先，未给则用 gen_build.py 自动生成。
+# 2026-11-20 起与小兔 / DevCard 一致：正式发布显式传 MOTE_BUILD=<tag 序号>（build = seq，从 1 起，无固定基数）；
+# 未给时用 gen_build.py 兜底，仅供本地试打包。
 BUILD_NUMBER="${MOTE_BUILD:-}"
 BUILD_SOURCE="MOTE_BUILD 环境变量"
 if [ -z "$BUILD_NUMBER" ]; then

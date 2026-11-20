@@ -27,8 +27,8 @@ function Fail([string]$message) {
 if (-not $SkipBuild) {
     Write-Host "[1/6] 构建原生 Release"
     if ([string]::IsNullOrWhiteSpace($Build)) {
-        # 构建号全自动：显式 -Build 优先，否则用 gen_build.py（与 macOS 打包一致，
-        # 保证 > 线上 manifest.json 的 build 最大值）。
+        # 正式发布应显式传 -Build <tag 序号>（build = seq，从 1 起，无固定基数）；
+        # 未传时用 gen_build.py 兜底，仅供本地试打包。
         $py = Get-Command python -ErrorAction SilentlyContinue
         if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
         if (-not $py) { Fail "找不到 python（gen_build.py 需要）；可改用 -Build 显式指定构建号" }

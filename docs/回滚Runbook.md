@@ -8,7 +8,7 @@
 
 | 产品 | Ed25519 签名种子 | Sparkle 签名私钥 |
 |---|---|---|
-| Mote | `~/.config/mote-updates/ed25519_seed.b64` | `~/.config/mote-updates/sparkle_ed25519_seed.b64` |
+| Mote | `~/.config/mote-updates/ed25519_seed.b64`（`SIGN_KEY`） | 复用同一把 `SIGN_KEY`（2026-11-20 起 appcast 与清单共用；旧的 `sparkle_ed25519_seed.b64` 不再使用） |
 | 小兔 | `~/.config/xiaotu-updates/update_signing_2026.pem` | 无（iOS 自研） |
 | DevCard | `~/.config/devcard/manifest-keys/ed25519_seed.b64` | `~/.config/devcard/sparkle-keys/private_key.pem` |
 
@@ -96,20 +96,19 @@ python3 tools/release/manifest_v2.py resign --manifest /tmp/manifest-live.json \
 
 ### 2a. 覆盖同名包（immutable 缓存下的快速修复）
 
-OSS 对象标记 `immutable, max-age=31536000`，**同名重传会替换源站**。客户端可能命中浏览器/系统缓存，**仅限紧急修复**，之后必须升版本号发正式版。
+OSS 对象标记 `immutable, max-age=31536000`，**同名重传会替换源站**。客户端可能命中浏览器/系统缓存，**仅限紧急修复**，之后必须升版本号发正式版。同版本重发必须递增 `build`（新的 tag 序号），否则客户端不会再次提示。
 
 ```bash
-# ① 重新打包（正常流程，略）
-# ② 用 publish_macos.sh / publish_windows.sh 按同版本号重发
-VERSION=1.0.4
-BUILD=202611181542
-bash tools/release/publish_macos.sh --version $VERSION
+# ① 重新打包（正常流程，略；版本号取自 VERSION.txt）
+# ② 用 publish_macos.sh / publish_windows.sh 按同版本号重发，构建号取本次 tag 序号
+BUILD=<seq> bash tools/release/publish_macos.sh
 # 或（Windows）
-BUILD=$BUILD bash tools/release/publish_windows.sh
+BUILD=<seq> bash tools/release/publish_windows.sh
 
 # ③ 线上 SHA256 必须变化（guard verify-live 会校验）
 python3 tools/release/guard.py verify-live \
-  --product mote --kind mac --file dist/Mote-1.0.4-macos-arm64.dmg
+  --product mote --kind mac --file dist/Mote-macOS-native-1.0.4.dmg \
+  --name mote-1.0.4-macos-arm64.dmg
 ```
 
 ### 2b. 升版本号（推荐）
@@ -154,17 +153,19 @@ Sparkle 2 的 appcast.xml 也有 Ed25519 签名。清单回滚时 appcast 必须
 
 ```bash
 PRODUCT=mote
-KEY=~/.config/mote-updates/sparkle_ed25519_seed.b64
+KEY=~/.config/mote-updates/ed25519_seed.b64   # appcast 与清单共用
 SPARKLE_BIN=~/.config/mote-updates/bin  # 或下载的 Sparkle 发行包 bin
 
-# ① 取线上 appcast + 重签（用 Sparkle 自带的 sign_update）
+# 推荐：直接重跑发布脚本，由它重新生成并上传 appcast + manifest
+BUILD=<seq> bash tools/release/publish_macos.sh
+
+# 手工重签：sign_update 的对象是 DMG，不是 appcast.xml
+#   1) 取线上 appcast
 curl -fsSL https://dl.xiaotu.online/$PRODUCT_DIR/updates/stable/appcast.xml \
   -o /tmp/appcast-live.xml
-$SPARKLE_BIN/sign_update /tmp/appcast-live.xml \
-  --key $KEY \
-  # (Sparkle 重签会刷新 edSignature，不改变 feed 内容)
-
-# ② 上传覆盖
+#   2) 对 DMG 取签名：$SPARKLE_BIN/sign_update dist/Mote-macOS-native-<版本>.dmg -f $KEY
+#   3) 把输出的 sparkle:edSignature / length 填进 /tmp/appcast-live.xml 对应 <enclosure>
+#   4) 上传 appcast.xml（Cache-Control: public, max-age=60）
 ossutil -c ~/.config/xiaotu-updates/.env cp /tmp/appcast-live.xml \
   oss://xiaotu-update/$PRODUCT_DIR/updates/stable/appcast.xml \
   -f --headers "Cache-Control:public, max-age=60"

@@ -21,15 +21,16 @@
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -SkipUpload
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -ZipPath dist\x.zip
-#   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -Build 202611190930
+#   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -Build 42
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -Rollout 10
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 `
 #       -Mandatory -MandatoryReason SECURITY -MandatoryDeadline 2026-12-01T00:00:00Z
 #
 # -Build 可省略：依次从 build\windows\CMakeCache.txt、zip 内 Mote.exe 的
 # "MOTE_BUILD=<digits>" 标记自动识别，识别后与二进制交叉校验。
-# tools\package\package_windows.ps1 不传 -Build 时会自动用 gen_build.py 生成，
-# 因此正常发布流程无需手工指定构建号。
+# 正式发布必须让 build 等于 tag v<semver>+<seq> 的序号（从 1 起，无固定基数）；
+# tools\package\package_windows.ps1 未传 -Build 时会用 gen_build.py 兜底，
+# 仅供本地试打包，不能作为正式发布号。
 
 param(
     [string]$ZipPath = "",
