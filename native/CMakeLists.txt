@@ -162,17 +162,13 @@ if(WIN32)
   if(NOT MOTE_BUILD_HASH)
     set(MOTE_BUILD_HASH "")
   endif()
-  # 带 hash 的完整 stamp（仅用于二进制内搜索和追溯），与数字版 MOTE_BUILD 分离
-  if(MOTE_BUILD_HASH)
-    set(MOTE_BUILD_STAMP "${MOTE_BUILD}-${MOTE_BUILD_HASH}")
-  else()
-    set(MOTE_BUILD_STAMP "${MOTE_BUILD}")
-  endif()
+  # 字符串宏只放纯数字构建号（三仓同一口径）；hash 通过 MOTE_BUILD_HASH 单独注入
   target_compile_definitions(Mote PRIVATE
     UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00
     MOTE_VERSION="${MOTE_VERSION}"
     MOTE_BUILD=${MOTE_BUILD}
-    MOTE_BUILD_STR="${MOTE_BUILD_STAMP}")
+    MOTE_BUILD_STR="${MOTE_BUILD}"
+    MOTE_BUILD_HASH="${MOTE_BUILD_HASH}")
   target_compile_options(Mote PRIVATE /utf-8 /W4 /permissive-)
   # 关闭链接器自动生成的 manifest，改用 app.manifest（Common Controls v6）
   target_link_options(Mote PRIVATE /MANIFEST:NO)
@@ -329,15 +325,11 @@ else()
   if(NOT MOTE_BUILD_HASH)
     set(MOTE_BUILD_HASH "")
   endif()
-  if(MOTE_BUILD_HASH)
-    set(MOTE_BUILD_STAMP "${MOTE_BUILD}-${MOTE_BUILD_HASH}")
-  else()
-    set(MOTE_BUILD_STAMP "${MOTE_BUILD}")
-  endif()
   target_compile_definitions(Mote PRIVATE
     MOTE_VERSION="${MOTE_VERSION}"
     MOTE_BUILD=${MOTE_BUILD}
-    MOTE_BUILD_STR="${MOTE_BUILD_STAMP}")
+    MOTE_BUILD_STR="${MOTE_BUILD}"
+    MOTE_BUILD_HASH="${MOTE_BUILD_HASH}")
 
   target_link_libraries(Mote PRIVATE
     mote_update

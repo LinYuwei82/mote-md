@@ -87,12 +87,12 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > DevCard Windows 构建号机制（2026-11-20 与小兔 / Mote 全链路对齐）：
 > CMake configure 传 `-DDEVCARD_BUILD=<UTC yyyyMMddHHmm>`，由
 > `cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数同时注入
-> 两个宏：`DEVCARD_BUILD_STAMP=<int>` 给 core 用、`DEVCARD_BUILD_STAMP_STR="<int>"`
+> 两个宏：`DEVCARD_BUILD=<int>` 给 core 用、`DEVCARD_BUILD_STR="<int>"`
 > 给 shell 的 BUILD_STR 拼接用（`shell/win/main.cpp` 里
-> `kBuildStamp[] = "DEVCARD_BUILD_STAMP=" DEVCARD_BUILD_STAMP_STR`）。
+> `kBuildStamp[] = "DEVCARD_BUILD=" DEVCARD_BUILD_STR`）。
 > `compiled_build_number()` 条件编译返回注入值（未注入返回 0）；
 > 服务端同版本时比较清单 `build` 与本地 `compiled_build_number()`；
-> guard.py preflight 统一搜索二进制内 `"DEVCARD_BUILD_STAMP=<digits>"` 静态字符串
+> guard.py preflight 统一搜索二进制内 `"DEVCARD_BUILD=<digits>"` 静态字符串
 > （三产品同口径，`_BUILD_STAMP_PREFIX` 映射已补齐）。
 > 发布脚本（本地 `publish_windows.ps1 -Build N` 或 GitHub Actions）保证三端同值：
 > CMake 注入 = 清单 build = 发布参数。
@@ -304,13 +304,13 @@ guard.py 在 v2 preflight 里新增了**二进制内 build 号二次校验**：
 
 | 组件 | 改动 |
 |---|---|
-| CMake 注入 | Mote：`native/CMakeLists.txt` 一处注入 `-DMOTE_BUILD=<int>` + `-DMOTE_BUILD_STR="<int>"`；小兔：顶层只校验 `XIAOTU_BUILD` 必填，实际注入分散在 `shell/win/CMakeLists.txt` 给 updater、`core/CMakeLists.txt` 给 core；DevCard：`cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数注入 `-DDEVCARD_BUILD_STAMP=<int>` + `-DDEVCARD_BUILD_STAMP_STR="<int>"`（双宏，整数宏给 core 用、字符串宏给 shell 拼接用） |
+| CMake 注入 | Mote：`native/CMakeLists.txt` 一处注入 `-DMOTE_BUILD=<int>` + `-DMOTE_BUILD_STR="<int>"`；小兔：顶层只校验 `XIAOTU_BUILD` 必填，实际注入分散在 `shell/win/CMakeLists.txt` 给 updater、`core/CMakeLists.txt` 给 core；DevCard：`cmake/devcard_version.cmake` 的 `devcard_add_build_stamp(target)` 函数注入 `-DDEVCARD_BUILD=<int>` + `-DDEVCARD_BUILD_STR="<int>"`（双宏，整数宏给 core 用、字符串宏给 shell 拼接用） |
 | 壳源码 | 三产品统一模式：`constexpr const char kBuildStamp[] = "<PREFIX>=" <PREFIX>_STR;` 进 .rdata 段。Mote `platform/win/updater.cpp`、小兔 `shell/win/updater_win.cpp`、DevCard `shell/win/main.cpp` 均已落地 |
-| guard.py | `_BUILD_STAMP_PREFIX = {"mote": b"MOTE_BUILD=", "xiaotu": b"XIAOTU_BUILD=", "devcard": b"DEVCARD_BUILD_STAMP="}`；`_read_exe_bytes` 解包 zip（绿色包）或用 innounp 解包 setup.exe（ISCC 安装包），搜对应前缀 |
+| guard.py | `_BUILD_STAMP_PREFIX = {"mote": b"MOTE_BUILD=", "xiaotu": b"XIAOTU_BUILD=", "devcard": b"DEVCARD_BUILD="}`；`_read_exe_bytes` 解包 zip（绿色包）或用 innounp 解包 setup.exe（ISCC 安装包），搜对应前缀 |
 
 zip 和 setup.exe 里的壳是**同一份编译产物**：两者同时存在时 guard.py 只扫 zip，setup.exe 那条跳过（`✓ setup.exe 同源于已校验的绿色包`）。只有 setup.exe 单独出现时才走 innounp 解包。
 
-DevCard 2026-11-20 与小兔 / Mote 全链路对齐：guard.py 对三产品做相同的 BUILD_STR 二次校验，不再跳过。selftest 已覆盖 DevCard 正向用例（绿色包内 `DevCard.exe` 含 `DEVCARD_BUILD_STAMP=<digits>`）。
+DevCard 2026-11-20 与小兔 / Mote 全链路对齐：guard.py 对三产品做相同的 BUILD_STR 二次校验，不再跳过。selftest 已覆盖 DevCard 正向用例（绿色包内 `DevCard.exe` 含 `DEVCARD_BUILD=<digits>`）。
 
 #### innounp：解包 ISCC setup.exe
 

@@ -41,8 +41,7 @@ SRC_DIR="$MOTE_ROOT/tools/release"
 SYNC_FILES=(
   "guard.py guard.sha256"
   "manifest_v2.py manifest_v2.sha256"
-  "publish_args.py publish_args.sha256 \
-    tools/release/gen_build.py tools/release/gen_build.sha256"
+  "publish_args.py publish_args.sha256"
   "gen_build.py gen_build.sha256"
 )
 
