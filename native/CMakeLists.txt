@@ -121,16 +121,17 @@ if(WIN32)
   # 时会 grep 绿色包/安装包里的 Mote.exe，与 --build 参数比对，防止清单 build
   # 与编译值不一致导致客户端反复提示同一版本（2026-11-19 mote 1.0.4 即因此重发）。
   # Windows 构建号（与 macOS 侧完全一致的门禁体系）
-  set(MOTE_DEFAULT_BUILD "2026111301")
+  # 统一用 tools/release/gen_build.py 生成（保证 > 线上 manifest.json 的 build 最大值）。
+  set(MOTE_DEFAULT_BUILD "999999999")
   if(NOT MOTE_BUILD)
     set(MOTE_BUILD "${MOTE_DEFAULT_BUILD}")
-    message(WARNING "MOTE_BUILD 未设置，回退到开发默认值 ${MOTE_BUILD}（仅适合本地开发，发布请显式传 -DMOTE_BUILD=<纯数字>）")
+    message(WARNING "MOTE_BUILD 未设置，回退到开发占位值 ${MOTE_BUILD}（仅适合本地开发，发布请显式传 -DMOTE_BUILD=<build>，推荐 gen_build.py 生成）")
   endif()
   if(NOT MOTE_BUILD MATCHES "^[0-9]+$")
     message(FATAL_ERROR "MOTE_BUILD 必须是纯数字：${MOTE_BUILD}")
   endif()
   if(MOTE_STRICT_BUILD AND MOTE_BUILD STREQUAL MOTE_DEFAULT_BUILD)
-    message(FATAL_ERROR "发布构建（MOTE_STRICT_BUILD=ON）不能使用开发默认构建号 ${MOTE_DEFAULT_BUILD}")
+    message(FATAL_ERROR "发布构建（MOTE_STRICT_BUILD=ON）不能使用开发默认构建号 ${MOTE_DEFAULT_BUILD}，请用 gen_build.py 生成")
   endif()
   if(NOT MOTE_BUILD_HASH)
     set(MOTE_BUILD_HASH "")
@@ -286,10 +287,10 @@ else()
   # updater.mm 里读 MOTE_BUILD_STR 做同版本 build 比较；
   # 缺失时（开发态直接 cmake）回退到开发默认值，WARNING 提示不可发布；
   # 纯数字校验 + STRICT_BUILD=ON 时非零双保险（和小兔 XIAOTU_RELEASE_BUILD=ON 对齐）。
-  set(MOTE_DEFAULT_BUILD "2026111301")
+  set(MOTE_DEFAULT_BUILD "999999999")
   if(NOT MOTE_BUILD)
     set(MOTE_BUILD "${MOTE_DEFAULT_BUILD}")
-    message(WARNING "MOTE_BUILD 未设置，回退到开发默认值 ${MOTE_BUILD}（仅适合本地开发，发布请显式传 -DMOTE_BUILD=<纯数字>）")
+    message(WARNING "MOTE_BUILD 未设置，回退到开发占位值 ${MOTE_BUILD}（仅适合本地开发，发布请显式传 -DMOTE_BUILD=<build>，推荐 gen_build.py 生成）")
   endif()
   if(NOT MOTE_BUILD MATCHES "^[0-9]+$")
     message(FATAL_ERROR "MOTE_BUILD 必须是纯数字：${MOTE_BUILD}")
