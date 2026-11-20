@@ -35,6 +35,10 @@ add_library(mote_tweetnacl STATIC
   "${MOTE_REPO_ROOT}/core/third_party/tweetnacl/tweetnacl.c")
 target_include_directories(mote_tweetnacl PUBLIC
   "${MOTE_REPO_ROOT}/core/third_party/tweetnacl")
+if(MSVC)
+  # 消除上游 tweetnacl.c/h 的 C4819（源文件含 UTF-8 BOM）
+  target_compile_options(mote_tweetnacl PRIVATE /utf-8)
+endif()
 
 # 无平台 API 的核心：macOS 与 Windows 共用（业务逻辑，不含自动更新）
 add_library(mote_core STATIC
