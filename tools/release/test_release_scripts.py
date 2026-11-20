@@ -104,12 +104,16 @@ class TestPublishMacos(unittest.TestCase):
             "SIGN_KEY": str(Path(tempfile.mkdtemp()) / "missing.b64"),
         }, expect_code=1, expect_stderr_contains="更新签名私钥不存在")
 
-    def test_sparkle_key_must_exist(self):
-        """Sparkle appcast 签名种子必须存在。"""
+    def test_sign_update_must_be_found(self):
+        """2026-11-20 起 Sparkle appcast 与 v2 清单共用 SIGN_KEY，
+        SPARKLE_KEY 不再单独校验；缺失的是 Sparkle 的 sign_update 工具。"""
+        home = Path(tempfile.mkdtemp())
         self.r.run(self.script, env_override={
             "DMG_PATH": self._fake_dmg(),
-            "SPARKLE_KEY": str(Path(tempfile.mkdtemp()) / "missing.b64"),
-        }, expect_code=1, expect_stderr_contains="Sparkle 签名私钥不存在")
+            "HOME": str(home),
+            "SIGN_KEY": str(self.r.cfg / "ed25519_seed.b64"),
+            "SPARKLE_BIN": str(home / "no-sparkle"),
+        }, expect_code=1, expect_stderr_contains="未找到 Sparkle 的 sign_update")
 
     def test_channel_must_be_stable_or_beta(self):
         self.r.run(self.script, env_override={
@@ -123,6 +127,39 @@ class TestPublishMacos(unittest.TestCase):
             "DMG_PATH": self._fake_dmg(),
             "NOTES_URL": "/mote/release-notes.html",
         }, expect_code=2, expect_stderr_contains="绝对 http(s)")
+
+    def test_rollout_percent_must_be_1_to_100(self):
+        """灰度比例越界或非数字直接拒绝，避免清单写出非法值。"""
+        for bad in ("0", "101", "abc"):
+            self.r.run(self.script, env_override={
+                "DMG_PATH": self._fake_dmg(),
+                "ROLLOUT_PERCENT": bad,
+            }, expect_code=2, expect_stderr_contains="ROLLOUT_PERCENT")
+
+    def test_mandatory_requires_valid_reason(self):
+        self.r.run(self.script, env_override={
+            "DMG_PATH": self._fake_dmg(),
+            "MANDATORY": "1",
+        }, expect_code=2, expect_stderr_contains="MANDATORY_REASON")
+        self.r.run(self.script, env_override={
+            "DMG_PATH": self._fake_dmg(),
+            "MANDATORY": "1",
+            "MANDATORY_REASON": "BECAUSE",
+        }, expect_code=2, expect_stderr_contains="MANDATORY_REASON")
+
+    def test_mandatory_deadline_must_be_iso_utc(self):
+        self.r.run(self.script, env_override={
+            "DMG_PATH": self._fake_dmg(),
+            "MANDATORY": "1",
+            "MANDATORY_REASON": "SECURITY",
+            "MANDATORY_DEADLINE": "2026-12-01",
+        }, expect_code=2, expect_stderr_contains="ISO 8601 UTC")
+
+    def test_mandatory_fields_only_with_mandatory(self):
+        self.r.run(self.script, env_override={
+            "DMG_PATH": self._fake_dmg(),
+            "MANDATORY_REASON": "SECURITY",
+        }, expect_code=2, expect_stderr_contains="只在 MANDATORY=1")
 
     # ---- helpers ----
 
@@ -143,15 +180,11 @@ class TestPublishWindows(unittest.TestCase):
         cls.r = Runner()
         cls.script = str(RELEASE / "publish_windows.sh")
 
-    def test_build_required(self):
-        self.r.run(self.script, env_override={"BUILD": ""},
-                   expect_code=1, expect_stderr_contains="缺少 BUILD")
-
     def test_build_must_be_numeric_ge_4(self):
         self.r.run(self.script, env_override={"BUILD": "12"},
-                   expect_code=1, expect_stderr_contains="非法构建号")
+                   expect_code=1, expect_stderr_contains="用户显式传的 BUILD 非法")
         self.r.run(self.script, env_override={"BUILD": "2026abcdef"},
-                   expect_code=1, expect_stderr_contains="非法构建号")
+                   expect_code=1, expect_stderr_contains="用户显式传的 BUILD 非法")
 
     def test_channel_must_be_stable_or_beta(self):
         self.r.run(self.script, env_override={
@@ -170,6 +203,19 @@ class TestPublishWindows(unittest.TestCase):
             "BUILD": "202611190001",
             "SIGN_KEY": str(Path(tempfile.mkdtemp()) / "missing.b64"),
         }, expect_code=1, expect_stderr_contains="v2 清单签名种子不存在")
+
+    def test_rollout_percent_must_be_1_to_100(self):
+        for bad in ("0", "101", "abc"):
+            self.r.run(self.script, env_override={
+                "BUILD": "202611190001",
+                "ROLLOUT_PERCENT": bad,
+            }, expect_code=2, expect_stderr_contains="ROLLOUT_PERCENT")
+
+    def test_mandatory_requires_valid_reason(self):
+        self.r.run(self.script, env_override={
+            "BUILD": "202611190001",
+            "MANDATORY": "1",
+        }, expect_code=2, expect_stderr_contains="MANDATORY_REASON")
 
 
 # --------------------------------------------------------------------------- main

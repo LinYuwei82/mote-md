@@ -23,6 +23,9 @@
 #   BUILD=202611180930 ZIP_PATH=/path/to/portable.zip \
 #   SETUP_PATH=/path/to/setup.exe tools/release/publish_windows.sh
 #   BUILD=202611180930 NOTES_URL=https://... tools/release/publish_windows.sh
+#   BUILD=202611180930 ROLLOUT_PERCENT=10 tools/release/publish_windows.sh
+#   BUILD=202611180930 MANDATORY=1 MANDATORY_REASON=SECURITY \
+#     tools/release/publish_windows.sh
 
 set -euo pipefail
 
@@ -69,6 +72,35 @@ NOTES_FILE=""
 if [ -z "$NOTES_URL" ] && [ -f "$REPO_ROOT/docs/release-notes-$VERSION.html" ]; then
   NOTES_FILE="$REPO_ROOT/docs/release-notes-$VERSION.html"
   NOTES_URL="$CDN_DOMAIN/$PRODUCT_DIR/release-notes-$VERSION.html"
+fi
+
+# ---- 灰度与强制更新（可选，默认全量 + 非强制；与 publish_macos.sh 同一口径）----
+ROLLOUT_PERCENT="${ROLLOUT_PERCENT:-100}"
+MANDATORY="${MANDATORY:-0}"
+MANDATORY_REASON="${MANDATORY_REASON:-}"
+MANDATORY_DEADLINE="${MANDATORY_DEADLINE:-}"
+if ! [[ "$ROLLOUT_PERCENT" =~ ^[0-9]+$ ]] \
+   || (( ROLLOUT_PERCENT < 1 || ROLLOUT_PERCENT > 100 )); then
+  echo "ROLLOUT_PERCENT 必须是 1–100 的整数：$ROLLOUT_PERCENT" >&2; exit 2
+fi
+case "$MANDATORY" in
+  0|1) ;;
+  *) echo "MANDATORY 只能是 0 或 1：$MANDATORY" >&2; exit 2 ;;
+esac
+if [ "$MANDATORY" = "1" ]; then
+  case "$MANDATORY_REASON" in
+    SECURITY|PROTOCOL|REGULATORY|MIN_SUPPORTED) ;;
+    *) echo "MANDATORY=1 时必须指定 MANDATORY_REASON（SECURITY/PROTOCOL/REGULATORY/MIN_SUPPORTED）" >&2; exit 2 ;;
+  esac
+  if [ -n "$MANDATORY_DEADLINE" ] \
+     && ! [[ "$MANDATORY_DEADLINE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
+    echo "MANDATORY_DEADLINE 必须是 ISO 8601 UTC（如 2026-12-01T00:00:00Z）" >&2; exit 2
+  fi
+  echo "更新策略：灰度 ${ROLLOUT_PERCENT}% · 强制更新（${MANDATORY_REASON}${MANDATORY_DEADLINE:+，截止 ${MANDATORY_DEADLINE}}）"
+else
+  [ -z "$MANDATORY_REASON$MANDATORY_DEADLINE" ] || {
+    echo "MANDATORY_REASON / MANDATORY_DEADLINE 只在 MANDATORY=1 时有效" >&2; exit 2; }
+  echo "更新策略：灰度 ${ROLLOUT_PERCENT}% · 非强制"
 fi
 
 # ---- 定位产物 ----
@@ -136,6 +168,11 @@ MANIFEST_ARGS=(
 )
 if [ -n "$SETUP_PATH" ] && [ -f "$SETUP_PATH" ]; then
   MANIFEST_ARGS+=(--artifact "setup=$SETUP_PATH")
+fi
+MANIFEST_ARGS+=(--rollout "$ROLLOUT_PERCENT")
+if [ "$MANDATORY" = "1" ]; then
+  MANIFEST_ARGS+=(--mandatory --mandatory-reason "$MANDATORY_REASON")
+  [ -n "$MANDATORY_DEADLINE" ] && MANIFEST_ARGS+=(--mandatory-deadline "$MANDATORY_DEADLINE")
 fi
 [ -n "$NOTES_URL" ] && MANIFEST_ARGS+=(--notes-url "$NOTES_URL")
 [ -s "$MANIFEST_LOCAL" ] && MANIFEST_ARGS+=(--prev "$MANIFEST_LOCAL")

@@ -22,6 +22,9 @@
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -SkipUpload
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -ZipPath dist\x.zip
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -Build 202611190930
+#   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 -Rollout 10
+#   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 `
+#       -Mandatory -MandatoryReason SECURITY -MandatoryDeadline 2026-12-01T00:00:00Z
 #
 # -Build 必须等于编译时的 -DMOTE_BUILD；省略时从 build-native-ninja\CMakeCache.txt 读取，
 # 读不到直接失败（不再退回当前时间：清单比安装包新会让客户端反复提示同一版本）。
@@ -35,6 +38,10 @@ param(
     [string]$MinOs = "10.0",
     [string]$Build = "",
     [string]$EnvFile = "",
+    [ValidateRange(1, 100)][int]$Rollout = 100,
+    [switch]$Mandatory,
+    [ValidateSet("SECURITY", "PROTOCOL", "REGULATORY", "MIN_SUPPORTED")][string]$MandatoryReason = "",
+    [string]$MandatoryDeadline = "",
     [switch]$SkipUpload
 )
 
@@ -44,6 +51,17 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 function Fail([string]$message) {
     Write-Host "[失败] $message"
     exit 1
+}
+
+# 灰度 / 强制更新参数互斥与格式校验（与 publish_macos.sh 同一口径）
+if ($Mandatory -and -not $MandatoryReason) {
+    Fail "强制更新必须用 -MandatoryReason 指定 SECURITY/PROTOCOL/REGULATORY/MIN_SUPPORTED 之一"
+}
+if (-not $Mandatory -and ($MandatoryReason -or $MandatoryDeadline)) {
+    Fail "-MandatoryReason / -MandatoryDeadline 只在 -Mandatory 时有效"
+}
+if ($MandatoryDeadline -and $MandatoryDeadline -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$') {
+    Fail "-MandatoryDeadline 必须是 ISO 8601 UTC（如 2026-12-01T00:00:00Z）"
 }
 
 # 凭据：环境变量优先，其次读 %USERPROFILE%\.config\xiaotu-updates\.env（与 macOS 同路径风格）
@@ -227,8 +245,16 @@ $manifestV2Args = @(
     "--platform", "windows", "--version", $Version, "--build", $Build,
     "--min-os", $MinOs, "--key-id", "2026-11",
     "--artifact", "portable=$ZipFull",
+    "--rollout", "$Rollout",
     "--key", $signKeyPath, "--out", $manifestPath
 )
+if ($Mandatory) {
+    $manifestV2Args += @("--mandatory", "--mandatory-reason", $MandatoryReason)
+    if ($MandatoryDeadline) { $manifestV2Args += @("--mandatory-deadline", $MandatoryDeadline) }
+    Write-Host "  更新策略：灰度 $Rollout% · 强制更新（$MandatoryReason$(if ($MandatoryDeadline) { "，截止 $MandatoryDeadline" })）"
+} else {
+    Write-Host "  更新策略：灰度 $Rollout% · 非强制"
+}
 if ($SetupFull) { $manifestV2Args += @("--artifact", "setup=$SetupFull") }
 if ($NotesUrl) { $manifestV2Args += @("--notes-url", $NotesUrl) }
 # 另一平台段可能已在线上：先取线上清单，--prev 合并后整体重签，避免覆盖另一平台段

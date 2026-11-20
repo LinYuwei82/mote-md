@@ -61,7 +61,22 @@ python3 tools/release/manifest_v2.py resign --manifest /tmp/manifest-live.json \
 # 同上步骤 ③④⑤
 ```
 
-### 1c. 换签名密钥
+### 1c. 撤回强制更新（mandatory）
+
+误发强制更新、或想从强制退回正常提示时，用 `--clear-mandatory` 移除
+`mandatory` / `mandatory_reason` / `mandatory_deadline` 三字段后整体重签
+（版本、产物、`rollout_percent` 均不变）：
+
+```bash
+python3 tools/release/manifest_v2.py resign --manifest /tmp/manifest-live.json \
+  --key $KEY --clear-mandatory
+# 同上步骤 ③④⑤
+```
+
+撤回后客户端下次检查按普通更新处理（可「稍后」）；已升级的客户端不受影响。
+如需同时暂停灰度，可再加 `--rollout 1`。
+
+### 1d. 换签名密钥
 
 ```bash
 # 新密钥对应的客户端必须也内置了新公钥才算完成
