@@ -227,6 +227,8 @@ fi
 echo ""
 echo "================ 完成 ================"
 echo "版本 / build： $VERSION / $BUILD"
+GIT_HASH="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+echo "commit：       $GIT_HASH"
 echo "绿色包：    $ZIP_URL"
 echo "安装包：    ${SETUP_URL:-（无）}"
 echo "SHA256：    $ZIP_SHA256"

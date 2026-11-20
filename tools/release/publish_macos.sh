@@ -400,6 +400,8 @@ fi
 echo ""
 echo "================ 完成 ================"
 echo "版本：      $VERSION"
+GIT_HASH="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+echo "commit：    $GIT_HASH"
 echo "DMG：       $DMG_URL"
 echo "SHA256：    $DMG_SHA256"
 echo "appcast：   $APPCAST_URL"
