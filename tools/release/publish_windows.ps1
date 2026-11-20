@@ -26,7 +26,7 @@
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 `
 #       -Mandatory -MandatoryReason SECURITY -MandatoryDeadline 2026-12-01T00:00:00Z
 #
-# -Build 可省略：依次从 build-native-ninja\CMakeCache.txt、zip 内 Mote.exe 的
+# -Build 可省略：依次从 build\windows\CMakeCache.txt、zip 内 Mote.exe 的
 # "MOTE_BUILD=<digits>" 标记自动识别，识别后与二进制交叉校验。
 # tools\package\package_windows.ps1 不传 -Build 时会自动用 gen_build.py 生成，
 # 因此正常发布流程无需手工指定构建号。
@@ -113,7 +113,7 @@ $Version = $versionLine.Trim()
 # 二进制不一致（那会让客户端反复提示同一版本、装完还是旧包）。
 $BuildSource = "参数 -Build"
 if ([string]::IsNullOrWhiteSpace($Build)) {
-    $cachePath = Join-Path $root "build-native-ninja\CMakeCache.txt"
+    $cachePath = Join-Path $root "build\windows\CMakeCache.txt"
     if (Test-Path -LiteralPath $cachePath) {
         $cacheText = Get-Content -LiteralPath $cachePath -Raw
         $match = [regex]::Match($cacheText, 'MOTE_BUILD:[A-Z]+=(\d+)')
@@ -152,7 +152,7 @@ if ([string]::IsNullOrWhiteSpace($Build)) {
 if ($Build -notmatch '^\d+$') { Fail "非法构建号：$Build（应为纯数字）" }
 
 # 二次验证：和 CMakeCache 里的 MOTE_BUILD 一致（防止 shell 手动传 -Build 与编译值不同步）
-$cachePath = Join-Path $root "build-native-ninja\CMakeCache.txt"
+$cachePath = Join-Path $root "build\windows\CMakeCache.txt"
 if (Test-Path -LiteralPath $cachePath) {
     $cacheText = Get-Content -LiteralPath $cachePath -Raw
     $cachedMatch = [regex]::Match($cacheText, 'MOTE_BUILD:[A-Z]+=(\d+)')

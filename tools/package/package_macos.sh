@@ -61,9 +61,10 @@ echo "公证 profile：${NOTARY_PROFILE} ✓"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_NAME="Mote"
-# 构建/签名放在非同步目录：工程若位于 iCloud“文稿”等 FileProvider 目录，
-# 系统会反复给 .app 加 FinderInfo 扩展属性，导致 codesign 失败。
-BUILD_DIR="${TMPDIR:-/tmp}/mote-build-native"
+# 构建目录统一为 <repo>/build/release（与 xiaotu-inventory 一致），每次打包前清空重建。
+# 工程若位于 iCloud“文稿”等 FileProvider 目录，系统会反复给 .app 加 FinderInfo
+# 扩展属性导致 codesign 失败，因此签名前的暂存/打包仍在 $TMPDIR 完成。
+BUILD_DIR="$ROOT/build/release"
 DIST_DIR="$ROOT/dist"
 # 产物名沿用历史命名（Mote-macOS-native），避免已发布的清单与下载链接失配
 PKG_NAME="${APP_NAME}-macOS-native"
@@ -73,7 +74,7 @@ ZIP_PATH="$DIST_DIR/${PKG_NAME}.zip"
 # 基础 7 步 + 公证 4 步（提交 + stapler/spctl + zip 验证 + 拷 DMG）= 11
 TOTAL=11
 
-echo "==> 1/${TOTAL} 清理并创建影子构建目录"
+echo "==> 1/${TOTAL} 清理并创建构建目录（build/release）"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 # dist/ 里可能有上一次的产物（甚至手工保留的 DMG）。默认只覆盖本次产出的同名文件，

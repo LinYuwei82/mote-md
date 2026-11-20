@@ -12,7 +12,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-if (-not $BuildDir) { $BuildDir = Join-Path $root "build-native-ninja" }
+if (-not $BuildDir) { $BuildDir = Join-Path $root "build/windows" }
 $dist = Join-Path $root "dist"
 $out = Join-Path $dist $OutName
 $zip = Join-Path $dist "$OutName.zip"

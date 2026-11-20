@@ -211,11 +211,11 @@ docs/                     架构、决策、验收、发行说明
 依赖：macOS 14+、Xcode CLT、CMake 3.25+（不需要 Qt）。
 
 ```bash
-cmake -S native -B build-native && cmake --build build-native
+cmake -S native -B build/release && cmake --build build/release
 bash tools/package/package_macos.sh --dmg --clean-dist
 ```
 
-脚本固定七步：影子构建 → 依赖自检（不得链接 Qt）→ 去 rpath/strip → 签名/公证 → 做 DMG → 组装 zip → 外部路径自检。
+脚本固定七步：构建（`build/release`，每次清空重建）→ 依赖自检（不得链接 Qt）→ 去 rpath/strip → 签名/公证 → 做 DMG → 组装 zip → 外部路径自检。
 自检要求 `otool -L/-D` 中 `/opt/homebrew`、`/usr/local`、`/Users/` 均为 0 行。
 
 产物：`dist/Mote-macOS-native-<ver>.dmg`（约 1.7MB）、`dist/Mote-macOS-native.zip`（`.app` 约 4.1MB，含 Sparkle.framework）。

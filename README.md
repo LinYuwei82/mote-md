@@ -38,12 +38,12 @@
 构建：
 
 ```bash
-cmake -S native -B build-native
-cmake --build build-native
-ctest --test-dir build-native                    # core 单测，无需 GUI
+cmake -S native -B build/release
+cmake --build build/release
+ctest --test-dir build/release                   # core 单测，无需 GUI
 
-open build-native/Mote.app                       # 或直接运行
-./build-native/Mote.app/Contents/MacOS/Mote 文档.md
+open build/release/Mote.app                      # 或直接运行
+./build/release/Mote.app/Contents/MacOS/Mote 文档.md
 ```
 
 一键打包（构建 + Developer ID 签名 + 公证 + zip/DMG + 依赖自检）：
@@ -81,12 +81,12 @@ configure 阶段会自动探测 `Versions/` 下唯一子目录（如 `B`）并�
 ```bat
 set WEBVIEW2_SDK=C:\dev\webview2sdk\pkg
 :: 在 "x64 Native Tools Command Prompt for VS 2022" 里执行，保证 cl.exe 在 PATH
-cmake -S native -B build-native-win -G Ninja
-cmake --build build-native-win
-ctest --test-dir build-native-win                  :: core 单测，无需 -C
+cmake -S native -B build/windows -G Ninja
+cmake --build build/windows
+ctest --test-dir build/windows                     :: core 单测，无需 -C
 ```
 
-Ninja 是单配置生成器：产物直接在 `build-native-win\`，没有 Debug/Release 子目录，`ctest` 也不需要 `-C`。若坚持用 Visual Studio 生成器，工程已收敛为单一配置——`cmake -S native -B build-native-vs -A x64` 只会生成 Release（Debug 等多余配置不出现），命令需带 `--config Release` / `ctest -C Release`；要换配置用 `-DMOTE_BUILD_CONFIG=Debug`。
+Ninja 是单配置生成器：产物直接在 `build/windows\`，没有 Debug/Release 子目录，`ctest` 也不需要 `-C`。若坚持用 Visual Studio 生成器，工程已收敛为单一配置——`cmake -S native -B build/windows-vs -A x64` 只会生成 Release（Debug 等多余配置不出现），命令需带 `--config Release` / `ctest -C Release`；要换配置用 `-DMOTE_BUILD_CONFIG=Debug`。
 
 打包（产物 `dist/Mote-Windows/` 与 `dist/Mote-Windows.zip`，不含 Qt）：
 

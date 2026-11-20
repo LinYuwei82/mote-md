@@ -176,16 +176,16 @@ cd D:\projects\mote-md
 $env:WEBVIEW2_SDK = "C:/dev/webview2sdk/pkg"
 
 # 3) configure
-cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S native -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release
 
 # 4) build
-cmake --build build-native-ninja
+cmake --build build/windows
 
 # 5) core 单测
-ctest --test-dir build-native-ninja --output-on-failure
+ctest --test-dir build/windows --output-on-failure
 
 # 6) 运行
-.\build-native-ninja\Mote.exe .\resources\samples\welcome.md
+.\build\windows\Mote.exe .\resources\samples\welcome.md
 ```
 
 说明：
@@ -198,16 +198,16 @@ ctest --test-dir build-native-ninja --output-on-failure
 
 | 阶段 | 期望输出 |
 |---|---|
-| configure | 末尾 `-- Build files have been written to: <...>\build-native-ninja`，无 `FATAL_ERROR`（尤其不能有「未找到 WebView2 SDK」） |
+| configure | 末尾 `-- Build files have been written to: <...>\build\windows`，无 `FATAL_ERROR`（尤其不能有「未找到 WebView2 SDK」） |
 | build | 最后几行是 `[N/N] Linking CXX executable Mote.exe`，无 `error`、无新增 `warning`（本机实测警告 0、错误 0） |
 | 单测 | `100% tests passed out of 1`，`mote_core_tests ... Passed` |
-| 产物 | `build-native-ninja\` 下同时有 `Mote.exe`、`WebView2Loader.dll`、`web\`、`fonts\`、`samples\` |
+| 产物 | `build\windows\` 下同时有 `Mote.exe`、`WebView2Loader.dll`、`web\`、`fonts\`、`samples\` |
 | 运行 | 窗口打开，显示 `welcome.md` 内容与状态栏字数统计；标题为 `welcome.md - Mote` |
 
 产物目录长这样（由 CMake 的 POST_BUILD 自动准备）：
 
 ```
-build-native-ninja\
+build\windows\
   Mote.exe
   WebView2Loader.dll
   web\editor.html / editor.css / editor.js
@@ -220,7 +220,7 @@ build-native-ninja\
 ```powershell
 $env:MOTE_LOG = "$env:TEMP\mote-build.log"
 $env:MOTE_EVAL = "document.querySelectorAll('.block').length"
-.\build-native-ninja\Mote.exe .\resources\samples\welcome.md
+.\build\windows\Mote.exe .\resources\samples\welcome.md
 Get-Content "$env:TEMP\mote-build.log" | Select-String "JSLOG EVAL|stats"
 ```
 

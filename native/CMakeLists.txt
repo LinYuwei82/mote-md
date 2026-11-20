@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 # 原生薄外壳：macOS（AppKit + WKWebView）与 Windows（Win32 + WebView2）。
-# 用法：cmake -S native -B build-native && cmake --build build-native
+# 用法：cmake -S native -B build/release && cmake --build build/release
 
 if(WIN32)
   project(MoteNative VERSION 0.0.0 LANGUAGES C CXX)
@@ -83,7 +83,7 @@ else()
   target_compile_options(mote_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall>")
 endif()
 
-# 无窗口单测：cmake --build build-native && ctest --test-dir build-native
+# 无窗口单测：cmake --build build/release && ctest --test-dir build/release
 enable_testing()
 add_executable(mote_core_tests tests/core_tests.cpp)
 target_link_libraries(mote_core_tests PRIVATE mote_update)

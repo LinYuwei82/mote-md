@@ -32,8 +32,8 @@ Windows（PowerShell，MSVC 环境）：
 ```powershell
 $env:WEBVIEW2_SDK = "C:\dev\webview2sdk\pkg"
 cd C:\dev\Mote
-cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build-native-ninja
+cmake -S native -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/windows
 powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 ```
 
@@ -221,13 +221,13 @@ exe 只链接系统 DLL；WebView2 运行时由目标机器提供（Evergreen）
 
 ```powershell
 $env:WEBVIEW2_SDK = "C:\dev\webview2sdk\pkg"
-cmake -S native -B build-native-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build-native-ninja
+cmake -S native -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/windows
 
 mkdir dist\Mote-Windows
-copy build-native-ninja\Mote.exe dist\Mote-Windows\
-copy build-native-ninja\web dist\Mote-Windows\web -Recurse
-copy build-native-ninja\fonts dist\Mote-Windows\fonts -Recurse
+copy build/windows\Mote.exe dist\Mote-Windows\
+copy build/windows\web dist\Mote-Windows\web -Recurse
+copy build/windows\fonts dist\Mote-Windows\fonts -Recurse
 copy "$env:WEBVIEW2_SDK\build\native\x64\WebView2Loader.dll" dist\Mote-Windows\
 Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip -Force
 ```

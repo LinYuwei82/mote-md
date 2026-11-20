@@ -11,8 +11,8 @@
 
 | 项 | 做法 |
 |---|---|
-| macOS 构建 | `cmake -S native -B build-native && cmake --build build-native`，产物在 `build-native/` |
-| Windows 构建 | 推送后取 GitHub Actions 的 CI 产物，或本地 `cmake -S native -B build-native -G Ninja -DMOTE_BUILD=<时间戳>` |
+| macOS 构建 | `cmake -S native -B build/release && cmake --build build/release`，产物在 `build/release/` |
+| Windows 构建 | 推送后取 GitHub Actions 的 CI 产物，或本地 `cmake -S native -B build/windows -G Ninja -DMOTE_BUILD=<时间戳>` |
 | 测试文档 | 新建 `blank-lines.md`，内容按下面各用例填写；另存一份副本用于比对 |
 | 字节级比对 | macOS：`cat -A blank-lines.md`（行尾 `$`，空行是一行只有 `$`）；或 `python3 -c "print(open('blank-lines.md','rb').read().count(b'\n\n\n'))"` |
 | 保存前后对比 | 保存前 `cp blank-lines.md before.md`，保存后 `diff before.md blank-lines.md`，期望无输出 |
