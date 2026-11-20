@@ -1,43 +1,63 @@
 #!/bin/bash
 # macOS 打包脚本：编译 -> 检查依赖 -> 清理扩展属性 -> Developer ID 签名 -> 公证 -> 打 zip/DMG
 # 用法：
-#   bash packaging/package_macos.sh                 # AppKit + CMake 构建 + 签名 + 公证
+#   bash packaging/package_macos.sh                 # AppKit + CMake 构建 + Developer ID 签名 + 公证
 #   bash packaging/package_macos.sh --dmg           # 额外出 dist/Mote-macOS-native-<版本>.dmg（拖拽安装）+ DMG 公证
 #   bash packaging/package_macos.sh --clean-dist    # 先清空 dist/（默认保留其它旧产物）
-#   bash packaging/package_macos.sh --skip-sign     # 跳过签名（调试用）
-#   bash packaging/package_macos.sh --skip-notarize # 跳过公证（仍做签名）
 #
-# 签名证书：自动从钥匙串查找 "Developer ID Application: ..."；找不到则 fallback 到 ad-hoc。
+# 硬门禁（2026-11-20 起生效）：签名 + 公证是发布硬性前提，不满足直接 exit 1。
+#   - 钥匙串里必须有 Developer ID Application 证书，否则 fail
+#   - notarytool keychain profile 必须配置（默认 "mote-notary"，可用 MOTE_NOTARY_PROFILE 覆盖），否则 fail
+#   - 已移除 --skip-sign / --skip-notarize 参数（旁路后门已删除）
+#
+# 签名证书：自动从钥匙串查找 "Developer ID Application: ..."
 # 公证凭据：xcrun notarytool store-credentials "mote-notary" --apple-id <id> --team-id <team> --password <app-specific>
 set -euo pipefail
 
 WITH_DMG=0
 CLEAN_DIST=0
-SKIP_SIGN=0
-SKIP_NOTARIZE=0
 for arg in "$@"; do
     case "$arg" in
         --dmg) WITH_DMG=1 ;;
         --clean-dist) CLEAN_DIST=1 ;;
-        --skip-sign) SKIP_SIGN=1 ;;
-        --skip-notarize) SKIP_NOTARIZE=1 ;;
         -h|--help)
-            echo "用法: bash packaging/package_macos.sh [--dmg] [--clean-dist] [--skip-sign] [--skip-notarize]"
-            echo "  --dmg            在 zip 之外再产出一个拖拽安装式 DMG（卷标 Mote，UDZO 压缩）"
-            echo "  --clean-dist     先清空 dist/（默认只覆盖同名产物，保留 dist 里的其它文件）"
-            echo "  --skip-sign      跳过签名（调试用；公证也会被跳过）"
-            echo "  --skip-notarize  跳过公证（仍做 Developer ID 签名）"
+            echo "用法: bash packaging/package_macos.sh [--dmg] [--clean-dist]"
+            echo "  --dmg         在 zip 之外再产出一个拖拽安装式 DMG（卷标 Mote，UDZO 压缩）"
+            echo "  --clean-dist  先清空 dist/（默认只覆盖同名产物，保留 dist 里的其它文件）"
+            echo ""
+            echo "硬性前提：必须具备 Developer ID Application 签名证书 + notarytool 公证 profile。"
+            echo "不满足时脚本会直接 exit 1，无旁路。"
             exit 0 ;;
-        *) echo "未知参数：${arg}（可用：--dmg, --clean-dist, --skip-sign, --skip-notarize）"; exit 2 ;;
+        *) echo "未知参数：${arg}（可用：--dmg, --clean-dist）"; exit 2 ;;
     esac
 done
 
-# 自动发现 Developer ID Application 证书
+# ===== 硬门禁前置：签名证书 + 公证 profile 必须同时满足 =====
+# --- 签名证书 ---
 find_developer_id_sign() {
     security find-identity -v -p codesigning 2>&1 \
         | sed -n 's/.*"Developer ID Application: \(.*\)".*/\1/p' | head -1
 }
 SIGN_IDENTITY="$(find_developer_id_sign)"
+if [ -z "$SIGN_IDENTITY" ]; then
+    echo "硬性前提检查失败：钥匙串里找不到 Developer ID Application 证书" >&2
+    echo "  security find-identity -v -p codesigning" >&2
+    echo "  需要在 Apple Developer 后台申请并安装到登录钥匙串" >&2
+    exit 1
+fi
+echo "签名证书：Developer ID Application: ${SIGN_IDENTITY} ✓"
+
+# --- 公证 profile ---
+NOTARY_PROFILE="${MOTE_NOTARY_PROFILE:-mote-notary}"
+if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" 2>&1 | head -1 | grep -qi "error"; then
+    echo "硬性前提检查失败：notarytool keychain profile '$NOTARY_PROFILE' 不存在" >&2
+    echo "  需要先运行：" >&2
+    echo "    xcrun notarytool store-credentials '$NOTARY_PROFILE' \\" >&2
+    echo "      --apple-id <your@appleid.com> --team-id BMCUC4B6XX --password <app-specific-password>" >&2
+    echo "  或者用 MOTE_NOTARY_PROFILE 环境变量指定已存在的 profile 名" >&2
+    exit 1
+fi
+echo "公证 profile：${NOTARY_PROFILE} ✓"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="Mote"
@@ -49,18 +69,9 @@ DIST_DIR="$ROOT/dist"
 PKG_NAME="${APP_NAME}-macOS-native"
 ZIP_PATH="$DIST_DIR/${PKG_NAME}.zip"
 
-# 进度总数：
-# 基础 7 步：清理 → 构建 → 依赖自检 → 修正路径 → 签名 → 做 DMG → 组装 zip
-# 然后：拷 DMG（有公证或 --dmg）= +1
-# 如果 DO_NOTARIZE：还多 提交公证 + stapler/spctl + 最终 zip 验证 = +3
-TOTAL=7
-DO_NOTARIZE=0
-if [ "$SKIP_SIGN" -ne 1 ] && [ "$SKIP_NOTARIZE" -ne 1 ] && [ -n "$SIGN_IDENTITY" ]; then
-    DO_NOTARIZE=1
-    TOTAL=$((TOTAL + 4))   # 提交公证 + stapler/spctl + 最终 zip 验证 + 拷 DMG
-elif [ "$WITH_DMG" -eq 1 ]; then
-    TOTAL=$((TOTAL + 1))   # 只拷 DMG
-fi
+# 进度总数：签名证书 + 公证 profile 已前置检查，这里走满流程
+# 基础 7 步 + 公证 4 步（提交 + stapler/spctl + zip 验证 + 拷 DMG）= 11
+TOTAL=11
 
 echo "==> 1/${TOTAL} 清理并创建影子构建目录"
 rm -rf "$BUILD_DIR"
@@ -171,48 +182,35 @@ scan_external_paths() {
     fi
 }
 
-if [ "$SKIP_SIGN" -eq 1 ]; then
-    echo "==> 5/${TOTAL} 跳过签名（--skip-sign）"
-elif [ -n "$SIGN_IDENTITY" ]; then
-    echo "==> 5/${TOTAL} Developer ID 签名：${SIGN_IDENTITY}"
-    # entitlements：禁用 sandbox（Sparkle 自动更新要求 bundle 可写）
-    ENTITLEMENTS="$ROOT/packaging/entitlements.plist"
-    if [ ! -f "$ENTITLEMENTS" ]; then
-        echo "错误：entitlements plist 不存在 $ENTITLEMENTS" >&2
-        exit 1
-    fi
-    # 签名前再清一次扩展属性（install_name_tool 可能引入新的 xattr）
-    xattr -cr "$APP_PATH"
-    xattr -d com.apple.FinderInfo "$APP_PATH" 2>/dev/null || true
-    xattr -d "com.apple.fileprovider.fpfs#P" "$APP_PATH" 2>/dev/null || true
+echo "==> 5/${TOTAL} Developer ID 签名：${SIGN_IDENTITY}"
+# entitlements：禁用 sandbox（Sparkle 自动更新要求 bundle 可写）
+ENTITLEMENTS="$ROOT/packaging/entitlements.plist"
+if [ ! -f "$ENTITLEMENTS" ]; then
+    echo "错误：entitlements plist 不存在 $ENTITLEMENTS" >&2
+    exit 1
+fi
+# 签名前再清一次扩展属性（install_name_tool 可能引入新的 xattr）
+xattr -cr "$APP_PATH"
+xattr -d com.apple.FinderInfo "$APP_PATH" 2>/dev/null || true
+xattr -d "com.apple.fileprovider.fpfs#P" "$APP_PATH" 2>/dev/null || true
 
-    # 新版 codesign：分步嵌套签名（先签子 framework 内部所有嵌套 bundle，再签 .app 主体）
-    # Sparkle.framework 内含 Updater.app、XPCServices 等多个嵌套 bundle，--deep 一次签完
-    SIGN_NAME="Developer ID Application: ${SIGN_IDENTITY}"
-    SPARKLE_FW="$APP_PATH/Contents/Frameworks/Sparkle.framework"
-    if [ -d "$SPARKLE_FW" ]; then
-        echo "    签 Sparkle.framework（--deep 覆盖 Updater.app + XPCServices）..."
-        codesign --force --sign "$SIGN_NAME" --options runtime --timestamp \
-            --entitlements "$ENTITLEMENTS" --deep "$SPARKLE_FW"
-        codesign --verify --deep --strict "$SPARKLE_FW" || { echo "Sparkle.framework 签名验证失败"; exit 1; }
-    fi
-    echo "    签 .app 主体..."
+# 新版 codesign：分步嵌套签名（先签子 framework 内部所有嵌套 bundle，再签 .app 主体）
+# Sparkle.framework 内含 Updater.app、XPCServices 等多个嵌套 bundle，--deep 一次签完
+SIGN_NAME="Developer ID Application: ${SIGN_IDENTITY}"
+SPARKLE_FW="$APP_PATH/Contents/Frameworks/Sparkle.framework"
+if [ -d "$SPARKLE_FW" ]; then
+    echo "    签 Sparkle.framework（--deep 覆盖 Updater.app + XPCServices）..."
     codesign --force --sign "$SIGN_NAME" --options runtime --timestamp \
-        --entitlements "$ENTITLEMENTS" "$APP_PATH"
-else
-    echo "==> 5/${TOTAL} Developer ID 证书未找到，fallback 到 ad-hoc 签名"
-    echo "    提示：钥匙串里需要有 'Developer ID Application: ...' 证书才能通过公证"
-    codesign --force --deep --sign - "$APP_PATH"
+        --entitlements "$ENTITLEMENTS" --deep "$SPARKLE_FW"
+    codesign --verify --deep --strict "$SPARKLE_FW" || { echo "Sparkle.framework 签名验证失败"; exit 1; }
 fi
-# --skip-sign 时 .app 未签名，verify 必然返回非 0，会直接打断 set -e 的打包流程
-if [ "$SKIP_SIGN" -ne 1 ]; then
-    codesign --verify --deep --strict "$APP_PATH"
-fi
+echo "    签 .app 主体..."
+codesign --force --sign "$SIGN_NAME" --options runtime --timestamp \
+    --entitlements "$ENTITLEMENTS" "$APP_PATH"
+codesign --verify --deep --strict "$APP_PATH"
 
 # 签名后检查 Gatekeeper 兼容性（runtime + 证书）
-if [ "$SKIP_SIGN" -ne 1 ] && [ -n "$SIGN_IDENTITY" ]; then
-    codesign -dvv "$APP_PATH" 2>&1 | grep -E "Authority|flags=" | head -5
-fi
+codesign -dvv "$APP_PATH" 2>&1 | grep -E "Authority|flags=" | head -5
 
 # install_name_tool 会破坏签名，这里重签后立刻全包扫描；有残留就停，不出包
 scan_external_paths fail
@@ -250,74 +248,56 @@ hdiutil create -volname "$APP_NAME" -srcfolder "$NOTARY_DMG_STAGE" \
 hdiutil verify "$NOTARY_DMG" >/dev/null
 
 # DMG 签名（Developer ID 签名的 DMG 让 mount 更顺畅，公证也更稳）
-if [ "$SKIP_SIGN" -ne 1 ] && [ -n "$SIGN_IDENTITY" ]; then
-    codesign --force --sign "Developer ID Application: ${SIGN_IDENTITY}" --timestamp "$NOTARY_DMG"
+codesign --force --sign "Developer ID Application: ${SIGN_IDENTITY}" --timestamp "$NOTARY_DMG"
+
+echo "==> 7/${TOTAL} 提交 DMG 公证（xcrun notarytool submit --wait）..."
+echo "    凭据钥匙串配置：$NOTARY_PROFILE（已前置检查）"
+echo "    提交文件：$NOTARY_DMG"
+
+NOTARY_LOG="$NOTARY_STAGE/notary.log"
+xcrun notarytool submit "$NOTARY_DMG" \
+    --keychain-profile "$NOTARY_PROFILE" \
+    --wait --timeout 900 2>&1 | tee "$NOTARY_LOG"
+echo
+
+# notarytool 的进度行是 "Current status: In Progress..."，会淹没最终结论；
+# 只取结尾那段 "  status: Accepted"，并把进度里的 \r 折成换行再匹配
+NOTARY_STATUS="$(tr '\r' '\n' < "$NOTARY_LOG" \
+    | awk -F': *' '/^[[:space:]]*status: /{v=$2} END{print v}')"
+if [ "$NOTARY_STATUS" != "Accepted" ]; then
+    echo "错误：公证状态为 '$NOTARY_STATUS'，请查看完整日志：$NOTARY_LOG"
+    echo "       常见原因：缺少 --options runtime、签名时没有 Developer ID、Info.plist 问题"
+    exit 1
 fi
+echo "    公证通过 ✓"
 
-if [ "$DO_NOTARIZE" -eq 1 ]; then
-    NOTARY_PROFILE="${MOTE_NOTARY_PROFILE:-mote-notary}"
-    echo "==> 7/${TOTAL} 提交 DMG 公证（xcrun notarytool submit --wait）..."
-    echo "    凭据钥匙串配置：$NOTARY_PROFILE"
-    echo "    提交文件：$NOTARY_DMG"
+echo "==> 8/${TOTAL} stapler staple DMG + spctl 验证"
+xcrun stapler staple "$NOTARY_DMG"
+xcrun stapler validate "$NOTARY_DMG"
+echo "    DMG stapled ✓"
 
-    # 提前检测 profile 是否在 Keychain 中存在
-    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" 2>&1 | head -1 | grep -qi "error"; then
-        echo "错误：notarytool keychain profile '$NOTARY_PROFILE' 不存在" >&2
-        echo "      需要先运行：" >&2
-        echo "        xcrun notarytool store-credentials '$NOTARY_PROFILE' \\" >&2
-        echo "          --apple-id <your@appleid.com> --team-id BMCUC4B6XX --password <app-specific-password>" >&2
-        echo "      或者用 MOTE_NOTARY_PROFILE 环境变量指定已存在的 profile 名" >&2
-        exit 1
-    fi
+# stapler 也 staple 一下 .app，这样 zip 里的 .app 也自带 ticket
+xcrun stapler staple "$APP_PATH"
+xcrun stapler validate "$APP_PATH"
+echo "    .app 也 stapled ✓"
 
-    NOTARY_LOG="$NOTARY_STAGE/notary.log"
-    xcrun notarytool submit "$NOTARY_DMG" \
-        --keychain-profile "$NOTARY_PROFILE" \
-        --wait --timeout 900 2>&1 | tee "$NOTARY_LOG"
-    echo
-
-    # notarytool 的进度行是 "Current status: In Progress..."，会淹没最终结论；
-    # 只取结尾那段 "  status: Accepted"，并把进度里的 \r 折成换行再匹配
-    NOTARY_STATUS="$(tr '\r' '\n' < "$NOTARY_LOG" \
-        | awk -F': *' '/^[[:space:]]*status: /{v=$2} END{print v}')"
-    if [ "$NOTARY_STATUS" != "Accepted" ]; then
-        echo "错误：公证状态为 '$NOTARY_STATUS'，请查看完整日志：$NOTARY_LOG"
-        echo "       常见原因：缺少 --options runtime、签名时没有 Developer ID、Info.plist 问题"
-        exit 1
-    fi
-    echo "    公证通过 ✓"
-
-    echo "==> 8/${TOTAL} stapler staple DMG + spctl 验证"
-    xcrun stapler staple "$NOTARY_DMG"
-    xcrun stapler validate "$NOTARY_DMG"
-    echo "    DMG stapled ✓"
-
-    # stapler 也 staple 一下 .app，这样 zip 里的 .app 也自带 ticket
-    xcrun stapler staple "$APP_PATH"
-    xcrun stapler validate "$APP_PATH"
-    echo "    .app 也 stapled ✓"
-
-    # mount DMG → spctl 评估里面的 .app（模拟用户挂载 DMG 后的 Gatekeeper 检查）
-    echo "    mount DMG → spctl 验证..."
-    MOUNT_POINT="/Volumes/${APP_NAME}"
-    [ -d "$MOUNT_POINT" ] && hdiutil detach "$MOUNT_POINT" 2>/dev/null || true
-    hdiutil attach "$NOTARY_DMG" -nobrowse -mountpoint "$MOUNT_POINT" >/dev/null 2>&1 || true
-    DMG_APP="$MOUNT_POINT/${APP_NAME}.app"
-    DMG_SPCTL="$(spctl --assess --type execute -vv "$DMG_APP" 2>&1 || true)"
-    hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true
-    echo "    $DMG_SPCTL"
-    echo "$DMG_SPCTL" | grep -q "accepted" || {
-        echo "错误：DMG 内 .app 未通过 spctl"
-        exit 1
-    }
-    echo "    DMG 内 .app 通过 spctl ✓"
-else
-    echo "==> 7/${TOTAL} 跳过公证（--skip-notarize 或无 Developer ID 证书）"
-    echo "    提示：未公证的 .app 会被 Gatekeeper 拦截，首次打开需要右键 → 打开"
-fi
+# mount DMG → spctl 评估里面的 .app（模拟用户挂载 DMG 后的 Gatekeeper 检查）
+echo "    mount DMG → spctl 验证..."
+MOUNT_POINT="/Volumes/${APP_NAME}"
+[ -d "$MOUNT_POINT" ] && hdiutil detach "$MOUNT_POINT" 2>/dev/null || true
+hdiutil attach "$NOTARY_DMG" -nobrowse -mountpoint "$MOUNT_POINT" >/dev/null 2>&1 || true
+DMG_APP="$MOUNT_POINT/${APP_NAME}.app"
+DMG_SPCTL="$(spctl --assess --type execute -vv "$DMG_APP" 2>&1 || true)"
+hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true
+echo "    $DMG_SPCTL"
+echo "$DMG_SPCTL" | grep -q "accepted" || {
+    echo "错误：DMG 内 .app 未通过 spctl"
+    exit 1
+}
+echo "    DMG 内 .app 通过 spctl ✓"
 
 echo
-echo "==> $((DO_NOTARIZE ? 9 : 7))/${TOTAL} 组装最终发布目录（zip）"
+echo "==> 9/${TOTAL} 组装最终发布目录（zip）"
 STAGE="${TMPDIR:-/tmp}/mote-stage"
 rm -rf "$STAGE"
 PKG_DIR="$STAGE/$PKG_NAME"
@@ -337,56 +317,36 @@ ditto -c -k --sequesterRsrc --keepParent "$PKG_DIR" "$STAGE/${PKG_NAME}.zip"
 mv -f "$STAGE/${PKG_NAME}.zip" "$ZIP_PATH"
 rm -rf "$STAGE"
 
-if [ "$DO_NOTARIZE" -eq 1 ] || [ "$WITH_DMG" -eq 1 ]; then
-    echo "==> $((DO_NOTARIZE ? 10 : 8))/${TOTAL} 拷贝最终 DMG"
-    if [ "$DO_NOTARIZE" -eq 1 ]; then
-        # 直接用已 stapled 的 DMG
-        cp "$NOTARY_DMG" "$DMG_PATH"
-        hdiutil verify "$DMG_PATH"
-        rm -rf "$NOTARY_STAGE"
-    else
-        # 无公证时仍做 DMG（无 ticket，Gatekeeper 会拦截）
-        DMG_STAGE="${TMPDIR:-/tmp}/mote-dmg"
-        rm -rf "$DMG_STAGE"
-        mkdir -p "$DMG_STAGE"
-        ditto "$APP_PATH" "$DMG_STAGE/${APP_NAME}.app"
-        ln -s /Applications "$DMG_STAGE/Applications"
-        find "$DMG_STAGE" -name ".DS_Store" -delete 2>/dev/null || true
-        rm -f "$DMG_PATH"
-        hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_STAGE" \
-            -ov -format UDZO -fs HFS+ "$DMG_PATH"
-        hdiutil verify "$DMG_PATH"
-        rm -rf "$DMG_STAGE"
-    fi
-fi
+# ---- 拷贝已 stapled 的 DMG ----
+echo "==> 10/${TOTAL} 拷贝最终 DMG"
+cp "$NOTARY_DMG" "$DMG_PATH"
+hdiutil verify "$DMG_PATH"
+rm -rf "$NOTARY_STAGE"
+echo "    DMG：$DMG_PATH"
 
 # 最终验证：解压 zip → spctl 确认
-if [ "$DO_NOTARIZE" -eq 1 ]; then
-    echo
-    echo "==> 11/${TOTAL} 最终 zip 解压 spctl 验证"
-    FINAL_CHECK="/tmp/mote-final-check"
-    rm -rf "$FINAL_CHECK"
-    mkdir -p "$FINAL_CHECK"
-    cd "$FINAL_CHECK" && ditto -x -k "$ZIP_PATH" .
-    FINAL_APP="$FINAL_CHECK/$PKG_NAME/${APP_NAME}.app"
-    FINAL_SPCTL="$(spctl --assess --type execute -vv "$FINAL_APP" 2>&1 || true)"
-    echo "    $FINAL_SPCTL"
-    echo "$FINAL_SPCTL" | grep -q "accepted" || {
-        echo "错误：zip 解压后的 app 未通过 spctl"
-        exit 1
-    }
-    echo "    zip 解压后 .app 通过 spctl ✓"
-fi
+echo
+echo "==> 11/${TOTAL} 最终 zip 解压 spctl 验证"
+FINAL_CHECK="/tmp/mote-final-check"
+rm -rf "$FINAL_CHECK"
+mkdir -p "$FINAL_CHECK"
+cd "$FINAL_CHECK" && ditto -x -k "$ZIP_PATH" .
+FINAL_APP="$FINAL_CHECK/$PKG_NAME/${APP_NAME}.app"
+FINAL_SPCTL="$(spctl --assess --type execute -vv "$FINAL_APP" 2>&1 || true)"
+echo "    $FINAL_SPCTL"
+echo "$FINAL_SPCTL" | grep -q "accepted" || {
+    echo "错误：zip 解压后的 app 未通过 spctl"
+    exit 1
+}
+echo "    zip 解压后 .app 通过 spctl ✓"
 
 echo
 echo "完成：$ZIP_PATH"
 echo "包体大小：$(du -sh "$ZIP_PATH" | cut -f1)"
 echo "解压后 .app 大小：$(du -sh "$APP_PATH" | cut -f1)"
-if [ "$WITH_DMG" -eq 1 ]; then
-    echo "DMG：$DMG_PATH"
-    echo "DMG 字节数：$(stat -f%z "$DMG_PATH")"
-    echo "DMG SHA256：$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
-    echo "（DMG 内含卷 UUID 与时间戳，每次重建哈希都会变，这是正常的）"
-fi
+echo "DMG：$DMG_PATH"
+echo "DMG 字节数：$(stat -f%z "$DMG_PATH")"
+echo "DMG SHA256：$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
+echo "（DMG 内含卷 UUID 与时间戳，每次重建哈希都会变，这是正常的）"
 echo
 scan_external_paths report
