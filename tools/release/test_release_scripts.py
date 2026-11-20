@@ -27,6 +27,7 @@ VERSION = (REPO / "VERSION.txt").read_text().strip()
 # 测试用 Ed25519 种子（RFC 8032 固定向量，只用于"文件存在性"检查）
 TEST_SEED_HEX = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 TEST_SEED_B64 = base64.b64encode(bytes.fromhex(TEST_SEED_HEX)).decode()
+IS_DARWIN = sys.platform == "darwin"
 
 
 # --------------------------------------------------------------------------- Runner
@@ -79,6 +80,7 @@ class Runner:
 
 # --------------------------------------------------------------------------- publish_macos.sh
 
+@unittest.skipUnless(IS_DARWIN, "发布 shell 脚本测试仅在 macOS 运行")
 class TestPublishMacos(unittest.TestCase):
     """mote publish_macos.sh：拒绝路径覆盖。
 
@@ -172,6 +174,7 @@ class TestPublishMacos(unittest.TestCase):
 
 # --------------------------------------------------------------------------- publish_windows.sh
 
+@unittest.skipUnless(IS_DARWIN, "发布 shell 脚本测试仅在 macOS 运行")
 class TestPublishWindows(unittest.TestCase):
     """mote publish_windows.sh：拒绝路径覆盖。"""
 
@@ -228,12 +231,12 @@ class TestPublishWindows(unittest.TestCase):
 def main() -> int:
     print(f"\n=== mote manifest_v2 selftest ===")
     r1 = subprocess.run(
-        ["python3", str(RELEASE / "manifest_v2.py"), "selftest"],
+        [sys.executable, str(RELEASE / "manifest_v2.py"), "selftest"],
         check=False,
     )
     print(f"\n=== mote guard selftest ===")
     r2 = subprocess.run(
-        ["python3", str(RELEASE / "guard.py"), "selftest"],
+        [sys.executable, str(RELEASE / "guard.py"), "selftest"],
         check=False,
     )
     print(f"\n=== mote release_scripts unittest ===")
