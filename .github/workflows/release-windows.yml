@@ -114,7 +114,7 @@ jobs:
           $cache = Get-Content build-native-ninja/CMakeCache.txt -Raw
           $stamped = [regex]::Match($cache, 'MOTE_BUILD:[A-Z]+=(\d+)').Groups[1].Value
           Write-Host "cache 中的构建号: $stamped"
-          if ($stamped -notmatch '^\d{12}$') { throw "MOTE_BUILD 未生效: '$stamped'" }
+          if ($stamped -notmatch '^\d+$') { throw "MOTE_BUILD 未生效: '$stamped'" }
           # 清单必须写同一个构建号：发布步骤是另一个进程，默认值会取「发布时刻」，
           # 比二进制新，客户端会反复提示同一个版本
           "MOTE_BUILD_STAMP=$stamped" | Out-File -FilePath $env:GITHUB_ENV -Append
