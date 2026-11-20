@@ -26,8 +26,10 @@
 #   powershell -ExecutionPolicy Bypass -File tools\release\publish_windows.ps1 `
 #       -Mandatory -MandatoryReason SECURITY -MandatoryDeadline 2026-12-01T00:00:00Z
 #
-# -Build 必须等于编译时的 -DMOTE_BUILD；省略时从 build-native-ninja\CMakeCache.txt 读取，
-# 读不到直接失败（不再退回当前时间：清单比安装包新会让客户端反复提示同一版本）。
+# -Build 可省略：依次从 build-native-ninja\CMakeCache.txt、zip 内 Mote.exe 的
+# "MOTE_BUILD=<digits>" 标记自动识别，识别后与二进制交叉校验。
+# packaging\package_windows_native.ps1 不传 -Build 时会自动用 gen_build.py 生成，
+# 因此正常发布流程无需手工指定构建号。
 
 param(
     [string]$ZipPath = "",
@@ -55,14 +57,19 @@ function Fail([string]$message) {
 
 # 灰度 / 强制更新参数校验：唯一实现在 tools/release/publish_args.py（三仓库共享）。
 # 非 0 退出直接 exit 2，脚本里不再重复 if 校验。
-$pyArgs = Get-Command python3 -ErrorAction SilentlyContinue
-if (-not $pyArgs) { $pyArgs = Get-Command python -ErrorAction SilentlyContinue }
+# Windows 上 python3 常是 Microsoft Store 的占位程序（退出码 9009），优先用 python
+$pyArgs = Get-Command python -ErrorAction SilentlyContinue
+if (-not $pyArgs) { $pyArgs = Get-Command python3 -ErrorAction SilentlyContinue }
 if (-not $pyArgs) { Fail "找不到 python（publish_args / manifest_v2 需要）" }
 $mandatoryArg = if ($Mandatory) { "1" } else { "0" }
 $argsOutput = & $pyArgs.Source (Join-Path $root "tools\release\publish_args.py") validate `
     "--product=mote" "--rollout=$Rollout" "--mandatory=$mandatoryArg" `
     "--mandatory-reason=$MandatoryReason" "--mandatory-deadline=$MandatoryDeadline" --emit sh
-if ($LASTEXITCODE -ne 0) { exit 2 }
+if ($LASTEXITCODE -ne 0) {
+    $argsOutput | Out-Host
+    Write-Host "[失败] 发布参数校验失败（publish_args.py 退出码 $LASTEXITCODE）"
+    exit 2
+}
 foreach ($line in @($argsOutput)) {
     if ($line -notmatch "^([A-Z_]+)='(.*)'$") { continue }
     $key = $Matches[1]
@@ -101,18 +108,45 @@ if (-not $versionLine) { Fail "无法从 VERSION.txt 读取版本号" }
 $Version = $versionLine.Trim()
 
 # v2 清单 windows 平台必须带 build（客户端同版本比对构建号）。
-# 必须与二进制里的 MOTE_BUILD 一致：取编译时写进 CMakeCache 的值。取不到就直接
-# 失败并要求显式传 -Build——退回当前时间会让清单比安装包「更新」，客户端每次检测
-# 都判定有新版本、装完仍是同一个包，形成无限更新循环，且很难在线上看出来。
+# 构建号解析顺序：-Build 显式传入 → CMakeCache → zip 内 Mote.exe 的
+# "MOTE_BUILD=<digits>" 标记。三者取到后仍会交叉校验，避免清单写的 build 与
+# 二进制不一致（那会让客户端反复提示同一版本、装完还是旧包）。
+$BuildSource = "参数 -Build"
 if ([string]::IsNullOrWhiteSpace($Build)) {
     $cachePath = Join-Path $root "build-native-ninja\CMakeCache.txt"
     if (Test-Path -LiteralPath $cachePath) {
         $cacheText = Get-Content -LiteralPath $cachePath -Raw
         $match = [regex]::Match($cacheText, 'MOTE_BUILD:[A-Z]+=(\d+)')
-        if ($match.Success) { $Build = $match.Groups[1].Value }
+        if ($match.Success) { $Build = $match.Groups[1].Value; $BuildSource = "CMakeCache" }
+    }
+}
+if ([string]::IsNullOrWhiteSpace($Build)) {
+    # 兜底：直接从产物里的 MOTE_BUILD 标记识别（package_windows_native.ps1 自动注入）
+    if ([string]::IsNullOrWhiteSpace($ZipPath)) { $ZipPath = Join-Path $root "dist\Mote-Windows.zip" }
+    if (Test-Path -LiteralPath $ZipPath) {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zipForBuild = [IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $ZipPath).Path)
+        try {
+            $entryForBuild = $zipForBuild.Entries | Where-Object {
+                $_.FullName.EndsWith("Mote.exe", [StringComparison]::OrdinalIgnoreCase)
+            } | Select-Object -First 1
+            if ($entryForBuild) {
+                $tmpExe = Join-Path $env:TEMP ("mote-build-" + [guid]::NewGuid().ToString("N") + ".exe")
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($entryForBuild, $tmpExe)
+                try {
+                    $ascii = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($tmpExe))
+                    $m = [regex]::Match($ascii, 'MOTE_BUILD=(\d{4,})')
+                    if ($m.Success) { $Build = $m.Groups[1].Value; $BuildSource = "zip 内 Mote.exe" }
+                } finally {
+                    Remove-Item $tmpExe -Force -ErrorAction SilentlyContinue
+                }
+            }
+        } finally {
+            $zipForBuild.Dispose()
+        }
     }
     if ([string]::IsNullOrWhiteSpace($Build)) {
-        Fail "未能确定编译时的 MOTE_BUILD：CMakeCache 里没有该变量。请用 -Build <构建号> 显式传入，值必须与 -DMOTE_BUILD 一致"
+        Fail "无法自动确定构建号：CMakeCache 与 zip 内 Mote.exe 都没有 MOTE_BUILD 标记。请先跑 packaging\package_windows_native.ps1（会自动生成构建号并编译），或用 -Build 显式传入"
     }
 }
 if ($Build -notmatch '^\d{4,}$') { Fail "非法构建号：$Build（应为纯数字，如 202611180930）" }
@@ -127,12 +161,12 @@ if (Test-Path -LiteralPath $cachePath) {
         if ($cachedBuild -ne $Build) {
             Fail "-Build $Build 与编译时 CMakeCache MOTE_BUILD=$cachedBuild 不一致；请保持同步（或清理 build 目录重编）"
         }
-        Write-Host "构建号：$Build（CMakeCache 一致 ✓）"
+        Write-Host "构建号：$Build（来源 $BuildSource，CMakeCache 一致 ✓）"
     } else {
-        Write-Host "构建号：$Build（CMakeCache 未找到 MOTE_BUILD，跳过二次验证）"
+        Write-Host "构建号：$Build（来源 $BuildSource，CMakeCache 未找到 MOTE_BUILD，跳过二次验证）"
     }
 } else {
-    Write-Host "构建号：$Build（无 CMakeCache，跳过二次验证）"
+    Write-Host "构建号：$Build（来源 $BuildSource，无 CMakeCache，跳过二次验证）"
 }
 
 # 签名种子：环境变量优先（CI），其次本地种子文件

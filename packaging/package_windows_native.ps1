@@ -6,6 +6,7 @@
 param(
     [string]$BuildDir = "",
     [string]$OutName = "Mote-Windows",
+    [string]$Build = "",
     [switch]$SkipBuild
 )
 
@@ -25,6 +26,27 @@ function Fail([string]$message) {
 
 if (-not $SkipBuild) {
     Write-Host "[1/6] 构建原生 Release"
+    if ([string]::IsNullOrWhiteSpace($Build)) {
+        # 构建号全自动：显式 -Build 优先，否则用 gen_build.py（与 macOS 打包一致，
+        # 保证 > 线上 manifest.json 的 build 最大值）。
+        $py = Get-Command python -ErrorAction SilentlyContinue
+        if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
+        if (-not $py) { Fail "找不到 python（gen_build.py 需要）；可改用 -Build 显式指定构建号" }
+        $genOut = (& $py.Source (Join-Path $root "tools\release\gen_build.py") `
+            --product mote --repo-root $root 2>&1 | Select-Object -Last 1)
+        if ($LASTEXITCODE -ne 0 -or "$genOut" -notmatch '^\d{4,}$') {
+            Fail "gen_build.py 失败：$genOut（可改用 -Build 显式指定构建号）"
+        }
+        $Build = "$genOut".Trim()
+        Write-Host "构建号：$Build（来源 gen_build.py）"
+    } else {
+        if ($Build -notmatch '^\d{4,}$') { Fail "非法构建号：$Build（应为纯数字，如 202611180930）" }
+        Write-Host "构建号：$Build（来源 -Build）"
+    }
+    # -DMOTE_RELEASE_BUILD=ON：发布态门禁（占位构建号 / 缺 Sparkle 等直接 FATAL）
+    cmake -S (Join-Path $root "native") -B $BuildDir `
+        -DMOTE_BUILD="$Build" -DMOTE_RELEASE_BUILD=ON | Out-Host
+    if ($LASTEXITCODE -ne 0) { Fail "cmake configure 失败（退出码 $LASTEXITCODE）" }
     cmake --build $BuildDir | Out-Host
     if ($LASTEXITCODE -ne 0) { Fail "cmake --build 失败" }
 }
@@ -33,14 +55,15 @@ $exe = Join-Path $BuildDir "Mote.exe"
 if (-not (Test-Path $exe)) { Fail "未找到 $exe（先构建或检查 -BuildDir）" }
 if (-not (Test-Path $loader)) { Fail "未找到 $loader（设置 WEBVIEW2_SDK）" }
 
-# 发布清单的 build 必须等于编译时的 MOTE_BUILD，否则客户端会反复提示同一版本
+# 发布清单的 build 必须等于编译时的 MOTE_BUILD，否则客户端会反复提示同一版本；
+# 自动构建（上面的 configure）会把构建号写进 CMakeCache，发布脚本直接读取。
 $cacheFile = Join-Path $BuildDir "CMakeCache.txt"
 if (Test-Path -LiteralPath $cacheFile) {
     $stamp = [regex]::Match((Get-Content -LiteralPath $cacheFile -Raw), 'MOTE_BUILD:[A-Z]+=(\d+)').Groups[1].Value
     if ($stamp -and $stamp -ne "0") {
         Write-Host "构建号 MOTE_BUILD=$stamp（发布时清单必须写同一个值）"
     } else {
-        Write-Host "[提示] 本次构建未设置 MOTE_BUILD，发布 Windows 更新时需用 -Build 显式指定构建号"
+        Write-Host "[提示] 本次构建未设置 MOTE_BUILD，发布脚本会从 zip 内 Mote.exe 自动识别构建号"
     }
 }
 
