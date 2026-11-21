@@ -117,7 +117,7 @@ body = markdown.markdown(md, extensions=['tables','fenced_code'])
 full = f'<!DOCTYPE html><html><head><meta charset="utf-8"><style>{css}</style></head><body>{body}</body></html>'
 open(html_path, 'w', encoding='utf-8').write(full)
 PYEOF
-        echo "  (md → html 自动生成 $html_file)"
+        echo "  (md → html 自动生成 $html_file)" >&2
       else
         echo "⚠️  有 release-notes-$ver.md 但缺 Python markdown 库，跳过转换" >&2
         return 1
