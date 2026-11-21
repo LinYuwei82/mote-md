@@ -3792,6 +3792,14 @@
         base = stop;
         continue;
       }
+      // 表格整块交给按格步进：| 标记与对齐行都不可编辑
+      if (list[i] && list[i].classList.contains('table')) {
+        var tableTarget = crossStepInTable(list[i], abs, dir);
+        if (tableTarget !== null)
+          return tableTarget;
+        return dir < 0 ? crossPrevEnd(blocks, gaps, list, i)
+          : (i + 1 < blocks.length ? stop + gapBefore(gaps, i + 1) : null);
+      }
       if (dir < 0) {
         // 围栏前缀不可编辑：停在正文行首时直接跨到上一块末尾
         if (isCodeBlock(list[i]) && abs <= base + codePrefixLength(list[i]))
@@ -3825,7 +3833,90 @@
     return start + crossEditableLength(list[prev], blocks[prev]);
   }
 
-  // 把折叠光标落到整篇绝对偏移处；焦点切块时先 focus 触发 enterEdit 与滚动
+  // 表格块的可编辑核心：首格可见起点 / 末格可见终点（块内 raw 偏移）。块首的
+  // | 标记与隐藏的对齐行都不可编辑，光标不能停在它们里面
+  function tableCoreOffsets(el) {
+    var cells = tableCellList(el);
+    var first = null;
+    var last = null;
+    for (var i = 0; i < cells.length; i++) {
+      var nodes = editableTextNodes(cells[i]);
+      if (!nodes.length)
+        continue;
+      if (!first)
+        first = nodes[0];
+      last = nodes[nodes.length - 1];
+    }
+    if (!first)
+      return null;
+    return {
+      start: rawOffsetAtPoint(el, first, 0),
+      end: rawOffsetAtPoint(el, last, last.nodeValue.length)
+    };
+  }
+
+  // 表格块里每格可见文本在整篇里的连续区间（空格子不参与）
+  function tableVisibleSpans(el) {
+    var cells = tableCellList(el);
+    var spans = [];
+    for (var i = 0; i < cells.length; i++) {
+      var nodes = editableTextNodes(cells[i]);
+      if (!nodes.length)
+        continue;
+      var total = 0;
+      for (var n = 0; n < nodes.length; n++)
+        total += nodes[n].nodeValue.length;
+      if (!total)
+        continue;
+      var start = absoluteOf(el, nodes[0], 0);
+      var end = absoluteOf(el, nodes[nodes.length - 1], nodes[nodes.length - 1].nodeValue.length);
+      if (start === null || end === null)
+        continue;
+      spans.push({ start: start, end: end });
+    }
+    return spans;
+  }
+
+  // 表格块内的横向步进：格内逐字；跨格落到相邻格的首/末可见字符，绝不落进
+  // | 标记或对齐行。返回 null 表示这个方向已经到表格两端，该跨出整块
+  function crossStepInTable(el, abs, dir) {
+    var spans = tableVisibleSpans(el);
+    if (!spans.length)
+      return null;
+    if (abs < spans[0].start)
+      return dir > 0 ? spans[0].start : null;
+    if (abs > spans[spans.length - 1].end)
+      return dir < 0 ? spans[spans.length - 1].end : null;
+    for (var i = 0; i < spans.length; i++) {
+      var span = spans[i];
+      if (abs < span.start)
+        return dir > 0 ? span.start : spans[i - 1].end;
+      if (abs <= span.end) {
+        if (dir < 0)
+          return abs > span.start ? abs - 1 : (i > 0 ? spans[i - 1].end : null);
+        return abs < span.end ? abs + 1 : (i + 1 < spans.length ? spans[i + 1].start : null);
+      }
+    }
+    return null;
+  }
+
+  // 表格块里 raw 偏移 → 单元格可见文本里的点（不能停在 | 标记上）
+  function tableCaretAt(el, offset) {
+    var cells = tableCellList(el);
+    for (var i = 0; i < cells.length; i++) {
+      var nodes = editableTextNodes(cells[i]);
+      for (var n = 0; n < nodes.length; n++) {
+        var start = rawOffsetAtPoint(el, nodes[n], 0);
+        var len = nodes[n].nodeValue.length;
+        if (offset <= start + len)
+          return { node: nodes[n], offset: Math.max(0, offset - start) };
+      }
+    }
+    return null;
+  }
+
+  // 把折叠光标落到整篇绝对偏移处，返回实际落点（切块时会先 focus 触发
+  // enterEdit 与滚动；表格要收进单元格可见文本，代码块要跳过围栏）
   function focusCrossAt(abs) {
     var blocks = collectBlocks();
     var gaps = collectGaps();
@@ -3833,11 +3924,33 @@
     var at = locateBlock(blocks, gaps, abs);
     var el = list[at.index];
     if (!el)
-      return false;
+      return null;
     if (document.activeElement !== el)
       el.focus();
-    placeBlockCaret(el, Math.max(0, Math.min(at.start, blocks[at.index].length)));
-    return true;
+    var offset = Math.max(0, Math.min(at.start, blocks[at.index].length));
+    if (el.classList.contains('table')) {
+      var caret = tableCaretAt(el, offset);
+      if (caret) {
+        var range = document.createRange();
+        try {
+          range.setStart(caret.node, caret.offset);
+          range.collapse(true);
+          var selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          var placed = absoluteOf(el, caret.node, caret.offset);
+          if (placed !== null)
+            return placed;
+        } catch (error) { /* 退回块内统一落点 */ }
+      }
+    }
+    placeBlockCaret(el, offset);
+    var live = window.getSelection();
+    if (!live.rangeCount)
+      return null;
+    var settled = live.getRangeAt(0);
+    var result = absoluteOf(el, settled.startContainer, settled.startOffset);
+    return result === null ? blockStartOffset(blocks, gaps, at.index) + offset : result;
   }
 
   // Shift+←/→：块首/块尾才升级成跨块选区；升级后由这里逐字接管，块内横向
@@ -3862,9 +3975,20 @@
       if (index < 0)
         return false;
       var off = rawOffsetAtPoint(focusEl, selection.focusNode, selection.focusOffset);
-      // 代码块的可视行首/行尾在围栏之内，那两个位置同样算块首/块尾
-      var visibleStart = isCodeBlock(focusEl) ? codePrefixLength(focusEl) : 0;
-      var visibleEnd = crossEditableLength(focusEl, blocks[index]);
+      // 代码块的可视行首/行尾在围栏之内、表格的首/末可见字符在 | 标记之后，
+      // 这几个位置同样算作块首/块尾
+      var visibleStart = 0;
+      var visibleEnd = blocks[index].length;
+      if (isCodeBlock(focusEl)) {
+        visibleStart = codePrefixLength(focusEl);
+        visibleEnd = crossEditableLength(focusEl, blocks[index]);
+      } else if (focusEl.classList.contains('table')) {
+        var core = tableCoreOffsets(focusEl);
+        if (core) {
+          visibleStart = core.start;
+          visibleEnd = core.end;
+        }
+      }
       if (left ? off > visibleStart : off < visibleEnd)
         return false;
       focusAbs = blockStartOffset(blocks, gaps, index) + off;
@@ -3897,11 +4021,12 @@
       selection.removeAllRanges();
       selection.addRange(collapseNative);
     }
-    if (!focusCrossAt(to))
+    var placed = focusCrossAt(to);
+    if (placed === null)
       return false;
     if (!crossSel)
       crossSel = { anchor: anchorAbs, focus: focusAbs, goalX: null };
-    crossSel.focus = to;
+    crossSel.focus = placed;
     // 横向移动后原来的目标列已经没意义，上下扩展时按新光标重新取
     crossSel.goalX = null;
     if (crossSel.anchor === crossSel.focus)
@@ -3937,6 +4062,13 @@
       var lo = Math.max(bounds.from, span.base);
       var hi = Math.min(bounds.to, span.stop);
       if (hi <= lo || !list[i] || list[i].classList.contains('hr')) {
+        base = span.stop;
+        continue;
+      }
+      // 表格直接取原文切片：| 与对齐行都在 raw 里，按 DOM 片段复制会把它们
+      // 当零宽标记剔掉，粘回去就不再是表格
+      if (list[i].classList.contains('table')) {
+        parts.push(blocks[i].slice(lo - span.base, hi - span.base));
         base = span.stop;
         continue;
       }
