@@ -3445,9 +3445,9 @@
      覆盖层画高亮；原生选区只保留焦点处的折叠光标，保证光标可见、滚动与输入法
      正常。偏移口径与撤销栈一致：blockStartOffset + 块内 raw 偏移。
 
-     范围只在 Shift+↑/↓ 时建立/扩展；点击、Esc、普通按键、撤销重建、打开查找、
-     切源码模式都会清除。原型边界：鼠标拖选、Shift+←/→、输入法组合输入、跨表格
-     单元格的精细边界都不接管，遇到时回退到原生单块行为。 */
+     范围只在 Shift+方向键或鼠标拖选时建立/扩展；点击、Esc、普通按键、撤销重建、
+     打开查找、切源码模式都会清除。原型边界：输入法组合输入、跨表格单元格的精细
+     边界都不接管，遇到时回退到原生单块行为。 */
 
   var crossSel = null;        // { anchor, focus, goalX }，整篇绝对字符偏移
   var crossLayer = null;      // 覆盖层（position:absolute，挂在 body）
@@ -3761,6 +3761,157 @@
     return true;
   }
 
+  // 可编辑长度：代码块的围栏前缀与收尾围栏都不可编辑，只算正文
+  function crossEditableLength(el, raw) {
+    if (!el || !isCodeBlock(el))
+      return raw.length;
+    var code = codeEl(el);
+    return codePrefixLength(el) + (code ? code.textContent.length : 0);
+  }
+
+  // 整篇绝对偏移按字符左右步进。块内逐字走；越过块间空行时直接落到相邻块的
+  // 端点上——空行本身画不出高亮，停在空行里等同于原地不动。代码块两端还要
+  // 跳过不可编辑的围栏，否则光标会在围栏里空走好几下。
+  function crossStepTarget(abs, dir) {
+    var blocks = collectBlocks();
+    var gaps = collectGaps();
+    var list = blockList();
+    var base = 0;
+    for (var i = 0; i < blocks.length; i++) {
+      var gap = gapBefore(gaps, i);
+      base += gap;
+      var stop = base + blocks[i].length;
+      var visible = crossEditableLength(list[i], blocks[i]);
+      if (abs < base) {
+        // 落在块前空行：向左归到上一块末尾，向右归到本块开头
+        if (dir < 0)
+          return i > 0 ? crossPrevEnd(blocks, gaps, list, i) : null;
+        return base;
+      }
+      if (abs > stop) {
+        base = stop;
+        continue;
+      }
+      if (dir < 0) {
+        // 围栏前缀不可编辑：停在正文行首时直接跨到上一块末尾
+        if (isCodeBlock(list[i]) && abs <= base + codePrefixLength(list[i]))
+          return i > 0 ? crossPrevEnd(blocks, gaps, list, i) : null;
+        // 收尾围栏不可编辑：归到正文末尾
+        if (abs > base + visible)
+          return base + visible;
+        if (abs > base)
+          return abs - 1;
+        if (i === 0)
+          return null;
+        // 行首：退到上一块末尾；块间没有空行时两个端点重合，再退一个字
+        return gap > 0 ? crossPrevEnd(blocks, gaps, list, i) : abs - 1;
+      }
+      if (abs < base + visible)
+        return abs + 1;
+      if (i + 1 >= blocks.length)
+        return null;
+      var nextGap = gapBefore(gaps, i + 1);
+      return nextGap > 0 ? stop + nextGap : abs + 1;
+    }
+    return null;
+  }
+
+  // 第 index 块之前那一块的可编辑末尾
+  function crossPrevEnd(blocks, gaps, list, index) {
+    var prev = index - 1;
+    if (prev < 0)
+      return null;
+    var start = blockStartOffset(blocks, gaps, prev);
+    return start + crossEditableLength(list[prev], blocks[prev]);
+  }
+
+  // 把折叠光标落到整篇绝对偏移处；焦点切块时先 focus 触发 enterEdit 与滚动
+  function focusCrossAt(abs) {
+    var blocks = collectBlocks();
+    var gaps = collectGaps();
+    var list = blockList();
+    var at = locateBlock(blocks, gaps, abs);
+    var el = list[at.index];
+    if (!el)
+      return false;
+    if (document.activeElement !== el)
+      el.focus();
+    placeBlockCaret(el, Math.max(0, Math.min(at.start, blocks[at.index].length)));
+    return true;
+  }
+
+  // Shift+←/→：块首/块尾才升级成跨块选区；升级后由这里逐字接管，块内横向
+  // 选区仍交回原生
+  function extendCrossSelectionHorizontal(el, left) {
+    if (mode !== 'wysiwyg' || !el.classList.contains('editing'))
+      return false;
+    var selection = window.getSelection();
+    if (!selection || !selection.rangeCount)
+      return false;
+    var range = selection.getRangeAt(0);
+    var anchorAbs = null;
+    var focusAbs = null;
+    var collapseNative = null;
+    if (!crossSel) {
+      var blocks = collectBlocks();
+      var gaps = collectGaps();
+      var list = blockList();
+      // 看移动端（焦点）是否已经顶到块首/块尾；原生单块选区在这里一并升格
+      var focusEl = blockOf(selection.focusNode) || el;
+      var index = list.indexOf(focusEl);
+      if (index < 0)
+        return false;
+      var off = rawOffsetAtPoint(focusEl, selection.focusNode, selection.focusOffset);
+      // 代码块的可视行首/行尾在围栏之内，那两个位置同样算块首/块尾
+      var visibleStart = isCodeBlock(focusEl) ? codePrefixLength(focusEl) : 0;
+      var visibleEnd = crossEditableLength(focusEl, blocks[index]);
+      if (left ? off > visibleStart : off < visibleEnd)
+        return false;
+      focusAbs = blockStartOffset(blocks, gaps, index) + off;
+      if (range.collapsed) {
+        anchorAbs = focusAbs;
+      } else {
+        var anchorEl = blockOf(selection.anchorNode);
+        var anchorIndex = anchorEl ? list.indexOf(anchorEl) : -1;
+        if (anchorIndex < 0)
+          return false;
+        anchorAbs = blockStartOffset(blocks, gaps, anchorIndex)
+          + rawOffsetAtPoint(anchorEl, selection.anchorNode, selection.anchorOffset);
+        // 确定要接管后才把原生选区收成焦点处的折叠光标，高亮交给覆盖层；
+        // 先收起会在边界上白白丢掉用户已有的选区
+        collapseNative = document.createRange();
+        try {
+          collapseNative.setStart(selection.focusNode, selection.focusOffset);
+          collapseNative.collapse(true);
+        } catch (error) {
+          collapseNative = null;
+          return false;
+        }
+      }
+    }
+    var from = crossSel ? crossSel.focus : focusAbs;
+    var to = crossStepTarget(from, left ? -1 : 1);
+    if (to === null)
+      return false;
+    if (collapseNative) {
+      selection.removeAllRanges();
+      selection.addRange(collapseNative);
+    }
+    if (!focusCrossAt(to))
+      return false;
+    if (!crossSel)
+      crossSel = { anchor: anchorAbs, focus: focusAbs, goalX: null };
+    crossSel.focus = to;
+    // 横向移动后原来的目标列已经没意义，上下扩展时按新光标重新取
+    crossSel.goalX = null;
+    if (crossSel.anchor === crossSel.focus)
+      clearCrossSelection();
+    else
+      paintCrossSelection();
+    announceCross();
+    return true;
+  }
+
   function crossBounds() {
     if (!crossSel)
       return null;
@@ -4004,6 +4155,14 @@
     if ((event.key === 'ArrowUp' || event.key === 'ArrowDown')
         && event.shiftKey && plainKeys
         && extendCrossSelection(el, event.key === 'ArrowUp')) {
+      event.preventDefault();
+      return;
+    }
+
+    // Shift+←/→ 跨块：块首/块尾或已有跨块选区时逐字扩展，其余交回原生
+    if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+        && event.shiftKey && plainKeys
+        && extendCrossSelectionHorizontal(el, event.key === 'ArrowLeft')) {
       event.preventDefault();
       return;
     }
