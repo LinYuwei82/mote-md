@@ -114,6 +114,7 @@ class TestPublishMacos(unittest.TestCase):
             "DMG_PATH": self._fake_dmg(),
             "HOME": str(home),
             "SIGN_KEY": str(self.r.cfg / "ed25519_seed.b64"),
+            "SPARKLE_KEY": str(self.r.cfg / "sparkle_ed25519_seed.b64"),
             "SPARKLE_BIN": str(home / "no-sparkle"),
         }, expect_code=1, expect_stderr_contains="未找到 Sparkle 的 sign_update")
 
