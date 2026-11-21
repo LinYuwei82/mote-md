@@ -4079,6 +4079,152 @@
     return parts.join('\n');
   }
 
+  // 表格单元格可见文本的整篇绝对区间；空格子没有可量测的文字，返回 null
+  function tableCellAbsSpan(el, cell) {
+    var nodes = editableTextNodes(cell);
+    if (!nodes.length)
+      return null;
+    var first = nodes[0];
+    var last = nodes[nodes.length - 1];
+    var start = absoluteOf(el, first, 0);
+    var end = absoluteOf(el, last, last.nodeValue.length);
+    if (start === null || end === null)
+      return null;
+    return { start: start, end: end };
+  }
+
+  // 单元格里截取 [from, to)（单元格内可见文本口径）的克隆片段
+  function cellClipContents(cell, from, to) {
+    var nodes = editableTextNodes(cell);
+    var acc = 0;
+    var startNode = null, startOffset = 0, endNode = null, endOffset = 0;
+    for (var i = 0; i < nodes.length && to > acc; i++) {
+      var len = nodes[i].nodeValue.length;
+      if (!startNode && from < acc + len) {
+        startNode = nodes[i];
+        startOffset = Math.max(0, from - acc);
+      }
+      if (to <= acc + len) {
+        endNode = nodes[i];
+        endOffset = Math.max(0, to - acc);
+        break;
+      }
+      acc += len;
+    }
+    if (!startNode || !endNode)
+      return null;
+    var range = document.createRange();
+    try {
+      range.setStart(startNode, startOffset);
+      range.setEnd(endNode, endOffset);
+    } catch (error) {
+      return null;
+    }
+    return range.cloneContents();
+  }
+
+  // 表格块在跨块选区里的 HTML：整表克隆后按区间裁行裁格，保留 <table> 结构。
+  // 对齐行是编辑器内部的隐藏标记（原文里才有意义），HTML 里去掉。
+  function crossTableHtml(el, from, to) {
+    var source = el.querySelector('table');
+    if (!source)
+      return null;
+    var clone = source.cloneNode(true);
+    var rows = source.querySelectorAll('tr');
+    var copies = clone.querySelectorAll('tr');
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r];
+      var copy = copies[r];
+      if (!copy)
+        continue;
+      if (row.classList.contains('tbl-align')) {
+        copy.parentNode.removeChild(copy);
+        continue;
+      }
+      var cells = row.children;
+      var cellCopies = copy.children;
+      var kept = false;
+      for (var c = 0; c < cells.length; c++) {
+        var copyCell = cellCopies[c];
+        if (!copyCell)
+          continue;
+        var span = tableCellAbsSpan(el, cells[c]);
+        if (!span)
+          continue;
+        var lo = Math.max(from, span.start);
+        var hi = Math.min(to, span.end);
+        if (hi <= lo) {
+          copyCell.parentNode.removeChild(copyCell);
+          continue;
+        }
+        kept = true;
+        if (lo > span.start || hi < span.end) {
+          var clipped = cellClipContents(cells[c], lo - span.start, hi - span.start);
+          while (copyCell.firstChild)
+            copyCell.removeChild(copyCell.firstChild);
+          if (clipped)
+            copyCell.appendChild(clipped);
+        }
+      }
+      if (!kept)
+        copy.parentNode.removeChild(copy);
+    }
+    return clone;
+  }
+
+  // 跨块选区的 HTML：与纯文本同一区间口径，逐块裁剪，保留标题/列表/代码块
+  // 的语义；表格按行列裁剪后仍是 <table>。已选区间之外的"未选中"内容不进来。
+  function crossSelectionHtml() {
+    var bounds = crossBounds();
+    if (!bounds || bounds.from === bounds.to)
+      return '';
+    var blocks = collectBlocks();
+    var gaps = collectGaps();
+    var list = blockList();
+    var holder = document.createElement('div');
+    var base = 0;
+    for (var i = 0; i < blocks.length && base < bounds.to; i++) {
+      var span = blockAbsoluteSpan(blocks, gaps, i);
+      base = span.base;
+      var lo = Math.max(bounds.from, span.base);
+      var hi = Math.min(bounds.to, span.stop);
+      if (hi <= lo || !list[i] || list[i].classList.contains('hr')) {
+        base = span.stop;
+        continue;
+      }
+      var el = list[i];
+      if (el.classList.contains('table')) {
+        var table = crossTableHtml(el, lo, hi);
+        if (table)
+          holder.appendChild(table);
+        base = span.stop;
+        continue;
+      }
+      var sub = crossBlockRange(el, lo - span.base, hi - span.base);
+      if (!sub) {
+        base = span.stop;
+        continue;
+      }
+      var fragment = sub.cloneContents();
+      var inner = blockSemantic(el);
+      var only = fragment.childNodes.length === 1 ? fragment.firstChild : null;
+      var shell;
+      // 整块选中时片段已带出内层语义标签，不能再套一层（与 selectionHtml 同口径）
+      if (inner && only && only.nodeType === 1 && only.nodeName === inner.nodeName) {
+        shell = only;
+      } else {
+        shell = document.createElement(inner ? inner.tagName.toLowerCase() : 'p');
+        shell.appendChild(fragment);
+      }
+      applyCopyStyle(inner || el, shell);
+      inlineCodeTokenColors(el, sub, shell);
+      holder.appendChild(shell);
+      base = span.stop;
+    }
+    sanitizeCopyHtml(holder);
+    return holder.innerHTML;
+  }
+
   // 用 insert 替换跨块选区：整篇源码拼接后一次重建（一步撤销），光标落到替换末尾
   function replaceCrossSelection(insert) {
     var bounds = crossBounds();
@@ -4748,6 +4894,9 @@
   // 粘到 Word / 邮件 / TextEdit 里仍有标题层级、列表符号与代码块的样子。
   // 复制走 HTML 是给“粘到外部应用”用的；粘回 Mote 仍只读 text/plain。
   function selectionHtml() {
+    // 自建跨块选区：原生选区是折叠的，必须按绝对区间自己取 HTML
+    if (crossSel)
+      return crossSelectionHtml();
     var selection = window.getSelection();
     if (!selection || selection.isCollapsed || !selection.rangeCount)
       return '';
@@ -4852,11 +5001,16 @@
     if (mode === 'source')
       return;
     if (crossSel) {
-      // 原生选区是折叠的，WebKit 不会自己剪切：算好文本写剪贴板再删区间
+      // 原生选区是折叠的，WebKit 不会自己剪切：算好内容写剪贴板再删区间
       event.preventDefault();
       var crossText = crossSelectionPlainText();
-      if (event.clipboardData && !clipboardTextIsBlank(crossText))
-        event.clipboardData.setData('text/plain', crossText);
+      if (event.clipboardData) {
+        if (!clipboardTextIsBlank(crossText))
+          event.clipboardData.setData('text/plain', crossText);
+        var crossHtml = crossSelectionHtml();
+        if (crossHtml)
+          event.clipboardData.setData('text/html', crossHtml);
+      }
       replaceCrossSelection('');
       return;
     }
