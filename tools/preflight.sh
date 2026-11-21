@@ -57,10 +57,19 @@ mkdir -p "$BUILD_DIR" || { red "无法创建 $BUILD_DIR"; exit 1; }
 
 LOG="$BUILD_DIR/build.log"
 JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+if ! command -v python3 >/dev/null 2>&1; then
+    red "找不到 python3：生成 build 号需要 Python 3"
+    exit 1
+fi
+# 发布门禁要求显式 build 号；冒烟用离线模式，不依赖线上清单
+BUILD_NUM="$(python3 "$ROOT/tools/release/gen_build.py" --product mote --repo-root "$ROOT" --offline)" \
+    || { red "生成 build 号失败"; exit 1; }
+info "构建号：$BUILD_NUM"
 (
     # -DMOTE_RELEASE_BUILD=ON：Sparkle.framework 缺失时 FATAL_ERROR，
     # 防止残缺产物（2026-11-19 mote 1.0.4 即因此重发）
     cmake -S "$ROOT/native" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DMOTE_RELEASE_BUILD=ON \
+        -DMOTE_BUILD="$BUILD_NUM" \
         && cmake --build "$BUILD_DIR" --config Release -j"$JOBS"
 ) > "$LOG" 2>&1
 
