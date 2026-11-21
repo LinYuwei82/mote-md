@@ -373,10 +373,20 @@ private:
         _controller->redo();
         return;
     // 标准编辑动作交给响应链：WebKit 自己处理选区、剪贴板与页面 copy/cut/paste 事件
+    // 例外：自建跨块选区时原生选区是折叠的，WebKit 会判成「没有可复制内容」而
+    // 不派发 copy/cut 事件；此时改走页面算内容、外壳写剪贴板这条回路。
     case mote::CommandId::Cut:
+        if (_controller->crossSelection()) {
+            _controller->clipboardCommand("cut");
+            return;
+        }
         [self sendResponderAction:@selector(cut:)];
         return;
     case mote::CommandId::Copy:
+        if (_controller->crossSelection()) {
+            _controller->clipboardCommand("copy");
+            return;
+        }
         [self sendResponderAction:@selector(copy:)];
         return;
     case mote::CommandId::Paste:

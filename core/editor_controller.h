@@ -101,6 +101,9 @@ public:
     std::uint64_t pageGeneration() const { return m_pageGeneration; }
     bool pageReady() const { return m_pageReady; }
     bool dirty() const { return m_dirty; }
+    // 页面是否处于「自建跨块选区」状态（Shift+↑/↓ 跨块选区，原型）。
+    // 此时原生选区是折叠的，macOS 菜单的复制/剪切必须改走 clipboardCommand。
+    bool crossSelection() const { return m_crossSelection; }
     const std::string &baseDir() const { return m_baseDir; }
     const std::string &lastSavedText() const { return m_lastSavedText; }
     const std::string &theme() const { return m_theme; }
@@ -125,6 +128,7 @@ private:
     bool m_pageLoaded = false;
     bool m_pageReady = false;
     bool m_dirty = false;
+    bool m_crossSelection = false; // 页面自建跨块选区的开关，随换页复位
     std::uint64_t m_pageGeneration = 0;
 };
 

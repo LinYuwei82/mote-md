@@ -1771,6 +1771,8 @@
 
   // gaps 省略时全部按默认间隔（新建块之间的 2 个换行），供只关心文本的调用方使用
   function mountBlocks(blocks, gaps, trail) {
+    // 整篇重建后旧的绝对偏移全部失效，跨块选区必须先清掉
+    clearCrossSelection();
     closeLangMenu();
     root.innerHTML = '';
     for (var i = 0; i < blocks.length; i++) {
@@ -2582,6 +2584,8 @@
   function setMode(next) {
     if (next === mode)
       return;
+    // 自建跨块选区只在渲染态有效：切模式前先收起覆盖层
+    clearCrossSelection();
     // 查找/替换绑定当前模式的命中（DOM 区间或 textarea 区间），切模式前先关掉
     if (findBar)
       closeFind();
@@ -2716,6 +2720,8 @@
 
   // 点击渲染态时记录光标大致位置，切到源码态后尽量落在同一处
   document.addEventListener('mousedown', function (event) {
+    // 任何一次按下都结束自建跨块选区：原生选区接管，覆盖层不能残留
+    clearCrossSelection();
     var el = blockOf(event.target);
     if (!el || !document.caretRangeFromPoint) {
       pendingOffset = null;
@@ -2938,6 +2944,10 @@
   root.addEventListener('compositionstart', function () {
     if (suppressEvents)
       return;
+    // 组合输入不在原型范围，但也不能「选了却没删」：先按整篇源码删掉跨块选区，
+    // 候选上屏就落在替换点上；若输入法因此中断，用户重新输入即可。
+    if (crossSel)
+      replaceCrossSelection('');
     if (commitTimer) {
       clearTimeout(commitTimer);
       commitTimer = null;
@@ -3004,6 +3014,21 @@
   document.addEventListener('beforeinput', function (event) {
     if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo')
       event.preventDefault();
+    // 跨块选区上的输入：折叠光标只覆盖焦点一个字符，必须先按整篇源码替换区间
+    if (crossSel && !suppressEvents && mode === 'wysiwyg') {
+      if (event.inputType === 'insertText' && typeof event.data === 'string') {
+        event.preventDefault();
+        replaceCrossSelection(event.data);
+        return;
+      }
+      if (event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak') {
+        event.preventDefault();
+        replaceCrossSelection('\n');
+        return;
+      }
+      // 其余输入类型不由这里接管：先收起自建选区，避免原生操作折叠光标
+      clearCrossSelection();
+    }
     // 表格单元格内输入裸 |：转成转义的 \|，否则下次重排会被当成列分隔符、
     // 把整表撑出多余一列。渲染时 \| 显示为 |（反斜杠零宽），raw 保留转义。
     if (event.inputType === 'insertText' && event.data === '|' && !suppressEvents) {
@@ -3414,6 +3439,386 @@
     return true;
   }
 
+  /* ---------------- 跨块 Shift+方向键选区（原型） ----------------
+     每个块是独立 contenteditable，WebKit 会把跨块的 Selection.extend() 夹回原
+     块，原生选区跨不出块。这里自建一份「整篇绝对偏移」选区状态，用 body 上的
+     覆盖层画高亮；原生选区只保留焦点处的折叠光标，保证光标可见、滚动与输入法
+     正常。偏移口径与撤销栈一致：blockStartOffset + 块内 raw 偏移。
+
+     范围只在 Shift+↑/↓ 时建立/扩展；点击、Esc、普通按键、撤销重建、打开查找、
+     切源码模式都会清除。原型边界：鼠标拖选、Shift+←/→、输入法组合输入、跨表格
+     单元格的精细边界都不接管，遇到时回退到原生单块行为。 */
+
+  var crossSel = null;        // { anchor, focus, goalX }，整篇绝对字符偏移
+  var crossLayer = null;      // 覆盖层（position:absolute，挂在 body）
+  var crossAnnounced = false; // 与外壳同步的「是否有跨块选区」状态
+
+  function dropCrossLayer() {
+    if (crossLayer && crossLayer.parentNode)
+      crossLayer.parentNode.removeChild(crossLayer);
+    crossLayer = null;
+  }
+
+  function ensureCrossLayer() {
+    if (!crossLayer) {
+      crossLayer = document.createElement('div');
+      crossLayer.id = 'cross-layer';
+      crossLayer.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(crossLayer);
+    }
+    return crossLayer;
+  }
+
+  // 状态变化才回报：macOS 菜单的复制/剪切在折叠选区下会被 WebKit 判成「不可
+  // 复制」，需要外壳改走 EditorController::clipboardCommand 这条回路。
+  function announceCross() {
+    var active = !!crossSel;
+    if (active === crossAnnounced)
+      return;
+    crossAnnounced = active;
+    post({ type: 'crossSelection', active: active });
+  }
+
+  function clearCrossSelection() {
+    if (!crossSel)
+      return;
+    crossSel = null;
+    dropCrossLayer();
+    announceCross();
+  }
+
+  // 第 index 块在整篇里的字符长度与起点（与撤销栈同一口径）
+  function blockAbsoluteSpan(blocks, gaps, index) {
+    var base = blockStartOffset(blocks, gaps, index);
+    return { base: base, stop: base + blocks[index].length };
+  }
+
+  // 区间里是否真的有块正文：块间空白处投点得到的「只跨过空行」区间画不出任何
+  // 高亮，扩展时要跳过这种落点，继续往下一可视行找。
+  function crossRangeCoversText(from, to) {
+    var blocks = collectBlocks();
+    var gaps = collectGaps();
+    var base = 0;
+    for (var i = 0; i < blocks.length && base < to; i++) {
+      var span = blockAbsoluteSpan(blocks, gaps, i);
+      base = span.base;
+      if (span.stop > span.base
+          && Math.min(to, span.stop) > Math.max(from, span.base))
+        return true;
+      base = span.stop;
+    }
+    return false;
+  }
+
+  function absoluteOf(el, node, offset) {
+    var list = blockList();
+    var index = list.indexOf(el);
+    if (index < 0)
+      return null;
+    var blocks = collectBlocks();
+    var gaps = collectGaps();
+    return blockStartOffset(blocks, gaps, index) + rawOffsetAtPoint(el, node, offset);
+  }
+
+  // 块内某个 DOM 点 → 块内 raw 偏移（代码块补上围栏前缀）
+  function rawOffsetAtPoint(el, node, offset) {
+    var scope = navScope(el) || el;
+    var prefix = document.createRange();
+    prefix.selectNodeContents(scope);
+    try {
+      prefix.setEnd(node, offset);
+    } catch (error) {
+      return 0;
+    }
+    return prefix.toString().length + (isCodeBlock(el) ? codePrefixLength(el) : 0);
+  }
+
+  // 块内 raw 区间 → Range。分隔线没有可量测的文字，原型里不画它的高亮。
+  function crossBlockRange(el, start, end) {
+    if (!el || el.classList.contains('hr'))
+      return null;
+    var scope = navScope(el);
+    if (!scope)
+      return null;
+    var prefix = isCodeBlock(el) ? codePrefixLength(el) : 0;
+    var limit = scope.textContent.length;
+    var from = Math.max(0, Math.min(start - prefix, limit));
+    var to = Math.max(0, Math.min(end - prefix, limit));
+    if (to <= from)
+      return null;
+    var a = locateOffset(scope, from);
+    var b = locateOffset(scope, to);
+    var range = document.createRange();
+    try {
+      range.setStart(a.node, a.offset);
+      range.setEnd(b.node, b.offset);
+    } catch (error) {
+      return null;
+    }
+    return range;
+  }
+
+  // 逐块切开绝对区间取客户矩形，画成覆盖层色块（不插入任何正文节点）
+  function paintCrossSelection() {
+    if (!crossSel) {
+      dropCrossLayer();
+      return;
+    }
+    var from = Math.min(crossSel.anchor, crossSel.focus);
+    var to = Math.max(crossSel.anchor, crossSel.focus);
+    if (from === to) {
+      dropCrossLayer();
+      return;
+    }
+    var blocks = collectBlocks();
+    var gaps = collectGaps();
+    var list = blockList();
+    var layer = ensureCrossLayer();
+    while (layer.firstChild)
+      layer.removeChild(layer.firstChild);
+    var base = 0;
+    for (var i = 0; i < blocks.length && base < to; i++) {
+      var span = blockAbsoluteSpan(blocks, gaps, i);
+      base = span.base;
+      var lo = Math.max(from, span.base);
+      var hi = Math.min(to, span.stop);
+      if (hi > lo) {
+        var range = crossBlockRange(list[i], lo - span.base, hi - span.base);
+        var rects = range ? range.getClientRects() : [];
+        for (var r = 0; r < rects.length; r++) {
+          if (rects[r].width <= 0.5 || rects[r].height <= 0.5)
+            continue;
+          var box = document.createElement('div');
+          box.className = 'cross-hit';
+          box.style.left = (rects[r].left + window.scrollX) + 'px';
+          box.style.top = (rects[r].top + window.scrollY) + 'px';
+          box.style.width = rects[r].width + 'px';
+          box.style.height = rects[r].height + 'px';
+          layer.appendChild(box);
+        }
+      }
+      base = span.stop;
+    }
+  }
+
+  // 投点是否落在可编辑正文里：行号栏、语言徽标与工具条都不是正文
+  function crossHitNodeOk(el, node) {
+    if (!node || !pointInNavScope(el, node))
+      return false;
+    var host = node.nodeType === 1 ? node : node.parentNode;
+    if (host && host.closest && host.closest('.gutter, .code-lang, .code-tools'))
+      return false;
+    return true;
+  }
+
+  function blockAtAbsolute(abs) {
+    var blocks = collectBlocks();
+    var gaps = collectGaps();
+    var at = locateBlock(blocks, gaps, abs);
+    return { el: blockList()[at.index] || null, index: at.index, start: at.start };
+  }
+
+  // 量某个 DOM 点旁边那个字符的矩形（WebKit 的折叠 Range 常是 0×0）。
+  // 用来判断投点是否真的换了一可视行，而不是同一行内横向漂移。
+  function pointCharRect(node, offset, forward) {
+    if (!node || node.nodeType !== 3 || !node.nodeValue.length)
+      return null;
+    var index = forward
+      ? Math.min(offset, node.nodeValue.length - 1)
+      : Math.max(0, offset - 1);
+    var range = document.createRange();
+    try {
+      range.setStart(node, index);
+      range.setEnd(node, index + 1);
+    } catch (error) {
+      return null;
+    }
+    var rects = range.getClientRects();
+    for (var i = 0; i < rects.length; i++) {
+      if (rects[i].height > 0.5)
+        return rects[i];
+    }
+    return null;
+  }
+
+  // 从焦点光标往 up/down 走一可视行。优先按目标列投点（caretRangeFromPoint），
+  // 投不到（块间空白比一行宽、目标在视口外）时退到相邻块的首/末行。
+  function moveCrossFocus(up) {
+    if (!crossSel)
+      return false;
+    var at = blockAtAbsolute(crossSel.focus);
+    var el = at.el;
+    if (!el)
+      return false;
+    var caret = caretRectOfSelection();
+    var line = caret || contentEdgeRect(el, up);
+    if (!line)
+      return false;
+    var height = line.height || 20;
+    var x = typeof crossSel.goalX === 'number' ? crossSel.goalX : line.left;
+    var startY = up ? line.top : line.bottom;
+    // 块上下有内边距/外边距（代码块尤其高）：投点要够远才能落到下一块的正文行
+    var limit = Math.max(32, height * 5);
+    var hit = null;
+    if (document.caretRangeFromPoint) {
+      for (var d = 1; d <= limit; d += 2) {
+        var probe = document.caretRangeFromPoint(x, up ? startY - d : startY + d);
+        if (!probe)
+          continue;
+        var node = probe.startContainer;
+        var target = blockOf(node);
+        if (!target || !crossHitNodeOk(target, node))
+          continue;
+        var abs = absoluteOf(target, node, probe.startOffset);
+        // 只认「按方向真正前进」的落点：块内边距里投点会得到更靠后的坐标，
+        // 反向落点会让选区原地打转
+        if (abs === null || (up ? abs >= crossSel.focus : abs <= crossSel.focus))
+          continue;
+        // 同一可视行内的投点只是横向漂移（行尾/行首），不算换行
+        var charRect = pointCharRect(node, probe.startOffset, !up);
+        if (charRect && (up ? charRect.bottom > line.top + 1 : charRect.top < line.bottom - 1))
+          continue;
+        // 块间空白处的投点只会得到「跨过空行」的区间，画不出高亮：继续往下找
+        if (!crossRangeCoversText(crossSel.focus, abs))
+          continue;
+        hit = { el: target, range: probe, abs: abs };
+        break;
+      }
+    }
+    if (!hit) {
+      var next = up ? el.previousElementSibling : el.nextElementSibling;
+      while (next && !(next.classList && next.classList.contains('block')))
+        next = up ? next.previousElementSibling : next.nextElementSibling;
+      if (!next)
+        return false;
+      next.focus();   // 视口外时由焦点滚动带进视野
+      placeCaretInBlock(next, up, x);
+      var selection = window.getSelection();
+      if (!selection.rangeCount)
+        return false;
+      var settled = selection.getRangeAt(0);
+      var settledAbs = absoluteOf(next, settled.startContainer, settled.startOffset);
+      if (settledAbs === null)
+        return false;
+      hit = { el: next, range: settled.cloneRange(), abs: settledAbs };
+    }
+    if (document.activeElement !== hit.el)
+      hit.el.focus();
+    var range = window.getSelection();
+    range.removeAllRanges();
+    range.addRange(hit.range);
+    crossSel.focus = hit.abs;
+    return true;
+  }
+
+  // Shift+↑/↓：块首/块尾才升级成跨块选区；升级后一直由这里接管，直到清除
+  function extendCrossSelection(el, up) {
+    if (mode !== 'wysiwyg' || !el.classList.contains('editing'))
+      return false;
+    var selection = window.getSelection();
+    if (!selection || !selection.rangeCount)
+      return false;
+    var range = selection.getRangeAt(0);
+    if (!crossSel) {
+      var caret = caretRectOfSelection();
+      if (!caretAtBlockEdge(el, up, caret))
+        return false;
+      var index = blockList().indexOf(el);
+      if (index < 0)
+        return false;
+      var blocks = collectBlocks();
+      var gaps = collectGaps();
+      var base = blockStartOffset(blocks, gaps, index);
+      var anchorAbs, focusAbs;
+      if (range.collapsed) {
+        anchorAbs = focusAbs = base + rawOffsetAtPoint(el, range.startContainer, range.startOffset);
+      } else {
+        // 原生单块选区升格：锚点取 anchor 端，焦点取 focus 端；随后把原生选区
+        // 收成焦点处的折叠光标，高亮整段交给覆盖层
+        anchorAbs = base + rawOffsetAtPoint(el, selection.anchorNode, selection.anchorOffset);
+        focusAbs = base + rawOffsetAtPoint(el, selection.focusNode, selection.focusOffset);
+        var collapsed = document.createRange();
+        try {
+          collapsed.setStart(selection.focusNode, selection.focusOffset);
+          collapsed.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(collapsed);
+        } catch (error) { /* ignore */ }
+        caret = caretRectOfSelection();
+      }
+      crossSel = {
+        anchor: anchorAbs,
+        focus: focusAbs,
+        goalX: caret ? caret.left : null
+      };
+    }
+    moveCrossFocus(up);
+    if (crossSel.anchor === crossSel.focus)
+      clearCrossSelection();
+    else
+      paintCrossSelection();
+    announceCross();
+    return true;
+  }
+
+  function crossBounds() {
+    if (!crossSel)
+      return null;
+    return {
+      from: Math.min(crossSel.anchor, crossSel.focus),
+      to: Math.max(crossSel.anchor, crossSel.focus)
+    };
+  }
+
+  // 跨块选区的纯文本：逐块裁剪后按块拼接，口径与原生复制一致
+  function crossSelectionPlainText() {
+    var bounds = crossBounds();
+    if (!bounds || bounds.from === bounds.to)
+      return '';
+    var blocks = collectBlocks();
+    var gaps = collectGaps();
+    var list = blockList();
+    var parts = [];
+    var base = 0;
+    for (var i = 0; i < blocks.length && base < bounds.to; i++) {
+      var span = blockAbsoluteSpan(blocks, gaps, i);
+      base = span.base;
+      var lo = Math.max(bounds.from, span.base);
+      var hi = Math.min(bounds.to, span.stop);
+      if (hi <= lo || !list[i] || list[i].classList.contains('hr')) {
+        base = span.stop;
+        continue;
+      }
+      var range = crossBlockRange(list[i], lo - span.base, hi - span.base);
+      parts.push(range ? cleanCopyFragment(range.cloneContents()) : '');
+      base = span.stop;
+    }
+    return parts.join('\n');
+  }
+
+  // 用 insert 替换跨块选区：整篇源码拼接后一次重建（一步撤销），光标落到替换末尾
+  function replaceCrossSelection(insert) {
+    var bounds = crossBounds();
+    if (!bounds)
+      return false;
+    var text = currentSource();
+    var from = Math.max(0, Math.min(bounds.from, text.length));
+    var to = Math.max(0, Math.min(bounds.to, text.length));
+    var next = text.slice(0, from) + insert + text.slice(to);
+    crossSel = null;
+    dropCrossLayer();
+    announceCross();
+    // 改动前的整篇状态先入栈：撤销要回到「选区还在」的那一步
+    commitHistory();
+    var landed = rebuildFromSourceText(next, from + insert.length);
+    if (landed && landed.block) {
+      landed.block.classList.add('editing');
+      landed.block.focus();
+      placeBlockCaret(landed.block, landed.offset);
+    }
+    return true;
+  }
+
   root.addEventListener('keydown', function (event) {
     var el = blockOf(event.target);
     if (!el)
@@ -3444,8 +3849,44 @@
       }
     }
 
+    // 跨块选区（原型）：编辑键先在整篇源码上生效，避免落到折叠光标上只改一个字符
+    var plainKeys = !event.metaKey && !event.ctrlKey && !event.altKey;
+    if (crossSel) {
+      if (event.key === 'Backspace' || event.key === 'Delete') {
+        event.preventDefault();
+        replaceCrossSelection('');
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        replaceCrossSelection('\n');
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        clearCrossSelection();
+        return;
+      }
+    }
+
+    // Shift+↑/↓ 扩展选区：块首/块尾升级为跨块选区，之后由覆盖层显示
+    if ((event.key === 'ArrowUp' || event.key === 'ArrowDown')
+        && event.shiftKey && plainKeys
+        && extendCrossSelection(el, event.key === 'ArrowUp')) {
+      event.preventDefault();
+      return;
+    }
+
+    // 横向/翻页/制表键会让原生选区离开覆盖层范围：先收起，交回原生。
+    // 普通字符键不能在这里清除：输入要经过 beforeinput 才能按整篇源码替换选区。
+    if (crossSel && (event.key === 'ArrowLeft' || event.key === 'ArrowRight'
+                     || event.key === 'Home' || event.key === 'End'
+                     || event.key === 'PageUp' || event.key === 'PageDown'
+                     || event.key === 'Tab'
+                     || ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.shiftKey)))
+      clearCrossSelection();
+
     // 上下方向键跨块：只在块首/块尾接管，块内与表格/代码块内部导航保持原生。
-    // Shift+方向键是扩展选区，跨 contenteditable 的选区暂不支持，交回原生。
     if ((event.key === 'ArrowUp' || event.key === 'ArrowDown')
         && !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
       var navSelection = window.getSelection();
@@ -3746,6 +4187,11 @@
     }
     event.preventDefault();
     var el = blockOf(target);
+    // 跨块选区还在：粘贴等价于「用剪贴板文本替换选区」，仍走整篇源码重建
+    if (crossSel) {
+      replaceCrossSelection(clipboard.getData('text/plain'));
+      return;
+    }
     var baselineDone = false;
     if (!el) {
       // 块外粘贴要先补块才有落点。撤销基线必须落在补块之前：否则快照里已经
@@ -3801,6 +4247,9 @@
   // 直接粘在一起（跨两段复制曾得到「第一段第二段」）。块内仍按复制规则清理。
   // 复制、剪切与右键菜单共用这一个口径。
   function selectionPlainText() {
+    // 自建跨块选区：原生选区是折叠的，必须按绝对区间自己取文本
+    if (crossSel)
+      return crossSelectionPlainText();
     var selection = window.getSelection();
     if (!selection || selection.isCollapsed || !selection.rangeCount)
       return '';
@@ -3980,6 +4429,15 @@
   document.addEventListener('cut', function (event) {
     if (mode === 'source')
       return;
+    if (crossSel) {
+      // 原生选区是折叠的，WebKit 不会自己剪切：算好文本写剪贴板再删区间
+      event.preventDefault();
+      var crossText = crossSelectionPlainText();
+      if (event.clipboardData && !clipboardTextIsBlank(crossText))
+        event.clipboardData.setData('text/plain', crossText);
+      replaceCrossSelection('');
+      return;
+    }
     if (!clipboardTextIsBlank(selectionPlainText()))
       return;
     event.preventDefault();
@@ -4784,6 +5242,8 @@
   function openFind() {
     if (findBar)
       return;
+    // 查找条打开后焦点交给查找框，覆盖层选区先收起
+    clearCrossSelection();
     findInSource = mode === 'source';
     if (findInSource) {
       findCaret = { source: true, start: sourceEl.selectionStart, end: sourceEl.selectionEnd };
@@ -4908,21 +5368,35 @@
   window.addEventListener('resize', function () {
     if (findLayer && findMatches.length)
       paintFind();
+    // 覆盖层是文档绝对坐标，缩放/换行变化后必须按新几何重画
+    if (crossSel)
+      paintCrossSelection();
   });
 
   // 命中的块里图片晚一步解码完、字体替换完成时块高会变，但都不触发 resize。
   // load 不冒泡，必须用捕获阶段才能收到 <img> 的加载完成。
   document.addEventListener('load', function (event) {
     var target = event.target;
-    if (target && target.nodeName === 'IMG')
+    if (target && target.nodeName === 'IMG') {
       scheduleFindPaint();
+      if (crossSel)
+        paintCrossSelection();
+    }
   }, true);
 
   if (document.fonts) {
     if (document.fonts.ready && document.fonts.ready.then)
-      document.fonts.ready.then(scheduleFindPaint);
+      document.fonts.ready.then(function () {
+        scheduleFindPaint();
+        if (crossSel)
+          paintCrossSelection();
+      });
     if (document.fonts.addEventListener)
-      document.fonts.addEventListener('loadingdone', scheduleFindPaint);
+      document.fonts.addEventListener('loadingdone', function () {
+        scheduleFindPaint();
+        if (crossSel)
+          paintCrossSelection();
+      });
   }
 
   window.addEventListener('scroll', function () {
@@ -6397,6 +6871,11 @@
       // text/html，粘到 Word / 邮件里保留标题、列表、代码块的样子。
       post({ type: 'clipboardWrite', text: text, html: selectionHtml() });
       if (cut) {
+        // 跨块选区的原生选区是折叠的，原生 delete 删不掉它，按整篇源码替换
+        if (crossSel) {
+          replaceCrossSelection('');
+          return true;
+        }
         commitHistory();
         document.execCommand('delete');
         scheduleDirty();

@@ -23,6 +23,7 @@ void EditorController::setMarkdown(const std::string &text, const std::string &b
         m_hasPending = true;
         m_pageLoaded = true;
         m_pageReady = false;
+        m_crossSelection = false;
         // 新文档以载入的文本为基准：打开/新建后立刻是「未修改」
         if (m_dirty) {
             m_dirty = false;
@@ -46,6 +47,7 @@ void EditorController::newDocument()
     // 这里不能走 setBaseDir()（那会重载页面并把上一份正文带回来），只把 <base> 去掉。
     m_baseDir.clear();
     applyBaseHref();
+    m_crossSelection = false;
     m_pendingText.clear();
     m_hasPending = false;
     m_host.evaluateJs(js::newDocument());
@@ -66,6 +68,7 @@ void EditorController::setBaseDir(const std::string &dir)
     m_pendingText = m_lastSavedText;
     m_hasPending = true;
     m_pageReady = false;
+    m_crossSelection = false;
     ++m_pageGeneration;
     m_host.loadPage(dir);
 }
@@ -324,6 +327,11 @@ void EditorController::handleMessage(std::string_view json)
         const std::string source = message.stringAt("source");
         saveImageBytes(data, message.stringAt("mime"), message.stringAt("name"),
                        source != "drop");
+        return;
+    }
+    if (type == "crossSelection") {
+        // 页面自建跨块选区（原型）：只影响菜单复制/剪切的路由，不改正文
+        m_crossSelection = message.boolAt("active");
         return;
     }
     if (type == "editCommand") {
