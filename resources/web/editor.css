@@ -737,6 +737,16 @@ body.inline-proto .block.h6.editing {
   width: 140px;
 }
 
+#find-input {
+  height: 22px;
+  max-height: 72px;
+  resize: none;
+  overflow-y: auto;
+  white-space: pre;
+  line-height: 1.35;
+  font-family: inherit;
+}
+
 #find-input:focus,
 #find-replace:focus {
   border-color: var(--border-focus);

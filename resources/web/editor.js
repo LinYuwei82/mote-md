@@ -3993,17 +3993,20 @@
      移除，不留任何元素。覆盖层不占排版，块几何不受影响。
 
      命中集合按文档顺序生成：块顺序 → 表格单元格顺序 → 单元格内下标顺序，
-     跨块连续编号、连续跳转，正着/反着都能绕回。单个命中不会横跨两个块或两个
-     单元格：原文里块之间是空行，单行查询框表达不了换行，硬做「跨边界拼接」只会
-     让命中含义变得不可预期；替换也因此在结构上永远只改一个块（或一个单元格）。
+     跨块连续编号、连续跳转，正着/反着都能绕回。查找文本是「整篇可见文本」：
+     每个块各占一段，块与块之间用一个虚拟换行连接；查询里用 ⌥↩ 输入换行，
+     命中就可以从上一块跨到下一块。表格单元格之间、分隔线两侧用不可匹配的
+     哨兵隔开，所以命中不会跨单元格，也不会跨过分隔线。
 
      大小写：两边统一转小写再比对；中文与全角标点不受影响。不做正则、不做整词、
      不做空白归一化（连续空格要按原样输入）。
 
      替换是「按原文偏移改 dataset.raw，再整块重排」：标记结构、代码围栏、表格
-     管道都由 renderBlock 从新原文重建，撤销栈记一步（整篇快照）。命中若跨行内
-     标记或代码着色边界（起点与终点不在同一个文本节点），替换会拒绝并在查找条上
-     明确提示，不会把结构改坏；替换文本含换行 / 表格里的 | / 代码里的 ``` 也拒绝。
+     管道都由 renderBlock 从新原文重建，撤销栈记一步（整篇快照）。块内命中若跨
+     行内标记或代码着色边界（起点与终点不在同一个文本节点），替换会拒绝并在
+     查找条上明确提示，不会把结构改坏；替换文本含换行 / 表格里的 | / 代码里的
+     ``` 也拒绝。跨块命中走整篇源码重建：允许替换文本含换行，但两端或中间夹着
+     代码块、表格、分隔线时拒绝，避免把围栏或列结构改坏。
 
      焦点：查找期间输入焦点留在查找框；wysiwyg 编辑态跳转会把焦点交给命中的块并
      选中该词（先 focus 触发 enterEdit，再覆盖选区）。此时 Enter/Shift+Enter 仍由
@@ -4175,41 +4178,92 @@
     }
   }
 
-  function findScanBlocks(query, needle) {
-    var blocks = [].slice.call(root.children);
+  // 整篇可见文本：每个块占一段，块与块之间用一个虚拟换行连接；表格单元格之间、
+  // 分隔线两侧用不可匹配的 \0 隔开。返回全文与文本段索引（at 为段在全文中的起点），
+  // 命中下标 → 段 → DOM 点都靠这张表。
+  function findBuildDocument() {
+    var blocks = blockList();
+    var parts = [];
+    var chunks = [];
+    var length = 0;
+    function sep(ch) {
+      chunks.push(ch);
+      length += ch.length;
+    }
     for (var b = 0; b < blocks.length; b++) {
       var block = blocks[b];
-      if (!block.classList || !block.classList.contains('block'))
+      if (block.classList.contains('hr')) {
+        if (length)
+          sep('\0');
         continue;
-      if (block.classList.contains('hr'))   // 分隔线没有可读文本，不参与查找
-        continue;
+      }
       var runs = findRuns(block);
       for (var r = 0; r < runs.length; r++) {
-        var text = runs[r].text;
-        var hay = text.toLowerCase();
-        var use = needle;
-        // 少数语言的小写映射会改变长度（如 İ），那会打乱偏移，退回区分大小写
-        if (hay.length !== text.length) {
-          hay = text;
-          use = query;
-        }
-        var from = 0;
-        var at;
-        while ((at = hay.indexOf(use, from)) >= 0) {
-          var range = document.createRange();
-          try {
-            var a = findPoint(runs[r], at, false);
-            var z = findPoint(runs[r], at + use.length, true);
-            range.setStart(a.node, a.offset);
-            range.setEnd(z.node, z.offset);
-          } catch (error) {
-            from = at + 1;
-            continue;
-          }
-          findMatches.push({ range: range, block: block });
-          from = at + Math.max(1, use.length);
-        }
+        if (length)
+          sep(r === 0 ? '\n' : '\0');
+        parts.push({ at: length, run: runs[r], block: block });
+        chunks.push(runs[r].text);
+        length += runs[r].text.length;
       }
+    }
+    return { text: chunks.join(''), parts: parts };
+  }
+
+  // 全文字符下标 → 所在文本段；落在分隔符或越界时返回 null（跨分隔符的命中跳过）。
+  function findPartAt(parts, index) {
+    var lo = 0, hi = parts.length - 1, found = -1;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (parts[mid].at <= index) {
+        found = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (found < 0)
+      return null;
+    var part = parts[found];
+    if (index >= part.at + part.run.text.length)
+      return null;
+    return part;
+  }
+
+  function findScanBlocks(query, needle) {
+    var doc = findBuildDocument();
+    var text = doc.text;
+    var hay = text.toLowerCase();
+    var use = needle;
+    // 少数语言的小写映射会改变长度（如 İ），那会打乱偏移，退回区分大小写
+    if (hay.length !== text.length) {
+      hay = text;
+      use = query;
+    }
+    var from = 0;
+    var at;
+    while ((at = hay.indexOf(use, from)) >= 0) {
+      var last = at + use.length - 1;
+      var head = findPartAt(doc.parts, at);
+      var tail = findPartAt(doc.parts, last);
+      if (head && tail) {
+        var range = document.createRange();
+        try {
+          var a = findPoint(head.run, at - head.at, false);
+          var z = findPoint(tail.run, last - tail.at + 1, true);
+          range.setStart(a.node, a.offset);
+          range.setEnd(z.node, z.offset);
+          findMatches.push({
+            range: range,
+            block: head.block,
+            endBlock: tail.block,
+            cross: head.run !== tail.run,
+            startRun: head.run,
+            startIndex: at,
+            endIndex: at + use.length
+          });
+        } catch (error) { /* 跳过无法落到 DOM 的命中 */ }
+      }
+      from = at + Math.max(1, use.length);
     }
   }
 
@@ -4267,6 +4321,19 @@
       scroller.scrollLeft += (rect.right - box.right) + 24;
   }
 
+  // 跨块选区横跨多个 contenteditable，WebKit 的选区行为不确定；跳转时只选
+  // 起点块内的那一段，高亮层仍然画完整命中。
+  function findSelectRange(match) {
+    var range = match.range.cloneRange();
+    if (match.cross && match.startRun) {
+      var tail = findPoint(match.startRun, match.startRun.text.length, true);
+      try {
+        range.setEnd(tail.node, tail.offset);
+      } catch (error) { /* 起点段已失效时保持整段选区 */ }
+    }
+    return range;
+  }
+
   // 编辑态跳转：先让块进入就地编辑（enterEdit 会先把光标放到块尾），再把选区
   // 覆盖成命中范围。enterEdit 是同步的，先 focus 后设选区，落点才是命中本身；
   // 反过来先设选区会被 enterEdit 的 setSelectionRange 覆盖掉。
@@ -4278,7 +4345,7 @@
       block.focus();
     var selection = window.getSelection();
     selection.removeAllRanges();
-    selection.addRange(match.range.cloneRange());
+    selection.addRange(findSelectRange(match));
     return true;
   }
 
@@ -4320,46 +4387,93 @@
     updateFindCount();
   }
 
-  /* ---- 替换：命中 → dataset.raw 上的区间 ---- */
+  /* ---- 替换：命中 → 整篇原文的绝对区间 ---- */
 
-  // 只有「起点与终点在同一个文本节点」的命中才能安全替换：这样区间里不可能
-  // 夹着 **、`、| 这类零宽标记。返回 raw 区间（代码块加围栏前缀），否则 null。
-  function matchRawSpan(match) {
+  // 块内命中仍要求起点与终点在同一个文本节点：这样区间里不可能夹着 **、`、|
+  // 这类零宽标记。跨块命中允许跨节点，由整篇重建处理。返回绝对原文区间。
+  function findMatchSpan(match) {
+    if (findInSource)
+      return { start: match.start, end: match.end, sameBlock: true, source: true };
     var range = match.range;
-    if (!range || range.startContainer !== range.endContainer
-        || range.startContainer.nodeType !== 3)
+    if (!range || !range.startContainer.isConnected || !range.endContainer.isConnected)
       return null;
-    var block = match.block;
-    var scope = isCodeBlock(block) ? codeEl(block) : block;
-    if (!scope || !scope.isConnected || !range.startContainer.isConnected)
+    var startBlock = blockOf(range.startContainer) || match.block;
+    var endBlock = blockOf(range.endContainer) || match.endBlock || startBlock;
+    if (!startBlock || !endBlock || !startBlock.isConnected || !endBlock.isConnected)
       return null;
-    var start = offsetIn(scope, range.startContainer, range.startOffset);
-    var end = offsetIn(scope, range.endContainer, range.endOffset);
-    if (start < 0 || end < start)
+    var sameBlock = startBlock === endBlock;
+    if (sameBlock && (range.startContainer !== range.endContainer
+        || range.startContainer.nodeType !== 3))
       return null;
-    if (isCodeBlock(block)) {
-      var prefix = codePrefixLength(block);
-      return { start: prefix + start, end: prefix + end };
-    }
-    return { start: start, end: end };
+    var startScope = isCodeBlock(startBlock) ? codeEl(startBlock) : startBlock;
+    var endScope = isCodeBlock(endBlock) ? codeEl(endBlock) : endBlock;
+    if (!startScope || !endScope)
+      return null;
+    var start = offsetIn(startScope, range.startContainer, range.startOffset);
+    var end = offsetIn(endScope, range.endContainer, range.endOffset);
+    if (start < 0 || end < 0)
+      return null;
+    if (isCodeBlock(startBlock))
+      start += codePrefixLength(startBlock);
+    if (isCodeBlock(endBlock))
+      end += codePrefixLength(endBlock);
+    var list = blockList();
+    var si = list.indexOf(startBlock);
+    var ei = list.indexOf(endBlock);
+    if (si < 0 || ei < 0 || ei < si)
+      return null;
+    var blocks = collectBlocks();
+    var gaps = collectGaps();
+    var startAbs = blockStartOffset(blocks, gaps, si) + start;
+    var endAbs = blockStartOffset(blocks, gaps, ei) + end;
+    if (endAbs < startAbs)
+      return null;
+    return {
+      start: startAbs,
+      end: endAbs,
+      sameBlock: sameBlock,
+      startBlock: startBlock,
+      endBlock: endBlock,
+      startIndex: si,
+      endIndex: ei,
+      startRelative: start,
+      endRelative: end
+    };
   }
 
   function replacementProblem(match, repl) {
+    if (repl.indexOf('\0') >= 0)
+      return '替换文本含非法字符';
+    if (findInSource)
+      return repl.indexOf('\n') >= 0 ? '替换文本不能含换行' : '';
+    var span = findMatchSpan(match);
+    if (!span)
+      return '命中跨行内标记或代码着色边界，未替换';
+    if (!span.sameBlock) {
+      if (isCodeBlock(span.startBlock) || isCodeBlock(span.endBlock)
+          || span.startBlock.classList.contains('table')
+          || span.endBlock.classList.contains('table')
+          || span.startBlock.classList.contains('hr')
+          || span.endBlock.classList.contains('hr'))
+        return '跨块替换不支持代码块/表格/分隔线边界';
+      var list = blockList();
+      for (var i = span.startIndex + 1; i < span.endIndex; i++) {
+        var between = list[i];
+        if (isCodeBlock(between) || between.classList.contains('table')
+            || between.classList.contains('hr'))
+          return '跨块区间包含代码块/表格/分隔线，未替换';
+      }
+      return '';
+    }
     if (repl.indexOf('\n') >= 0)
       return '替换文本不能含换行';
-    if (findInSource)
-      return '';
-    var block = match.block;
-    if (!block || !block.isConnected)
-      return '命中已失效，请重新查找';
+    var block = span.startBlock;
     if (block.classList.contains('hr'))
       return '分隔线不支持替换';
     if (block.classList.contains('table') && repl.indexOf('|') >= 0)
       return '替换文本含 |，会改变表格列结构，已跳过';
     if (isCodeBlock(block) && repl.indexOf('```') >= 0)
       return '替换文本含 ```，会破坏代码围栏，已跳过';
-    if (!matchRawSpan(match))
-      return '命中跨行内标记或代码着色边界，未替换';
     return '';
   }
 
@@ -4369,6 +4483,20 @@
       block.classList.add('editing');
     if (isCodeBlock(block))
       normalizeCodeScrolls(block);
+  }
+
+  // 跨块替换后整篇重建：一次撤销步、保持滚动位置，返回替换末尾所在的块与块内偏移。
+  function rebuildFromSourceText(text, caret) {
+    var scrollY = window.scrollY;
+    var layout = splitSourceLayout(text);
+    suppressEvents = true;
+    mountBlocks(layout.blocks, layout.gaps, layout.trail);
+    suppressEvents = false;
+    var at = locateBlock(layout.blocks, layout.gaps, caret);
+    commitHistory();
+    scheduleTocRefresh();
+    window.scrollTo(window.scrollX, scrollY);
+    return { block: root.children[at.index] || null, offset: at.start };
   }
 
   function replaceCurrent() {
@@ -4397,11 +4525,38 @@
       setFindNote('已替换 1 处');
       return;
     }
-    var span = matchRawSpan(match);
-    var block = match.block;
+    var span = findMatchSpan(match);
+    if (!span) {
+      setFindNote('命中已失效，请重新查找');
+      return;
+    }
+    if (!span.sameBlock) {
+      var text = currentSource();
+      if (span.end > text.length) {
+        setFindNote('命中已失效，请重新查找');
+        return;
+      }
+      var landed = rebuildFromSourceText(
+        text.slice(0, span.start) + repl + text.slice(span.end),
+        span.start + repl.length);
+      findCaret = landed.block ? { block: landed.block, offset: landed.offset } : null;
+      findJumped = null;
+      findScan(findInput.value);
+      if (findMatches.length) {
+        findActive = Math.min(keep, findMatches.length - 1);
+        paintFind();
+        updateFindCount();
+      }
+      if (findInput)
+        findInput.focus();
+      setFindNote('已替换 1 处（跨块）');
+      return;
+    }
+    var block = span.startBlock;
     var raw = block.dataset.raw || '';
     var wasEditing = block.classList.contains('editing');
-    rerenderFromRaw(block, raw.slice(0, span.start) + repl + raw.slice(span.end), wasEditing);
+    rerenderFromRaw(block,
+      raw.slice(0, span.startRelative) + repl + raw.slice(span.endRelative), wasEditing);
     commitHistory();
     scheduleTocRefresh();
     findScan(findInput.value);
@@ -4411,6 +4566,45 @@
       updateFindCount();
     }
     setFindNote('已替换 1 处');
+  }
+
+  // 只要有一个跨块命中就统一按绝对区间从后往前改整篇源码，最后重建一次。
+  function replaceAllAcrossBlocks(repl, query) {
+    var text = currentSource();
+    var spans = [];
+    var skipped = 0;
+    for (var m = 0; m < findMatches.length; m++) {
+      if (replacementProblem(findMatches[m], repl)) {
+        skipped++;
+        continue;
+      }
+      var span = findMatchSpan(findMatches[m]);
+      if (!span || span.end > text.length) {
+        skipped++;
+        continue;
+      }
+      spans.push(span);
+    }
+    if (!spans.length) {
+      setFindNote('没有可替换的命中');
+      return;
+    }
+    spans.sort(function (a, b) { return b.start - a.start; });
+    // 从后往前改：最后一个替换的末尾在后续修改中不会再移动
+    var caret = spans[0].start + repl.length;
+    for (var i = 0; i < spans.length; i++)
+      text = text.slice(0, spans[i].start) + repl + text.slice(spans[i].end);
+    var landed = rebuildFromSourceText(text, caret);
+    findCaret = landed.block ? { block: landed.block, offset: landed.offset } : null;
+    findJumped = null;
+    findScan(query);
+    paintFind();
+    updateFindCount();
+    if (findInput)
+      findInput.focus();
+    setFindNote(skipped
+      ? '已替换 ' + spans.length + ' 处，跳过 ' + skipped + ' 处（跨行内标记/结构限制）'
+      : '全部替换 ' + spans.length + ' 处');
   }
 
   function replaceAll() {
@@ -4437,6 +4631,20 @@
       return;
     }
 
+    // 只要命中里有跨块的，就整篇改一次；否则保持按块重排（更快，也保留编辑态）
+    var hasCross = false;
+    for (var c = 0; c < findMatches.length; c++) {
+      var crossSpan = findMatchSpan(findMatches[c]);
+      if (crossSpan && !crossSpan.sameBlock) {
+        hasCross = true;
+        break;
+      }
+    }
+    if (hasCross) {
+      replaceAllAcrossBlocks(repl, query);
+      return;
+    }
+
     // 按块分组（保持文档顺序），块内从后往前改 raw，前面命中的下标不受影响
     var groups = [];
     for (var m = 0; m < findMatches.length; m++) {
@@ -4445,7 +4653,12 @@
         skipped++;
         continue;
       }
-      var host = findMatches[m].block;
+      var span = findMatchSpan(findMatches[m]);
+      if (!span) {
+        skipped++;
+        continue;
+      }
+      var host = span.startBlock;
       var slot = -1;
       for (var g = 0; g < groups.length; g++) {
         if (groups[g].block === host) {
@@ -4457,7 +4670,7 @@
         groups.push({ block: host, spans: [] });
         slot = groups.length - 1;
       }
-      groups[slot].spans.push(matchRawSpan(findMatches[m]));
+      groups[slot].spans.push({ start: span.startRelative, end: span.endRelative });
     }
     for (var n = 0; n < groups.length; n++) {
       var target = groups[n].block;
@@ -4490,10 +4703,18 @@
     }, 120);
   }
 
+  // 查找框是多行 textarea：⌥↩ 输入换行，块与块之间也按一个换行参与匹配。
+  function growFindInput() {
+    if (!findInput)
+      return;
+    findInput.style.height = 'auto';
+    findInput.style.height = Math.min(72, Math.max(22, findInput.scrollHeight)) + 'px';
+  }
+
   function buildFindBar() {
     findBar = document.createElement('div');
     findBar.id = 'find-bar';
-    findBar.innerHTML = '<input id="find-input" type="text" placeholder="查找" spellcheck="false">'
+    findBar.innerHTML = '<textarea id="find-input" rows="1" placeholder="查找（⌥↩ 换行）" spellcheck="false"></textarea>'
       + '<input id="find-replace" type="text" placeholder="替换为" spellcheck="false">'
       + '<span id="find-count">0/0</span>'
       + '<button id="find-prev" type="button" title="上一个（Shift+Enter）">↑</button>'
@@ -4508,8 +4729,12 @@
     findCount = document.getElementById('find-count');
     findNote = document.getElementById('find-note');
     findNote.style.display = 'none';
+    growFindInput();
 
-    findInput.addEventListener('input', scheduleFind);
+    findInput.addEventListener('input', function () {
+      growFindInput();
+      scheduleFind();
+    });
     findReplace.addEventListener('keydown', function (event) {
       if (event.key === 'Enter') {
         event.preventDefault();
@@ -4517,10 +4742,15 @@
       }
     });
     findInput.addEventListener('keydown', function (event) {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        goFind(event.shiftKey ? -1 : 1);
+      if (event.key !== 'Enter')
+        return;
+      // ⌥↩ 让 textarea 插入换行，input 事件会重新扫描；其余 Enter 仍是跳转
+      if (event.altKey) {
+        setTimeout(growFindInput, 0);
+        return;
       }
+      event.preventDefault();
+      goFind(event.shiftKey ? -1 : 1);
     });
     document.getElementById('find-prev').addEventListener('click', function () { goFind(-1); });
     document.getElementById('find-next').addEventListener('click', function () { goFind(1); });
@@ -4559,6 +4789,7 @@
     if (picked && picked.length <= 80)
       findInput.value = picked;
     findInput.select();
+    growFindInput();
     findScan(findInput.value);
   }
 
@@ -4603,7 +4834,7 @@
         jumped.block.focus();
       var selection = window.getSelection();
       selection.removeAllRanges();
-      selection.addRange(jumped.range.cloneRange());
+      selection.addRange(findSelectRange(jumped));
     } else if (caret && caret.block && caret.block.isConnected) {
       // 没跳转过：回到打开查找前的光标位置
       if (document.activeElement !== caret.block)
