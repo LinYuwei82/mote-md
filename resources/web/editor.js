@@ -4002,11 +4002,13 @@
      不做空白归一化（连续空格要按原样输入）。
 
      替换是「按原文偏移改 dataset.raw，再整块重排」：标记结构、代码围栏、表格
-     管道都由 renderBlock 从新原文重建，撤销栈记一步（整篇快照）。块内命中若跨
-     行内标记或代码着色边界（起点与终点不在同一个文本节点），替换会拒绝并在
-     查找条上明确提示，不会把结构改坏；替换文本含换行 / 表格里的 | / 代码里的
-     ``` 也拒绝。跨块命中走整篇源码重建：允许替换文本含换行，但两端或中间夹着
-     代码块、表格、分隔线时拒绝，避免把围栏或列结构改坏。
+     管道都由 renderBlock 从新原文重建，撤销栈记一步（整篇快照）。块内命中可以
+     跨文本节点：只要起点/终点都在行内格式之外，区间里的 **、`、[ 等要么没有，
+     要么是完整的行内结构，替换后 Markdown 仍然合法（行内格式会随区间一起被
+     替换掉）。起点或终点落在 <strong>/<em>/<a>/`<code>` 内部时仍拒绝，避免留下
+     不成对的标记。替换文本含换行 / 表格里的 | / 代码里的 ``` 也拒绝。跨块命中
+     走整篇源码重建：允许替换文本含换行，但两端或中间夹着代码块、表格、分隔线
+     时拒绝，避免把围栏或列结构改坏。
 
      焦点：查找期间输入焦点留在查找框；wysiwyg 编辑态跳转会把焦点交给命中的块并
      选中该词（先 focus 触发 enterEdit，再覆盖选区）。此时 Enter/Shift+Enter 仍由
@@ -4389,8 +4391,28 @@
 
   /* ---- 替换：命中 → 整篇原文的绝对区间 ---- */
 
-  // 块内命中仍要求起点与终点在同一个文本节点：这样区间里不可能夹着 **、`、|
-  // 这类零宽标记。跨块命中允许跨节点，由整篇重建处理。返回绝对原文区间。
+  // 命中边界落在行内格式内部时，整段替换会把外侧的开标记留下、把闭标记删掉，
+  // 产生不成对的 ** / ` / [ 等。代码块不适用这条：高亮会把一行拆成多个 span，
+  // 但 raw 仍是连续的，跨 span 替换是安全的。
+  var FIND_INLINE_HOSTS = {
+    STRONG: 1, EM: 1, DEL: 1, S: 1, A: 1, CODE: 1,
+    MARK: 1, SUP: 1, SUB: 1, KBD: 1, SPAN: 1
+  };
+
+  function findBoundarySafe(block, node) {
+    if (isCodeBlock(block))
+      return true;
+    var current = node && node.nodeType === 3 ? node.parentNode : node;
+    while (current && current !== block) {
+      if (current.nodeType === 1 && FIND_INLINE_HOSTS[current.nodeName])
+        return false;
+      current = current.parentNode;
+    }
+    return true;
+  }
+
+  // 块内命中允许跨文本节点，但两个端点都必须在行内格式之外；这样区间里要么
+  // 没有标记，要么是完整的行内结构，替换后 Markdown 仍然合法。返回绝对区间。
   function findMatchSpan(match) {
     if (findInSource)
       return { start: match.start, end: match.end, sameBlock: true, source: true };
@@ -4401,10 +4423,10 @@
     var endBlock = blockOf(range.endContainer) || match.endBlock || startBlock;
     if (!startBlock || !endBlock || !startBlock.isConnected || !endBlock.isConnected)
       return null;
-    var sameBlock = startBlock === endBlock;
-    if (sameBlock && (range.startContainer !== range.endContainer
-        || range.startContainer.nodeType !== 3))
+    if (!findBoundarySafe(startBlock, range.startContainer)
+        || !findBoundarySafe(endBlock, range.endContainer))
       return null;
+    var sameBlock = startBlock === endBlock;
     var startScope = isCodeBlock(startBlock) ? codeEl(startBlock) : startBlock;
     var endScope = isCodeBlock(endBlock) ? codeEl(endBlock) : endBlock;
     if (!startScope || !endScope)
@@ -4448,7 +4470,7 @@
       return repl.indexOf('\n') >= 0 ? '替换文本不能含换行' : '';
     var span = findMatchSpan(match);
     if (!span)
-      return '命中跨行内标记或代码着色边界，未替换';
+      return '命中边界在行内格式内部或已失效，未替换';
     if (!span.sameBlock) {
       if (isCodeBlock(span.startBlock) || isCodeBlock(span.endBlock)
           || span.startBlock.classList.contains('table')
