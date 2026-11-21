@@ -112,6 +112,7 @@ jobs:
           $channel = '${{ inputs.channel || 'stable' }}'
           if (-not $channel) { $channel = 'stable' }
           python tools\release\check_version_bump.py --product mote --build $build `
+            --platform windows `
             --manifest-url "https://dl.xiaotu.online/mote/updates/$channel/manifest.json"
           if ($LASTEXITCODE -ne 0) { throw '版本/构建号递增校验失败' }
           # 参数整体加引号：不引号时 PowerShell 会把 -DMOTE_BUILD=$build 原样传给 cmake
