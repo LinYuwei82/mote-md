@@ -162,8 +162,11 @@ scan_external_paths() {
     while IFS= read -r -d '' f; do
         file "$f" | grep -q "Mach-O" || continue
         macho=$((macho + 1))
-        deps="$(otool -L "$f" 2>/dev/null || true)"
-        ids="$(otool -D "$f" 2>/dev/null || true)"
+        # otool 输出首行（fat 包为每个架构各一行）是被检文件自身的路径表头，
+        # 形如 "<绝对路径>:" / "<绝对路径> (architecture arm64):"，会误命中 /Users/ 规则，
+        # 必须在比对前剔除，只保留真正的依赖 / install id 行。
+        deps="$(otool -L "$f" 2>/dev/null | grep -v ':$' || true)"
+        ids="$(otool -D "$f" 2>/dev/null | grep -v ':$' || true)"
         l_hb=$((l_hb + $(printf '%s\n' "$deps" | grep -c '/opt/homebrew' || true)))
         l_ul=$((l_ul + $(printf '%s\n' "$deps" | grep -c '/usr/local' || true)))
         l_user=$((l_user + $(printf '%s\n' "$deps" | grep -c '/Users/' || true)))
