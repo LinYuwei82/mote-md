@@ -61,9 +61,12 @@ DMG_PATH="${DMG_PATH:-$REPO_ROOT/dist/Mote-macOS-native-$VERSION.dmg}"
 SIGN_KEY="${SIGN_KEY:-$HOME/.config/mote-updates/ed25519_seed.b64}"
 [ -f "$SIGN_KEY" ] || { echo "更新签名私钥不存在：$SIGN_KEY" >&2; exit 1; }
 
-# Sparkle appcast 签名复用 SIGN_KEY（与 v2 清单共用同一把 Ed25519 key）
-# ← 2026-11-20 起合并，对齐小兔方案；之前 manifest + Sparkle 各一把独立密钥已废弃。
-SPARKLE_KEY="$SIGN_KEY"
+# Sparkle appcast 必须用「包内 SUPublicEDKey 对应的私钥」签名：即 sparkle_ed25519_seed，
+# 与 v2 清单签名种子（ed25519_seed）是两把不同的 key。
+# 2026-11-21 的 1.0.9 曾误用清单种子签 appcast，客户端报「此更新未正确签名，无法验证其真实性」。
+# 不要合并这两把 key；签名后会校验一次（见 ②b）。
+SPARKLE_KEY="${SPARKLE_KEY:-$HOME/.config/mote-updates/sparkle_ed25519_seed.b64}"
+[ -f "$SPARKLE_KEY" ] || { echo "Sparkle 签名私钥不存在：$SPARKLE_KEY" >&2; exit 1; }
 
 CHANNEL="${CHANNEL:-stable}"
 case "$CHANNEL" in stable|beta) ;; *) echo "CHANNEL 必须是 stable/beta" >&2; exit 2 ;; esac
@@ -248,6 +251,31 @@ case "${#ED_SIG}" in
   *) echo "签名长度异常：${#ED_SIG} 字符（应为 88），拒绝继续" >&2; exit 1 ;;
 esac
 echo "  edSignature 长度：${#ED_SIG} 字符"
+
+# ---- ②b 验签：edSignature 必须能被 DMG 内 SUPublicEDKey 验证 ----
+# 只校验长度说明不了什么：用错私钥时长度仍是 88，客户端却会在安装时报
+# 「此更新未正确签名，无法验证其真实性」（2026-11-21 的 1.0.9 即因此故障）。
+echo ""
+echo "===== ②b 校验 appcast 签名与包内公钥匹配"
+VERIFY_DIR="$(mktemp -d)"
+python3 - "$PLIST_PUB" "$VERIFY_DIR/pub.der" <<'PY'
+import base64, binascii, sys
+pub, out = sys.argv[1], sys.argv[2]
+# Ed25519 公钥 SPKI 前缀 + 32 字节 raw key
+der = binascii.unhexlify("302a300506032b6570032100" + base64.b64decode(pub).hex())
+open(out, "wb").write(der)
+PY
+printf '%s' "$ED_SIG" | base64 -D > "$VERIFY_DIR/sig.bin"
+if openssl pkeyutl -verify -pubin -inkey "$VERIFY_DIR/pub.der" -keyform DER \
+     -rawin -in "$DMG_PATH" -sigfile "$VERIFY_DIR/sig.bin" >/dev/null 2>&1; then
+  echo "  ✓ 签名可被包内 SUPublicEDKey 验证（Sparkle 可正常安装）"
+  rm -rf "$VERIFY_DIR"
+else
+  echo "拒绝发布：appcast 签名无法被包内 SUPublicEDKey 验证，客户端会报「此更新未正确签名」" >&2
+  echo "  appcast 必须用 sparkle_ed25519_seed 签名，不能用清单种子 ed25519_seed" >&2
+  rm -rf "$VERIFY_DIR"
+  exit 1
+fi
 
 # ---- ③ 生成 appcast.xml ----
 echo ""
