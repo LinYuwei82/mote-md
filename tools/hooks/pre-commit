@@ -6,9 +6,10 @@
 #         无 BOM 会被按 GBK 读，中文字面量断裂 → 脚本崩溃。
 #
 # 门禁 2：Sparkle EdDSA 公钥硬编码一致性
-#         Sparkle 验签公钥在 native/CMakeLists.txt 硬编码一处；
-#         如果被误改会导致客户端更新验签静默失败。
-#         这个 hook 从 ~/.config/mote-updates/sparkle_ed25519_seed.b64
+#         Sparkle 验签公钥在 native/CMakeLists.txt 硬编码一处，且会全仓扫描
+#         已跟踪的代码/脚本里的所有 32 字节 base64 公钥；任一处被误改都会导致
+#         客户端更新验签静默失败。这个 hook 从
+#         ~/.config/mote-updates/sparkle_ed25519_seed.b64
 #         （或 MOTE_SIGNING_KEY 环境变量指定）推导出正确公钥，
 #         和代码里硬编码的值比对。
 #
@@ -95,6 +96,36 @@ TARGET_FILES=(
 # docs/ 扫描（仅提示）
 DOCS_GLOB="docs/*.md docs/**/*.md"
 
+# 广扫：所有已跟踪的代码/脚本/配置（排除 build/dist/3rdparty/vendor 与 docs/）里出现的
+# 32 字节 base64 公钥，只要不是正确值就阻断——新增文件硬编码错公钥也会被拦下。
+# 只把 base64 解码后正好 32 字节的当公钥（签名是 64 字节，自动排除），减少误判。
+# docs/ 仍只提示（文档可能记录历史密钥，需人工核对）。
+echo ""
+echo -e "  ${YELLOW}— 全仓扫描（代码/脚本，阻断）—${NC}"
+scan_files=$(git ls-files \
+    | grep -vE '(^|/)(build|dist|3rdparty|vendor|\.git)/' \
+    | grep -vE '^docs/' \
+    | grep -E '(^|/)(CMakeLists\.txt|.*\.(txt|sh|cmake|plist|py|yml|yaml|json|iss|ps1))$' || true)
+scan_fail=0
+if [ -n "$scan_files" ]; then
+    while IFS= read -r f; do
+        [ -f "$REPO_ROOT/$f" ] || continue
+        hits=$(grep -oE '[A-Za-z0-9+/]{43}=' "$REPO_ROOT/$f" 2>/dev/null | sort -u || true)
+        [ -z "$hits" ] && continue
+        while IFS= read -r tok; do
+            [ -z "$tok" ] && continue
+            [ "$tok" = "$CORRECT_PUBKEY" ] && continue
+            tok_size=$(printf '%s' "$tok" | openssl base64 -d -A 2>/dev/null | wc -c | tr -d ' ')
+            [ "$tok_size" = "32" ] || continue
+            echo -e "  ${RED}✗${NC} $f 出现非预期公钥：$tok"
+            scan_fail=$((scan_fail + 1))
+        done <<< "$hits"
+    done <<< "$scan_files"
+fi
+if [ $scan_fail -eq 0 ]; then
+    echo -e "  ${GREEN}✓ 通过：代码/脚本里的公钥均为正确值${NC}"
+fi
+
 target_fail=0
 for f in "${TARGET_FILES[@]}"; do
     [ -f "$REPO_ROOT/$f" ] || { echo -e "  ${YELLOW}⚠${NC} $f 不存在"; continue; }
@@ -128,9 +159,9 @@ for pat in $DOCS_GLOB; do
     done
 done
 
-if [ $target_fail -gt 0 ]; then
+if [ $((target_fail + scan_fail)) -gt 0 ]; then
     echo ""
-    echo -e "${RED}[hook] 阻断：${target_fail} 处硬编码公钥与 Sparkle 种子不一致${NC}"
+    echo -e "${RED}[hook] 阻断：$((target_fail + scan_fail)) 处硬编码公钥与 Sparkle 种子不一致${NC}"
     echo -e "       错公钥会导致 Sparkle 验签失败，客户端更新静默拒绝。"
     echo -e "       种子文件：$SEED_FILE"
     echo -e "       绕过：$RERUN"
