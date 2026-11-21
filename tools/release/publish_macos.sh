@@ -278,9 +278,14 @@ echo "  已生成：$APPCAST_LOCAL"
 echo ""
 echo "===== ④ 生成 manifest.json（v2）"
 MANIFEST_LOCAL="$REPO_ROOT/dist/manifest.json"
-# 另一平台段可能已在线上：先取线上清单，--prev 合并后整体重签，避免覆盖另一平台段
-if [ ! -s "$MANIFEST_LOCAL" ]; then
-  curl -fsSL "$MANIFEST_URL" -o "$MANIFEST_LOCAL" 2>/dev/null || rm -f "$MANIFEST_LOCAL"
+# 另一平台段在线上：每次都先拉线上清单覆盖本地，再用 --prev 合并后整体重签。
+# dist/manifest.json 是持久文件，直接拿它当 --prev 会把上一轮残留的旧平台段
+# （旧版本/旧构建号）写回线上，导致另一平台「版本回退」。
+if curl -fsSL "$MANIFEST_URL" -o "$MANIFEST_LOCAL.tmp" 2>/dev/null && [ -s "$MANIFEST_LOCAL.tmp" ]; then
+  mv "$MANIFEST_LOCAL.tmp" "$MANIFEST_LOCAL"
+else
+  rm -f "$MANIFEST_LOCAL.tmp"
+  echo "  警告：未能从线上获取 manifest.json，回退使用本地副本（可能含旧平台段）" >&2
 fi
 MANIFEST_ARGS=(
   generate
