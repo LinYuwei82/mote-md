@@ -164,10 +164,18 @@ static NSString *MotePageHTML(void)
             page = @"<html><body>缺少前端资源</body></html>";
             return;
         }
+        // mermaid 用于把 ```mermaid 代码块画成图；缺资源时留空，页面其它功能不受影响
+        NSString *mermaid = MoteReadBundleText(@"mermaid.min", @"js", @"web");
+        if (mermaid.length == 0)
+            mermaid = @"";
         NSMutableString *built = [html mutableCopy];
         NSString *style = [MoteFontFaceCSS() stringByAppendingString:css];
         [built replaceOccurrencesOfString:@"__MOTE_CSS__"
                                withString:style
+                                  options:0
+                                    range:NSMakeRange(0, built.length)];
+        [built replaceOccurrencesOfString:@"__MOTE_MERMAID__"
+                               withString:mermaid
                                   options:0
                                     range:NSMakeRange(0, built.length)];
         NSString *flag = MoteInlineProtoEnabled()

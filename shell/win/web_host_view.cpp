@@ -456,12 +456,14 @@ bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
     std::string page = read_file(web_dir + L"\\editor.html");
     const std::string css = read_file(web_dir + L"\\editor.css");
     const std::string js = read_file(web_dir + L"\\editor.js");
+    std::string mermaid = read_file(web_dir + L"\\mermaid.min.js");
     if (page.empty() || css.empty() || js.empty())
         return false;
 
     std::string style = wide_to_utf8(font_face_css());
     style += css;
     replace_all(page, "__MOTE_CSS__", style);
+    replace_all(page, "__MOTE_MERMAID__", mermaid);
     const std::string flag = inline_proto_enabled()
         ? "window.MOTE_INLINE_PROTO=true;"
         : "window.MOTE_INLINE_PROTO=false;";

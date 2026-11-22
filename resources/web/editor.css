@@ -325,6 +325,31 @@ pre.code-block {
   border-radius: 8px;
 }
 
+/* mermaid：非编辑态把源码块换成渲染好的图（Typora 同样处理），点图进入编辑 */
+.block.code.has-mermaid:not(.editing) > pre.code-block {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.block.code.has-mermaid:not(.editing) > pre.code-block > .code-tools,
+.block.code.has-mermaid:not(.editing) > pre.code-block > .gutter,
+.block.code.has-mermaid:not(.editing) > pre.code-block > .code-scroll {
+  display: none;
+}
+.mermaid-figure {
+  display: none;
+  width: 100%;
+  padding: 4pt 0;
+  text-align: center;
+}
+.block.code.has-mermaid:not(.editing) > pre.code-block > .mermaid-figure {
+  display: block;
+}
+.mermaid-figure svg {
+  max-width: 100%;
+  height: auto;
+}
+
 /* 代码块顶部头栏：语言徽标靠左，复制按钮绝对定位在代码块内部右上角
    （top/right 各留 0.35–0.45rem 内缩），整条都在边框内，不再挂到框外。
    头栏只占很窄的一条，代码正文从下一行开始；横向滚动只发生在 .code-scroll 内，
@@ -1360,6 +1385,21 @@ body.pdf-export pre.code-block code {
   font-size: 9.3pt;
   line-height: 1.54;
   white-space: pre-wrap;
+}
+
+/* 导出时 mermaid 块按图排版：去掉代码框与行号槽，只留居中的 SVG */
+body.pdf-export .block.code.has-mermaid > pre.code-block {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+body.pdf-export .block.code.has-mermaid > pre.code-block > .code-tools,
+body.pdf-export .block.code.has-mermaid > pre.code-block > .gutter,
+body.pdf-export .block.code.has-mermaid > pre.code-block > .code-scroll {
+  display: none !important;
+}
+body.pdf-export .block.code.has-mermaid > pre.code-block > .mermaid-figure {
+  display: block;
 }
 
 body.pdf-export .block table {

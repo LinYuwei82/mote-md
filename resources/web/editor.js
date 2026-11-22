@@ -1551,6 +1551,7 @@
     el._codeStale = false;
     if (codeEl(el))
       drawCode(el);
+    scheduleMermaid();
   }
 
   // 把代码正文重新着色：只重建 <code> 的行内 span（文本不变，字体/行高/宽度
@@ -1802,6 +1803,7 @@
     // 全部挂载完成、文档结构稳定后再归一化，避免逐个元素强制布局
     normalizeCodeScrolls();
     postWordCount();
+    scheduleMermaid();
   }
 
   // 绝对偏移 → 所在块下标与块内偏移（undo/redo 恢复选区用）
@@ -2274,6 +2276,7 @@
       el.classList.remove('editing');
       commitHistory();
       scheduleTocRefresh();
+      scheduleMermaid();
       return;
     }
     if (el.classList.contains('hr') || el.classList.contains('table')) {
@@ -7385,6 +7388,12 @@
 
   function pdfContentReady() {
     pdfPrepareImages();
+    if (mermaidReady) {
+      // 导出要求所有 mermaid 块都已画成图（含光标所在块），否则会量到源码块的高度
+      scanMermaid(true);
+      if (mermaidPending > 0)
+        return false;
+    }
     if (pdfImagesPending > 0)
       return false;
     if (document.fonts && !document.fonts.check('10.33pt "Open Sans"'))
@@ -7395,6 +7404,112 @@
         return false;
     }
     return true;
+  }
+
+  // ---- mermaid 代码块 ----
+  // Typora 把 ```mermaid 画成图；渲染态与 PDF 导出同样换成图，点图回到源码编辑。
+  // 渲染是异步的，pdfContentReady 会等它完成再量高度，避免量到 0 高度。
+  var mermaidPending = 0;
+  var mermaidSeq = 0;
+  var mermaidTimer = null;
+  var mermaidReady = !!(window.mermaid && window.mermaid.initialize);
+  if (mermaidReady) {
+    window.mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'strict',
+      fontFamily: '"PingFang SC", "Open Sans", sans-serif',
+      themeVariables: { fontSize: '14px' },
+      flowchart: { htmlLabels: false, useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  }
+
+  function isMermaidBlock(el) {
+    return isCodeBlock(el) && (el.dataset.lang || '').trim().toLowerCase() === 'mermaid';
+  }
+
+  function mermaidFigure(el) {
+    var pre = el.querySelector('pre.code-block');
+    if (!pre)
+      return null;
+    var fig = pre.querySelector('.mermaid-figure');
+    if (fig)
+      return fig;
+    fig = document.createElement('div');
+    fig.className = 'mermaid-figure';
+    fig.setAttribute('contenteditable', 'false');
+    fig.setAttribute('aria-hidden', 'true');
+    // 图不可编辑：点图直接回到源码编辑（enterEdit 会把光标放进 <code>）
+    fig.addEventListener('mousedown', function (ev) {
+      ev.preventDefault();
+      enterEdit(el);
+    });
+    pre.insertBefore(fig, pre.firstChild);
+    return fig;
+  }
+
+  function renderMermaidBlock(el) {
+    var src = codeText(el).trim();
+    if (!src) {
+      el.classList.remove('has-mermaid');
+      return;
+    }
+    var fig = mermaidFigure(el);
+    if (!fig || el._mermaidSig === src)
+      return;
+    if (el._mermaidBusy)
+      return;
+    el._mermaidBusy = true;
+    mermaidPending++;
+    window.mermaid.render('mote-mermaid-' + (++mermaidSeq), src).then(function (out) {
+      el._mermaidBusy = false;
+      mermaidPending--;
+      if (fig.isConnected && out && out.svg) {
+        fig.innerHTML = out.svg;
+        el._mermaidSig = src;
+        el.classList.add('has-mermaid');
+      } else {
+        el._mermaidSig = src;
+        el.classList.remove('has-mermaid');
+      }
+    }, function () {
+      // 语法错误：保留源码块，不显示图
+      el._mermaidBusy = false;
+      mermaidPending--;
+      el._mermaidSig = src;
+      el.classList.remove('has-mermaid');
+    });
+  }
+
+  // force=true 时连正在编辑的块也渲染（导出前用），否则让开光标所在的块
+  function scanMermaid(force) {
+    if (!mermaidReady)
+      return;
+    var ed = document.getElementById('editor');
+    if (!ed || mode === 'source')
+      return;
+    var blocks = ed.querySelectorAll('.block.code');
+    for (var i = 0; i < blocks.length; i++) {
+      var el = blocks[i];
+      if (isMermaidBlock(el)) {
+        if (force || !el.classList.contains('editing'))
+          renderMermaidBlock(el);
+      } else if (el.classList.contains('has-mermaid')) {
+        el.classList.remove('has-mermaid');
+        el._mermaidSig = null;
+      }
+    }
+  }
+
+  function scheduleMermaid() {
+    if (!mermaidReady || mermaidTimer)
+      return;
+    mermaidTimer = setTimeout(function () {
+      mermaidTimer = null;
+      scanMermaid(false);
+    }, 120);
   }
 
   window.mote = {

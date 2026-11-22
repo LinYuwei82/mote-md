@@ -226,7 +226,8 @@ else()
   set(MOTE_WEB_FILES
     "${MOTE_REPO_ROOT}/resources/web/editor.html"
     "${MOTE_REPO_ROOT}/resources/web/editor.css"
-    "${MOTE_REPO_ROOT}/resources/web/editor.js")
+    "${MOTE_REPO_ROOT}/resources/web/editor.js"
+    "${MOTE_REPO_ROOT}/resources/web/mermaid.min.js")
   set(MOTE_FONT_FILES
     "${MOTE_REPO_ROOT}/resources/fonts/JetBrainsMono-Light.ttf")
   set(MOTE_SAMPLE_FILES
