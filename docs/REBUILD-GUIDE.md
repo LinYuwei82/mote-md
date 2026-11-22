@@ -81,7 +81,7 @@ core/
 shell/mac/               AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
 shell/win/               Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
 resources/
-  web/editor.html         唯一页面骨架（两个占位符）
+  web/editor.html         唯一页面骨架（三个占位符：CSS / mermaid / JS）
   web/editor.css          全部样式（含打印与 PDF 清理）
   web/editor.js           解析 + 渲染 + 编辑 + 历史 + 菜单
   fonts/                  JetBrains Mono（Light/Regular/Bold）+ OFL
@@ -93,7 +93,7 @@ tools/preflight.sh        干净目录构建 + 启动冒烟（macOS）
 docs/                     架构、决策、验收、发行说明
 ```
 
-**页面组装方式**：`editor.html` 只有 `__MOTE_CSS__`、`__MOTE_JS__` 两个占位符。外壳读取产物内的 `web/editor.html`、`web/editor.css`、`web/editor.js`（macOS 在 `Contents/Resources/web/`，Windows 在 exe 同级 `web/`），内联后写到**文档同目录**的隐藏文件 `.mote-preview-<pid>.html`，再加载该文件。这一段是坑 P01 的解，不要改成 `loadHTMLString`。
+**页面组装方式**：`editor.html` 只有 `__MOTE_CSS__`、`__MOTE_MERMAID__`、`__MOTE_JS__` 三个占位符。外壳读取产物内的 `web/editor.html`、`web/editor.css`、`web/mermaid.min.js`、`web/editor.js`（macOS 在 `Contents/Resources/web/`，Windows 在 exe 同级 `web/`），内联后写到**文档同目录**的隐藏文件 `.mote-preview-<pid>.html`，再加载该文件。这一段是坑 P01 的解，不要改成 `loadHTMLString`。
 
 **`editor.js` 体积警告**：单文件 5.8k 行已经偏大。重建时可以拆成「解析 / 渲染 / 编辑 / 历史 / 浮层」五个 IIFE 文件，但**不要引入 AMD/ESM/bundler**——原生按顺序拼进 `__MOTE_JS__` 即可，保持零构建。
 
@@ -502,6 +502,7 @@ Gitee 在 `tag_name` 不存在时会按 `target_commitish` 自建 tag。
 // 读 qrc → 内联 → 写到文档目录隐藏文件 → 用文件 URL 加载
 QString html = readAll(QStringLiteral(":/web/editor.html"));
 html.replace(QStringLiteral("__MOTE_CSS__"), readAll(QStringLiteral(":/web/editor.css")));
+html.replace(QStringLiteral("__MOTE_MERMAID__"), readAll(QStringLiteral(":/web/mermaid.min.js")));
 html.replace(QStringLiteral("__MOTE_JS__"),  readAll(QStringLiteral(":/web/editor.js")));
 
 const QString page = baseDir.toLocalFile()
