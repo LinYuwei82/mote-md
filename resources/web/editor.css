@@ -1210,7 +1210,9 @@ body.pdf-export {
   font-family: "Open Sans", "PingFang SC", "Helvetica Neue", sans-serif;
   font-size: 10.33pt;
   font-weight: 400;
-  line-height: 1.54;
+  /* Typora 正文行高 15.9pt；WKWebView 行盒按整像素取整，1.54 会落到 22px
+     （16.5pt，比样张松），1.53 落到 21px（15.73pt），是能取到的最近值。 */
+  line-height: 1.53;
   color: #333333;
 }
 
