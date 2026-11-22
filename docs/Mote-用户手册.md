@@ -1,6 +1,6 @@
 # Mote 用户手册
 
-> **Mote v1.0.6** · macOS / Windows 双平台 · 最后更新 2026-11-20
+> **Mote v1.0.10** · macOS / Windows 双平台 · 最后更新 2026-11-22
 > C++20 原生薄外壳 + 系统 WebView 的 Markdown 查看 / 编辑器。macOS 用 AppKit + WKWebView，Windows 用 Win32 + WebView2。前端零框架、零构建，不含 Electron 运行时。
 
 ---
@@ -35,8 +35,10 @@
 
 从官方下载页获取最新版本：
 
-- **macOS**：macOS 14+ · Apple Silicon（M 系列）· [下载 .dmg](https://dl.xiaotu.online/mote/mote-1.0.6-macos-arm64.dmg)
+- **macOS**：macOS 14+ · Apple Silicon（M 系列）· [下载 .dmg](https://dl.xiaotu.online/mote/mote-1.0.10-macos-arm64.dmg)
 - **Windows**：Windows 10/11 · 64 位 · 下载安装包（setup.exe）或绿色版（zip）
+
+Windows 首次安装时，若系统缺少 WebView2 Runtime，安装包会显示一个可选的 WebView2 安装任务（默认勾选），随 Mote 一起自动安装，无需手动下载。
 
 macOS 首次打开时，Gatekeeper 可能会提示"无法验证开发者"：在「系统设置 → 隐私与安全性」点「仍要打开」即可。DMG 内 .app 已通过 Apple 公证，spctl 检查为 `Notarized Developer ID`。
 
@@ -98,6 +100,12 @@ Mote 按空行把文档切成**块**（paragraph block），这是整个编辑�
 
 ![放大后标记隐藏](../screenshots/inline-markers-after-zoom.png)
 
+### 3.4 跨块选区
+
+选区可以跨越块边界：用鼠标拖选，或按住 `Shift+方向键` 向相邻块扩展选区。
+
+复制或剪切跨块选区时，Mote 会同时把**纯文本**与**标准 HTML** 写入剪贴板：粘贴到纯文本应用得到普通文本；粘贴到支持富文本的应用时，标题、列表、代码块、表格的结构都会保留。
+
 ---
 
 ## 4. 代码块
@@ -106,12 +114,12 @@ Mote 按空行把文档切成**块**（paragraph block），这是整个编辑�
 
 Markdown 三反引号围栏创建代码块，支持语法高亮（内置轻量高亮，无第三方解析库）：
 
-```markdown
+````markdown
 ```python
 def hello():
     print("Hello, Mote")
 ```
-```
+````
 
 ![代码块示例](../screenshots/code-lang-before.png)
 
@@ -400,16 +408,35 @@ Markdown 标准语法：
 
 ## 16. 导出 HTML 与 PDF
 
+### 16.1 导出方式
+
 | 操作 | 格式 | 快捷键 |
 |------|------|--------|
 | `文件 → 导出 HTML…` | 单文件自包含 HTML（样式内联、图片 base64 内嵌、代码高亮保留） | `Option+Cmd+E` |
 | `文件 → 导出 PDF…` | A4 多页、无页眉页脚 | `Cmd+P` |
 
-源码模式下禁用 PDF 导出。macOS 端按 Typora 的 A4 版式导出（正文 10.33pt、页边距 37.6/45.4pt、表格铺满正文宽、代码块不超过一页时整块保留）；Windows 端分页由 Chromium 决定。
+源码模式下禁用 PDF 导出。
 
 导出的 HTML 用浏览器打开：
 
 ![导出后在浏览器中打开](../screenshots/export-browser.png)
+
+### 16.2 PDF 版式与分页
+
+PDF 版式按 Typora 的 A4 样张逐项校准：正文 10.33pt、页边距 37.6/45.4pt、正文行高、表格行高（26.25pt）与单元格留白、表格铺满正文宽、代码块行距与编号、目录项间距（21.6pt）。
+
+分页规则：
+
+- **整块不劈开**：整张表格或代码块不超过一页时保持完整，不会被跨页劈开
+- **表格按行分页**：超过一页的长表格按行续排
+- **换页后首行贴顶**：换页后的首行紧贴正文区顶部
+
+Windows 端分页由 Chromium 决定。
+
+### 16.3 mermaid 图与导出体积
+
+- **mermaid 按图导出**：mermaid 代码块在导出时渲染为矢量图，不再输出源码文本
+- **导出体积大幅下降**：PDF 改为逐页抓取内容、嵌入字体按族共享，59 页的技术方案文档从 4.22MB 降到约 1.40MB，文本层与分页保持不变
 
 ---
 
@@ -439,6 +466,7 @@ Markdown 标准语法：
 |------|-------|---------|
 | 插入表格 | `Cmd+Enter` | `Ctrl+Enter` |
 | 离开编辑块 | `Esc` | `Esc` |
+| 跨块扩展选区 | `Shift+方向键` | `Shift+方向键` |
 
 ---
 
@@ -501,4 +529,4 @@ Mote 已通过 Apple 公证（Notarized Developer ID）。macOS 14+ 在 Gatekeep
 
 ---
 
-**Mote · v1.0.6 用户手册 · © 2026**
+**Mote · v1.0.10 用户手册 · © 2026**
