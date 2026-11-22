@@ -522,7 +522,8 @@ blockquote {
 }
 
 ul, ol { margin: 0.4em 0 0.9em; padding-left: 1.6em; }
-li { margin: 0.15em 0; }
+/* 列表项间距与导出/Typora 对齐：21.6pt ≈ 28.8px（行盒 25.1px + 3.7px） */
+li { margin: 0.22em 0; }
 
 hr {
   border: none;
@@ -1321,7 +1322,7 @@ body.pdf-export .block ol {
 }
 
 body.pdf-export .block li {
-  margin: 5.5pt 0;
+  margin: 5.9pt 0; /* 行盒 15.73pt + 5.9pt = 21.6pt，与样张的目录项间距一致 */
 }
 
 body.pdf-export .block li > p {
