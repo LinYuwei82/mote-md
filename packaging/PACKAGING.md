@@ -530,7 +530,7 @@ NSMenu key equivalent 消费），右键用 **`cliclick` 真实鼠标事件**；
 `'</head>'` 字面量**也一起替换了，导致导出的 HTML 凭空多出一个 `file://` 的 `<base>`。
 改为只替换第一处（模板自己的 `</head>`，`src/macwebview.mm`）后，`grep file://` 从 1 变 0。
 
-PDF 导出的可行性评估见 §5 第 5 条（结论：不提供，理由是实测数据不支持）。
+PDF 导出早期判定为「不提供」，后续改为按安全切点分段 `createPDF` + A4 拼页实现（见 §5 第 5 条）。
 
 ### 1.14 DMG 分发：拖拽安装（2026-11-10，最终包）
 
@@ -769,18 +769,12 @@ Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip 
    quarantine 属性（见 1.14 的历史记录）。
 4. **拖拽打开**：功能已实现（`dragEnterEvent`/`dropEvent`），但当前环境无法用自动化
    模拟真实的 Finder 拖放；其余打开方式（文件对话框、命令行传入路径）已实际验证。
-5. **导出 PDF 未提供**（本批次实测结论，不是遗漏）：WebKit 在 macOS 上只给两条路，都不满足
-   「可靠」——
-   - `WKPDFConfiguration`（`createPDFWithConfiguration:`，macOS 11+）的配置对象只有 `rect` 与
-     `allowTransparentBackground`，**没有分页 API**。实测能生成 PDF（779×1168 pt 单页、
-     138 KB、文字可选中），但整篇文档永远是**一张长页**，页数随文档增长而非 A4 分页。
-   - 唯一的分页路径 `printOperationWithPrintInfo:`（macOS 11+）实测失控：三种参数组合
-     （`NSFitPagination`+离屏窗口 / `NSClipPagination`+可见窗口 / 全默认 `NSPrintInfo`+有标题栏窗口）
-     都在 `runOperation` 里持续写盘不返回，20 秒内产出 **408 MB / 407 MB / 982 MB** 后被强制杀掉，
-     没有一次正常结束。属于 WebKit 打印实现的问题，不是参数写错。
-   
-   结论：不做半成品。若以后要做，可行方向是拿导出好的自包含 HTML 交给系统打印面板由用户
-   「存储为 PDF」，而不是绕开用户在应用内静默生成。
+5. **导出 PDF（已解决）**：本批次曾判定不提供——`WKPDFConfiguration`（`createPDFWithConfiguration:`）
+   只有 `rect` 与 `allowTransparentBackground`，没有分页 API，整篇会是一张长页；
+   `printOperationWithPrintInfo:` 又会在 `runOperation` 里持续写盘不返回。
+   最终方案是**按安全切点分段 `createPDF`，再由 `CGPDFContext` 逐页拼成 A4**
+   （`shell/mac/pdf_export.mm`），不经过系统打印面板；版式按 Typora 样张对齐，
+   表格与代码块不超过一页时整块保留。
 6. **链接的复制验证方式**：`Cmd+A`/`Cmd+C` 在 WKWebView 外壳里不会产生选区（历史遗留），
    因此链接的「复制出标准 Markdown」走产品自身的 `copy` 处理器 + 合成 `DataTransfer` 读取
    `text/plain` 验证；真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。

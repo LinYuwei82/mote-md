@@ -405,7 +405,7 @@ Markdown 标准语法：
 | `文件 → 导出 HTML…` | 单文件自包含 HTML（样式内联、图片 base64 内嵌、代码高亮保留） | `Option+Cmd+E` |
 | `文件 → 导出 PDF…` | A4 多页、无页眉页脚 | `Cmd+P` |
 
-源码模式下禁用 PDF 导出。两端分页切点由各自 WebView 引擎决定，未做逐页像素比对。
+源码模式下禁用 PDF 导出。macOS 端按 Typora 的 A4 版式导出（正文 10.33pt、页边距 37.6/45.4pt，表格与代码块不超过一页时整块保留）；Windows 端分页由 Chromium 决定。
 
 导出的 HTML 用浏览器打开：
 
