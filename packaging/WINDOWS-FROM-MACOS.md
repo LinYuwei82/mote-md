@@ -158,6 +158,11 @@ powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 `fonts\JetBrainsMono-Light.ttf` 齐全且不含 Qt 产物，再编译 `packaging\mote.iss`。
 发布时该文件存在就一并上传，不存在则只发绿色包。
 
+安装版会在缺少 WebView2 Runtime 时给出可选的安装任务（默认勾选）：安装前联网下载
+官方 Evergreen 安装器，再以 `/silent /install` 静默安装（按机器安装，会请求管理员
+权限）。取消勾选、下载失败或拒绝授权都不影响 Mote 安装，结束时只做提示；已装
+Runtime 的机器不会看到该任务。
+
 ---
 
 ## 5. 产物与结构
@@ -209,7 +214,7 @@ exe 只链接系统 DLL；WebView2 运行时由目标机器提供（Evergreen）
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 窗口空白 / 提示缺 WebView2 | 目标机器没有 Evergreen Runtime | 安装 WebView2 Runtime 后重试 |
+| 窗口空白 / 提示缺 WebView2 | 目标机器没有 Evergreen Runtime | 安装 WebView2 Runtime 后重试，或重跑安装包并勾选 WebView2 任务 |
 | 提示缺 `WebView2Loader.dll` | 打包时没复制 Loader | 重新跑 `package_windows.ps1`（确认 `WEBVIEW2_SDK`） |
 | SmartScreen「Windows 已保护你的电脑」 | 未签名 | 点「更多信息 → 仍要运行」；正式发布需购买代码签名证书 |
 | `cmake --build` 失败 | 没在 MSVC 环境，或 `WEBVIEW2_SDK` 未设置 | 在 VS 开发者环境重开 PowerShell，按第 3 节核对 |

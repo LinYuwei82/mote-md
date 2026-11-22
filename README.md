@@ -277,7 +277,8 @@ VERSION.txt              版本号唯一来源（单行 x.y.z）
 ## 第三方与许可
 
 - **系统 WebKit**：macOS 自带框架，不随包分发。
-- **WebView2 Runtime**：Windows 由系统/用户安装的 Evergreen Runtime 提供，不随包分发。
+- **WebView2 Runtime**：Windows 由系统/用户安装的 Evergreen Runtime 提供，绿色包不随包分发；
+  安装版在缺少运行时时提供默认勾选的可选任务，联网下载官方安装器并静默安装（需一次管理员授权）。
 - **Sparkle 2**：macOS 自动更新框架，MIT 许可；`resources/Sparkle.framework`（不随仓库分发），构建时拷入 `.app/Contents/Frameworks/`。
 - **JetBrains Mono**：SIL Open Font License 1.1；仓库内 [resources/fonts/OFL.txt](resources/fonts/OFL.txt)，
   发布包内 `licenses/JetBrainsMono-OFL.txt`。

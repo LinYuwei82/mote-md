@@ -676,6 +676,12 @@ powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 `packaging\mote.iss`；发布时 `publish_windows.ps1` 检测到该文件就一并上传，
 不存在则只发绿色包。
 
+安装版带一个可选的 **WebView2 安装任务**：目标机器没装 Runtime 时，任务页出现
+「安装 Microsoft Edge WebView2 Runtime」并默认勾选；安装前从微软官方 fwlink 下载
+Evergreen 安装器，安装阶段以 `/silent /install` 静默执行（按机器安装，会请求一次
+管理员权限）。下载失败或用户取消授权不会阻断 Mote 安装，安装结束时会再提示一次
+并给出下载地址；已装 Runtime 的机器看不到该任务，静默升级也不会额外联网。
+
 ### 2.4 手动逐步执行（不用脚本时）
 
 ```powershell
@@ -705,7 +711,8 @@ Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip 
   VC++ Redistributable。
 - 程序图标与文件版本由 CMake 从 `shell/win/app.rc.in` 生成 `app.rc` 后编译进 exe，
   图标取自 `resources/win/app.ico`，版本号取自仓库根 `VERSION.txt`，都不需要手工同步。
-- WebView2 运行时由目标机器提供（Evergreen），不随包分发；缺运行时时应用会提示安装。
+- WebView2 运行时由目标机器提供（Evergreen），绿色包不随包分发；缺运行时时应用会提示安装。
+  安装版提供可选安装任务，缺运行时时可代下载并静默安装（详见 2.3）。
 - 未做代码签名，SmartScreen 可能提示「Windows 已保护你的电脑」，
   点「更多信息 → 仍要运行」即可。
 
@@ -809,7 +816,8 @@ powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 | 依赖 | USER32 / ole32 / ADVAPI32 / SHLWAPI / SHELL32 / COMCTL32 / KERNEL32 |
 | Qt 文件 | 0 |
 
-绿色包就绪后可按 2.3 打安装包（Inno Setup 6，产物 `dist/Mote-Setup-<版本>.exe`）。
+绿色包就绪后可按 2.3 打安装包（Inno Setup 6，产物 `dist/Mote-Setup-<版本>.exe`）；
+缺 WebView2 Runtime 的干净机可以用安装包里的可选任务代下载安装。
 
 ### 6.2 截图与页面基线
 
