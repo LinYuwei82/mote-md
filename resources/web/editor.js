@@ -7272,7 +7272,7 @@
   // 或一张图劈开。切点取两段内容之间的空隙中点；行盒紧挨着（同一段内的换行）
   // 时向下让 2px，因为中文字形（尤其标点）的墨迹会略微溢出 line box，
   // 贴着盒底切会漏出半截。
-  // 页面正文高约 757pt（1009 CSS px）；不超过一页的表格/代码块按整体参与切页。
+  // 页面正文高约 757pt（1009 CSS px）；不超过一页的代码块按整体参与切页。
   var kPdfAtomicPage = 1000;
   function pdfSafeCuts(ed) {
     if (!ed)
@@ -7297,8 +7297,9 @@
       var block = ed.children[i];
       if (!block.classList || !block.classList.contains('block'))
         continue;
-      // 与 Typora 一致：整张表、整个代码块只要不超过一页就整体保留，不从中间切页。
-      if (block.classList.contains('table') || block.classList.contains('code')) {
+      // 与 Typora 一致：整个代码块只要不超过一页就整体保留，不从中间切页；
+      // 表格仍按行切（Typora 的打印样式只禁止表格行被劈开，整表可以跨页）。
+      if (block.classList.contains('code')) {
         var blockRect = block.getBoundingClientRect();
         if (blockRect.height > 0 && blockRect.height <= kPdfAtomicPage) {
           addRect(blockRect);

@@ -1372,12 +1372,9 @@ body.pdf-export .block table {
 body.pdf-export .block th,
 body.pdf-export .block td {
   border: 1px solid #dfe2e5;
-  padding: 2.03pt 7.5pt; /* Typora 单元格上下留白很小，左右约 10px */
-  line-height: 1.37;     /* 行盒 19px：单行行高 18.4pt（Typora 18.7pt） */
+  padding: 4.5pt 9.75pt; /* 6px 13px */
+  line-height: 1.6;      /* Typora 表格行距比正文略大，行高 26.25pt */
 }
-
-/* 行内 code 不在连字符/斜杠处折行（Typora 也不折），列宽按完整 token 分配 */
-body.pdf-export .block td code { white-space: nowrap; }
 
 body.pdf-export .block th { background: #f8f8f8; font-weight: 700; }
 body.pdf-export .block tbody tr:nth-child(2n) { background: #f8f8f8; }
