@@ -774,7 +774,7 @@ Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip 
    `printOperationWithPrintInfo:` 又会在 `runOperation` 里持续写盘不返回。
    最终方案是**按安全切点分段 `createPDF`，再由 `CGPDFContext` 逐页拼成 A4**
    （`shell/mac/pdf_export.mm`），不经过系统打印面板；版式按 Typora 样张对齐，
-   表格与代码块不超过一页时整块保留。
+   表格铺满正文宽；代码块不超过一页时整块保留。
 6. **链接的复制验证方式**：`Cmd+A`/`Cmd+C` 在 WKWebView 外壳里不会产生选区（历史遗留），
    因此链接的「复制出标准 Markdown」走产品自身的 `copy` 处理器 + 合成 `DataTransfer` 读取
    `text/plain` 验证；真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
