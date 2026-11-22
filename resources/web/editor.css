@@ -554,7 +554,11 @@ table {
   border-collapse: collapse;
   margin: 1em 0;
   font-size: 0.95em;
-  width: auto;
+  /* 与 Typora 一致：表格铺满正文宽；auto 会按内容收缩，导致 1.2、1.4 这类
+     表比其它表窄一截，编辑态、HTML 导出与 PDF 导出也会各不相同。 */
+  width: 100%;
+  /* 等宽分列，避免 auto 把短列（如“类别”）压成竖排；PDF 另按样张用 auto。 */
+  table-layout: fixed;
   max-width: 100%;
 }
 
@@ -1405,6 +1409,7 @@ body.pdf-export .block.code.has-mermaid > pre.code-block > .mermaid-figure {
 body.pdf-export .block table {
   margin: 0;
   width: 100%; /* Typora 的表格铺满正文宽度，auto 会按内容收缩 */
+  table-layout: auto; /* 样张按内容比例分列（1.2 表的“类别”列会很窄），不要等宽 */
   font-size: 10.33pt;
   border-collapse: collapse;
 }
