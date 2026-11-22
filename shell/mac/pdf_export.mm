@@ -16,7 +16,7 @@ const CGFloat kPdfMarginTop = 45.4;
 const CGFloat kPdfMarginBottom = 45.4;
 const CGFloat kPdfContentW = kPdfPageW - kPdfMarginLeft - kPdfMarginRight;
 const CGFloat kPdfContentH = kPdfPageH - kPdfMarginTop - kPdfMarginBottom;
-const double kPdfChunkPx = 13800.0; // 低于 createPDF 的 14400pt 上限
+const double kPdfChunkPx = 13800.0; // 单次 createPDF 的高度上限（低于 14400pt）
 const int kPdfMaxPages = 200;
 
 struct PdfPage {
@@ -109,18 +109,15 @@ std::vector<PdfPage> pdfPlanPages(const std::vector<double> &cuts, double height
 
 std::vector<std::pair<double, double>> pdfChunks(const std::vector<PdfPage> &pages)
 {
+    // 每页单独 createPDF：早先按 18 页成段、再把同一段切给每一页，会让每页
+    // 内容流重复整段的绘制指令，导出体积膨胀十几倍（7.9MB）。单页成段后每个
+    // 内容流只含本页内容（内容流共 0.55MB，与 Typora 相当）；2 页成段虽能少
+    // 嵌入一些字体子集，但会把下一页的文字带进本页文本层，影响检索与复制，
+    // 所以不采用。
     std::vector<std::pair<double, double>> chunks;
-    size_t i = 0;
-    while (i < pages.size()) {
-        const double top = pages[i].top;
-        size_t j = i;
-        while (j < pages.size() && pages[j].bottom - top <= kPdfChunkPx + 0.01)
-            ++j;
-        if (j == i)
-            j = i + 1;
-        chunks.emplace_back(top, pages[j - 1].bottom);
-        i = j;
-    }
+    chunks.reserve(pages.size());
+    for (const PdfPage &page : pages)
+        chunks.emplace_back(page.top, page.bottom);
     return chunks;
 }
 
