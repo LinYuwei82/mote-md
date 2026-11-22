@@ -530,7 +530,7 @@ NSMenu key equivalent 消费），右键用 **`cliclick` 真实鼠标事件**；
 `'</head>'` 字面量**也一起替换了，导致导出的 HTML 凭空多出一个 `file://` 的 `<base>`。
 改为只替换第一处（模板自己的 `</head>`，`src/macwebview.mm`）后，`grep file://` 从 1 变 0。
 
-PDF 导出早期判定为「不提供」，后续改为按安全切点分段 `createPDF` + A4 拼页实现（见 §5 第 5 条）。
+PDF 导出早期判定为「不提供」，后续改为逐页 `createPDF` 抓内容 + 超集字体共享的手工 A4 拼装（见 §5 第 5 条）。
 
 ### 1.14 DMG 分发：拖拽安装（2026-11-10，最终包）
 
@@ -772,7 +772,7 @@ Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip 
 5. **导出 PDF（已解决）**：本批次曾判定不提供——`WKPDFConfiguration`（`createPDFWithConfiguration:`）
    只有 `rect` 与 `allowTransparentBackground`，没有分页 API，整篇会是一张长页；
    `printOperationWithPrintInfo:` 又会在 `runOperation` 里持续写盘不返回。
-   最终方案是**按安全切点分段 `createPDF`，再由 `CGPDFContext` 逐页拼成 A4**
+   最终方案是**逐页 `createPDF` 抓内容，再用超集字体共享手工拼成 A4**
    （`shell/mac/pdf_export.mm`），不经过系统打印面板；版式按 Typora 样张对齐，
    表格铺满正文宽；代码块不超过一页时整块保留。
 6. **链接的复制验证方式**：`Cmd+A`/`Cmd+C` 在 WKWebView 外壳里不会产生选区（历史遗留），
