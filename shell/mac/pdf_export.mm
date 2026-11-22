@@ -8,10 +8,12 @@ namespace {
 
 const CGFloat kPdfPageW = 595.28;
 const CGFloat kPdfPageH = 841.89;
-const CGFloat kPdfMarginLeft = 51.0;
-const CGFloat kPdfMarginRight = 51.0;
-const CGFloat kPdfMarginTop = 56.7;
-const CGFloat kPdfMarginBottom = 56.7;
+// 与 Typora 导出的 A4 样张一致：左右 37.6pt、上下 45.4pt，正文宽 520.08pt。
+// 导出态 CSS 把 #editor 固定成 693.44px（=520.08pt），因此纸面上的 1pt 就是 CSS 里的 1pt。
+const CGFloat kPdfMarginLeft = 37.6;
+const CGFloat kPdfMarginRight = 37.6;
+const CGFloat kPdfMarginTop = 45.4;
+const CGFloat kPdfMarginBottom = 45.4;
 const CGFloat kPdfContentW = kPdfPageW - kPdfMarginLeft - kPdfMarginRight;
 const CGFloat kPdfContentH = kPdfPageH - kPdfMarginTop - kPdfMarginBottom;
 const double kPdfChunkPx = 13800.0; // 低于 createPDF 的 14400pt 上限
@@ -262,6 +264,9 @@ std::vector<double> parseCuts(NSDictionary *dimensions, double height)
     return cuts;
 }
 
+void pdfBeginExport(PdfJob *job, WKWebView *webView);
+void pdfWaitContent(PdfJob *job, WKWebView *webView, int attempt);
+
 } // namespace
 
 void MoteExportPdf(WKWebView *webView, const std::string &path,
@@ -280,70 +285,101 @@ void MoteExportPdf(WKWebView *webView, const std::string &path,
     job->completion = std::move(completion);
 
     // 先进入导出态（隐藏外壳）并量整篇正文尺寸与安全切点；pdfBegin 只加 body class，
-    // 失败路径也必须 pdfEnd 还原
+    // 失败路径也必须 pdfEnd 还原。导出样式依赖内嵌字体与图片：量高度前先等它们解码完，
+    // 否则图片块高度为 0，createPDF 也会把图片画成空白。
+    pdfWaitContent(job, webView, 0);
+}
+
+namespace {
+
+void pdfBeginExport(PdfJob *job, WKWebView *webView)
+{
     [webView evaluateJavaScript:@"window.mote && window.mote.pdfBegin()"
               completionHandler:^(id result, NSError *error) {
-                (void)error;
-                NSString *json = nil;
-                if ([result isKindOfClass:[NSString class]])
-                    json = (NSString *)result;
-                else if ([result isKindOfClass:[NSDictionary class]])
-                    json = [[NSString alloc]
-                        initWithData:[NSJSONSerialization dataWithJSONObject:result
-                                                                     options:0
-                                                                       error:NULL]
-                            encoding:NSUTF8StringEncoding];
-                NSDictionary *dimensions = nil;
-                if (json.length > 0) {
-                    id parsed = [NSJSONSerialization
-                        JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
-                                   options:0
-                                     error:NULL];
-                    if ([parsed isKindOfClass:[NSDictionary class]])
-                        dimensions = parsed;
-                }
+            (void)error;
+            NSString *json = nil;
+            if ([result isKindOfClass:[NSString class]])
+                json = (NSString *)result;
+            else if ([result isKindOfClass:[NSDictionary class]])
+                json = [[NSString alloc]
+                    initWithData:[NSJSONSerialization dataWithJSONObject:result
+                                                                 options:0
+                                                                   error:NULL]
+                        encoding:NSUTF8StringEncoding];
+            NSDictionary *dimensions = nil;
+            if (json.length > 0) {
+                id parsed = [NSJSONSerialization
+                    JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
+                               options:0
+                                 error:NULL];
+                if ([parsed isKindOfClass:[NSDictionary class]])
+                    dimensions = parsed;
+            }
 
-                const double width = [dimensions[@"w"] doubleValue];
-                const double height = [dimensions[@"h"] doubleValue];
-                std::vector<double> cuts = parseCuts(dimensions, height);
-                if (width < 10 || height < 10 || cuts.size() < 2) {
-                    [webView evaluateJavaScript:@"window.mote && window.mote.pdfEnd()"
-                              completionHandler:nil];
-                    if (job->completion)
-                        job->completion(false, "导出失败：没有可导出的正文");
-                    delete job;
+            const double width = [dimensions[@"w"] doubleValue];
+            const double height = [dimensions[@"h"] doubleValue];
+            std::vector<double> cuts = parseCuts(dimensions, height);
+            if (width < 10 || height < 10 || cuts.size() < 2) {
+                [webView evaluateJavaScript:@"window.mote && window.mote.pdfEnd()"
+                          completionHandler:nil];
+                if (job->completion)
+                    job->completion(false, "导出失败：没有可导出的正文");
+                delete job;
+                return;
+            }
+            std::sort(cuts.begin(), cuts.end());
+            job->width = width;
+            job->height = height;
+            job->pages = pdfPlanPages(cuts, height, width);
+            if (job->pages.empty() || job->pages.back().bottom < height - 0.5) {
+                // 超过页数上限时宁可报错，也不能把后半篇悄悄丢掉
+                pdfAbort(job, webView, "导出失败：文档过长，无法完整导出");
+                return;
+            }
+            for (const PdfPage &page : job->pages) {
+                if (page.bottom - page.top > kPdfChunkPx + 0.01) {
+                    pdfAbort(job, webView, "导出失败：文档中有超高元素，无法完整导出");
                     return;
                 }
-                std::sort(cuts.begin(), cuts.end());
-                job->width = width;
-                job->height = height;
-                job->pages = pdfPlanPages(cuts, height, width);
-                if (job->pages.empty() || job->pages.back().bottom < height - 0.5) {
-                    // 超过页数上限时宁可报错，也不能把后半篇悄悄丢掉
-                    pdfAbort(job, webView, "导出失败：文档过长，无法完整导出");
-                    return;
-                }
-                for (const PdfPage &page : job->pages) {
-                    if (page.bottom - page.top > kPdfChunkPx + 0.01) {
-                        pdfAbort(job, webView, "导出失败：文档中有超高元素，无法完整导出");
-                        return;
-                    }
-                }
-                job->chunks = pdfChunks(job->pages);
+            }
+            job->chunks = pdfChunks(job->pages);
 
-                const CGRect mediaBox = CGRectMake(0, 0, kPdfPageW, kPdfPageH);
-                job->buffer = CFDataCreateMutable(kCFAllocatorDefault, 0);
-                CGDataConsumerRef consumer = job->buffer
-                    ? CGDataConsumerCreateWithCFData(job->buffer)
-                    : nullptr;
-                if (consumer) {
-                    job->ctx = CGPDFContextCreate(consumer, &mediaBox, NULL);
-                    CGDataConsumerRelease(consumer);
-                }
-                if (!job->ctx) {
-                    pdfAbort(job, webView, "导出失败：无法生成 PDF");
-                    return;
-                }
-                pdfRunChunk(job, webView);
+            const CGRect mediaBox = CGRectMake(0, 0, kPdfPageW, kPdfPageH);
+            job->buffer = CFDataCreateMutable(kCFAllocatorDefault, 0);
+            CGDataConsumerRef consumer = job->buffer
+                ? CGDataConsumerCreateWithCFData(job->buffer)
+                : nullptr;
+            if (consumer) {
+                job->ctx = CGPDFContextCreate(consumer, &mediaBox, NULL);
+                CGDataConsumerRelease(consumer);
+            }
+            if (!job->ctx) {
+                pdfAbort(job, webView, "导出失败：无法生成 PDF");
+                return;
+            }
+            pdfRunChunk(job, webView);
               }];
 }
+
+void pdfWaitContent(PdfJob *job, WKWebView *webView, int attempt)
+{
+    [webView
+        evaluateJavaScript:
+            @"String(!!(window.mote&&window.mote.pdfContentReady&&window.mote.pdfContentReady()))"
+      completionHandler:^(id ready, NSError *error) {
+        const BOOL contentReady = [ready isKindOfClass:[NSString class]]
+            && [(NSString *)ready isEqualToString:@"true"];
+        // 每 100ms 查一次，最多等 8 秒；真不可用就照常导出
+        if (!contentReady && !error && attempt < 80) {
+            dispatch_after(
+                dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
+                dispatch_get_main_queue(), ^{
+                  pdfWaitContent(job, webView, attempt + 1);
+                });
+            return;
+        }
+        pdfBeginExport(job, webView);
+      }];
+}
+
+} // namespace

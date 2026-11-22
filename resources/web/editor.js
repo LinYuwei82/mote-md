@@ -7324,10 +7324,9 @@
     }
     var cuts = [0];
     for (var p = 0; p + 1 < merged.length; p++) {
-      var gap = merged[p + 1].top - merged[p].bottom;
-      // 空隙里切：离上一行墨迹 4px（盖住标点溢出），余量留给页首
-      cuts.push(gap >= 4 ? merged[p].bottom + Math.min(gap / 2, 4)
-                         : merged[p].bottom + 2);
+      // 切在下一段内容的上沿：换页后首行紧贴正文区顶部，不会把块外边距带进新页首
+      // （Chromium/Typora 在分页处同样丢弃相邻外边距）。0.5px 回退防止行盒顶边重叠。
+      cuts.push(Math.max(merged[p].bottom, merged[p + 1].top - 0.5));
     }
     var bottom = merged.length ? merged[merged.length - 1].bottom + 1 : 1;
     cuts.push(Math.ceil(bottom));
@@ -7341,6 +7340,38 @@
   }
 
   var pdfSavedScrollY = 0;
+
+  // 导出前确认内嵌字体与图片真正可用：图片 complete 只代表下载完成，解码是异步的，
+  // createPDF 若在解码前取图会把图片画成空白（位置留着、内容没有）。
+  var pdfImagesPreparing = false;
+  var pdfImagesPending = 0;
+  function pdfPrepareImages() {
+    if (pdfImagesPreparing || !document.images)
+      return;
+    pdfImagesPreparing = true;
+    Array.prototype.forEach.call(document.images, function (img) {
+      pdfImagesPending++;
+      var done = function () { pdfImagesPending--; };
+      if (img.decode)
+        img.decode().then(done, done);
+      else
+        done();
+    });
+  }
+
+  function pdfContentReady() {
+    pdfPrepareImages();
+    if (pdfImagesPending > 0)
+      return false;
+    if (document.fonts && !document.fonts.check('10.33pt "Open Sans"'))
+      return false;
+    for (var i = 0; i < document.images.length; i++) {
+      var img = document.images[i];
+      if (!img.complete || img.naturalWidth <= 0)
+        return false;
+    }
+    return true;
+  }
 
   window.mote = {
     setTheme: setTheme,
@@ -7540,6 +7571,10 @@
     // PDF 导出：createPDF / PrintToPdf 走屏幕媒体，@media print 不生效，
     // 所以由宿主在导出前加 body.pdf-export（样式里清外壳），导出完成立刻移除。
     // 只动 body 的 class，不碰正文节点，因此不改文档、不进撤销栈、不置脏标记。
+    // 字体/图片是否已经可以进入导出：宿主在 pdfBegin 之前轮询，避免量到错的高度
+    pdfContentReady: function () {
+      return pdfContentReady();
+    },
     pdfBegin: function () {
       closeLangMenu();
       pdfSavedScrollY = window.pageYOffset || 0;
@@ -7558,6 +7593,13 @@
       window.scrollTo(0, pdfSavedScrollY);
     }
   };
+
+  // 导出 PDF 用的 Open Sans 是 base64 内嵌字体，提前请求解码，
+  // 避免导出时前几页的拉丁字符因字体未就绪而回退成系统字体。
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load('400 1em "Open Sans"', 'Aa0');
+    document.fonts.load('700 1em "Open Sans"', 'Aa0');
+  }
 
   applyZoom();
   if (INLINE_PROTO)
