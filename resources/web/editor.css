@@ -1335,13 +1335,16 @@ body.pdf-export .gutter {
   font-family: "Courier", monospace;
   font-size: 9.3pt;
   font-weight: 400;
-  line-height: 1.45;
+  line-height: 1.54;
   text-align: right;
   white-space: pre;
 }
 
 body.pdf-export .code-scroll {
-  flex: 1 1 auto;
+  /* 必须与编辑态一致用 flex-basis 0：pre.code-block 带 flex-wrap，若按内容宽度
+     参与折行判断，长代码行会把整列挤到行号槽下面，代码跑到灰框外。 */
+  flex: 1 1 0;
+  min-width: 0;
   overflow: visible !important;
 }
 
@@ -1353,7 +1356,7 @@ body.pdf-export pre.code-block code {
   border-radius: 0;
   font-family: "Courier", monospace;
   font-size: 9.3pt;
-  line-height: 1.45;
+  line-height: 1.54;
   white-space: pre-wrap;
 }
 
