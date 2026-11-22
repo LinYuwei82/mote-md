@@ -9,6 +9,8 @@
 ;
 ;  安装形态：按用户安装（LocalAppData），无需管理员；带卸载程序。
 ;  .md 关联：独立 ProgID Mote.md + 可选接管默认程序，卸载时只清理自己写入的项。
+;  WebView2：可选任务，缺少运行时时联网下载官方 Evergreen 安装器并静默安装
+;            （该安装器按机器安装，会请求一次管理员权限）。
 ; ============================================================
 
 #define MyAppName "Mote"
@@ -63,6 +65,8 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务："
 Name: "associatemd"; Description: "将 .md 文件关联到 Mote（接管当前默认程序）"; GroupDescription: "文件关联："
+; 运行时时不显示该任务；缺少时默认勾选，仍可由用户取消
+Name: "webview2"; Description: "安装 Microsoft Edge WebView2 Runtime（缺少时界面无法显示，需联网下载并请求管理员权限）"; GroupDescription: "运行组件："; Check: not IsWebView2Installed
 
 [Files]
 ; 直接使用绿色版目录，安装内容与 zip 完全一致
@@ -74,6 +78,8 @@ Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
+; WebView2 必须先装好，否则 Mote 启动后只能显示提示页
+Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "正在安装 Microsoft Edge WebView2 Runtime..."; Flags: waituntilterminated runhidden; Check: ShouldRunWebView2Installer; AfterInstall: WebView2InstallFinished
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
 ; 应用内更新：/RELAUNCH=1 时静默安装完成后自动启动新版本
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait; Check: ShouldRelaunch
@@ -116,6 +122,8 @@ procedure SHChangeNotify(wEventId: Integer; uFlags: Cardinal; dwItem1, dwItem2: 
 
 var
   BackupDone: Boolean;
+  // 只有下载成功的安装器才允许执行，避免网络中断留下半截文件
+  WebView2SetupReady: Boolean;
 
 // 应用内更新时由 updater 传入 /RELAUNCH=1：静默安装结束后重新启动 Mote
 function ShouldRelaunch(): Boolean;
@@ -141,6 +149,59 @@ begin
     (RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\' + RuntimeId, 'pv', Version) and (Version <> ''))
     or (RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\' + RuntimeId, 'pv', Version) and (Version <> ''))
     or (RegQueryStringValue(HKCU, 'Software\Microsoft\EdgeUpdate\Clients\' + RuntimeId, 'pv', Version) and (Version <> ''));
+end;
+
+// 官方 Evergreen Bootstrapper：带 /silent /install 静默安装（按机器安装，会请求管理员权限）
+function WebView2SetupPath(): String;
+begin
+  Result := ExpandConstant('{tmp}\MicrosoftEdgeWebview2Setup.exe');
+end;
+
+// 可选任务默认勾选；已经装过运行时的机器不显示该任务（[Tasks] 的 Check）
+function ShouldRunWebView2Installer(): Boolean;
+begin
+  Result := WizardIsTaskSelected('webview2')
+    and not IsWebView2Installed()
+    and WebView2SetupReady
+    and FileExists(WebView2SetupPath());
+end;
+
+// 下载失败会抛异常，这里统一转成 Boolean（下载成功返回字节数）
+function DownloadWebView2Setup(): Boolean;
+var
+  Size: Int64;
+begin
+  Result := False;
+  try
+    Size := DownloadTemporaryFile('{#MyAppUrl}', 'MicrosoftEdgeWebview2Setup.exe', '', nil);
+    Result := Size > 0;
+  except
+    Log('下载 WebView2 安装程序失败：' + GetExceptionMessage);
+  end;
+end;
+
+// 复制文件之前先下载安装器；下载失败不阻断 Mote 安装，只做提示
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  WebView2SetupReady := False;
+  if not WizardIsTaskSelected('webview2') or IsWebView2Installed() then
+    Exit;
+  WebView2SetupReady := DownloadWebView2Setup();
+  if (not WebView2SetupReady) and (not IsSilentMode()) then
+    MsgBox('未能下载 WebView2 安装程序，可能是网络不可用。' + #13#10 + #13#10 +
+           'Mote 会照常安装，但缺少运行时时界面无法显示。安装完成后可重新运行本安装包，或访问：' + #13#10 +
+           '{#MyAppUrl}', mbInformation, MB_OK);
+end;
+
+// [Run] 结束后复查：用户取消 UAC 或安装失败时给出可操作提示
+procedure WebView2InstallFinished();
+begin
+  if IsWebView2Installed() or IsSilentMode() then
+    Exit;
+  MsgBox('WebView2 Runtime 仍未安装成功（可能取消了管理员授权）。' + #13#10 + #13#10 +
+         'Mote 已经安装，但缺少该组件时界面无法显示。请手动安装后重新打开 Mote，或访问：' + #13#10 +
+         '{#MyAppUrl}', mbError, MB_OK);
 end;
 
 procedure BackupMdAssociation();
@@ -286,22 +347,5 @@ begin
     RegDeleteKeyIfEmpty(HKCU, 'Software\Mote');
     // 关联已还原，通知资源管理器刷新图标与右键菜单
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, 0, 0);
-  end;
-end;
-
-function InitializeSetup(): Boolean;
-var
-  ResultCode: Integer;
-begin
-  Result := True;
-  if not IsSilentMode() and not IsWebView2Installed() then
-  begin
-    if MsgBox('未检测到 Microsoft Edge WebView2 Runtime。' + #13#10 + #13#10 +
-              'Mote 的编辑界面依赖该系统组件，缺少时只能显示提示页。' + #13#10 +
-              '是否现在打开 Evergreen 下载页面？安装完成后重新运行本安装程序即可。',
-              mbConfirmation, MB_YESNO) = IDYES then
-      if not ShellExec('open', '{#MyAppUrl}', '', '', SW_SHOWNORMAL, ewNoWait, ResultCode) then
-        MsgBox('无法自动打开浏览器。请手动访问：' + #13#10 + '{#MyAppUrl}',
-               mbInformation, MB_OK);
   end;
 end;
