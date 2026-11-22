@@ -689,6 +689,7 @@
     var pending = 0;      // 刚才跨过的空行数，等下一块出现时归到它的间隔里
     var inFence = false;
     var started = false;
+    var listKind = null;  // 当前块的列表标记类型：'ul' / 'ol'
 
     function flush() {
       if (!current.length)
@@ -708,7 +709,19 @@
       if (!inFence && line.trim() === '') {
         flush();
         pending++;
+        listKind = null;
         continue;
+      }
+      if (!inFence) {
+        var marker = line.match(/^\s*(?:([-*+])|(\d+)[.)])\s+/);
+        var kind = marker ? (marker[1] ? 'ul' : 'ol') : null;
+        // 有序列表和无序列表紧挨着（中间没有空行）时，标记类型一变就断开成两块；
+        // 否则整段会被当成普通段落，列表标记和缩进都丢了。
+        if (kind && listKind && kind !== listKind)
+          flush();
+        listKind = kind;
+      } else {
+        listKind = null;
       }
       current.push(line);
     }
