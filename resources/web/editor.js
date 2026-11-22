@@ -7272,6 +7272,8 @@
   // 或一张图劈开。切点取两段内容之间的空隙中点；行盒紧挨着（同一段内的换行）
   // 时向下让 2px，因为中文字形（尤其标点）的墨迹会略微溢出 line box，
   // 贴着盒底切会漏出半截。
+  // 页面正文高约 757pt（1009 CSS px）；不超过一页的表格/代码块按整体参与切页。
+  var kPdfAtomicPage = 1000;
   function pdfSafeCuts(ed) {
     if (!ed)
       return { cuts: [0, 1], bottom: 1 };
@@ -7295,6 +7297,14 @@
       var block = ed.children[i];
       if (!block.classList || !block.classList.contains('block'))
         continue;
+      // 与 Typora 一致：整张表、整个代码块只要不超过一页就整体保留，不从中间切页。
+      if (block.classList.contains('table') || block.classList.contains('code')) {
+        var blockRect = block.getBoundingClientRect();
+        if (blockRect.height > 0 && blockRect.height <= kPdfAtomicPage) {
+          addRect(blockRect);
+          continue;
+        }
+      }
       // 文字行盒：逐个文本节点取 Range 的行矩形；同一行被行内元素切开的片段
       // 纵向互相重叠，后面按重叠合并，相邻两行（首尾相接）保持独立以便切页。
       var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null, false);
