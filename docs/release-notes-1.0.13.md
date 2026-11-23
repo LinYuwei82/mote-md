@@ -1,0 +1,37 @@
+## Mote 1.0.13
+
+### 本次更新
+
+- **表格列宽按内容分配（根本修复）**：彻底解决「表格里不管什么内容列都等宽」的问题。此前 WKWebView 引擎在 `table-layout: auto` 下会把表格剩余空间按列均分，内容短的表格必然趋向等宽，与 Typora（Chromium 按内容加权）行为不一致。现在渲染时直接测量每列内容的最大宽度，按比例注入列宽，任何引擎下列宽都由内容决定，对所有表格统一生效。
+- **列宽策略参照 wolai / Notion**：短列有最小宽度保护（不会被长列挤压到逐字换行），长列有封顶（超长内容自动换行而不是无限吃掉其他列）。
+- **导出继承同一套列宽算法**：PDF 导出与 HTML 导出复用渲染结果，表格列宽与编辑器内所见一致。
+- **表格单元格垂直居中**：单元格文字改为垂直居中对齐，与 Typora 一致。
+
+### 构建与分发
+
+- macOS 安装包使用 **Developer ID 签名 + Apple 公证 + stapler 票据**，离线状态下也能通过 Gatekeeper 校验。
+- Windows 安装包与绿色版同步更新，构建号 `10`。
+
+### 下载
+
+| 平台 | 文件 | 说明 |
+| --- | --- | --- |
+| macOS（Apple Silicon） | `mote-1.0.13-macos-arm64.dmg` | 拖拽到「应用程序」即可 |
+| Windows | `mote-1.0.13-win64-setup.exe` | 安装版 |
+| Windows | `mote-1.0.13-win64-portable.zip` | 免安装绿色版 |
+
+### 校验
+
+随附 `SHA256SUMS.txt`，下载后可自行校验：
+
+```bash
+# macOS / Linux
+shasum -a 256 -c SHA256SUMS.txt
+
+# Windows
+certutil -hashfile mote-1.0.13-win64-setup.exe SHA256
+```
+
+### 升级说明
+
+应用内「检查更新」会自动检测并升级；也可以从下载页手动安装覆盖。构建号 `10`，macOS 与 Windows 同号。
