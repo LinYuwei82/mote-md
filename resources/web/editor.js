@@ -1022,6 +1022,63 @@
     return html + '</tr>';
   }
 
+  // 列宽算法：WKWebView 的 auto 布局会把表格剩余空间「按列均分」，内容短的
+  // 表格必然趋向等宽；Chromium（Typora）则按内容加权。引擎差异无法用 CSS
+  // 消除，所以这里直接测量每列可见文本的最大内容宽度，按比例注入 colgroup
+  // 百分比，任何引擎下列宽都由内容决定。
+  var measureCtx = null;
+  function measureTextWidth(text, bold) {
+    if (!measureCtx)
+      measureCtx = document.createElement('canvas').getContext('2d');
+    var cs = getComputedStyle(document.body);
+    var px = (parseFloat(cs.fontSize) || 16) * 0.95;   // table { font-size: 0.95em }
+    measureCtx.font = (bold ? '600 ' : '300 ') + px + 'px ' + (cs.fontFamily || 'sans-serif');
+    return measureCtx.measureText(text).width;
+  }
+
+  // 单元格原文 → 可见纯文本：链接/图片取文字、行内代码与强调去符号。
+  // 注意：不要命名为 cellVisibleText——2058 行已有同名 DOM 节点版本，
+  // 同作用域函数声明会相互覆盖。
+  function stripMarkdownForWidth(text) {
+    return text
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/`([^`]*)`/g, '$1')
+      .replace(/(\*\*|__|~~|\*|_)/g, '')
+      .replace(/\\\|/g, '|')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .trim();
+  }
+
+  function cellMaxWidth(text, bold) {
+    return measureTextWidth(stripMarkdownForWidth(text), bold) + 24;   // th/td 左右 padding 12px
+  }
+
+  function tableColgroupHtml(head, bodyLines) {
+    var n = head.cells.length;
+    if (!n)
+      return '';
+    var widths = [];
+    for (var c = 0; c < n; c++)
+      widths[c] = 0;
+    for (var h = 0; h < head.cells.length && h < n; h++)
+      widths[h] = Math.max(widths[h], cellMaxWidth(head.cells[h].text, true));
+    for (var r = 0; r < bodyLines.length; r++) {
+      var cells = splitTableLine(bodyLines[r]).cells;
+      for (var k = 0; k < cells.length && k < n; k++)
+        widths[k] = Math.max(widths[k], cellMaxWidth(cells[k].text, false));
+    }
+    var total = 0;
+    for (var i = 0; i < n; i++)
+      total += widths[i];
+    if (!total)
+      return '';
+    var out = '<colgroup>';
+    for (var j = 0; j < n; j++)
+      out += '<col style="width:' + (widths[j] / total * 100).toFixed(2) + '%"/>';
+    return out + '</colgroup>';
+  }
+
   function renderTable(lines) {
     var align = tableAlignments(lines[1]);
     var head = splitTableLine(lines[0]);
@@ -1032,7 +1089,7 @@
     }
     // 对齐行不参与渲染（display:none，零高度），但原文按 DOM 顺序留在表头与表体
     // 之间，textContent 才能逐字还原 `| a | b |\n|---|...|`。
-    var html = '<table class="md-table"><thead>'
+    var html = '<table class="md-table">' + tableColgroupHtml(head, body) + '<thead>'
       + tableRowHtml(lines[0], align, 'th', true)
       + '<tr class="tbl-align" aria-hidden="true"><td colspan="' + Math.max(1, head.cells.length) + '">'
       + escapeHtml(lines[1]) + (body.length ? newlineMarker() : '') + '</td></tr>'
