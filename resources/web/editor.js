@@ -1054,6 +1054,12 @@
     return measureTextWidth(stripMarkdownForWidth(text), bold) + 24;   // th/td 左右 padding 12px
   }
 
+  // 参照 wolai / Notion 的列宽策略：按内容分配，但加两层约束——
+  // 短列有最小宽度保护（不被长列挤压到逐字换行），长列有封顶（超长
+  // 内容换行而不是无限吃掉其他列），观感更接近专业笔记应用。
+  var COL_MIN_PX = 90;
+  var COL_MAX_PX = 460;
+
   function tableColgroupHtml(head, bodyLines) {
     var n = head.cells.length;
     if (!n)
@@ -1069,8 +1075,10 @@
         widths[k] = Math.max(widths[k], cellMaxWidth(cells[k].text, false));
     }
     var total = 0;
-    for (var i = 0; i < n; i++)
+    for (var i = 0; i < n; i++) {
+      widths[i] = Math.max(COL_MIN_PX, Math.min(widths[i], COL_MAX_PX));
       total += widths[i];
+    }
     if (!total)
       return '';
     var out = '<colgroup>';
