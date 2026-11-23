@@ -885,7 +885,8 @@ body.inline-proto .block.h6.editing {
 
 /* 斜杠命令浮层（挂在 body 上，不在 #editor 内） */
 #slash-menu,
-#turn-menu {
+#turn-menu,
+#block-menu {
   position: fixed;
   z-index: 40;
   min-width: 190px;
@@ -956,6 +957,63 @@ body.inline-proto .block.h6.editing {
   height: 1px;
   margin: 4px 2px;
   background: var(--border-hair);
+}
+
+/* 块操作手柄（⋮⋮）、拖拽插入指示线与块菜单：都挂在 body 上（position:fixed），
+   不进 #editor，克隆导出时天然不带；打印与 PDF 导出模式再兜底隐藏。 */
+#block-handle {
+  position: fixed;
+  z-index: 45;
+  display: none;
+  width: 22px;
+  padding: 3px 0;
+  border-radius: 5px;
+  text-align: center;
+  color: var(--muted-3);
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: -2px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#block-handle:hover {
+  background: var(--bg-active);
+  color: var(--muted);
+}
+
+#block-handle:active {
+  cursor: grabbing;
+}
+
+.block-dragging {
+  opacity: 0.35;
+}
+
+#block-insert-line {
+  position: fixed;
+  z-index: 46;
+  display: none;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+#block-insert-line::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+#block-menu {
+  min-width: 150px;
 }
 
 /* 代码块语言选择器：挂在 body 上，position:fixed，天然躲开代码块的 overflow，
@@ -1064,6 +1122,9 @@ body.inline-proto .block.h6.editing {
   #slash-menu,
   #turn-menu,
   #lang-menu,
+  #block-handle,
+  #block-insert-line,
+  #block-menu,
   .mk,
   .code-tools,
   .gutter { display: none !important; }
@@ -1121,6 +1182,9 @@ body.pdf-export #find-bar,
 body.pdf-export #slash-menu,
 body.pdf-export #turn-menu,
 body.pdf-export #lang-menu,
+body.pdf-export #block-handle,
+body.pdf-export #block-insert-line,
+body.pdf-export #block-menu,
 body.pdf-export .mk,
 body.pdf-export .code-tools,
 body.pdf-export .gutter { display: none !important; }

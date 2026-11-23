@@ -7268,6 +7268,10 @@
       : null;
     if (turnMenu && !turnMenu.contains(event.target))
       closeTurnMenu();
+    // 手柄自己的按下会弹菜单，这里不能把它当成「点外部」提前关掉
+    if (blockMenu && !blockMenu.contains(event.target)
+        && !(blockHandle && blockHandle.contains(event.target)))
+      closeBlockMenu();
     if (slashMenu && !slashMenu.contains(event.target) && !blockOf(event.target))
       closeSlash(true);
     // 徽标自己的 mousedown 会先打开/切换下拉，这里不能把它当成「点外部」关掉
@@ -7291,8 +7295,415 @@
     } else if (langMenu) {
       event.preventDefault();
       closeLangMenu();
+    } else if (blockMenu) {
+      event.preventDefault();
+      closeBlockMenu();
     }
   }, true);
+
+  /* ---------------- 块操作手柄（⋮⋮：拖拽重排 + 块菜单） ----------------
+     参照 wolai / Notion：指针悬停到任意块（或块获得焦点）时，块左缘出现 ⋮⋮
+     手柄；按住手柄上下拖动可重排块，落点画插入指示线；单击手柄弹出块菜单
+     （在上方/下方插入、复制副本、删除、转为）。手柄与菜单都挂在 body 上
+     （position:fixed），不在 contenteditable 内部，因此不会污染块原文与
+     dataset.raw；导出克隆的是 #editor，天然不含手柄。重排只移动 DOM 节点，
+     dataset.raw / data-gap 跟着节点走，currentSource 由块序重新拼接，撤销走
+     snapshotState 的 blocks/gaps 快照，与现有块模型完全一致。 */
+
+  var blockHandle = null;
+  var blockHandleTarget = null;   // 手柄当前停靠的块
+  var blockHandleKeep = false;    // 指针停在手柄上，离开正文也不隐藏
+  var blockMenu = null;
+  var blockMenuTarget = null;
+  var blockDrag = null;           // 正在拖拽的块
+  var dragPending = null;         // 手柄按下的起点（尚未确认是拖拽还是单击）
+  var insertLine = null;
+
+  // 结构变动后的间隔归一：首块前不留空行；离开首位的老首块补回块间默认间隔
+  function normalizeBlockGaps() {
+    var list = blockList();
+    for (var i = 0; i < list.length; i++) {
+      var value = list[i].dataset.gap;
+      if (value === undefined || value === '')
+        continue;
+      var n = parseInt(value, 10);
+      if (isNaN(n))
+        continue;
+      if (i === 0 && n > 0)
+        list[i].dataset.gap = '0';
+      if (i > 0 && n === 0)
+        list[i].dataset.gap = '2';
+    }
+  }
+
+  // 所有块级结构操作（插入/删除/副本/重排）的统一收尾
+  function afterBlockStructureChange() {
+    normalizeBlockGaps();
+    clearCrossSelection();
+    commitHistory();
+    scheduleDirty();
+    scheduleTocRefresh();
+    updatePlaceholder();
+    scheduleMermaid();
+  }
+
+  function makeBlockEl(raw) {
+    var el = document.createElement('div');
+    el.className = 'block';
+    el.setAttribute('contenteditable', 'true');
+    renderBlock(el, raw);
+    normalizeCodeScrolls(el);
+    return el;
+  }
+
+  /* ---------- 插入指示线 ---------- */
+
+  function ensureInsertLine() {
+    if (insertLine)
+      return insertLine;
+    insertLine = document.createElement('div');
+    insertLine.id = 'block-insert-line';
+    insertLine.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(insertLine);
+    return insertLine;
+  }
+
+  // 指针纵坐标 → 落点参照块（插到它前面）；null 表示插到文档末尾。
+  // 拖拽块自身跳过，不参与落点判定。
+  function blockDropRef(clientY) {
+    var list = blockList();
+    for (var i = 0; i < list.length; i++) {
+      var el = list[i];
+      if (el === blockDrag)
+        continue;
+      var r = el.getBoundingClientRect();
+      if (clientY < r.top + r.height / 2)
+        return el;
+    }
+    return null;
+  }
+
+  function positionInsertLine(ref) {
+    var line = ensureInsertLine();
+    if (!ref) {
+      var list = blockList();
+      var last = null;
+      for (var i = list.length - 1; i >= 0; i--) {
+        if (list[i] !== blockDrag) {
+          last = list[i];
+          break;
+        }
+      }
+      if (!last) {
+        line.style.display = 'none';
+        return;
+      }
+      var lr = last.getBoundingClientRect();
+      line.style.left = lr.left + 'px';
+      line.style.width = Math.max(40, lr.width) + 'px';
+      line.style.top = (lr.bottom + 2) + 'px';
+      line.style.display = 'block';
+      return;
+    }
+    var r = ref.getBoundingClientRect();
+    line.style.left = r.left + 'px';
+    line.style.width = Math.max(40, r.width) + 'px';
+    line.style.top = (r.top - 2) + 'px';
+    line.style.display = 'block';
+  }
+
+  /* ---------- 手柄显示与定位 ---------- */
+
+  function positionBlockHandle() {
+    if (!blockHandle)
+      return;
+    var el = blockHandleTarget;
+    if (!el || el.parentNode !== root || mode === 'source' || blockDrag
+        || document.body.classList.contains('pdf-export')) {
+      blockHandle.style.display = 'none';
+      return;
+    }
+    var r = el.getBoundingClientRect();
+    if (r.bottom < -8 || r.top > window.innerHeight + 8) {
+      blockHandle.style.display = 'none';
+      return;
+    }
+    var w = blockHandle.offsetWidth || 22;
+    var left = r.left - w - 6;
+    if (left < 2)
+      left = 2;
+    blockHandle.style.left = left + 'px';
+    blockHandle.style.top = (r.top + 1) + 'px';
+    blockHandle.style.display = 'block';
+  }
+
+  function setHandleBlock(el) {
+    if (blockDrag)
+      return;
+    blockHandleTarget = el || null;
+    positionBlockHandle();
+  }
+
+  function hideBlockHandle() {
+    if (blockHandleKeep || blockDrag)
+      return;
+    blockHandleTarget = null;
+    if (blockHandle)
+      blockHandle.style.display = 'none';
+  }
+
+  function ensureBlockHandle() {
+    if (blockHandle)
+      return blockHandle;
+    blockHandle = document.createElement('div');
+    blockHandle.id = 'block-handle';
+    blockHandle.textContent = '⋮⋮';
+    blockHandle.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(blockHandle);
+    blockHandle.addEventListener('mousedown', onHandleDown);
+    blockHandle.addEventListener('mouseenter', function () { blockHandleKeep = true; });
+    blockHandle.addEventListener('mouseleave', function () { blockHandleKeep = false; });
+    return blockHandle;
+  }
+
+  /* ---------- 拖拽重排（指针事件，不依赖 HTML5 DnD） ---------- */
+
+  function onHandleDown(event) {
+    if (event.button !== 0)
+      return;
+    // 手柄不参与选字与聚焦：块保持原状，拖拽与菜单都由这里接管
+    event.preventDefault();
+    if (!blockHandleTarget || mode === 'source')
+      return;
+    ensureBlockHandle();
+    dragPending = { x: event.clientX, y: event.clientY };
+    document.addEventListener('mousemove', onHandleMove, true);
+    document.addEventListener('mouseup', onHandleUp, true);
+  }
+
+  function onHandleMove(event) {
+    if (!dragPending)
+      return;
+    if (!blockDrag) {
+      if (Math.abs(event.clientY - dragPending.y) < 4 && Math.abs(event.clientX - dragPending.x) < 4)
+        return;
+      blockDrag = blockHandleTarget;
+      if (!blockDrag || blockDrag.parentNode !== root) {
+        dragPending = null;
+        return;
+      }
+      commitHistory();   // 拖拽前的块序固定为一个撤销步骤
+      blockDrag.classList.add('block-dragging');
+      closeBlockMenu();
+      blockHandle.style.display = 'none';
+    }
+    event.preventDefault();
+    positionInsertLine(blockDropRef(event.clientY));
+    // 拖到视口上下边缘时自动滚动，长文档也能一路拖到底
+    if (event.clientY < 40)
+      window.scrollBy(0, -14);
+    else if (event.clientY > window.innerHeight - 40)
+      window.scrollBy(0, 14);
+  }
+
+  function onHandleUp(event) {
+    document.removeEventListener('mousemove', onHandleMove, true);
+    document.removeEventListener('mouseup', onHandleUp, true);
+    if (blockDrag) {
+      var ref = blockDropRef(event.clientY);
+      var moved = false;
+      if (ref) {
+        if (ref !== blockDrag.nextElementSibling) {
+          root.insertBefore(blockDrag, ref);
+          moved = true;
+        }
+      } else if (root.lastElementChild !== blockDrag) {
+        root.appendChild(blockDrag);
+        moved = true;
+      }
+      blockDrag.classList.remove('block-dragging');
+      blockDrag = null;
+      if (insertLine)
+        insertLine.style.display = 'none';
+      if (moved)
+        afterBlockStructureChange();
+      positionBlockHandle();
+    } else if (dragPending && blockHandleTarget) {
+      // 没有位移 = 单击：在手柄下方弹出块菜单
+      var r = blockHandle.getBoundingClientRect();
+      openBlockMenu(blockHandleTarget, r.left, r.bottom + 4);
+    }
+    dragPending = null;
+  }
+
+  /* ---------- 块菜单 ---------- */
+
+  function closeBlockMenu() {
+    removeMenu(blockMenu);
+    blockMenu = null;
+    blockMenuTarget = null;
+  }
+
+  function openBlockMenu(block, x, y) {
+    if (!block || mode === 'source')
+      return;
+    closeTurnMenu();
+    closeSlash(false);
+    closeBlockMenu();
+    blockMenuTarget = block;
+    blockMenu = document.createElement('div');
+    blockMenu.id = 'block-menu';
+    var html = '';
+    html += '<div class="turn-item" data-act="above">在上方插入</div>';
+    html += '<div class="turn-item" data-act="below">在下方插入</div>';
+    html += '<div class="turn-item" data-act="duplicate">复制副本</div>';
+    html += '<div class="turn-item" data-act="delete">删除</div>';
+    html += '<div class="turn-sep"></div>';
+    html += '<div class="turn-title">转为</div>';
+    TURN_ITEMS.forEach(function (item) {
+      html += '<div class="turn-item" data-key="' + item.key + '">' + escapeHtml(item.label) + '</div>';
+    });
+    blockMenu.innerHTML = html;
+    // 按下不抢焦点、不动选区（与 turn-menu 同一处理）；动作在 mouseup 派发
+    blockMenu.addEventListener('mousedown', function (event) {
+      event.preventDefault();
+    });
+    blockMenu.addEventListener('mouseup', function (event) {
+      var hit = event.target.closest ? event.target.closest('.turn-item') : null;
+      if (!hit)
+        return;
+      event.preventDefault();
+      var target = blockMenuTarget;
+      var act = hit.getAttribute('data-act');
+      var key = hit.getAttribute('data-key');
+      closeBlockMenu();
+      if (!target || !target.parentNode)
+        return;
+      if (act === 'above')
+        insertBlockNear(target, true);
+      else if (act === 'below')
+        insertBlockNear(target, false);
+      else if (act === 'duplicate')
+        duplicateBlock(target);
+      else if (act === 'delete')
+        removeBlock(target);
+      else if (key)
+        turnBlockTo(target, key);
+    });
+    placeMenu(blockMenu, { left: x, top: y, bottom: y, right: x });
+  }
+
+  /* ---------- 块菜单动作 ---------- */
+
+  function insertBlockNear(block, above) {
+    if (!block || !block.parentNode)
+      return;
+    commitHistory();
+    var el = makeBlockEl('');
+    if (above)
+      root.insertBefore(el, block);
+    else
+      root.insertBefore(el, block.nextSibling);
+    afterBlockStructureChange();
+    el.classList.add('editing');
+    el.focus();
+    setCaret(el, 0);
+    if (el.scrollIntoView)
+      el.scrollIntoView({ block: 'nearest' });
+    setHandleBlock(el);
+  }
+
+  function duplicateBlock(block) {
+    if (!block || !block.parentNode)
+      return;
+    commitHistory();
+    var el = makeBlockEl(rawOf(block));
+    root.insertBefore(el, block.nextSibling);
+    afterBlockStructureChange();
+  }
+
+  function removeBlock(block) {
+    if (!block || !block.parentNode)
+      return;
+    commitHistory();
+    if (blockList().length <= 1) {
+      // 最后一块不删结构：清空内容，保持可编辑
+      applyRawToBlock(block, '', 0, 0, true);
+      return;
+    }
+    var prev = block.previousElementSibling;
+    var next = block.nextElementSibling;
+    var focusEl = (prev && prev.classList.contains('block')) ? prev
+      : ((next && next.classList.contains('block')) ? next : null);
+    block.remove();
+    if (blockHandleTarget === block)
+      setHandleBlock(focusEl);
+    afterBlockStructureChange();
+    if (focusEl) {
+      focusEl.classList.add('editing');
+      focusEl.focus();
+      placeBlockCaret(focusEl, focusEl.textContent.length);
+    }
+  }
+
+  function turnBlockTo(block, key) {
+    var type = { h1: 'h1', h2: 'h2', h3: 'h3', paragraph: 'p',
+      ul: 'ul', ol: 'ol', quote: 'quote', codeBlock: 'code' }[key];
+    if (!type || !block || !block.parentNode)
+      return;
+    commitHistory();
+    var raw = rawOf(block);
+    var next = convertRaw(raw, type, false);
+    applyRawToBlock(block, next, next.length, next.length, true);
+    setTimeout(commitHistory, 0);
+  }
+
+  /* ---------- 悬停 / 焦点 / 滚动联动 ---------- */
+
+  document.addEventListener('mousemove', function (event) {
+    if (blockDrag)
+      return;
+    var t = event.target;
+    if (blockHandle && blockHandle.contains(t)) {
+      blockHandleKeep = true;
+      return;
+    }
+    if (blockMenu && blockMenu.contains(t))
+      return;
+    if (mode === 'source' || !root.contains(t)) {
+      hideBlockHandle();
+      return;
+    }
+    var el = blockOf(t);
+    if (el) {
+      ensureBlockHandle();
+      setHandleBlock(el);
+    }
+  });
+
+  document.addEventListener('mouseleave', function () {
+    hideBlockHandle();
+  });
+
+  root.addEventListener('focusin', function (event) {
+    var el = blockOf(event.target);
+    if (el) {
+      ensureBlockHandle();
+      setHandleBlock(el);
+    }
+  });
+
+  window.addEventListener('scroll', function () {
+    if (blockDrag)
+      return;
+    positionBlockHandle();
+    closeBlockMenu();
+  }, true);
+
+  window.addEventListener('resize', function () {
+    positionBlockHandle();
+    closeBlockMenu();
+  });
 
   /* ---------------- 导出自包含 HTML ---------------- */
   // 页面里已有渲染好的 DOM 与全部样式规则，导出时直接复用：
@@ -7641,6 +8052,8 @@
       closeSlash(false);
       closeTurnMenu();
       closeLangMenu();
+      closeBlockMenu();
+      hideBlockHandle();
       var normalized = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n');
 
       suppressEvents = true;
