@@ -567,7 +567,9 @@ th, td {
   border: 1px solid var(--border);
   padding: 6px 12px;
   text-align: left;
-  vertical-align: top;
+  /* 与 Typora 一致：单元格默认垂直居中。top 对齐会把单行文字钉在行首，
+     行高由最高的兄弟格决定时，文字下方出现大片空白，浪费空间。 */
+  vertical-align: middle;
   /* 表格原文里的空格（| 两侧、单元格首尾）以文本节点保留，表格内按普通空白
      折叠；不能让 .block 的 pre-wrap 漏进来，否则会画出多余的空隙。 */
   white-space: normal;
