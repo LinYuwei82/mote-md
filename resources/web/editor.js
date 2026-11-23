@@ -2728,6 +2728,12 @@
     if (findBar)
       closeFind();
     closeLangMenu();
+    // 块手柄与块菜单是渲染态浮层：切到源码模式必须一并收起，
+    // 否则菜单悬空且动作会作用到即将被重建的旧 DOM 上
+    closeBlockMenu();
+    if (blockHandle)
+      blockHandle.style.display = 'none';
+    blockHandleTarget = null;
     if (commitTimer) {
       clearTimeout(commitTimer);
       commitTimer = null;
@@ -7653,7 +7659,25 @@
       return;
     commitHistory();
     var raw = rawOf(block);
+    var before = kindOfRaw(raw);
     var next = convertRaw(raw, type, false);
+    // 与 convertBlocks 同口径：列表/引用转正文逐行拆回独立段落，
+    // 不在一个块里塞硬换行
+    if (type === 'p' && (before === 'ul' || before === 'ol' || before === 'quote')) {
+      var lines = contentOfRaw(raw, before).replace(/\n+$/, '').split('\n');
+      if (lines.length > 1) {
+        applyRawToBlock(block, lines[0], lines[0].length, lines[0].length, true);
+        var anchor = block;
+        for (var li = 1; li < lines.length; li++) {
+          insertBlockAfter(anchor, lines[li], lines[li].length);
+          anchor = anchor.nextElementSibling;
+        }
+        normalizeBlockGaps();
+        scheduleTocRefresh();
+        commitHistory();   // 拆分合成一个撤销步
+        return;
+      }
+    }
     applyRawToBlock(block, next, next.length, next.length, true);
     setTimeout(commitHistory, 0);
   }
