@@ -1050,44 +1050,98 @@
       .trim();
   }
 
-  function cellMaxWidth(text, bold) {
-    return measureTextWidth(stripMarkdownForWidth(text), bold) + 24;   // th/td 左右 padding 12px
+  // 单元格渲染宽度 = 内容 + 两侧空格 + padding。DOM 里是 `|␣内容␣|`：
+  // 空格夹在 pipe 标记与文本之间，不在行首/行尾，不参与折叠，必须计入；
+  // 否则窄列会差着这两个空格刚好折行（不可断词被挤到下一行）。
+  function cellEdgeWidth(text, bold) {
+    return measureTextWidth(stripMarkdownForWidth(text), bold)
+      + 2 * measureTextWidth(' ', bold) + COL_CELL_PAD_PX;
   }
 
-  // 参照 wolai / Notion 的列宽策略：按内容分配，但加两层约束——
-  // 短列有最小宽度保护（不被长列挤压到逐字换行），长列有封顶（超长
-  // 内容换行而不是无限吃掉其他列），观感更接近专业笔记应用。
-  var COL_MIN_PX = 90;
-  var COL_MAX_PX = 460;
+  // 参照 wolai / Notion 的列宽策略，落实标准 auto 表格布局算法：
+  //   · hi = max-content：最长行宽，封顶（超长内容换行，不无限吃掉其他列）；
+  //   · lo = min-content：最长不可断段宽（长英文词/URL 不拦腰截断；
+  //     CJK 可逐字断行，不抬高 lo）；
+  //   · 空间充裕按内容比例拉伸；空间紧张先保 lo，再按增长空间 (hi-lo)
+  //     分配剩余；连 lo 都放不下时保持 lo 宽、表格横向溢出滚动
+  //     （wolai/Notion 都是滚动而不是把词压碎）。
+  var COL_MIN_PX = 90;      // 短列保护：不被挤压到逐字换行
+  var COL_MAX_PX = 460;     // 长列封顶
+  var COL_CELL_PAD_PX = 24; // th/td 左右 padding 12px
+  var COL_SAFETY_PX = 4;    // 百分比→像素取整误差余量，防不可断词差 1px 被折行
+  var COL_FALLBACK_W = 685; // 块尚未入文档时的 #editor 内容宽（50rem - 2×3.6rem）
 
-  function tableColgroupHtml(head, bodyLines) {
+  // 最长不可断段宽度：CJK 每个字、空白两侧都可断行，其余连续非空白段不可断。
+  var CJK_BREAK = '-〿぀-ヿ㐀-䶿一-鿿가-힯豈-﫿';
+  var MIN_UNIT_RE = new RegExp('[' + CJK_BREAK + ']|[^\\s' + CJK_BREAK + ']+', 'g');
+
+  function minContentWidth(text, bold) {
+    var plain = stripMarkdownForWidth(text);
+    var units = plain.match(MIN_UNIT_RE);
+    var best = 0;
+    for (var i = 0; units && i < units.length; i++)
+      best = Math.max(best, measureTextWidth(units[i], bold));
+    return best + 2 * measureTextWidth(' ', bold) + COL_CELL_PAD_PX + COL_SAFETY_PX;
+  }
+
+  function tableColgroupHtml(head, bodyLines, availW) {
     var n = head.cells.length;
     if (!n)
-      return '';
+      return { colgroup: '', minWidth: 0 };
+    var lo = [];
+    var hi = [];
+    for (var c = 0; c < n; c++) {
+      lo[c] = COL_MIN_PX;
+      hi[c] = COL_MIN_PX;
+    }
+    function considerCells(cells, bold) {
+      for (var k = 0; k < cells.length && k < n; k++) {
+        hi[k] = Math.max(hi[k], cellEdgeWidth(cells[k].text, bold));
+        lo[k] = Math.max(lo[k], minContentWidth(cells[k].text, bold));
+      }
+    }
+    considerCells(head.cells, true);
+    for (var r = 0; r < bodyLines.length; r++)
+      considerCells(splitTableLine(bodyLines[r]).cells, false);
+    var sumLo = 0;
+    var sumHi = 0;
+    for (var m = 0; m < n; m++) {
+      hi[m] = Math.max(COL_MIN_PX, Math.min(hi[m], COL_MAX_PX));
+      lo[m] = Math.max(COL_MIN_PX, Math.min(lo[m], COL_MAX_PX));
+      if (lo[m] > hi[m])
+        hi[m] = lo[m];
+      sumLo += lo[m];
+      sumHi += hi[m];
+    }
+    var W = availW > 100 ? availW : COL_FALLBACK_W;
     var widths = [];
-    for (var c = 0; c < n; c++)
-      widths[c] = 0;
-    for (var h = 0; h < head.cells.length && h < n; h++)
-      widths[h] = Math.max(widths[h], cellMaxWidth(head.cells[h].text, true));
-    for (var r = 0; r < bodyLines.length; r++) {
-      var cells = splitTableLine(bodyLines[r]).cells;
-      for (var k = 0; k < cells.length && k < n; k++)
-        widths[k] = Math.max(widths[k], cellMaxWidth(cells[k].text, false));
+    var base;
+    if (sumHi <= W) {
+      for (var a = 0; a < n; a++)
+        widths[a] = hi[a];
+      base = sumHi;              // 百分比铺满容器 = 按内容比例拉伸
+    } else if (sumLo <= W) {
+      var grow = 0;
+      for (var b = 0; b < n; b++)
+        grow += hi[b] - lo[b];
+      var extra = W - sumLo;
+      for (var d = 0; d < n; d++)
+        widths[d] = grow > 0
+          ? lo[d] + extra * (hi[d] - lo[d]) / grow
+          : lo[d] + extra / n;   // 全列都到上限：剩余空间均分
+      base = W;
+    } else {
+      for (var e = 0; e < n; e++)
+        widths[e] = lo[e];
+      base = sumLo;              // 溢出：保持 min-content 宽，横向滚动
     }
-    var total = 0;
-    for (var i = 0; i < n; i++) {
-      widths[i] = Math.max(COL_MIN_PX, Math.min(widths[i], COL_MAX_PX));
-      total += widths[i];
-    }
-    if (!total)
-      return '';
     var out = '<colgroup>';
-    for (var j = 0; j < n; j++)
-      out += '<col style="width:' + (widths[j] / total * 100).toFixed(2) + '%"/>';
-    return out + '</colgroup>';
+    for (var f = 0; f < n; f++)
+      out += '<col style="width:' + (widths[f] / base * 100).toFixed(2) + '%"/>';
+    return { colgroup: out + '</colgroup>', minWidth: sumLo > W ? Math.ceil(sumLo) : 0 };
   }
 
-  function renderTable(lines) {
+  function renderTable(lines, el) {
     var align = tableAlignments(lines[1]);
     var head = splitTableLine(lines[0]);
     var body = [];
@@ -1097,7 +1151,10 @@
     }
     // 对齐行不参与渲染（display:none，零高度），但原文按 DOM 顺序留在表头与表体
     // 之间，textContent 才能逐字还原 `| a | b |\n|---|...|`。
-    var html = '<table class="md-table">' + tableColgroupHtml(head, body) + '<thead>'
+    var layout = tableColgroupHtml(head, body, el ? el.clientWidth : 0);
+    var html = '<table class="md-table"'
+      + (layout.minWidth ? ' style="min-width:' + layout.minWidth + 'px"' : '')
+      + '>' + layout.colgroup + '<thead>'
       + tableRowHtml(lines[0], align, 'th', true)
       + '<tr class="tbl-align" aria-hidden="true"><td colspan="' + Math.max(1, head.cells.length) + '">'
       + escapeHtml(lines[1]) + (body.length ? newlineMarker() : '') + '</td></tr>'
@@ -1304,7 +1361,7 @@
       html = '<h' + level + '>' + prefix + renderInline(heading[3]) + '</h' + level + '>';
     } else if (isTableSource(lines)) {
       kind = 'table';
-      html = renderTable(lines);
+      html = renderTable(lines, el);
     } else if (lines.length && lines.every(function (line) { return /^\s*[-*+]\s+/.test(line); })) {
       kind = 'ul';
       html = '<ul>';

@@ -563,6 +563,12 @@ table {
   max-width: 100%;
 }
 
+/* 超宽表格（列的 min-content 总和放不下）不压缩单词，改为横向滚动，
+   与 wolai / Notion 的行为一致。min-width 由列宽算法在溢出时注入 table。 */
+.block.table {
+  overflow-x: auto;
+}
+
 th, td {
   border: 1px solid var(--border);
   padding: 6px 12px;
@@ -1412,9 +1418,14 @@ body.pdf-export .block.code.has-mermaid > pre.code-block > .mermaid-figure {
 body.pdf-export .block table {
   margin: 0;
   width: 100%; /* Typora 的表格铺满正文宽度，auto 会按内容收缩 */
+  min-width: 0 !important; /* 纸宽固定：溢出滚动是编辑器行为，纸面按页宽压缩 */
   table-layout: auto; /* 样张按内容比例分列（1.2 表的“类别”列会很窄），不要等宽 */
   font-size: 10.33pt;
   border-collapse: collapse;
+}
+
+body.pdf-export .block.table {
+  overflow-x: visible;
 }
 
 body.pdf-export .block th,
