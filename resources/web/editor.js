@@ -6264,6 +6264,10 @@
       var fence = raw.match(/^```([^\n`]*)\n?([\s\S]*?)\n?```\s*$/);
       return fence ? fence[2].replace(/\n$/, '') : raw;
     }
+    // hr 必须在标题分支之前判：'hr' 首字母也是 h，会被 charAt(0)==='h' 误捕
+    if (kind === 'hr')
+      // 分割线没有正文内容：转成正文/标题时得到空内容，而不是字面量 '---'
+      return '';
     if (kind.charAt(0) === 'h')
       return raw.replace(/^#{1,6}\s+/, '');
     if (kind === 'ul')
@@ -6272,6 +6276,18 @@
       return raw.split('\n').map(function (line) { return line.replace(/^\s*\d+[.)]\s+/, ''); }).join('\n');
     if (kind === 'quote')
       return raw.split('\n').map(function (line) { return line.replace(/^\s*>\s?/, ''); }).join('\n');
+    if (kind === 'table') {
+      // 表格内容 = 各行单元格文字（跳过第 2 行对齐行）。竖线与对齐行是结构，
+      // 不是内容：缺这个分支时「转为正文」会原样返回而变成无效果。
+      var rows = raw.split('\n');
+      var texts = [];
+      for (var ri = 0; ri < rows.length; ri++) {
+        if (ri === 1)
+          continue;
+        texts.push(tableCells(rows[ri]).join(' '));
+      }
+      return texts.join('\n');
+    }
     return raw;
   }
 
@@ -6442,8 +6458,8 @@
       if (next === raw)
         return;
       changed = true;
-      // 列表/引用回正文：逐行拆回独立段落，避免一个块里塞进硬换行
-      if (type === 'p' && (before === 'ul' || before === 'ol' || before === 'quote')) {
+      // 列表/引用/表格回正文：逐行拆回独立段落，避免一个块里塞进硬换行
+      if (type === 'p' && (before === 'ul' || before === 'ol' || before === 'quote' || before === 'table')) {
         var lines = contentOfRaw(raw, before).replace(/\n+$/, '').split('\n');
         if (lines.length > 1) {
           applyRawToBlock(el, lines[0], lines[0].length, lines[0].length, true);
@@ -6585,8 +6601,11 @@
     var blocks = selectedBlocks();
     var el = blocks.length ? blocks[blocks.length - 1] : root.lastElementChild;
     commitHistory();
+    var elKind = el && el.classList.contains('block') ? kindOfRaw(rawOf(el)) : '';
+    // hr/表格的内容按定义可能为空，但它们是实打实的结构块：不能当成空块被替换掉
     var empty = el && el.classList.contains('block')
-      && contentOfRaw(rawOf(el), kindOfRaw(rawOf(el))).trim() === '';
+      && elKind !== 'hr' && elKind !== 'table'
+      && contentOfRaw(rawOf(el), elKind).trim() === '';
     if (empty) {
       applyRawToBlock(el, TABLE_TEMPLATE, 2, 2, true);
     } else {
@@ -6601,8 +6620,11 @@
     var blocks = selectedBlocks();
     var el = blocks.length ? blocks[blocks.length - 1] : root.lastElementChild;
     commitHistory();
+    var elKind = el && el.classList.contains('block') ? kindOfRaw(rawOf(el)) : '';
+    // hr/表格的内容按定义可能为空，但它们是实打实的结构块：不能当成空块被替换掉
     var empty = el && el.classList.contains('block')
-      && contentOfRaw(rawOf(el), kindOfRaw(rawOf(el))).trim() === '';
+      && elKind !== 'hr' && elKind !== 'table'
+      && contentOfRaw(rawOf(el), elKind).trim() === '';
     if (empty) {
       applyRawToBlock(el, '---', 3, 3, true);
       insertBlockAfter(el, '', 0);
@@ -7671,9 +7693,9 @@
     var raw = rawOf(block);
     var before = kindOfRaw(raw);
     var next = convertRaw(raw, type, false);
-    // 与 convertBlocks 同口径：列表/引用转正文逐行拆回独立段落，
+    // 与 convertBlocks 同口径：列表/引用/表格转正文逐行拆回独立段落，
     // 不在一个块里塞硬换行
-    if (type === 'p' && (before === 'ul' || before === 'ol' || before === 'quote')) {
+    if (type === 'p' && (before === 'ul' || before === 'ol' || before === 'quote' || before === 'table')) {
       var lines = contentOfRaw(raw, before).replace(/\n+$/, '').split('\n');
       if (lines.length > 1) {
         applyRawToBlock(block, lines[0], lines[0].length, lines[0].length, true);
