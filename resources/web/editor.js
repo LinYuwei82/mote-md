@@ -1910,6 +1910,12 @@
     // 整篇重建后旧的绝对偏移全部失效，跨块选区必须先清掉
     clearCrossSelection();
     closeLangMenu();
+    // 块菜单/手柄指向的旧节点即将全部脱离 DOM：撤销、重做、整篇载入都要收拢，
+    // 否则菜单会悬空浮在重建后的文档上（动作虽有 parentNode 兜底不会误伤）
+    closeBlockMenu();
+    blockHandleTarget = null;
+    if (blockHandle)
+      blockHandle.style.display = 'none';
     root.innerHTML = '';
     for (var i = 0; i < blocks.length; i++) {
       var el = document.createElement('div');
@@ -7633,8 +7639,10 @@
       return;
     commitHistory();
     if (blockList().length <= 1) {
-      // 最后一块不删结构：清空内容，保持可编辑
+      // 最后一块不删结构：清空内容，保持可编辑；清空后的状态也要落一步，
+      // 否则撤销会直接跳过这一步回到更早的历史，内容找不回来
       applyRawToBlock(block, '', 0, 0, true);
+      commitHistory();
       return;
     }
     var prev = block.previousElementSibling;
@@ -7648,7 +7656,9 @@
     if (focusEl) {
       focusEl.classList.add('editing');
       focusEl.focus();
-      placeBlockCaret(focusEl, focusEl.textContent.length);
+      // 偏移必须按 raw 口径给：代码块的 textContent 不含围栏，直接给
+      // textContent.length 会被换算成块首而不是块尾
+      placeBlockCaret(focusEl, rawOf(focusEl).length);
     }
   }
 
@@ -7705,7 +7715,13 @@
     }
   });
 
-  document.addEventListener('mouseleave', function () {
+  document.addEventListener('mouseleave', function (event) {
+    // 拖拽中指针移出窗口时 mouseup 不会送达：按当前位置落块收尾，
+    // 否则 blockDrag 卡住，手柄与指示线都会悬死
+    if (blockDrag && dragPending) {
+      onHandleUp(event);
+      return;
+    }
     hideBlockHandle();
   });
 
