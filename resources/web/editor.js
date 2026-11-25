@@ -2551,6 +2551,98 @@
     scheduleTocRefresh();
   }
 
+  // 光标所在行的定位信息（块原文口径，代码块含围栏行）
+  function caretLineInfo(el) {
+    var raw = rawOf(el);
+    var off = rawCaretOffset(el);
+    var lines = raw.split('\n');
+    var acc = 0, li = 0;
+    for (var i = 0; i < lines.length; i++) {
+      if (off <= acc + lines[i].length) { li = i; break; }
+      acc += lines[i].length + 1;
+    }
+    return { lines: lines, li: li, lineStart: acc, off: off };
+  }
+
+  // Tab：结构行（列表/任务/引用）在本行行首加两格缩进——光标在行中也一样，
+  // 不能把空格插进正文；其余行保持行内插两格。
+  function indentCurrentLine(el) {
+    if (!isCodeBlock(el)) {
+      var info = caretLineInfo(el);
+      var line = info.lines[info.li];
+      if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line) || /^\s*>/.test(line)) {
+        commitHistory();
+        var lines = info.lines.slice();
+        lines[info.li] = '  ' + lines[info.li];
+        applyRawToBlock(el, lines.join('\n'), info.off + 2, info.off + 2, true);
+        setTimeout(commitHistory, 0);
+        return;
+      }
+    }
+    document.execCommand('insertText', false, '  ');
+  }
+
+  // Shift+Tab：去掉本行行首最多两个空格；本行没有缩进就什么都不做
+  function outdentCurrentLine(el) {
+    var info = caretLineInfo(el);
+    var line = info.lines[info.li];
+    var strip = Math.min(/^\s*/.exec(line)[0].length, 2);
+    if (!strip)
+      return;
+    commitHistory();
+    var lines = info.lines.slice();
+    lines[info.li] = line.slice(strip);
+    var caret = Math.max(info.lineStart, info.off - strip);
+    applyRawToBlock(el, lines.join('\n'), caret, caret, true);
+    setTimeout(commitHistory, 0);
+  }
+
+  // 原生跨块选区（Cmd+A 全选、鼠标拖出块）上的删除：按整篇源码拼接删掉选区。
+  // 不接管的话 INLINE_PROTO 会把选区收成折叠光标，退格变成死键。
+  function deleteNativeCrossSelection() {
+    var selection = window.getSelection();
+    if (!selection || !selection.rangeCount)
+      return false;
+    var range = selection.getRangeAt(0);
+    if (range.collapsed)
+      return false;
+    var first = blockAtBoundary(range.startContainer, range.startOffset, false);
+    var last = blockAtBoundary(range.endContainer, range.endOffset, true);
+    if (!first || !last || first === last)
+      return false;
+    var from = absoluteOf(first, range.startContainer, range.startOffset);
+    var to = absoluteOf(last, range.endContainer, range.endOffset);
+    if (from === null || to === null) {
+      var list = blockList();
+      var blocks = collectBlocks();
+      var gaps = collectGaps();
+      var fi = list.indexOf(first);
+      var li = list.indexOf(last);
+      if (fi < 0 || li < 0)
+        return false;
+      if (from === null)
+        from = blockStartOffset(blocks, gaps, fi);
+      if (to === null)
+        to = blockStartOffset(blocks, gaps, li) + blocks[li].length;
+    }
+    if (from > to) {
+      var t = from;
+      from = to;
+      to = t;
+    }
+    var text = currentSource();
+    var next = text.slice(0, from) + text.slice(to);
+    commitHistory();
+    var landed = rebuildFromSourceText(next, from);
+    if (landed && landed.block) {
+      landed.block.classList.add('editing');
+      landed.block.focus();
+      placeBlockCaret(landed.block, landed.offset);
+    }
+    commitHistory();
+    return true;
+  }
+
   function mergeBack(el) {
     var previous = el.previousElementSibling;
     if (!previous || !previous.classList.contains('block'))
@@ -4717,6 +4809,13 @@
       }
     }
 
+    // 原生跨块选区上的退格/删除先接管（全选删除不能是死键）
+    if ((event.key === 'Backspace' || event.key === 'Delete')
+        && !event.metaKey && !event.ctrlKey && deleteNativeCrossSelection()) {
+      event.preventDefault();
+      return;
+    }
+
     var inTable = el.classList.contains('table');
 
     if (inTable && event.key === 'Tab') {
@@ -4853,7 +4952,10 @@
 
     if (event.key === 'Tab') {
       event.preventDefault();
-      document.execCommand('insertText', false, '  ');
+      if (event.shiftKey)
+        outdentCurrentLine(el);
+      else
+        indentCurrentLine(el);
     }
   }, true);
 
