@@ -2447,6 +2447,12 @@
       var line = lines[li];
       var lm = line.match(leadRe);
       var lead = lm ? lm[0] : (kind === 'quote' ? '> ' : kind === 'ol' ? '1. ' : '- ');
+      // 任务项：前缀连带复选框一起算，拆出的后半段保留 [ ]/[x] 标记
+      if (kind !== 'quote') {
+        var tm = line.match(/^\s*(?:[-*+]|\d+[.)])\s+\[[ xX]\]\s+/);
+        if (tm)
+          lead = tm[0];
+      }
       if (line.slice(lead.length).trim() === '') {
         // 空条目没有可拆的内容：无论光标在标记前后都退出结构
         before = lines.slice(0, li).join('\n');
@@ -2515,6 +2521,34 @@
         return kinds[i];
     }
     return 'p';
+  }
+
+  // 块内行首退格（光标紧跟换行标记之后）：去掉换行与本行的结构前缀，
+  // 把内容并入上一行末尾——与跨块块首退格合并同一套语义。换行标记不可编辑，
+  // 不接管的话退格只会把光标挪过标记，看起来像死键。
+  function joinPrevLine(el) {
+    var raw = el.textContent;
+    var offset = caretOffset(el);
+    var lines = raw.split('\n');
+    var acc = 0, li = -1, i;
+    for (i = 0; i < lines.length; i++) {
+      if (offset <= acc + lines[i].length) { li = i; break; }
+      acc += lines[i].length + 1;
+    }
+    if (li <= 0)
+      return;
+    var line = lines[li];
+    var lm = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?|^\s*>\s?/);
+    var lead = lm ? lm[0] : '';
+    var joined = lines.slice(0, li - 1);
+    joined.push(lines[li - 1] + line.slice(lead.length));
+    var rest = lines.slice(li + 1);
+    for (i = 0; i < rest.length; i++)
+      joined.push(rest[i]);
+    commitHistory();
+    applyRawToBlock(el, joined.join('\n'), acc - 1, acc - 1, true);
+    setTimeout(commitHistory, 0);
+    scheduleTocRefresh();
   }
 
   function mergeBack(el) {
@@ -4717,6 +4751,11 @@
       var neighbour = markerAdjacent(el, backward ? -1 : 1);
       if (neighbour) {
         event.preventDefault();
+        // 块内行首退格：换行标记右侧退格 = 并入上一行，不能只是跨过标记
+        if (backward && neighbour.classList.contains('mk-nl')) {
+          joinPrevLine(el);
+          return;
+        }
         // 标记不可见：直接删掉它另一侧同一行内的可见字符，而不是把光标停在
         // 标记边上（那样看起来像没反应）。跨行/跨列表项时退回“跨过标记”。
         var caret = window.getSelection().getRangeAt(0);
