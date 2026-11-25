@@ -2493,7 +2493,17 @@
     commitHistory();   // 合并前的状态单独成一个步骤
 
     var previousRaw = previous.dataset.raw === undefined ? previous.textContent : previous.dataset.raw;
-    var merged = previousRaw + el.textContent;
+    // 同类型拼接要按结构口径：标题剥掉第二块的 # 前缀再并成一行；列表/引用
+    // 每行自带标记，补一个换行合成一个块；正文直接首尾相接。
+    var elRaw = el.textContent;
+    var mergeKind = blockType(el);
+    var merged;
+    if (mergeKind.charAt(0) === 'h')
+      merged = previousRaw + contentOfRaw(elRaw, mergeKind);
+    else if (mergeKind === 'ul' || mergeKind === 'ol' || mergeKind === 'quote')
+      merged = previousRaw + '\n' + elRaw;
+    else
+      merged = previousRaw + elRaw;
     el.remove();
     renderBlock(previous, merged);
     normalizeCodeScrolls(previous);
@@ -4669,6 +4679,23 @@
       if (blocking) {
         event.preventDefault();
         var range = window.getSelection().getRangeAt(0);
+        // 光标在块最前、挡住删除的是结构前缀标记（标题 # / 列表项符 / 引用 >）：
+        // 块首没有可见字符可删，退格不能成死键。上一块同类型就合并，
+        // 否则剥掉前缀还原成正文（再按一次退格即可与上一段相接）。
+        if (backward && caretOffset(el) === 0 &&
+            (blocking.classList.contains('mk-head') || blocking.classList.contains('mk-bullet') ||
+             blocking.classList.contains('mk-quote'))) {
+          var prevBlock = el.previousElementSibling;
+          if (prevBlock && prevBlock.classList.contains('block') && blockType(prevBlock) === blockType(el))
+            mergeBack(el);
+          else {
+            var blockRaw = rawOf(el);
+            commitHistory();
+            applyRawToBlock(el, contentOfRaw(blockRaw, kindOfRaw(blockRaw)), 0, 0, true);
+            setTimeout(commitHistory, 0);
+          }
+          return;
+        }
         deleteVisibleChar(el, range, backward, blocking);
         return;
       }
@@ -4700,6 +4727,16 @@
           scheduleDirty();
           scheduleCommit();
         }
+        return;
+      }
+      if (el.classList.contains('hr')) {
+        // 分割线没有可拆的文本：直接走 splitBlock 会把 --- 变成两个空段，
+        // 分割线凭空消失。回车应在其后插入一个空正文块，分割线留在原地。
+        event.preventDefault();
+        commitHistory();
+        insertBlockAfter(el, '', 0);
+        commitHistory();
+        scheduleDirty();
         return;
       }
       if (!event.shiftKey) {
@@ -6458,8 +6495,9 @@
       if (next === raw)
         return;
       changed = true;
-      // 列表/引用/表格回正文：逐行拆回独立段落，避免一个块里塞进硬换行
-      if (type === 'p' && (before === 'ul' || before === 'ol' || before === 'quote' || before === 'table')) {
+      // 列表/引用/表格/代码回正文：逐行拆回独立段落，避免一个块里塞进硬换行
+      if (type === 'p' && (before === 'ul' || before === 'ol' || before === 'quote' ||
+                           before === 'table' || before === 'code')) {
         var lines = contentOfRaw(raw, before).replace(/\n+$/, '').split('\n');
         if (lines.length > 1) {
           applyRawToBlock(el, lines[0], lines[0].length, lines[0].length, true);
@@ -7693,9 +7731,10 @@
     var raw = rawOf(block);
     var before = kindOfRaw(raw);
     var next = convertRaw(raw, type, false);
-    // 与 convertBlocks 同口径：列表/引用/表格转正文逐行拆回独立段落，
+    // 与 convertBlocks 同口径：列表/引用/表格/代码转正文逐行拆回独立段落，
     // 不在一个块里塞硬换行
-    if (type === 'p' && (before === 'ul' || before === 'ol' || before === 'quote' || before === 'table')) {
+    if (type === 'p' && (before === 'ul' || before === 'ol' || before === 'quote' ||
+                         before === 'table' || before === 'code')) {
       var lines = contentOfRaw(raw, before).replace(/\n+$/, '').split('\n');
       if (lines.length > 1) {
         applyRawToBlock(block, lines[0], lines[0].length, lines[0].length, true);
