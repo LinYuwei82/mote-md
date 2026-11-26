@@ -220,6 +220,11 @@ private:
 
 - (instancetype)init
 {
+    return [self initWithPendingFile:nil];
+}
+
+- (instancetype)initWithPendingFile:(NSString *)pendingPath
+{
     self = [super init];
     if (!self)
         return nil;
@@ -254,7 +259,10 @@ private:
     [self setupDropHandlers];
 
     [self installMenu];
-    [self loadBuiltinSample];
+    if (pendingPath.length > 0)
+        [self openPath:pendingPath];
+    else
+        [self loadBuiltinSample];
     // 页面就绪前先记住主题，ready 后由 core 补发
     [self applyTheme];
     [window center];

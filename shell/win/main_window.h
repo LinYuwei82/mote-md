@@ -28,6 +28,9 @@ public:
     bool create();
     void show(int show_command);
     int run_message_loop();
+    // 带待打开文件启动：WM_CREATE 里直接打开它，跳过内置示例页，
+    // 避免「示例页解析完 → 立刻换目录重载」的两次全量页面加载。
+    void set_pending_path(const std::string &path);
     void open_path(const std::string &path);
 
     // ShellHost → 外壳
@@ -96,6 +99,7 @@ private:
 
     HINSTANCE instance_ = nullptr;
     HWND hwnd_ = nullptr;
+    std::string pending_path_;
     std::unique_ptr<WebHostView> host_;
     std::unique_ptr<ShellHost> shell_;
     std::unique_ptr<mote::EditorController> controller_;

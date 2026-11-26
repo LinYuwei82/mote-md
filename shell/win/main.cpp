@@ -40,9 +40,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command)
     int exit_code = 1;
     {
         MoteMainWindow window(instance);
+        if (argc > 1 && argv && argv[1])
+            window.set_pending_path(wide_to_utf8(argv[1]));
         if (window.create()) {
-            if (argc > 1 && argv && argv[1])
-                window.open_path(wide_to_utf8(argv[1]));
             window.show(show_command);
             exit_code = window.run_message_loop();
         }

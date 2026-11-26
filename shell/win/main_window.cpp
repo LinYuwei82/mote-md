@@ -596,7 +596,14 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             });
         shell_ = std::make_unique<ShellHost>(*this);
         controller_ = std::make_unique<mote::EditorController>(*shell_);
-        load_builtin_sample();
+        // 命令行带文件：直接打开它，跳过示例页（省一次全量页面加载）
+        if (!pending_path_.empty()) {
+            const std::string pending = pending_path_;
+            pending_path_.clear();
+            open_path(pending);
+        } else {
+            load_builtin_sample();
+        }
         layout();
 
         SetMenu(hwnd, mote::win::build_main_menu());
@@ -798,6 +805,11 @@ void MoteMainWindow::open_document()
     const std::string path = MoteOpenMarkdownDialog(hwnd_, dir);
     if (!path.empty())
         open_path(path);
+}
+
+void MoteMainWindow::set_pending_path(const std::string &path)
+{
+    pending_path_ = path;
 }
 
 void MoteMainWindow::open_path(const std::string &path)

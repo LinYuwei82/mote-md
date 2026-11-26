@@ -11,6 +11,7 @@
 @property(nonatomic, strong) WKWebView *webView;
 @property(nonatomic) NSUInteger pageGeneration;
 @property(nonatomic, copy) NSString *pageFile;
+@property(nonatomic, copy) NSString *mermaidFile;
 @end
 
 // 从拖放板取真实文件路径；Finder 给的是 file URL
@@ -164,10 +165,16 @@ static NSString *MotePageHTML(void)
             page = @"<html><body>缺少前端资源</body></html>";
             return;
         }
-        // mermaid 用于把 ```mermaid 代码块画成图；缺资源时留空，页面其它功能不受影响
-        NSString *mermaid = MoteReadBundleText(@"mermaid.min", @"js", @"web");
-        if (mermaid.length == 0)
-            mermaid = @"";
+        // mermaid 不再内联进页面（3.3MB，每次换页都要重新解析，是启动与
+        // 打开文件的主要开销）；这里只留一个懒加载声明，页面首次出现
+        // mermaid 块时再从同目录的 .mote-mermaid-<pid>.js 动态加载。
+        NSString *mermaidStub = @"";
+        if ([[NSBundle mainBundle] URLForResource:@"mermaid.min"
+                                    withExtension:@"js"
+                                     subdirectory:@"web"]) {
+            mermaidStub = [NSString stringWithFormat:
+                @"window.MOTE_MERMAID_SRC=\".mote-mermaid-%d.js\";", (int)getpid()];
+        }
         NSMutableString *built = [html mutableCopy];
         NSString *style = [MoteFontFaceCSS() stringByAppendingString:css];
         [built replaceOccurrencesOfString:@"__MOTE_CSS__"
@@ -175,7 +182,7 @@ static NSString *MotePageHTML(void)
                                   options:0
                                     range:NSMakeRange(0, built.length)];
         [built replaceOccurrencesOfString:@"__MOTE_MERMAID__"
-                               withString:mermaid
+                               withString:mermaidStub
                                   options:0
                                     range:NSMakeRange(0, built.length)];
         NSString *flag = MoteInlineProtoEnabled()
@@ -243,6 +250,26 @@ static NSString *MoteHtmlEscaped(NSString *text)
     }
     NSString *path = [dir stringByAppendingPathComponent:
         [NSString stringWithFormat:@".mote-preview-%d.html", (int)getpid()]];
+
+    // mermaid 库文件与临时页面放同一目录（该目录在 WebView 读取授权内），
+    // 页面按需动态加载；缺文件时前端自然退回「mermaid 块显示源码」。
+    NSString *mermaidName = [NSString stringWithFormat:@".mote-mermaid-%d.js", (int)getpid()];
+    NSString *mermaidPath = [dir stringByAppendingPathComponent:mermaidName];
+    NSURL *mermaidURL = [[NSBundle mainBundle] URLForResource:@"mermaid.min"
+                                                 withExtension:@"js"
+                                                  subdirectory:@"web"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if (mermaidURL) {
+        unsigned long long want = [[fm attributesOfItemAtPath:mermaidURL.path error:NULL] fileSize];
+        unsigned long long have = [[fm attributesOfItemAtPath:mermaidPath error:NULL] fileSize];
+        if (want > 0 && have != want) {
+            [fm removeItemAtPath:mermaidPath error:NULL];
+            [fm copyItemAtPath:mermaidURL.path toPath:mermaidPath error:NULL];
+        }
+    }
+    if (self.mermaidFile.length > 0 && ![self.mermaidFile isEqualToString:mermaidPath])
+        [fm removeItemAtPath:self.mermaidFile error:NULL];
+    self.mermaidFile = mermaidURL ? mermaidPath : nil;
 
     NSMutableString *page = [MotePageHTML() mutableCopy];
     if (directory.length > 0) {
@@ -355,6 +382,8 @@ static NSString *MoteHtmlEscaped(NSString *text)
 {
     if (self.pageFile.length > 0)
         [[NSFileManager defaultManager] removeItemAtPath:self.pageFile error:NULL];
+    if (self.mermaidFile.length > 0)
+        [[NSFileManager defaultManager] removeItemAtPath:self.mermaidFile error:NULL];
 }
 
 #pragma mark - WKNavigationDelegate

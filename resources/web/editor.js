@@ -8320,12 +8320,11 @@
 
   function pdfContentReady() {
     pdfPrepareImages();
-    if (mermaidReady) {
-      // 导出要求所有 mermaid 块都已画成图（含光标所在块），否则会量到源码块的高度
-      scanMermaid(true);
-      if (mermaidPending > 0)
-        return false;
-    }
+    // 导出要求所有 mermaid 块都已画成图（含光标所在块），否则会量到源码块的高度；
+    // 库未就绪时 scanMermaid 会触发懒加载并计入 pending，这里统一等它完成
+    scanMermaid(true);
+    if (mermaidPending > 0)
+      return false;
     if (pdfImagesPending > 0)
       return false;
     if (document.fonts && !document.fonts.check('10.33pt "Open Sans"'))
@@ -8345,7 +8344,9 @@
   var mermaidSeq = 0;
   var mermaidTimer = null;
   var mermaidReady = !!(window.mermaid && window.mermaid.initialize);
-  if (mermaidReady) {
+  var mermaidLoading = false;
+  var mermaidLoadQueue = [];
+  function initMermaid() {
     window.mermaid.initialize({
       startOnLoad: false,
       theme: 'default',
@@ -8356,6 +8357,39 @@
       sequence: { useMaxWidth: false },
       gantt: { useMaxWidth: false }
     });
+  }
+  if (mermaidReady)
+    initMermaid();
+
+  // mermaid.min.js（3.3MB）不再内联进页面，壳只把它拷到页面同目录；
+  // 文档里真的出现 mermaid 块时才动态加载，省掉每次启动/换页的解析开销。
+  function ensureMermaidLoaded() {
+    if (mermaidReady || mermaidLoading || !window.MOTE_MERMAID_SRC)
+      return;
+    mermaidLoading = true;
+    var s = document.createElement('script');
+    // 相对页面自身目录解析（location.href），不受文档目录 <base> 影响
+    s.src = new URL(window.MOTE_MERMAID_SRC, location.href).href;
+    var settle = function () {
+      mermaidLoading = false;
+      var q = mermaidLoadQueue.splice(0);
+      for (var i = 0; i < q.length; i++) q[i]();
+    };
+    s.onload = function () {
+      if (window.mermaid && window.mermaid.initialize) {
+        mermaidReady = true;
+        initMermaid();
+      } else {
+        window.MOTE_MERMAID_SRC = '';
+      }
+      settle();
+    };
+    s.onerror = function () {
+      // 缺文件：本次会话不再重试，mermaid 块保持源码显示
+      window.MOTE_MERMAID_SRC = '';
+      settle();
+    };
+    document.head.appendChild(s);
   }
 
   function isMermaidBlock(el) {
@@ -8417,11 +8451,31 @@
 
   // force=true 时连正在编辑的块也渲染（导出前用），否则让开光标所在的块
   function scanMermaid(force) {
-    if (!mermaidReady)
-      return;
     var ed = document.getElementById('editor');
     if (!ed || mode === 'source')
       return;
+    if (!mermaidReady) {
+      if (!window.MOTE_MERMAID_SRC)
+        return;
+      var probe = ed.querySelectorAll('.block.code');
+      var has = false;
+      for (var i = 0; i < probe.length; i++) {
+        if (isMermaidBlock(probe[i])) {
+          has = true;
+          break;
+        }
+      }
+      if (!has)
+        return;
+      // 计入 pending：导出路径会等库加载与渲染都完成
+      mermaidPending++;
+      mermaidLoadQueue.push(function () {
+        mermaidPending--;
+        scanMermaid(force);
+      });
+      ensureMermaidLoaded();
+      return;
+    }
     var blocks = ed.querySelectorAll('.block.code');
     for (var i = 0; i < blocks.length; i++) {
       var el = blocks[i];
@@ -8436,7 +8490,7 @@
   }
 
   function scheduleMermaid() {
-    if (!mermaidReady || mermaidTimer)
+    if (mermaidTimer)
       return;
     mermaidTimer = setTimeout(function () {
       mermaidTimer = null;

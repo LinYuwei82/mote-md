@@ -244,6 +244,8 @@ WebHostView::~WebHostView()
     // 临时页面写在文档目录，退出时尽量清理自己那份
     if (!page_file_.empty())
         DeleteFileW(page_file_.c_str());
+    if (!mermaid_file_.empty())
+        DeleteFileW(mermaid_file_.c_str());
 }
 
 void WebHostView::initialize()
@@ -456,14 +458,24 @@ bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
     std::string page = read_file(web_dir + L"\\editor.html");
     const std::string css = read_file(web_dir + L"\\editor.css");
     const std::string js = read_file(web_dir + L"\\editor.js");
-    std::string mermaid = read_file(web_dir + L"\\mermaid.min.js");
     if (page.empty() || css.empty() || js.empty())
         return false;
+
+    // mermaid.min.js（3.3MB）不再内联进页面：每次换页都重新解析它是启动与
+    // 打开文件慢的主要原因。这里只留懒加载声明，库文件在下方拷到页面同目录，
+    // 前端文档里出现 mermaid 块时才动态加载；缺文件时 mermaid 块保持源码显示。
+    std::error_code mec;
+    const std::wstring mermaid_src = web_dir + L"\\mermaid.min.js";
+    const auto mermaid_size = std::filesystem::file_size(mermaid_src, mec);
+    std::string mermaid_stub;
+    if (!mec && mermaid_size > 0)
+        mermaid_stub = "window.MOTE_MERMAID_SRC=\".mote-mermaid-"
+            + std::to_string(GetCurrentProcessId()) + ".js\";";
 
     std::string style = wide_to_utf8(font_face_css());
     style += css;
     replace_all(page, "__MOTE_CSS__", style);
-    replace_all(page, "__MOTE_MERMAID__", mermaid);
+    replace_all(page, "__MOTE_MERMAID__", mermaid_stub);
     const std::string flag = inline_proto_enabled()
         ? "window.MOTE_INLINE_PROTO=true;"
         : "window.MOTE_INLINE_PROTO=false;";
@@ -491,6 +503,21 @@ bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
     const std::wstring name = L"\\.mote-preview-"
         + std::to_wstring(GetCurrentProcessId()) + L".html";
     const std::wstring page_path = directory + name;
+
+    // mermaid 库与临时页面同目录（WebView2 可读取），按需加载
+    const std::wstring mermaid_path = directory + L"\\.mote-mermaid-"
+        + std::to_wstring(GetCurrentProcessId()) + L".js";
+    if (!mec && mermaid_size > 0) {
+        std::error_code pec;
+        const auto have = std::filesystem::file_size(mermaid_path, pec);
+        if (pec || have != mermaid_size)
+            std::filesystem::copy_file(mermaid_src, mermaid_path,
+                std::filesystem::copy_options::overwrite_existing, pec);
+    }
+    if (!mermaid_file_.empty() && mermaid_file_ != mermaid_path)
+        DeleteFileW(mermaid_file_.c_str());
+    mermaid_file_ = (!mec && mermaid_size > 0) ? mermaid_path : std::wstring();
+
     if (!write_file(page_path, page))
         return false;
 

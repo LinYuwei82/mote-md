@@ -13,17 +13,17 @@
 {
     (void)notification;
 
-    self.mainWindow = [[MoteMainWindow alloc] init];
+    // 第一个命令行参数当作待打开文件：直接交给 init，避免先加载示例页
+    // 再换目录重载（两次完整页面解析）
+    NSArray<NSString *> *arguments = NSProcessInfo.processInfo.arguments;
+    NSString *pendingPath = arguments.count > 1 ? arguments[1] : nil;
+
+    self.mainWindow = [[MoteMainWindow alloc] initWithPendingFile:pendingPath];
     [self.mainWindow show];
 
     // 在线更新：自研检查（OSS 上的 manifest.json）负责「有没有新版本」，
     // 用户确认后由 Sparkle 完成下载、验签与替换。启动后延迟一次 + 每 24 小时一次。
     [[MoteUpdater sharedUpdater] start];
-
-    // 第一个命令行参数当作待打开文件
-    NSArray<NSString *> *arguments = NSProcessInfo.processInfo.arguments;
-    if (arguments.count > 1)
-        [self.mainWindow openPath:arguments[1]];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender

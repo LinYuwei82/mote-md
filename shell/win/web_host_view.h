@@ -57,6 +57,7 @@ private:
     std::function<void(std::string_view)> message_;
     std::function<bool(UINT, WORD)> accelerator_;
     std::wstring page_file_;
+    std::wstring mermaid_file_;
     unsigned generation_ = 0;
     bool page_pending_ = false;
     std::string pending_dir_;
