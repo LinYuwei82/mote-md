@@ -169,4 +169,26 @@
       row.setAttribute('data-synced', 'fallback');
     });
   });
+
+  /* ---------- 公安备案（占位模板）----------
+     拿到公安备案号后，把编号填进下面的 MPS_BEIAN（如 '44030502000000号'），
+     依次执行 tools/release/deploy_site.sh 与 tools/release/publish_site_oss.sh，
+     全站页脚即自动显示警徽图标 + 编号（链接到全国互联网安全管理服务平台）。
+     留空时不渲染任何内容，避免展示无效编号。
+     注意：备案通过后平台会提供官方警徽图片，届时可用 /assets/img/mps-badge.png
+     替换下面的内联 SVG 占位图标。 */
+  var MPS_BEIAN = '';
+
+  if (MPS_BEIAN) {
+    var icon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" style="vertical-align:-3px;margin-right:4px"><path d="M12 2l8 3v6c0 5-3.4 9.1-8 11-4.6-1.9-8-6-8-11V5l8-3zm0 2.2L6 6.4V11c0 4 2.5 7.4 6 9.1 3.5-1.7 6-5.1 6-9.1V6.4l-6-2.2z"/></svg>';
+    document.querySelectorAll('.footer-bottom').forEach(function (bar) {
+      var a = document.createElement('a');
+      a.href = 'https://beian.mps.gov.cn/#/query/webSearch?code=' + MPS_BEIAN.replace(/号$/, '');
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.innerHTML = icon + '<span>' + MPS_BEIAN + '</span>';
+      var icp = bar.querySelector('a[href*="beian.miit.gov.cn"]');
+      if (icp) { bar.insertBefore(a, icp.nextSibling); } else { bar.appendChild(a); }
+    });
+  }
 })();
