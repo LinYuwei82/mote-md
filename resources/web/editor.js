@@ -6713,14 +6713,41 @@
   // 多块合并型转换（列表/引用/代码块）：把选中块的内容按行拼进一个块。
   var MERGE_TYPES = { ul: 1, ol: 1, quote: 1, code: 1 };
 
+  // 跨块选区是虚拟覆盖层，DOM 光标折叠在焦点块；selectedBlocks 只读 DOM 选区
+  // 会漏掉选区覆盖的其他块。这里按整篇源码偏移把覆盖到的块收集出来。
+  function crossSelBlocks() {
+    var bounds = crossBounds();
+    if (!bounds)
+      return null;
+    var els = blockList();
+    var out = [];
+    var offset = 0;
+    for (var i = 0; i < els.length; i++) {
+      offset += blockGap(els[i], i === 0);
+      var len = rawOf(els[i]).length;
+      if (offset + len > bounds.from && offset < bounds.to)
+        out.push(els[i]);
+      offset += len;
+    }
+    return out;
+  }
+
   function convertBlocks(type, toggle) {
     if (mode === 'source') {
       sourceConvert(type, toggle);
       return;
     }
-    var blocks = selectedBlocks();
-    if (!blocks.length)
-      return;
+    var blocks;
+    if (crossSel) {
+      blocks = crossSelBlocks();
+      if (!blocks || !blocks.length)
+        return;
+      clearCrossSelection();   // 结构即将改变，覆盖层失效
+    } else {
+      blocks = selectedBlocks();
+      if (!blocks.length)
+        return;
+    }
     var target = blocks[0];
     var selection = rangeIn(target);
 
@@ -6832,6 +6859,16 @@
       return {
         raw: raw.slice(0, start - open.length) + raw.slice(start, end) + raw.slice(end + closeMark.length),
         start: start - open.length, end: Math.max(start - open.length, end - open.length)
+      };
+    }
+    // 选区自身首尾就是成对标记（全选加粗行再按加粗）：整段脱掉，不能套第二层
+    if (!starConfused && start + open.length * 2 <= end
+        && raw.slice(start, start + open.length) === open
+        && raw.slice(end - closeMark.length, end) === closeMark
+        && raw.slice(start + open.length, end - closeMark.length).indexOf(open) < 0) {
+      return {
+        raw: raw.slice(0, start) + raw.slice(start + open.length, end - closeMark.length) + raw.slice(end),
+        start: start, end: Math.max(start, end - open.length - closeMark.length)
       };
     }
     if (start === end)
