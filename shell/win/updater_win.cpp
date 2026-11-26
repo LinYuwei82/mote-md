@@ -1,6 +1,11 @@
 #include "updater_win.h"
 
+// Windows 更新适配器：只实现「网络 / 持久化 / 原生弹窗 / 下载与安装」，
+// 状态机（时机、节流、验签→解析→判定、跳过规则、文案）全部在 mote::UpdateEngine，
+// 与 macOS 共用同一份，见 modules/update/include/mote/update_engine.h。
+
 #include "mote/update.h"
+#include "mote/update_engine.h"
 #include "mote/verify_signature.h"
 #include "dialogs.h"
 #include "env.h"
@@ -16,6 +21,7 @@
 #include <cctype>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <cwchar>
 #include <filesystem>
@@ -30,9 +36,8 @@
 #define MOTE_VERSION "0.0.0"
 #endif
 
-// Windows 构建号：发布时由 CMake -DMOTE_BUILD=202611180530 注入（见
-// native/CMakeLists.txt）。清单同版本时靠 build 判断是否有新构建；
-// 0（未知）时跳过 build 比较，仅按 version。
+// Windows 构建号：发布时由 CMake -DMOTE_BUILD=<seq> 注入（见 native/CMakeLists.txt）。
+// 清单同版本时靠 build 判断是否有新构建；0（未知）时跳过 build 比较，仅按 version。
 #ifndef MOTE_BUILD
 #define MOTE_BUILD 0
 #endif
@@ -40,12 +45,6 @@
 #if !defined(MOTE_BUILD_STR)
 #define MOTE_BUILD_STR "0"
 #endif
-
-// 发布门禁用的构建号字符串：guard.py preflight 会在绿色包/安装包的 Mote.exe
-// 里搜索 "MOTE_BUILD=<digits>" 并与 --build 参数比对，防止清单 build 与编译值
-// 不一致导致客户端反复提示同一版本（2026-11-19 mote 1.0.4 即因此重发）。
-static const char kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR;
-[[maybe_unused]] static const char* kBuildStampRef = kBuildStamp;
 
 namespace mote::win {
 
@@ -57,25 +56,19 @@ namespace {
 // guard.py 上传前扫描绿色包 / setup.exe 里的 EXE 字节，比对清单 build 与
 // 本机构建号一致——防止脚本读错 CMakeCache 导致同版本反复提示。
 // 这里放一条不会被 LTO 扔掉的静态字符串 "MOTE_BUILD=<digits>"。
-#ifndef MOTE_BUILD_STR
-#define STRINGIFY_(x) #x
-#define STRINGIFY(x) STRINGIFY_(x)
-#define MOTE_BUILD_STR STRINGIFY(MOTE_BUILD)
-#endif
-constexpr const char kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR;
-constexpr const char *const kBuildStampRef = kBuildStamp;  // 防优化器丢弃
+static const char kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR;
+[[maybe_unused]] static const char *const kBuildStampRef = kBuildStamp;
 
 // 与 macOS 的 SUFeedURL 同源：v2 统一清单放在 updates/stable/manifest.json
 constexpr wchar_t kDefaultManifestUrl[] =
     L"https://dl.xiaotu.online/mote/updates/stable/manifest.json";
-constexpr DWORD kCheckIntervalSeconds = 24 * 60 * 60;
 constexpr UINT kStartupDelayMs = 10 * 1000;
-constexpr int kRequestTimeoutMs = 15 * 1000;
+constexpr DWORD kRequestTimeoutMs = 15 * 1000;
 constexpr wchar_t kRegKey[] = L"Software\\Mote";
-constexpr wchar_t kLastCheckValue[] = L"LastUpdateCheck";
-constexpr wchar_t kSkippedValue[] = L"SkippedUpdateVersion";
-// 灰度分桶用的安装实例标识：首次生成后长期复用，保证同一台机器落在同一桶
-constexpr wchar_t kInstallIdValue[] = L"InstallId";
+// 引擎键 → 注册表值名（沿用旧版，升级后不丢「稍后」记录与灰度分桶标识）
+constexpr wchar_t kRegLastCheck[] = L"LastUpdateCheck";
+constexpr wchar_t kRegSkipped[] = L"SkippedUpdateVersion";
+constexpr wchar_t kRegInstallId[] = L"InstallId";
 
 using win_encoding::utf8_to_wide;
 using win_encoding::wide_to_utf8;
@@ -105,6 +98,20 @@ bool log_enabled()
     return !env_value("MOTE_KEYLOG").empty();
 }
 
+void engine_logger(const std::string &line)
+{
+    if (!log_enabled())
+        return;
+    OutputDebugStringA((line + "\n").c_str());
+    const std::string path = env_value("MOTE_LOG");
+    if (!path.empty()) {
+        std::ofstream file(std::filesystem::path(utf8_to_wide(path)),
+                           std::ios::app | std::ios::binary);
+        if (file)
+            file << line << "\n";
+    }
+}
+
 bool reg_read_dword(const wchar_t *name, DWORD *value)
 {
     HKEY key = nullptr;
@@ -116,20 +123,6 @@ bool reg_read_dword(const wchar_t *name, DWORD *value)
         RegQueryValueExW(key, name, nullptr, &type, reinterpret_cast<LPBYTE>(value), &size)
             == ERROR_SUCCESS
         && type == REG_DWORD;
-    RegCloseKey(key);
-    return ok;
-}
-
-bool reg_write_dword(const wchar_t *name, DWORD value)
-{
-    HKEY key = nullptr;
-    if (RegCreateKeyExW(HKEY_CURRENT_USER, kRegKey, 0, nullptr, 0, KEY_SET_VALUE, nullptr,
-                        &key, nullptr)
-        != ERROR_SUCCESS)
-        return false;
-    const bool ok = RegSetValueExW(key, name, 0, REG_DWORD,
-                                   reinterpret_cast<const BYTE *>(&value), sizeof(value))
-        == ERROR_SUCCESS;
     RegCloseKey(key);
     return ok;
 }
@@ -176,36 +169,171 @@ bool reg_delete_value(const wchar_t *name)
     return ok;
 }
 
-// 生成 32 位十六进制随机串作为 install_id（系统 CSPRNG，无需 COM 初始化）。
-// 失败返回空串：此时跳过灰度，只影响能否参与分批，不阻断更新主流程。
-std::string new_install_id()
+// 旧版 LastUpdateCheck 是 DWORD，升级后按字符串读会失败——兼容读一次 DWORD
+
+std::string current_os_version()
 {
-    unsigned char bytes[16] = {};
-    if (BCryptGenRandom(nullptr, bytes, sizeof(bytes), BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0)
-        return std::string();
-    static const char kHex[] = "0123456789abcdef";
-    std::string id;
-    id.reserve(sizeof(bytes) * 2);
-    for (const unsigned char byte : bytes) {
-        id.push_back(kHex[byte >> 4]);
-        id.push_back(kHex[byte & 0x0f]);
+    // Mote 只支持 Windows 10 及以上（WebView2 与 DPI 接口的最低要求），这里直接给 10.0。
+    // 不用 IsWindows10OrGreater 这类函数：它们依赖 manifest 的 supportedOS 声明，
+    // 没有声明时会把 Win10/11 报成 6.1，导致 min_os 比较误判为「系统太旧」。
+    return "10.0";
+}
+
+// 安装版与绿色版只差「更新包形态」：安装版目录里有卸载器 unins000.exe。
+// 按可执行文件同级是否存在卸载器判断，不依赖安装路径，绿色版解压到哪都成立。
+bool running_installed_copy()
+{
+    wchar_t path[MAX_PATH] = {};
+    const DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH)
+        return false;
+    const std::filesystem::path exe(path);
+    return std::filesystem::exists(exe.parent_path() / L"unins000.exe");
+}
+
+// 按安装形态挑更新包：安装版用 artifacts.setup，绿色包用 artifacts.portable；
+// 对应产物缺失（清单只给了一种）时回落到另一形态，避免清单直接失效。
+struct UpdateTarget {
+    std::string url;
+    std::string sha256;
+    long long size = 0;
+    bool installer = false;
+};
+
+UpdateTarget pick_target(const UpdateManifest &manifest)
+{
+    UpdateTarget target;
+    const bool installed = running_installed_copy();
+    const UpdateArtifact &preferred = installed ? manifest.setup : manifest.portable;
+    const UpdateArtifact &fallback = installed ? manifest.portable : manifest.setup;
+    const UpdateArtifact &chosen = !preferred.url.empty() ? preferred : fallback;
+    target.url = chosen.url;
+    target.sha256 = chosen.sha256;
+    target.size = chosen.size;
+    // 拿到安装包（setup.exe）就静默安装；拿到绿色包 zip 就交给用户解压
+    target.installer = installed ? !preferred.url.empty() : preferred.url.empty();
+    return target;
+}
+
+std::wstring human_size(long long bytes)
+{
+    if (bytes <= 0)
+        return std::wstring();
+    wchar_t buffer[64] = {};
+    std::swprintf(buffer, sizeof(buffer) / sizeof(buffer[0]), L"%.1f MB",
+                  static_cast<double>(bytes) / (1024.0 * 1024.0));
+    return buffer;
+}
+
+// 主窗口注入：判断未保存修改、以及在安装程序拉起后正常退出
+std::function<bool()> g_is_dirty;
+std::function<void()> g_quit;
+
+// ---- 下载与校验 ----
+
+std::wstring url_file_name(const std::wstring &url)
+{
+    std::wstring path = url;
+    const size_t query = path.find(L'?');
+    if (query != std::wstring::npos)
+        path.resize(query);
+    const size_t slash = path.find_last_of(L'/');
+    std::wstring name = slash == std::wstring::npos ? path : path.substr(slash + 1);
+    if (name.empty())
+        name = L"Mote-update.bin";
+    return name;
+}
+
+std::string to_hex(const std::vector<UCHAR> &bytes)
+{
+    static const char digits[] = "0123456789abcdef";
+    std::string hex;
+    hex.reserve(bytes.size() * 2);
+    for (UCHAR byte : bytes) {
+        hex.push_back(digits[byte >> 4]);
+        hex.push_back(digits[byte & 0x0F]);
     }
-    return id;
+    return hex;
 }
 
-std::string install_id()
+bool sha256_file(const std::filesystem::path &path, std::string *hex)
 {
-    const std::wstring stored = reg_read_string(kInstallIdValue);
-    if (!stored.empty())
-        return wide_to_utf8(stored);
-    const std::string created = new_install_id();
-    if (!created.empty())
-        reg_write_string(kInstallIdValue, utf8_to_wide(created));
-    return created;
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE)
+        return false;
+
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    DWORD object_size = 0;
+    DWORD digest_size = 0;
+    DWORD produced = 0;
+    bool ok = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0
+        && BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH,
+                             reinterpret_cast<PUCHAR>(&object_size), sizeof(object_size),
+                             &produced, 0) == 0
+        && BCryptGetProperty(algorithm, BCRYPT_HASH_LENGTH,
+                             reinterpret_cast<PUCHAR>(&digest_size), sizeof(digest_size),
+                             &produced, 0) == 0;
+
+    std::vector<UCHAR> object;
+    std::vector<UCHAR> digest;
+    if (ok) {
+        object.resize(object_size);
+        digest.resize(digest_size);
+        ok = BCryptCreateHash(algorithm, &hash, object.data(), object_size, nullptr, 0, 0) == 0;
+    }
+
+    std::vector<UCHAR> buffer(64 * 1024);
+    while (ok) {
+        DWORD read = 0;
+        if (!ReadFile(file, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)) {
+            ok = false;
+            break;
+        }
+        if (read == 0)
+            break;
+        ok = BCryptHashData(hash, buffer.data(), read, 0) == 0;
+    }
+    if (ok)
+        ok = BCryptFinishHash(hash, digest.data(), digest_size, 0) == 0;
+    if (ok)
+        *hex = to_hex(digest);
+
+    if (hash)
+        BCryptDestroyHash(hash);
+    if (algorithm)
+        BCryptCloseAlgorithmProvider(algorithm, 0);
+    CloseHandle(file);
+    return ok;
 }
 
-class InternetHandle
+bool equals_ignore_case(const std::string &left, const std::string &right)
 {
+    if (left.size() != right.size())
+        return false;
+    for (size_t i = 0; i < left.size(); ++i) {
+        const char a = static_cast<char>(std::tolower(static_cast<unsigned char>(left[i])));
+        const char b = static_cast<char>(std::tolower(static_cast<unsigned char>(right[i])));
+        if (a != b)
+            return false;
+    }
+    return true;
+}
+
+struct DownloadState {
+    std::atomic<bool> finished{false};
+    std::atomic<bool> cancel{false};
+    std::atomic<long long> written{0};
+    std::atomic<long long> expected_size{0}; // 只读，Content-Length 读到后赋值
+    std::string expected_sha256; // 只读，线程启动前赋值
+    std::string manifest_text;   // 只读，原始清单 JSON；下载完成后复验用
+    bool ok = false;
+    std::wstring error;
+    std::filesystem::path path;
+};
+
+class InternetHandle {
 public:
     explicit InternetHandle(HINTERNET handle) : handle_(handle) {}
     ~InternetHandle()
@@ -309,168 +437,6 @@ bool fetch_url(const std::wstring &url, std::string *body, std::wstring *error)
     }
     return true;
 }
-
-// Mote 只支持 Windows 10 及以上（WebView2 与 DPI 接口的最低要求），这里直接给 10.0。
-// 不用 IsWindows10OrGreater 这类函数：它们依赖 manifest 的 supportedOS 声明，
-// 没有声明时会把 Win10/11 报成 6.1，导致 min_os 比较误判为「系统太旧」。
-std::string current_os_version()
-{
-    return "10.0";
-}
-
-// 安装版与绿色版只差「更新包形态」：安装版目录里有卸载器 unins000.exe。
-// 按可执行文件同级是否存在卸载器判断，不依赖安装路径，绿色版解压到哪都成立。
-bool running_installed_copy()
-{
-    wchar_t path[MAX_PATH] = {};
-    const DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
-    if (length == 0 || length >= MAX_PATH)
-        return false;
-    const std::filesystem::path exe(path);
-    return std::filesystem::exists(exe.parent_path() / L"unins000.exe");
-}
-
-// 按安装形态挑更新包：安装版用 artifacts.setup，绿色包用 artifacts.portable；
-// 对应产物缺失（清单只给了一种）时回落到另一形态，避免清单直接失效。
-struct UpdateTarget {
-    std::string url;
-    std::string sha256;
-    long long size = 0;
-    bool installer = false;
-};
-
-UpdateTarget pick_target(const UpdateManifest &manifest)
-{
-    UpdateTarget target;
-    const bool installed = running_installed_copy();
-    const UpdateArtifact &preferred = installed ? manifest.setup : manifest.portable;
-    const UpdateArtifact &fallback = installed ? manifest.portable : manifest.setup;
-    const UpdateArtifact &chosen = !preferred.url.empty() ? preferred : fallback;
-    target.url = chosen.url;
-    target.sha256 = chosen.sha256;
-    target.size = chosen.size;
-    // 拿到安装包（setup.exe）就静默安装；拿到绿色包 zip 就交给用户解压
-    target.installer = installed ? !preferred.url.empty() : preferred.url.empty();
-    return target;
-}
-
-std::wstring human_size(long long bytes)
-{
-    if (bytes <= 0)
-        return std::wstring();
-    wchar_t buffer[64] = {};
-    std::swprintf(buffer, sizeof(buffer) / sizeof(buffer[0]), L"%.1f MB",
-                  static_cast<double>(bytes) / (1024.0 * 1024.0));
-    return buffer;
-}
-
-// 由主窗口注入：判断未保存修改、以及在安装程序拉起后正常退出
-std::function<bool()> g_is_dirty;
-std::function<void()> g_quit;
-
-// ---- 下载与校验 ----
-
-std::wstring url_file_name(const std::wstring &url)
-{
-    std::wstring path = url;
-    const size_t query = path.find(L'?');
-    if (query != std::wstring::npos)
-        path.resize(query);
-    const size_t slash = path.find_last_of(L'/');
-    std::wstring name = slash == std::wstring::npos ? path : path.substr(slash + 1);
-    if (name.empty())
-        name = L"Mote-update.bin";
-    return name;
-}
-
-std::string to_hex(const std::vector<UCHAR> &bytes)
-{
-    static const char digits[] = "0123456789abcdef";
-    std::string hex;
-    hex.reserve(bytes.size() * 2);
-    for (UCHAR byte : bytes) {
-        hex.push_back(digits[byte >> 4]);
-        hex.push_back(digits[byte & 0x0F]);
-    }
-    return hex;
-}
-
-bool sha256_file(const std::filesystem::path &path, std::string *hex)
-{
-    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
-                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE)
-        return false;
-
-    BCRYPT_ALG_HANDLE algorithm = nullptr;
-    BCRYPT_HASH_HANDLE hash = nullptr;
-    DWORD object_size = 0;
-    DWORD digest_size = 0;
-    DWORD produced = 0;
-    bool ok = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0
-        && BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH,
-                             reinterpret_cast<PUCHAR>(&object_size), sizeof(object_size),
-                             &produced, 0) == 0
-        && BCryptGetProperty(algorithm, BCRYPT_HASH_LENGTH,
-                             reinterpret_cast<PUCHAR>(&digest_size), sizeof(digest_size),
-                             &produced, 0) == 0;
-
-    std::vector<UCHAR> object;
-    std::vector<UCHAR> digest;
-    if (ok) {
-        object.resize(object_size);
-        digest.resize(digest_size);
-        ok = BCryptCreateHash(algorithm, &hash, object.data(), object_size, nullptr, 0, 0) == 0;
-    }
-
-    std::vector<UCHAR> buffer(64 * 1024);
-    while (ok) {
-        DWORD read = 0;
-        if (!ReadFile(file, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)) {
-            ok = false;
-            break;
-        }
-        if (read == 0)
-            break;
-        ok = BCryptHashData(hash, buffer.data(), read, 0) == 0;
-    }
-    if (ok)
-        ok = BCryptFinishHash(hash, digest.data(), digest_size, 0) == 0;
-    if (ok)
-        *hex = to_hex(digest);
-
-    if (hash)
-        BCryptDestroyHash(hash);
-    if (algorithm)
-        BCryptCloseAlgorithmProvider(algorithm, 0);
-    CloseHandle(file);
-    return ok;
-}
-
-bool equals_ignore_case(const std::string &left, const std::string &right)
-{
-    if (left.size() != right.size())
-        return false;
-    for (size_t i = 0; i < left.size(); ++i) {
-        const char a = static_cast<char>(std::tolower(static_cast<unsigned char>(left[i])));
-        const char b = static_cast<char>(std::tolower(static_cast<unsigned char>(right[i])));
-        if (a != b)
-            return false;
-    }
-    return true;
-}
-
-struct DownloadState {
-    std::atomic<bool> finished{false};
-    std::atomic<bool> cancel{false};
-    std::atomic<long long> written{0};
-    std::atomic<long long> expected_size{0}; // 只读，Content-Length 读到后赋值
-    std::string expected_sha256; // 只读，线程启动前赋值
-    std::string manifest_text;   // 只读，原始清单 JSON；下载完成后验签用
-    bool ok = false;
-    std::wstring error;
-    std::filesystem::path path;
-};
 
 // 流式下载到本地文件；只在后台线程调用
 // retryable（输出）：失败时置 true 表示网络/服务器临时问题，调用方可重试；
@@ -651,13 +617,17 @@ void run_download_dialog(HWND hwnd, DownloadState *state, std::thread *worker)
         worker->join();
 }
 
-// 用户确认后：下载 → 验清单签名 → 校验 SHA256 → 安装版静默升级 / 绿色版交给用户解压
+// 用户确认后：下载 → 复验清单签名（纵深防御）→ 校验 SHA256 → 安装版静默升级 / 绿色版交给用户解压
 void begin_download(HWND hwnd, const UpdateTarget &target, const std::string &manifestText)
 {
     // 安装版会覆盖当前目录的可执行文件，绿色版要求用户解压覆盖也得先退出；
     // 两条路径都要先保存，否则 quit 流程可能因保存确认而被用户取消，更新包已下载却退出不了
     if (g_is_dirty && g_is_dirty()) {
         MoteAlert(hwnd, L"请先保存", "文档有未保存的修改，保存后再更新。");
+        return;
+    }
+    if (target.url.empty()) {
+        MoteAlert(hwnd, L"检查更新失败", "更新清单缺少当前安装形态对应的更新包。");
         return;
     }
     if (target.sha256.empty()) {
@@ -721,7 +691,8 @@ void begin_download(HWND hwnd, const UpdateTarget &target, const std::string &ma
         }
 
         if (ok) {
-            // 先验清单 Ed25519 签名（公钥编译进客户端）：清单被篡改则放弃更新
+            // 判定链已在引擎里验过清单签名；这里对下载时使用的同一份
+            // manifest_text 复验一次，属纵深防御（防判定后被内存篡改等极端情况）
             std::string verify_error;
             if (!verifyUpdateManifestSignature(raw->manifest_text, kUpdateManifestPublicKey,
                                                &verify_error)) {
@@ -792,57 +763,90 @@ void begin_download(HWND hwnd, const UpdateTarget &target, const std::string &ma
         g_quit();
 }
 
-struct CheckResult {
-    bool ok = false;
-    bool interactive = false;
+// ---- 四个平台适配器 ----
+
+// fetch 结果经 WM_APP 消息回到 UI 线程后再调回调（引擎要求主线程投递）
+struct FetchContext {
+    int status = 0;
+    std::string body;
     std::string error;
-    std::string manifest_text; // 原始清单 JSON，下载完成后验签用
-    UpdateManifest manifest;
-    UpdateDecision decision = UpdateDecision::Invalid;
+    ManifestFetcher::Callback done;
 };
 
-void check_in_background(HWND hwnd, bool interactive)
-{
-    const std::string override_url = env_value("MOTE_UPDATE_URL");
-    const std::wstring url =
-        override_url.empty() ? std::wstring(kDefaultManifestUrl) : utf8_to_wide(override_url);
+class WinFetcher : public ManifestFetcher {
+public:
+    explicit WinFetcher(HWND hwnd) : hwnd_(hwnd) {}
 
-    if (log_enabled())
-        update_log("GET %s", wide_to_utf8(url).c_str());
-
-    // 网络与解析都在后台线程；结果指针的所有权交给窗口线程
-    std::thread([hwnd, url, interactive] {
-        auto result = std::make_unique<CheckResult>();
-        result->interactive = interactive;
-
-        std::string body;
-        std::wstring net_error;
-        if (!fetch_url(url, &body, &net_error)) {
-            result->error = wide_to_utf8(net_error);
-        } else {
-            result->manifest_text = body;
-            // parseUpdateManifest 直接给中文原因
-            if (!parseUpdateManifest(body, UpdatePlatform::Windows, result->manifest,
-                                     &result->error)) {
+    void asyncGet(const std::string &url, Callback done) override
+    {
+        const HWND hwnd = hwnd_;
+        const std::wstring wide = utf8_to_wide(url);
+        std::thread([hwnd, wide, done = std::move(done)]() mutable {
+            auto ctx = std::make_unique<FetchContext>();
+            ctx->done = std::move(done);
+            std::wstring net_error;
+            if (fetch_url(wide, &ctx->body, &net_error)) {
+                ctx->status = 200;
             } else {
-                result->ok = true;
-                // 同版本时按构建号比较：本机 build 来自编译期宏 MOTE_BUILD
-                result->decision = decideUpdate(result->manifest, UpdatePlatform::Windows,
-                                                MOTE_VERSION, current_os_version(), MOTE_BUILD,
-                                                install_id());
+                ctx->status = 0;
+                ctx->error = wide_to_utf8(net_error);
             }
-        }
+            FetchContext *raw = ctx.release();
+            if (!PostMessageW(hwnd, kUpdateResultMessage, 0,
+                              reinterpret_cast<LPARAM>(raw)))
+                delete raw;
+        }).detach();
+    }
 
-        CheckResult *raw = result.release();
-        if (!PostMessageW(hwnd, kUpdateResultMessage, 0, reinterpret_cast<LPARAM>(raw)))
-            delete raw;
-    }).detach();
-}
+private:
+    HWND hwnd_;
+};
+
+class WinStore : public SettingsStore {
+public:
+    std::string getString(const std::string &key) override
+    {
+        const std::wstring stored = reg_read_string(RegName(key));
+        if (!stored.empty())
+            return wide_to_utf8(stored);
+        // 旧版 LastUpdateCheck 是 DWORD：读不到字符串时按 DWORD 兼容一次
+        if (key == update_keys::kLastCheckAt) {
+            DWORD legacy = 0;
+            if (reg_read_dword(kRegLastCheck, &legacy) && legacy > 0)
+                return std::to_string(static_cast<unsigned long long>(legacy));
+        }
+        return std::string();
+    }
+    void setString(const std::string &key, const std::string &value) override
+    {
+        reg_write_string(RegName(key), utf8_to_wide(value));
+    }
+    void clearString(const std::string &key) override { reg_delete_value(RegName(key)); }
+
+    // 32 位十六进制随机串（系统 CSPRNG，无需 COM 初始化）；失败返回空串，
+    // 引擎会跳过灰度，不阻断更新主流程。
+    std::string newInstallId() override
+    {
+        unsigned char bytes[16] = {};
+        if (BCryptGenRandom(nullptr, bytes, sizeof(bytes), BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0)
+            return std::string();
+        return to_hex(std::vector<UCHAR>(bytes, bytes + sizeof(bytes)));
+    }
+
+private:
+    static const wchar_t *RegName(const std::string &key)
+    {
+        if (key == update_keys::kLastCheckAt)
+            return kRegLastCheck;
+        if (key == update_keys::kSkippedVersion)
+            return kRegSkipped;
+        return kRegInstallId;
+    }
+};
 
 // 「发现新版本」弹窗里的超链接：TDF_ENABLE_HYPERLINKS 只负责渲染，
 // 点击后必须自己处理 TDN_HYPERLINK_CLICKED，否则点了没有任何反应
-HRESULT CALLBACK install_dialog_callback(HWND hwnd, UINT message, WPARAM, LPARAM lparam,
-                                         LONG_PTR)
+HRESULT CALLBACK prompt_dialog_callback(HWND hwnd, UINT message, WPARAM, LPARAM lparam, LONG_PTR)
 {
     if (message == TDN_HYPERLINK_CLICKED && lparam) {
         const wchar_t *link = reinterpret_cast<const wchar_t *>(lparam);
@@ -851,150 +855,132 @@ HRESULT CALLBACK install_dialog_callback(HWND hwnd, UINT message, WPARAM, LPARAM
     return S_OK;
 }
 
-// 返回 true 表示用户选择「下载并安装」
-bool prompt_install(HWND hwnd, const UpdateManifest &manifest, const UpdateTarget &target)
-{
-    std::wstring content = L"当前版本 " + utf8_to_wide(MOTE_VERSION) + L"。";
-    if (!manifest.updated_at.empty())
-        content += L"\n更新时间：" + utf8_to_wide(manifest.updated_at);
-    const std::wstring size = human_size(target.size);
-    if (!size.empty())
-        content += L"\n安装包大小：" + size;
-    const bool force = mandatoryActive(manifest, std::time(nullptr));
-    if (manifest.mandatory) {
-        // 强制更新：原因始终显示；期限在截止前提示「到期后不能跳过」，到期后直接强制
-        const std::string reason = mandatoryReasonLabel(manifest.mandatory_reason);
-        if (!reason.empty())
-            content += L"\n升级原因：" + utf8_to_wide(reason);
-        if (!manifest.mandatory_deadline.empty()) {
-            content += L"\n升级期限：" + utf8_to_wide(manifest.mandatory_deadline);
-            if (!force)
-                content += L"（到期后将无法跳过）";
+class WinUi : public UpdateUi {
+public:
+    explicit WinUi(HWND hwnd) : hwnd_(hwnd) {}
+
+    void showAlert(const std::string &title, const std::string &body) override
+    {
+        MoteAlert(hwnd_, utf8_to_wide(title), body);
+    }
+
+    Choice showPrompt(const PromptSpec &spec) override
+    {
+        std::wstring content = utf8_to_wide(spec.body);
+        const std::wstring plain_content = content;
+        bool has_notes = false;
+        if (!spec.notes_url.empty()) {
+            content += L"\n\n<a href=\"" + utf8_to_wide(spec.notes_url)
+                + L"\">查看完整更新说明…</a>";
+            has_notes = true;
         }
+        const std::wstring title = utf8_to_wide(spec.title);
+
+        TASKDIALOGCONFIG config = {};
+        config.cbSize = sizeof(config);
+        config.hwndParent = hwnd_;
+        // 强制生效后不给关闭按钮：用户只能立即更新
+        config.dwFlags = TDF_POSITION_RELATIVE_TO_WINDOW
+            | (has_notes ? TDF_ENABLE_HYPERLINKS : 0)
+            | (spec.allow_later ? TDF_ALLOW_DIALOG_CANCELLATION : 0);
+        config.pszWindowTitle = L"Mote";
+        config.pszMainIcon = TD_INFORMATION_ICON;
+        config.pszMainInstruction = title.c_str();
+        config.pszContent = content.c_str();
+        config.pfCallback = prompt_dialog_callback;
+        const TASKDIALOG_BUTTON mandatory_buttons[] = {
+            {1001, L"立即更新"},
+        };
+        const TASKDIALOG_BUTTON buttons[] = {
+            {1001, L"下载更新"},
+            {1002, L"稍后"},
+        };
+        config.pButtons = spec.allow_later ? buttons : mandatory_buttons;
+        config.cButtons = spec.allow_later ? ARRAYSIZE(buttons) : ARRAYSIZE(mandatory_buttons);
+
+        int pressed = 0;
+        if (FAILED(TaskDialogIndirect(&config, &pressed, nullptr, nullptr))) {
+            // 退回 MessageBox 时不能带 <a> 标记，否则会原样显示成尖括号文本
+            std::wstring plain = plain_content;
+            if (!spec.notes_url.empty())
+                plain += L"\n\n更新说明：" + utf8_to_wide(spec.notes_url);
+            if (!spec.allow_later)
+                return MessageBoxW(hwnd_, plain.c_str(), title.c_str(),
+                                   MB_OK | MB_ICONWARNING) == IDOK
+                    ? Choice::Install
+                    : Choice::Later;
+            return MessageBoxW(hwnd_, plain.c_str(), title.c_str(),
+                               MB_YESNO | MB_ICONINFORMATION | MB_DEFBUTTON1)
+                    == IDYES
+                ? Choice::Install
+                : Choice::Later;
+        }
+        return pressed == 1001 ? Choice::Install : Choice::Later;
     }
-    content += target.installer
-        ? L"\n\n当前是安装版：将下载安装包、验签并校验 SHA256 后静默安装并重启。"
-        : L"\n\n当前是绿色版：将下载并校验更新包，随后打开所在文件夹，解压覆盖即可。";
 
-    const std::wstring plain_content = content;
-    bool has_notes = false;
-    if (!manifest.notes_url.empty()) {
-        content += L"\n\n<a href=\"" + utf8_to_wide(manifest.notes_url)
-            + L"\">查看完整更新说明…</a>";
-        has_notes = true;
+private:
+    HWND hwnd_;
+};
+
+class WinInstaller : public PlatformInstaller {
+public:
+    explicit WinInstaller(HWND hwnd) : hwnd_(hwnd) {}
+
+    bool preflight(std::string *, std::string *) override { return true; }
+
+    long long preferredArtifactSize(const UpdateManifest &manifest) override
+    {
+        return pick_target(manifest).size;
     }
 
-    const std::wstring title = force
-        ? L"必须更新到 " + utf8_to_wide(manifest.version)
-        : L"发现新版本 " + utf8_to_wide(manifest.version);
-
-    TASKDIALOGCONFIG config = {};
-    config.cbSize = sizeof(config);
-    config.hwndParent = hwnd;
-    // 强制生效后不给关闭按钮：用户只能立即更新
-    config.dwFlags = TDF_POSITION_RELATIVE_TO_WINDOW
-        | (has_notes ? TDF_ENABLE_HYPERLINKS : 0)
-        | (force ? 0 : TDF_ALLOW_DIALOG_CANCELLATION);
-    config.pszWindowTitle = L"Mote";
-    config.pszMainIcon = TD_INFORMATION_ICON;
-    config.pszMainInstruction = title.c_str();
-    config.pszContent = content.c_str();
-    config.pfCallback = install_dialog_callback;
-    const TASKDIALOG_BUTTON mandatory_buttons[] = {
-        {1001, L"立即更新"},
-    };
-    const TASKDIALOG_BUTTON buttons[] = {
-        {1001, L"下载更新"},
-        {1002, L"稍后"},
-    };
-    config.pButtons = force ? mandatory_buttons : buttons;
-    config.cButtons = force ? ARRAYSIZE(mandatory_buttons) : ARRAYSIZE(buttons);
-
-    int pressed = 0;
-    if (FAILED(TaskDialogIndirect(&config, &pressed, nullptr, nullptr))) {
-        // 退回 MessageBox 时不能带 <a> 标记，否则会原样显示成尖括号文本
-        std::wstring plain = plain_content;
-        if (!manifest.notes_url.empty())
-            plain += L"\n\n更新说明：" + utf8_to_wide(manifest.notes_url);
-        if (force)
-            return MessageBoxW(hwnd, plain.c_str(), title.c_str(),
-                               MB_OK | MB_ICONWARNING) == IDOK;
-        return MessageBoxW(hwnd, plain.c_str(), title.c_str(),
-                           MB_YESNO | MB_ICONINFORMATION | MB_DEFBUTTON1)
-            == IDYES;
+    void install(const UpdateManifest &manifest, const std::string &manifest_text) override
+    {
+        const UpdateTarget target = pick_target(manifest);
+        if (log_enabled())
+            update_log("target=%s installed=%d", target.url.c_str(),
+                       target.installer ? 1 : 0);
+        begin_download(hwnd_, target, manifest_text);
     }
-    return pressed == 1001;
-}
 
-void show_result(HWND hwnd, const CheckResult &result)
+private:
+    HWND hwnd_;
+};
+
+// 进程级引擎（生命周期覆盖在途 fetch）
+struct EngineBundle {
+    std::unique_ptr<WinFetcher> fetcher;
+    std::unique_ptr<WinStore> store;
+    std::unique_ptr<WinUi> ui;
+    std::unique_ptr<WinInstaller> installer;
+    std::unique_ptr<UpdateEngine> engine;
+};
+
+EngineBundle &engine_bundle(HWND hwnd)
 {
-    if (!result.ok) {
-        if (log_enabled())
-            update_log("check failed: %s", result.error.c_str());
-        if (result.interactive)
-            MoteAlert(hwnd, L"检查更新失败",
-                      result.error.empty() ? "无法获取更新清单" : result.error);
-        return;
+    static EngineBundle bundle;
+    if (!bundle.engine) {
+        bundle.fetcher = std::make_unique<WinFetcher>(hwnd);
+        bundle.store = std::make_unique<WinStore>();
+        bundle.ui = std::make_unique<WinUi>(hwnd);
+        bundle.installer = std::make_unique<WinInstaller>(hwnd);
+
+        UpdateEngineConfig config;
+        config.platform = UpdatePlatform::Windows;
+        const std::string override_url = env_value("MOTE_UPDATE_URL");
+        config.manifest_url = override_url.empty() ? wide_to_utf8(kDefaultManifestUrl)
+                                                   : override_url;
+        config.current_version = MOTE_VERSION;
+        config.current_os = current_os_version();
+        config.os_label = "Windows";
+        config.current_build = MOTE_BUILD;
+        config.install_note = running_installed_copy()
+            ? "当前是安装版：将下载安装包、验签并校验 SHA256 后静默安装并重启。"
+            : "当前是绿色版：将下载并校验更新包，随后打开所在文件夹，解压覆盖即可。";
+        bundle.engine = std::make_unique<UpdateEngine>(
+            std::move(config), *bundle.fetcher, *bundle.store, *bundle.ui, *bundle.installer,
+            engine_logger);
     }
-
-    if (log_enabled())
-        update_log("current=%s latest=%s os=%s decision=%d", MOTE_VERSION,
-                   result.manifest.version.c_str(), current_os_version().c_str(),
-                   static_cast<int>(result.decision));
-
-    switch (result.decision) {
-    case UpdateDecision::Invalid:
-        if (result.interactive)
-            MoteAlert(hwnd, L"检查更新失败", "更新清单缺少版本号或下载地址。");
-        return;
-    case UpdateDecision::UpToDate:
-        if (result.interactive)
-            MoteAlert(hwnd, L"已是最新版本",
-                      std::string("当前版本 ") + MOTE_VERSION + " 已经是最新版本。");
-        return;
-    case UpdateDecision::UnsupportedSystem:
-        if (result.interactive)
-            MoteAlert(hwnd, L"新版本不支持当前系统",
-                      "最新版本 " + result.manifest.version + " 需要 Windows "
-                          + (result.manifest.min_os.empty() ? "10" : result.manifest.min_os)
-                          + " 或更高。");
-        return;
-    case UpdateDecision::RolloutHold:
-        // 灰度分批：后台静默等待下一轮，用户主动检查时说明原因
-        if (log_enabled())
-            update_log("rollout hold: version=%s percent=%d", result.manifest.version.c_str(),
-                       result.manifest.rollout_percent);
-        if (result.interactive)
-            MoteAlert(hwnd, L"暂无可用更新",
-                      "新版本 " + result.manifest.version + " 正在分批推送中，请稍后再试。");
-        return;
-    case UpdateDecision::Available:
-        break;
-    }
-
-    const UpdateTarget target = pick_target(result.manifest);
-    if (log_enabled())
-        update_log("target=%s installed=%d", target.url.c_str(),
-                   target.installer ? 1 : 0);
-
-    // 后台检查不打扰用户：同一版本点过「稍后」后，等下次发布再说；
-    // 强制更新到期后不受「稍后」记录限制，每次检查都要提示（截止前仍可稍后）
-    const std::wstring skipped = reg_read_string(kSkippedValue);
-    const std::wstring latest = utf8_to_wide(result.manifest.version);
-    if (!result.interactive && !mandatoryActive(result.manifest, std::time(nullptr))
-        && !skipped.empty() && skipped == latest) {
-        if (log_enabled())
-            update_log("skip prompt for version=%s", result.manifest.version.c_str());
-        return;
-    }
-
-    if (!prompt_install(hwnd, result.manifest, target)) {
-        reg_write_string(kSkippedValue, latest);
-        return;
-    }
-
-    reg_delete_value(kSkippedValue);
-    begin_download(hwnd, target, result.manifest_text);
+    return bundle;
 }
 
 } // namespace
@@ -1012,35 +998,25 @@ void start_update_checker(HWND hwnd)
 
 void run_update_timer(HWND hwnd)
 {
-    // 首次由 10 秒定时器触发，之后固定 24 小时；节流看注册表里的上次检查时间，
-    // 这样频繁重启不会每次都打服务器。
+    // 首次由 10 秒定时器触发，之后固定 24 小时；节流口径在引擎里（两端同源）
     KillTimer(hwnd, kUpdateTimer);
-    SetTimer(hwnd, kUpdateTimer, static_cast<UINT>(kCheckIntervalSeconds) * 1000, nullptr);
-
-    const DWORD now = static_cast<DWORD>(std::time(nullptr));
-    DWORD last = 0;
-    if (reg_read_dword(kLastCheckValue, &last) && last > 0 && now >= last
-        && now - last < kCheckIntervalSeconds) {
-        if (log_enabled())
-            update_log("skip background check (last %lu s ago)",
-                       static_cast<unsigned long>(now - last));
-        return;
-    }
-
-    reg_write_dword(kLastCheckValue, now);
-    check_in_background(hwnd, false);
+    SetTimer(hwnd, kUpdateTimer, 24 * 60 * 60 * 1000, nullptr);
+    engine_bundle(hwnd).engine->tick(std::time(nullptr));
 }
 
 void check_for_updates_now(HWND hwnd)
 {
-    check_in_background(hwnd, true);
+    engine_bundle(hwnd).engine->checkNow(std::time(nullptr));
 }
 
 bool handle_update_message(HWND hwnd, LPARAM lparam)
 {
-    std::unique_ptr<CheckResult> result(reinterpret_cast<CheckResult *>(lparam));
-    if (result)
-        show_result(hwnd, *result);
+    std::unique_ptr<FetchContext> ctx(reinterpret_cast<FetchContext *>(lparam));
+    if (!ctx)
+        return false;
+    // 回调内部即 engine->onManifest，已在 UI 线程
+    if (ctx->done)
+        ctx->done(ctx->status, ctx->body, ctx->error);
     return true;
 }
 

@@ -9,6 +9,7 @@
 
 add_library(mote_update STATIC
   "${CMAKE_CURRENT_SOURCE_DIR}/src/update.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/update_engine.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/sha256.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/verify_signature.cpp")
 

@@ -4,13 +4,15 @@
 
 #include <functional>
 
-// Windows 在线更新，口径对齐 macOS：OSS 放清单 + 自研检查 + 自研下载校验 + 静默安装。
-//   core/update           解析清单（v2 统一 manifest.json）、比较版本、给出决策（两端共用）
-//   core/verify_signature 清单 Ed25519 验签（TweetNaCl，公钥编译进客户端）
-//   本文件                取清单（WinHTTP）、下载后验签并校验 SHA256、交给安装包静默升级
+// Windows 在线更新适配器。分层（与 macOS 共用同一份状态机）：
+//   modules/update 检测层   清单解析、Ed25519 验签、版本比较（两端共用）
+//   modules/update 编排层   mote::UpdateEngine：时机、节流、并发防重、
+//                           验签→解析→判定统一顺序、跳过规则、提示文案
+//   本文件       平台层   WinHTTP 取清单/下载、注册表持久化、TaskDialog
+//                           渲染、SHA256 校验、静默安装 / 绿色包指引
 //
-// 清单统一为 manifest.json（platforms.windows 平台段），安装版读 artifacts.setup，
-// 绿色包读 artifacts.portable；下载完成后先验清单签名、再校验产物 SHA256。
+// 壳内不得复制任何判定或文案逻辑——历史上两端各写一份状态机曾产生
+// 「win 判定前不验签」等双胞胎偏差，全部收口进引擎。
 namespace mote::win {
 
 // 更新检查用的定时器 id（WM_TIMER）与后台结果消息（WM_APP + 8）
@@ -24,13 +26,13 @@ void set_update_hooks(std::function<bool()> is_dirty, std::function<void()> quit
 // 窗口创建后调用一次：10 秒后首次后台检查，之后每 24 小时一次
 void start_update_checker(HWND hwnd);
 
-// WM_TIMER(kUpdateTimer) 的处理：重置间隔并按上次检查时间节流
+// WM_TIMER(kUpdateTimer) 的处理：重置为 24 小时周期，把 tick 交给引擎（节流在引擎内）
 void run_update_timer(HWND hwnd);
 
-// 菜单「检查更新…」：立即检查，无论结果都给出提示
+// 菜单「检查更新…」：引擎立即检查，无论结果都给出提示
 void check_for_updates_now(HWND hwnd);
 
-// 后台检查结果回到窗口线程后由这里消费；总是返回 true（消息属于更新模块）
+// WM_APP 的 fetch 结果消息：交回引擎 onManifest；true 表示消息属于更新模块
 bool handle_update_message(HWND hwnd, LPARAM lparam);
 
 } // namespace mote::win

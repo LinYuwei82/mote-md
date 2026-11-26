@@ -1213,10 +1213,317 @@ static void testTextEncoding()
     CHECK(mote::normalizeTextEncoding(gbk) == gbk);
 }
 
+// ---- UpdateEngine 编排层 ----
+// 状态机唯一份：这里锁死两端共同口径（验签顺序、节流、并发防重、跳过规则、文案）。
+
+#include "mote/update_engine.h"
+
+#include <map>
+
+namespace {
+
+struct FakeFetcher : mote::ManifestFetcher {
+    std::vector<std::string> urls;
+    mote::ManifestFetcher::Callback pending;
+    void asyncGet(const std::string &url, Callback done) override
+    {
+        urls.push_back(url);
+        pending = std::move(done);
+    }
+    void respond(int status, const std::string &body, const std::string &error = std::string())
+    {
+        auto cb = std::move(pending);
+        pending = nullptr;
+        if (cb)
+            cb(status, body, error);
+    }
+};
+
+struct FakeStore : mote::SettingsStore {
+    std::map<std::string, std::string> values;
+    std::string newId = "abc123";
+    std::string getString(const std::string &key) override
+    {
+        auto it = values.find(key);
+        return it == values.end() ? std::string() : it->second;
+    }
+    void setString(const std::string &key, const std::string &value) override
+    {
+        values[key] = value;
+    }
+    void clearString(const std::string &key) override { values.erase(key); }
+    std::string newInstallId() override { return newId; }
+};
+
+struct FakeUi : mote::UpdateUi {
+    std::vector<std::pair<std::string, std::string>> alerts;
+    std::vector<mote::PromptSpec> prompts;
+    Choice nextChoice = Choice::Install;
+    void showAlert(const std::string &title, const std::string &body) override
+    {
+        alerts.emplace_back(title, body);
+    }
+    Choice showPrompt(const mote::PromptSpec &spec) override
+    {
+        prompts.push_back(spec);
+        return nextChoice;
+    }
+};
+
+struct FakeInstaller : mote::PlatformInstaller {
+    bool allow = true;
+    std::string preTitle, preBody;
+    int installs = 0;
+    std::string lastManifestText;
+    bool preflight(std::string *title, std::string *body) override
+    {
+        *title = preTitle;
+        *body = preBody;
+        return allow;
+    }
+    long long preferredArtifactSize(const mote::UpdateManifest &manifest) override
+    {
+        return manifest.dmg.size;
+    }
+    void install(const mote::UpdateManifest &, const std::string &text) override
+    {
+        ++installs;
+        lastManifestText = text;
+    }
+};
+
+mote::UpdateEngineConfig engineConfig()
+{
+    mote::UpdateEngineConfig config;
+    config.platform = mote::UpdatePlatform::Macos;
+    config.manifest_url = "https://example.test/manifest.json";
+    config.current_version = "1.0.25";
+    config.current_os = "15.0";
+    config.os_label = "macOS";
+    config.current_build = 0;
+    config.install_note = "安装过程会退出并重新打开 Mote。";
+    return config;
+}
+
+// 构造 macos 平台段清单：版本、大小、可选字段（extra 注入 macos 段内）
+std::string makeManifest(const std::string &version, long long size = 3670016,
+                         const std::string &extra = std::string())
+{
+    std::string json = R"({"updated_at":"2026-11-26T00:00:00Z","platforms":{"macos":{"version":")"
+        + version + R"(")";
+    if (!extra.empty())
+        json += "," + extra;
+    json += R"(,"notes_url":"https://example.test/notes","artifacts":{"dmg":{"url":"https://example.test/a.dmg","size":)"
+        + std::to_string(size) + R"(}}}}})";
+    return json;
+}
+
+mote::UpdateEngine makeEngine(FakeFetcher &fetcher, FakeStore &store, FakeUi &ui,
+                              FakeInstaller &installer, bool verifyOk = true)
+{
+    auto config = engineConfig();
+    config.verifier = [verifyOk](const std::string &, std::string *error) {
+        if (!verifyOk && error)
+            *error = "signature mismatch";
+        return verifyOk;
+    };
+    return mote::UpdateEngine(std::move(config), fetcher, store, ui, installer, nullptr);
+}
+
+} // namespace
+
+static void testUpdateEngine()
+{
+    // 1) 验签失败：不解析、不弹窗、不安装（锁死 win 旧偏差：判定前必须验签）
+    {
+        FakeFetcher fetcher; FakeStore store; FakeUi ui; FakeInstaller installer;
+        auto engine = makeEngine(fetcher, store, ui, installer, /*verifyOk=*/false);
+        engine.checkNow(std::time(nullptr));
+        fetcher.respond(200, "not even json");
+        CHECK_EQ(ui.alerts.size(), static_cast<size_t>(1));
+        CHECK_EQ(ui.alerts[0].first, std::string("检查更新失败"));
+        CHECK(ui.alerts[0].second.find("验签失败") != std::string::npos);
+        CHECK_EQ(ui.prompts.size(), static_cast<size_t>(0));
+        CHECK_EQ(installer.installs, 0);
+        // 时间戳仍写入：失败也节流
+        CHECK(!store.getString(mote::update_keys::kLastCheckAt).empty());
+    }
+
+    // 2) 网络失败：交互提示原因；非交互静默
+    {
+        FakeFetcher fetcher; FakeStore store; FakeUi ui; FakeInstaller installer;
+        auto engine = makeEngine(fetcher, store, ui, installer);
+        engine.checkNow(std::time(nullptr));
+        fetcher.respond(0, "", "无法连接更新服务器");
+        CHECK_EQ(ui.alerts.size(), static_cast<size_t>(1));
+        CHECK_EQ(ui.alerts[0].second, std::string("无法连接更新服务器"));
+        store.values.clear();
+        ui.alerts.clear();
+        engine.tick(std::time(nullptr));
+        fetcher.respond(500, "");
+        CHECK_EQ(ui.alerts.size(), static_cast<size_t>(0));
+    }
+
+    // 3) 节流：tick 在间隔内不重复拉取；checkNow 无视节流；间隔外放行
+    {
+        FakeFetcher fetcher; FakeStore store; FakeUi ui; FakeInstaller installer;
+        auto engine = makeEngine(fetcher, store, ui, installer);
+        const std::time_t now = std::time(nullptr);
+        engine.tick(now);
+        CHECK_EQ(fetcher.urls.size(), static_cast<size_t>(1));
+        fetcher.respond(200, makeManifest("1.0.25")); // UpToDate，非交互静默
+        engine.tick(now + 60); // 1 分钟后再 tick：仍在 24h 节流内
+        CHECK_EQ(fetcher.urls.size(), static_cast<size_t>(1));
+        engine.checkNow(now + 61); // 手动无视节流
+        CHECK_EQ(fetcher.urls.size(), static_cast<size_t>(2));
+        fetcher.respond(200, makeManifest("1.0.25"));
+        // 手动 UpToDate 必须明确告知（后台则静默）
+        CHECK_EQ(ui.alerts.size(), static_cast<size_t>(1));
+        CHECK_EQ(ui.alerts[0].first, std::string("已是最新版本"));
+        ui.alerts.clear();
+        store.setString(mote::update_keys::kLastCheckAt,
+                        std::to_string(static_cast<long long>(now) - 25 * 3600));
+        engine.tick(now); // 超过间隔：放行
+        CHECK_EQ(fetcher.urls.size(), static_cast<size_t>(3));
+        fetcher.respond(200, makeManifest("1.0.25"));
+        CHECK_EQ(ui.alerts.size(), static_cast<size_t>(0));
+    }
+
+    // 4) 并发防重：在途检查期间 tick/checkNow 不再发请求；手动重复触发有提示
+    {
+        FakeFetcher fetcher; FakeStore store; FakeUi ui; FakeInstaller installer;
+        auto engine = makeEngine(fetcher, store, ui, installer);
+        const std::time_t now = std::time(nullptr);
+        engine.tick(now);
+        CHECK(engine.isChecking());
+        engine.tick(now + 1);
+        engine.checkNow(now + 2);
+        CHECK_EQ(fetcher.urls.size(), static_cast<size_t>(1));
+        CHECK_EQ(ui.alerts.size(), static_cast<size_t>(1)); // 手动重复：明确告知
+        CHECK(ui.alerts[0].second.find("正在进行") != std::string::npos);
+        fetcher.respond(200, makeManifest("1.0.25"));
+        CHECK(!engine.isChecking());
+        // 迟到的重复回流被忽略
+        engine.onManifest(200, makeManifest("9.9.9"), "");
+        CHECK_EQ(ui.prompts.size(), static_cast<size_t>(0));
+    }
+
+    // 5) 跳过规则：后台点「稍后」→ 同版本后台静默；手动仍弹；确认后清除记录
+    {
+        FakeFetcher fetcher; FakeStore store; FakeUi ui; FakeInstaller installer;
+        auto engine = makeEngine(fetcher, store, ui, installer);
+        std::time_t now = std::time(nullptr);
+        ui.nextChoice = mote::UpdateUi::Choice::Later;
+        engine.checkNow(now);
+        fetcher.respond(200, makeManifest("9.9.9"));
+        CHECK_EQ(ui.prompts.size(), static_cast<size_t>(1));
+        CHECK_EQ(store.getString(mote::update_keys::kSkippedVersion), std::string("9.9.9"));
+        CHECK_EQ(installer.installs, 0);
+
+        // 后台（tick，越过节流）：同版本静默
+        store.setString(mote::update_keys::kLastCheckAt,
+                        std::to_string(static_cast<long long>(now) - 25 * 3600));
+        engine.tick(now);
+        fetcher.respond(200, makeManifest("9.9.9"));
+        CHECK_EQ(ui.prompts.size(), static_cast<size_t>(1)); // 没有新弹窗
+
+        // 手动：无视跳过记录，仍弹
+        ui.nextChoice = mote::UpdateUi::Choice::Install;
+        engine.checkNow(now);
+        fetcher.respond(200, makeManifest("9.9.9"));
+        CHECK_EQ(ui.prompts.size(), static_cast<size_t>(2));
+        CHECK_EQ(installer.installs, 1);
+        CHECK(installer.lastManifestText == makeManifest("9.9.9"));
+        CHECK(store.getString(mote::update_keys::kSkippedVersion).empty());
+    }
+
+    // 6) 强制更新：到期后不受「稍后」限制；无「稍后」按钮
+    {
+        FakeFetcher fetcher; FakeStore store; FakeUi ui; FakeInstaller installer;
+        auto engine = makeEngine(fetcher, store, ui, installer);
+        const std::time_t now = std::time(nullptr);
+        const std::string forced = makeManifest("9.9.9", 3670016,
+            R"("mandatory":true,"mandatory_reason":"SECURITY","mandatory_deadline":"2020-01-01T00:00:00Z")");
+        store.setString(mote::update_keys::kSkippedVersion, "9.9.9");
+        store.setString(mote::update_keys::kLastCheckAt,
+                        std::to_string(static_cast<long long>(now) - 25 * 3600));
+        engine.tick(now); // 后台 + 有跳过记录 + 强制已到期 → 仍要提示
+        fetcher.respond(200, forced);
+        CHECK_EQ(ui.prompts.size(), static_cast<size_t>(1));
+        CHECK(ui.prompts[0].force);
+        CHECK(!ui.prompts[0].allow_later);
+        CHECK(ui.prompts[0].title == "必须更新到 9.9.9");
+        CHECK(ui.prompts[0].body.find("当前版本必须升级。") != std::string::npos);
+        CHECK(ui.prompts[0].body.find("安全漏洞修复") != std::string::npos);
+        CHECK(ui.prompts[0].body.find("已到截止时间") != std::string::npos);
+    }
+
+    // 7) PromptSpec 内容：更新时间/大小/安装说明/notes 链接
+    {
+        FakeFetcher fetcher; FakeStore store; FakeUi ui; FakeInstaller installer;
+        auto engine = makeEngine(fetcher, store, ui, installer);
+        engine.checkNow(std::time(nullptr));
+        fetcher.respond(200, makeManifest("9.9.9", 3670016));
+        CHECK_EQ(ui.prompts.size(), static_cast<size_t>(1));
+        const mote::PromptSpec &spec = ui.prompts[0];
+        CHECK(spec.title == "发现新版本 9.9.9");
+        CHECK(spec.body.find("更新时间：2026-11-26T00:00:00Z") != std::string::npos);
+        CHECK(spec.body.find("安装包大小：3.5 MB") != std::string::npos);
+        CHECK(spec.body.find("安装过程会退出并重新打开 Mote。") != std::string::npos);
+        CHECK(spec.notes_url == "https://example.test/notes");
+        CHECK(spec.allow_later && !spec.force);
+    }
+
+    // 8) preflight 拦截（如 mac Translocation）：只提示，不弹更新框、不记跳过
+    {
+        FakeFetcher fetcher; FakeStore store; FakeUi ui; FakeInstaller installer;
+        installer.allow = false;
+        installer.preTitle = "需要先移动到“应用程序”";
+        installer.preBody = "请移动后重试";
+        auto engine = makeEngine(fetcher, store, ui, installer);
+        engine.checkNow(std::time(nullptr));
+        fetcher.respond(200, makeManifest("9.9.9"));
+        CHECK_EQ(ui.prompts.size(), static_cast<size_t>(0));
+        CHECK_EQ(ui.alerts.size(), static_cast<size_t>(1));
+        CHECK_EQ(ui.alerts[0].first, installer.preTitle);
+        CHECK_EQ(installer.installs, 0);
+        CHECK(store.getString(mote::update_keys::kSkippedVersion).empty());
+    }
+
+    // 9) UnsupportedSystem / RolloutHold 交互与非交互矩阵
+    {
+        FakeFetcher fetcher; FakeStore store; FakeUi ui; FakeInstaller installer;
+        auto engine = makeEngine(fetcher, store, ui, installer);
+        std::time_t now = std::time(nullptr);
+        engine.tick(now);
+        fetcher.respond(200, makeManifest("9.9.9", 1024, R"("min_os":"99.0")"));
+        CHECK_EQ(ui.alerts.size(), static_cast<size_t>(0)); // 后台静默
+        engine.checkNow(now);
+        fetcher.respond(200, makeManifest("9.9.9", 1024, R"("min_os":"99.0")"));
+        CHECK_EQ(ui.alerts.size(), static_cast<size_t>(1));
+        CHECK(ui.alerts[0].second.find("macOS 99.0 或更高") != std::string::npos);
+
+        ui.alerts.clear();
+        engine.checkNow(now);
+        fetcher.respond(200, makeManifest("9.9.9", 1024, R"("rollout_percent":0)"));
+        CHECK_EQ(ui.alerts.size(), static_cast<size_t>(1));
+        CHECK(ui.alerts[0].first == "暂无可用更新");
+    }
+
+    // 10) formatSize 统一口径
+    {
+        CHECK(mote::UpdateEngine::formatSize(0).empty());
+        CHECK(mote::UpdateEngine::formatSize(-5).empty());
+        CHECK_EQ(mote::UpdateEngine::formatSize(2048), std::string("2 KB"));
+        CHECK_EQ(mote::UpdateEngine::formatSize(3670016), std::string("3.5 MB"));
+    }
+}
+
 int main()
 {
     testJson();
     testUpdate();
+    testUpdateEngine();
     testVerifySignature();
     testBase64();
     testPaths();
