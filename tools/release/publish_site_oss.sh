@@ -27,9 +27,9 @@ if ! "$PYTHON" -c 'import oss2' >/dev/null 2>&1; then
 fi
 
 OSS_ENV_FILE="${OSS_ENV_FILE:-$HOME/.config/xiaotu-updates/.env}"
-SITE_BUCKET="${SITE_BUCKET:-xiaotu-site}"
-SITE_ENDPOINT="${SITE_ENDPOINT:-https://oss-cn-hongkong.aliyuncs.com}"
-SITE_PUBLIC_URL="${SITE_PUBLIC_URL:-https://$SITE_BUCKET.oss-cn-hongkong.aliyuncs.com}"
+SITE_BUCKET="${SITE_BUCKET:-xiaotu-site-sz}"
+SITE_ENDPOINT="${SITE_ENDPOINT:-https://oss-cn-shenzhen.aliyuncs.com}"
+SITE_PUBLIC_URL="${SITE_PUBLIC_URL:-https://$SITE_BUCKET.oss-cn-shenzhen.aliyuncs.com}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOURCE="$REPO_ROOT/web"

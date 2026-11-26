@@ -13,9 +13,11 @@
 
 | 位置 | 域名 | 放什么 | 不放什么 |
 |---|---|---|---|
-| OSS 桶 `xiaotu-update`（香港） | `https://dl.xiaotu.online` | 全部安装包（dmg/exe/zip）、自动更新清单、PDF 手册、发布说明、访问日志 | 网页、图片、CSS/JS |
-| OSS 桶 `xiaotu-site`（香港） | `https://pre.xiaotu.online` | 官网静态网页（21 个文件） | 安装包、更新清单、PDF |
-| ECS `/var/www/xiaotu` | `https://xiaotu.online` | 与 `xiaotu-site` 完全相同的 21 个网页文件 | 安装包、更新清单 |
+| OSS 桶 `xiaotu-update-sz`（深圳） | `https://dl.xiaotu.online` | 全部安装包（dmg/exe/zip）、自动更新清单、PDF 手册、发布说明、访问日志 | 网页、图片、CSS/JS |
+| OSS 桶 `xiaotu-site-sz`（深圳） | `https://pre.xiaotu.online` | 官网静态网页（21 个文件） | 安装包、更新清单、PDF |
+| ECS `/var/www/xiaotu` | `https://xiaotu.online` | 与 `xiaotu-site-sz` 完全相同的 21 个网页文件 | 安装包、更新清单 |
+
+> 2026-11-26 备案通过后从香港（`xiaotu-update` / `xiaotu-site`）迁移到深圳，域名与对象键完全不变；旧香港桶保留作回滚。
 
 一句话：**自动更新相关文件全部在 `xiaotu-update` 桶的 `<product>/updates/stable/` 下；安装包在 `<product>/` 根下；PDF 也在 `<product>/` 根下。** `<product>` 只有三个值：`devcard`、`xiaotu`、`mote`。
 
@@ -204,15 +206,13 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 公网地址：
 
 ```
-https://pre.xiaotu.online/                  # OSS（测试/预览）
-https://xiaotu.online/                      # ECS（备案中）
+https://pre.xiaotu.online/                  # OSS 深圳桶（测试/预览）
+https://xiaotu.online/                      # ECS 正式站（已启用 HTTPS）
 ```
 
-> 备案未通过前，阿里云会对 `Host: xiaotu.online` 的 80 端口请求返回
-> `Non-compliance ICP Filing` 拦截页（403）；此时可用 `curl -H 'Host: IP'` 或直接
-> `http://47.107.36.33/` 预览，页面内容与 `pre.xiaotu.online` 完全一致。
-> 备案通过后执行 `sudo certbot --nginx -d xiaotu.online -d www.xiaotu.online` 并把
-> DNS 指向 `47.107.36.33` 即可对外服务。
+> 备案（粤ICP备2026190345，2026-11-25 通过）后 ECS 正式站已启用：DNS 指向
+> `47.107.36.33`，`sudo certbot --nginx -d xiaotu.online -d www.xiaotu.online`
+> 已签发证书（到期前自动续期），HTTP 自动 301 到 HTTPS。
 
 下载页的版本号、大小、SHA256、下载链接由 `assets/js/site.js` 在浏览器里读取上面第二节的清单自动填充，**不需要手工改 HTML**。
 

@@ -12,7 +12,7 @@
 set -euo pipefail
 
 DOMAIN="${SITE_DOMAIN:-pre.xiaotu.online}"
-BUCKET="${SITE_BUCKET:-xiaotu-site}"
+BUCKET="${SITE_BUCKET:-xiaotu-site-sz}"
 ENV_FILE="${OSS_ENV_FILE:-$HOME/.config/xiaotu-updates/.env}"
 CONF_DIR="${ACME_CONFIG_DIR:-$HOME/.config/xiaotu-updates/acme}"
 CERT_DIR="${CERT_OUT_DIR:-$HOME/.config/xiaotu-updates/site-cert}"
@@ -42,7 +42,7 @@ import os, sys, oss2
 token, validation = sys.argv[1:3]
 bucket = oss2.Bucket(
     oss2.Auth(os.environ["OSS_ACCESS_KEY_ID"], os.environ["OSS_ACCESS_KEY_SECRET"]),
-    "https://oss-cn-hongkong.aliyuncs.com",
+    "https://oss-cn-shenzhen.aliyuncs.com",
     os.environ["SITE_BUCKET"],
 )
 bucket.put_object(
@@ -61,7 +61,7 @@ source "$OSS_ENV_FILE"
 import os, sys, oss2
 bucket = oss2.Bucket(
     oss2.Auth(os.environ["OSS_ACCESS_KEY_ID"], os.environ["OSS_ACCESS_KEY_SECRET"]),
-    "https://oss-cn-hongkong.aliyuncs.com",
+    "https://oss-cn-shenzhen.aliyuncs.com",
     os.environ["SITE_BUCKET"],
 )
 bucket.delete_object(".well-known/acme-challenge/" + sys.argv[1])
@@ -111,7 +111,7 @@ key = open(f"{cert_dir}/privkey.pem", encoding="utf-8").read()
 
 bucket = oss2.Bucket(
     oss2.Auth(env["OSS_ACCESS_KEY_ID"], env["OSS_ACCESS_KEY_SECRET"]),
-    "https://oss-cn-hongkong.aliyuncs.com",
+    "https://oss-cn-shenzhen.aliyuncs.com",
     bucket_name,
 )
 request = oss2.models.PutBucketCnameRequest(
