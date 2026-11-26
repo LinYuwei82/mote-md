@@ -2421,6 +2421,31 @@
   }
 
 
+  // 拆分块后平衡成对行内标记（**、`、__、~~）：前半未闭合时——若后半以该标记
+  // 开头（拆分点恰在闭合标记前）把闭合标记挪到前半；否则前半补闭合、后半重开。
+  function balanceInlineMarkers(before, after) {
+    var marks = ['**', '`', '__', '~~'];
+    for (var mi = 0; mi < marks.length; mi++) {
+      var M = marks[mi];
+      if ((before.split(M).length - 1) % 2 === 1) {
+        if (after.indexOf(M) === 0) {
+          before += M;
+          after = after.slice(M.length);
+        } else {
+          var cut = before.lastIndexOf(M);
+          if (before.slice(cut + M.length) === '') {
+            before = before.slice(0, cut);
+            after = M + after;
+          } else {
+            before += M;
+            after = M + after;
+          }
+        }
+      }
+    }
+    return [before, after];
+  }
+
   function splitBlock(el) {
     commitHistory();   // 先把分段前的状态固定为一个步骤
 
@@ -2479,6 +2504,12 @@
           after = hm[1] + hm[2] + after.replace(/^\s+/, '');
       }
     }
+
+    // 拆分点若落在 **加粗** / `行内代码` 等成对标记内部，两半会各留一个未闭合
+    // 标记，渲染成字面星号/反引号。拆分后先做配对平衡：前半闭合、后半重开。
+    var balanced = balanceInlineMarkers(before, after);
+    before = balanced[0];
+    after = balanced[1];
 
     renderBlock(el, before);
 
@@ -2655,6 +2686,15 @@
       if (isCodeBlock(el) && !isCodeBlock(previous)) {
         commitHistory();
         applyRawToBlock(el, contentOfRaw(rawOf(el), 'code'), 0, 0, true);
+        setTimeout(commitHistory, 0);
+        return;
+      }
+      // 结构块（引用/列表/标题）首行退格遇到不同类型：剥掉前缀还原正文（再按
+      // 一次即可与上一段合并），对齐原生壳行为，避免死键。
+      var kind0 = blockType(el);
+      if (kind0 === 'ul' || kind0 === 'ol' || kind0 === 'quote' || kind0.charAt(0) === 'h') {
+        commitHistory();
+        applyRawToBlock(el, contentOfRaw(rawOf(el), kind0), 0, 0, true);
         setTimeout(commitHistory, 0);
       }
       return;
@@ -4949,11 +4989,25 @@
     // 表格单元格外没有“块首”这个概念：光标停在首格行首时不能把整张表并进
     // 上一段（caretOffset(el) 会恰好等于 0）。
     if (event.key === 'Backspace' && !event.metaKey && !event.ctrlKey && !inTable
-        && caretOffset(el) === 0
-        && el.previousElementSibling && el.previousElementSibling.classList.contains('block')) {
-      event.preventDefault();
-      mergeBack(el);
-      return;
+        && caretOffset(el) === 0) {
+      var prevSib = el.previousElementSibling;
+      if (prevSib && prevSib.classList.contains('block')) {
+        event.preventDefault();
+        mergeBack(el);
+        return;
+      }
+      // 首块是结构块（无上一块可并）：块首退格剥前缀还原正文，避免死键
+      if (!prevSib) {
+        var kind1 = blockType(el);
+        if (kind1 === 'ul' || kind1 === 'ol' || kind1 === 'quote'
+            || kind1 === 'code' || kind1.charAt(0) === 'h') {
+          event.preventDefault();
+          commitHistory();
+          applyRawToBlock(el, contentOfRaw(rawOf(el), kind1), 0, 0, true);
+          setTimeout(commitHistory, 0);
+          return;
+        }
+      }
     }
 
     if (event.key === 'Tab') {
