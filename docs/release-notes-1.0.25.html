@@ -1,0 +1,71 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+     max-width:720px;margin:40px auto;padding:0 20px;line-height:1.7;color:#222}
+h1{border-bottom:2px solid #eee;padding-bottom:8px}
+h2{margin-top:1.5em;color:#111}
+table{border-collapse:collapse;width:100%;margin:1em 0}
+th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}
+th{background:#f6f8fa}
+code{background:#f0f0f0;padding:1px 6px;border-radius:3px;font-size:.9em}
+pre{background:#f6f8fa;padding:12px 16px;border-radius:6px;overflow-x:auto}
+pre code{background:none;padding:0}
+blockquote{border-left:4px solid #ddd;margin:1em 0;padding:0 16px;color:#666}
+</style></head><body>
+<h2 id="mote-1.0.25">Mote 1.0.25</h2>
+<h3 id="本次更新">本次更新</h3>
+<ul>
+<li><strong>启动与打开文件明显提速</strong>：mermaid
+图形库（3.3MB）以前每次启动、每次打开不同目录的文件都要随整页重新解析，是慢的主因；现在改为<strong>按需加载</strong>——只有文档里真正出现
+```mermaid 代码块时才加载，页面体积从约 4.2MB 降到
+0.85MB，启动到可编辑实测快约 35%。</li>
+<li><strong>双击文件启动不再走弯路</strong>：带文件启动时原来会先加载内置示例页、再切到文档目录重载一次；现在直接打开目标文件，只加载一次页面。</li>
+<li>mermaid 图的渲染、点图回源码、PDF
+导出前等待出图等行为均不变；导出时会等待按需加载与渲染完成。</li>
+</ul>
+<h3 id="构建与分发">构建与分发</h3>
+<ul>
+<li>macOS 安装包使用 <strong>Developer ID 签名 + Apple 公证 + stapler
+票据</strong>，离线状态下也能通过 Gatekeeper 校验。</li>
+<li>Windows 安装包与绿色版同步更新，构建号 <code>22</code>。</li>
+</ul>
+<h3 id="下载">下载</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>平台</th>
+<th>文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>macOS（Apple Silicon）</td>
+<td><code>mote-1.0.25-macos-arm64.dmg</code></td>
+<td>拖拽到「应用程序」即可</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>mote-1.0.25-win64-setup.exe</code></td>
+<td>安装版</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>mote-1.0.25-win64-portable.zip</code></td>
+<td>免安装绿色版</td>
+</tr>
+</tbody>
+</table>
+<h3 id="校验">校验</h3>
+<p>随附 <code>SHA256SUMS.txt</code>，下载后可自行校验：</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># macOS / Linux</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">shasum</span> <span class="at">-a</span> 256 <span class="at">-c</span> SHA256SUMS.txt</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Windows（PowerShell）</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">Get-FileHash</span> SHA256SUMS.txt <span class="at">-Algorithm</span> SHA256</span></code></pre></div>
+</body></html>

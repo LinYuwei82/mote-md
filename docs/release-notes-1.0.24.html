@@ -1,0 +1,61 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+     max-width:720px;margin:40px auto;padding:0 20px;line-height:1.7;color:#222}
+h1{border-bottom:2px solid #eee;padding-bottom:8px}
+h2{margin-top:1.5em;color:#111}
+table{border-collapse:collapse;width:100%;margin:1em 0}
+th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}
+th{background:#f6f8fa}
+code{background:#f0f0f0;padding:1px 6px;border-radius:3px;font-size:.9em}
+pre{background:#f6f8fa;padding:12px 16px;border-radius:6px;overflow-x:auto}
+pre code{background:none;padding:0}
+blockquote{border-left:4px solid #ddd;margin:1em 0;padding:0 16px;color:#666}
+</style></head><body><h2>Mote 1.0.24</h2>
+<h3>本次更新</h3>
+<ul>
+<li><strong>结构块块首退格修复</strong>：光标在引用块、列表项、标题块的首行行首按退格，上一块类型不同时原来是一个死键——什么都不发生；现在会剥掉结构前缀（<code>&gt;</code>、<code>-</code>、<code>#</code> 等）把该块还原成正文（再按一次退格即可与上一段相接）。文档首块是结构块时同样生效。</li>
+<li><strong>行内标记拆分修复</strong>：光标在 <code>**加粗**</code> 或 <code>`行内代码`</code> 中间回车拆分，原来两半会各留下一个未闭合标记，渲染成字面的星号/反引号；现在拆分后自动配对平衡（前半闭合、后半重开）。</li>
+<li><strong>跨块选区转换修复</strong>：用 Shift+方向键或鼠标拖选出多个块后，通过手柄菜单/快捷键「转为」标题、引用等，原来只作用于光标所在的单个块；现在按选区实际覆盖的所有块逐块生效，且一步撤销即可整体还原。</li>
+<li><strong>加粗开关修复</strong>：选中整行加粗文本（含 <code>**</code> 标记本身）再按加粗，原来会套上第二层标记变成 <code>****文字****</code>；现在正确识别为取消加粗，还原为纯文本。</li>
+<li>边界验证新增 18 项（第十轮块首退格/标记拆分/撤销重做/跨块删除，第十二轮表格 IME/语言切换/粘贴边界/嵌套缩进/转块矩阵）全部通过，此前 88 项回归全通过（累计 115 项），无控制台报错。</li>
+</ul>
+<h3>构建与分发</h3>
+<ul>
+<li>macOS 安装包使用 <strong>Developer ID 签名 + Apple 公证 + stapler 票据</strong>，离线状态下也能通过 Gatekeeper 校验。</li>
+<li>Windows 安装包与绿色版同步更新，构建号 <code>21</code>。</li>
+</ul>
+<h3>下载</h3>
+<table>
+<thead>
+<tr>
+<th>平台</th>
+<th>文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>macOS（Apple Silicon）</td>
+<td><code>mote-1.0.24-macos-arm64.dmg</code></td>
+<td>拖拽到「应用程序」即可</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>mote-1.0.24-win64-setup.exe</code></td>
+<td>安装版</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>mote-1.0.24-win64-portable.zip</code></td>
+<td>免安装绿色版</td>
+</tr>
+</tbody>
+</table>
+<h3>校验</h3>
+<p>随附 <code>SHA256SUMS.txt</code>，下载后可自行校验：</p>
+<pre><code class="language-bash"># macOS / Linux
+shasum -a 256 -c SHA256SUMS.txt
+
+# Windows（PowerShell）
+Get-FileHash SHA256SUMS.txt -Algorithm SHA256
+</code></pre></body></html>
