@@ -17,7 +17,7 @@
 | OSS 桶 `xiaotu-site-sz`（深圳） | `https://pre.xiaotu.online` | 官网静态网页（21 个文件） | 安装包、更新清单、PDF |
 | ECS `/var/www/xiaotu` | `https://xiaotu.online` | 与 `xiaotu-site-sz` 完全相同的 21 个网页文件 | 安装包、更新清单 |
 
-> 2026-11-26 备案通过后从香港（`xiaotu-update` / `xiaotu-site`）迁移到深圳，域名与对象键完全不变；旧香港桶保留作回滚。
+> 2026-11-26 备案通过后从香港迁移到深圳，域名与对象键完全不变；旧香港桶（`xiaotu-update` / `xiaotu-site`）已于当天验证深圳线路正常后清空删除。
 
 一句话：**自动更新相关文件全部在 `xiaotu-update` 桶的 `<product>/updates/stable/` 下；安装包在 `<product>/` 根下；PDF 也在 `<product>/` 根下。** `<product>` 只有三个值：`devcard`、`xiaotu`、`mote`。
 
