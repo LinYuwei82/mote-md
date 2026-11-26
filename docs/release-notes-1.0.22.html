@@ -1,0 +1,63 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+     max-width:720px;margin:40px auto;padding:0 20px;line-height:1.7;color:#222}
+h1{border-bottom:2px solid #eee;padding-bottom:8px}
+h2{margin-top:1.5em;color:#111}
+table{border-collapse:collapse;width:100%;margin:1em 0}
+th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}
+th{background:#f6f8fa}
+code{background:#f0f0f0;padding:1px 6px;border-radius:3px;font-size:.9em}
+pre{background:#f6f8fa;padding:12px 16px;border-radius:6px;overflow-x:auto}
+pre code{background:none;padding:0}
+blockquote{border-left:4px solid #ddd;margin:1em 0;padding:0 16px;color:#666}
+</style></head><body><h2>Mote 1.0.22</h2>
+<h3>本次更新</h3>
+<ul>
+<li><strong>Tab / Shift+Tab 缩进</strong>：</li>
+<li>在列表/任务/引用行按 <strong>Tab</strong>：整行缩进一级（光标在行中间也一样），不再把空格插进正文；普通段落保持行内插入两个空格。</li>
+<li>新增 <strong>Shift+Tab</strong> 反缩进：去掉本行行首最多两个空格；本行没有缩进时保持不变（此前 Shift+Tab 与 Tab 同样只会插空格）。</li>
+<li><strong>全选删除修复</strong>：<code>Cmd/Ctrl+A</code> 全选（或鼠标拖选出块）后按退格/删除，原来是一个死键——选区被收成折叠光标、什么都不发生；现在按整篇源码删掉选区，行为与常规编辑器一致。</li>
+<li>边界验证新增 8 项全通过，此前各轮 72 项回归全通过（累计 80 项），无控制台报错。</li>
+</ul>
+<h3>构建与分发</h3>
+<ul>
+<li>macOS 安装包使用 <strong>Developer ID 签名 + Apple 公证 + stapler 票据</strong>，离线状态下也能通过 Gatekeeper 校验。</li>
+<li>Windows 安装包与绿色版同步更新，构建号 <code>19</code>。</li>
+</ul>
+<h3>下载</h3>
+<table>
+<thead>
+<tr>
+<th>平台</th>
+<th>文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>macOS（Apple Silicon）</td>
+<td><code>mote-1.0.22-macos-arm64.dmg</code></td>
+<td>拖拽到「应用程序」即可</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>mote-1.0.22-win64-setup.exe</code></td>
+<td>安装版</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>mote-1.0.22-win64-portable.zip</code></td>
+<td>免安装绿色版</td>
+</tr>
+</tbody>
+</table>
+<h3>校验</h3>
+<p>随附 <code>SHA256SUMS.txt</code>，下载后可自行校验：</p>
+<pre><code class="language-bash"># macOS / Linux
+shasum -a 256 -c SHA256SUMS.txt
+
+# Windows
+certutil -hashfile mote-1.0.22-win64-setup.exe SHA256
+</code></pre>
+<h3>升级说明</h3>
+<p>应用内「检查更新」会自动检测并升级；也可以从下载页手动安装覆盖。构建号 <code>19</code>，macOS 与 Windows 同号。</p></body></html>

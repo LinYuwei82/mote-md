@@ -1,0 +1,64 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+     max-width:720px;margin:40px auto;padding:0 20px;line-height:1.7;color:#222}
+h1{border-bottom:2px solid #eee;padding-bottom:8px}
+h2{margin-top:1.5em;color:#111}
+table{border-collapse:collapse;width:100%;margin:1em 0}
+th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}
+th{background:#f6f8fa}
+code{background:#f0f0f0;padding:1px 6px;border-radius:3px;font-size:.9em}
+pre{background:#f6f8fa;padding:12px 16px;border-radius:6px;overflow-x:auto}
+pre code{background:none;padding:0}
+blockquote{border-left:4px solid #ddd;margin:1em 0;padding:0 16px;color:#666}
+</style></head><body><h2>Mote 1.0.14</h2>
+<h3>本次更新</h3>
+<ul>
+<li><strong>表格列宽算法升级（参照 wolai / Notion 标准 auto 布局）</strong>：在 1.0.13 按内容分列的基础上，落实完整的标准表格布局算法——</li>
+<li><strong>长词保护（min-content）</strong>：每列宽度不低于最长不可断段（长英文单词、URL）的渲染宽度，链接和英文词不再被拦腰折行；中文可逐字断行，不额外占宽。</li>
+<li><strong>增长因子分配</strong>：空间紧张时先保证每列最小内容宽，再按各列「可增长空间」比例分配剩余宽度，长文本列获得更多空间、短标签列保持紧凑。</li>
+<li><strong>超宽表格横向滚动</strong>：当所有列的最小内容宽都放不下时（如 9 列长英文词），表格保持完整宽度、容器横向滚动，与 wolai / Notion 行为一致，不再压碎内容。</li>
+<li><strong>空格精确测量</strong>：单元格 <code>| 内容 |</code> 两侧参与布局的空格计入测量，消除窄列差 1 个字宽被折行的边界情况。</li>
+<li><strong>导出继承</strong>：PDF / HTML 导出继续复用同一渲染结果；纸面宽度固定，超宽表格在纸面按页宽压缩，编辑器内横向滚动不带入 PDF。</li>
+</ul>
+<h3>构建与分发</h3>
+<ul>
+<li>macOS 安装包使用 <strong>Developer ID 签名 + Apple 公证 + stapler 票据</strong>，离线状态下也能通过 Gatekeeper 校验。</li>
+<li>Windows 安装包与绿色版同步更新，构建号 <code>11</code>。</li>
+</ul>
+<h3>下载</h3>
+<table>
+<thead>
+<tr>
+<th>平台</th>
+<th>文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>macOS（Apple Silicon）</td>
+<td><code>mote-1.0.14-macos-arm64.dmg</code></td>
+<td>拖拽到「应用程序」即可</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>mote-1.0.14-win64-setup.exe</code></td>
+<td>安装版</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>mote-1.0.14-win64-portable.zip</code></td>
+<td>免安装绿色版</td>
+</tr>
+</tbody>
+</table>
+<h3>校验</h3>
+<p>随附 <code>SHA256SUMS.txt</code>，下载后可自行校验：</p>
+<pre><code class="language-bash"># macOS / Linux
+shasum -a 256 -c SHA256SUMS.txt
+
+# Windows
+certutil -hashfile mote-1.0.14-win64-setup.exe SHA256
+</code></pre>
+<h3>升级说明</h3>
+<p>应用内「检查更新」会自动检测并升级；也可以从下载页手动安装覆盖。构建号 <code>11</code>，macOS 与 Windows 同号。</p></body></html>
