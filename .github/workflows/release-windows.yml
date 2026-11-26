@@ -167,8 +167,8 @@ jobs:
         env:
           OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
-          OSS_BUCKET: xiaotu-update
-          OSS_REGION: cn-hongkong
+          OSS_BUCKET: xiaotu-update-sz
+          OSS_REGION: cn-shenzhen
           MOTE_UPDATE_SIGNING_KEY: ${{ secrets.MOTE_UPDATE_SIGNING_KEY }}
         run: |
           python -m pip install --quiet oss2
