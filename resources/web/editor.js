@@ -2649,14 +2649,20 @@
       return;
 
     // 相邻块结构类型不同时不合并：两段原文直接拼接会得到坏 Markdown
-    if (blockType(el) !== blockType(previous))
+    if (blockType(el) !== blockType(previous)) {
+      // 代码块首行行首退格是例外：上一块不是代码块时合并不了，但退格不能是
+      // 死键——先剥掉围栏还原成正文（再按一次退格即可与上一段相接）。
+      if (isCodeBlock(el) && !isCodeBlock(previous)) {
+        commitHistory();
+        applyRawToBlock(el, contentOfRaw(rawOf(el), 'code'), 0, 0, true);
+        setTimeout(commitHistory, 0);
+      }
       return;
+    }
 
     // 代码块首行行首退格 → 与上一块合并。相邻也是代码块时合并正文（保留上一块
     // 的语言）；相邻是普通块时不把围栏塞进段落（那会得到坏 Markdown），保持不动。
     if (isCodeBlock(el)) {
-      if (!isCodeBlock(previous))
-        return;
       commitHistory();   // 合并前的状态单独成一个步骤
       var junction = codeText(previous).length;
       var joined = codeText(previous) + codeText(el);
@@ -7614,6 +7620,10 @@
     scheduleTocRefresh();
     updatePlaceholder();
     scheduleMermaid();
+    // 结构一变，查找命中引用的旧文本节点可能已被重建（拖拽重排实测会失联），
+    // 原地重画只会把高亮层清空：查找条开着就按当前关键词重扫，命中与位置一起刷新
+    if (findBar)
+      scheduleFind();
   }
 
   function makeBlockEl(raw) {
