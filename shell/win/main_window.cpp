@@ -371,26 +371,6 @@ bool g_hook_shift = false;
 bool g_hook_alt = false;
 UINT g_last_shortcut_key = 0;
 
-void MoteMainWindow::ensure_keyboard_hook()
-{
-    if (g_keyboard_hook)
-        return;
-    g_hook_ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-    g_hook_shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-    g_hook_alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-    g_keyboard_hook = SetWindowsHookExW(WH_KEYBOARD_LL, &MoteMainWindow::keyboard_hook,
-                                        GetModuleHandleW(nullptr), 0);
-    log_line(std::string("NATIVE keyboard hook ") + (g_keyboard_hook ? "on" : "failed"));
-}
-
-void MoteMainWindow::remove_keyboard_hook()
-{
-    if (g_keyboard_hook) {
-        UnhookWindowsHookEx(g_keyboard_hook);
-        g_keyboard_hook = nullptr;
-    }
-}
-
 // 「最近打开」持久化：HKCU\Software\Mote 字符串值（与 updater_win 同一键路径）
 class RegStore final : public mote::SettingsStore
 {
@@ -483,6 +463,29 @@ bool same_path(const std::string &a, const std::string &b)
 }
 
 // 当前活跃窗口（更新模块钩子按前台路由，避免多窗口时指向已销毁实例）
+
+} // namespace
+
+void MoteMainWindow::ensure_keyboard_hook()
+{
+    if (g_keyboard_hook)
+        return;
+    g_hook_ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    g_hook_shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    g_hook_alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    g_keyboard_hook = SetWindowsHookExW(WH_KEYBOARD_LL, &MoteMainWindow::keyboard_hook,
+                                        GetModuleHandleW(nullptr), 0);
+    log_line(std::string("NATIVE keyboard hook ") + (g_keyboard_hook ? "on" : "failed"));
+}
+
+void MoteMainWindow::remove_keyboard_hook()
+{
+    if (g_keyboard_hook) {
+        UnhookWindowsHookEx(g_keyboard_hook);
+        g_keyboard_hook = nullptr;
+    }
+}
+
 MoteMainWindow *MoteMainWindow::active_window()
 {
     HWND hwnd = GetActiveWindow();
@@ -503,8 +506,6 @@ MoteMainWindow *MoteMainWindow::active_window()
     }
     return g_windows.empty() ? nullptr : g_windows.front();
 }
-
-} // namespace
 
 // EditorHost → Win32 的转发层。owner 是应用级单窗口，生命周期覆盖整个进程。
 class ShellHost final : public mote::EditorHost
