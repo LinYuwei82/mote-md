@@ -194,6 +194,7 @@ HMENU build_main_menu(HMENU *recent_submenu)
             }
             AppendMenuW(popup, MF_SEPARATOR, 0, nullptr);
             AppendMenuW(popup, MF_STRING, kCheckUpdateCommandId, L"检查更新(&U)...");
+            AppendMenuW(popup, MF_STRING, kAboutCommandId, L"关于 Mote(&A)...");
             AppendMenuW(popup, MF_SEPARATOR, 0, nullptr);
             AppendMenuW(popup, MF_STRING, kExitCommandId, L"退出(&X)\tAlt+F4");
         }

@@ -146,6 +146,7 @@ if(WIN32)
     "${MOTE_SHELL_WIN}/menus.cpp"
     "${MOTE_SHELL_WIN}/drop_target.cpp"
     "${MOTE_SHELL_WIN}/dialogs.cpp"
+    "${MOTE_SHELL_WIN}/about_dialog.cpp"
     "${MOTE_SHELL_WIN}/html_export.cpp"
     "${MOTE_SHELL_WIN}/pdf_export.cpp"
     "${MOTE_SHELL_WIN}/updater_win.cpp"
