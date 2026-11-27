@@ -11,6 +11,7 @@
 #include "core/js_bridge.h"
 #include "core/json.h"
 #include "core/paths.h"
+#include "core/recent_files.h"
 #include "core/text_encoding.h"
 #include "mote/update.h"
 #include "mote/verify_signature.h"
@@ -1533,6 +1534,81 @@ static void testUpdateEngine()
     }
 }
 
+static void testRecentFiles()
+{
+    using mote::RecentFiles;
+
+    FakeStore store;
+    RecentFiles recent(store);
+
+    // 初始为空
+    CHECK(recent.list().empty());
+
+    // 新项置顶、保序
+    recent.add("/docs/a.md");
+    recent.add("/docs/b.md");
+    recent.add("/docs/c.md");
+    auto items = recent.list();
+    CHECK_EQ(items.size(), std::size_t(3));
+    CHECK_EQ(items[0], std::string("/docs/c.md"));
+    CHECK_EQ(items[1], std::string("/docs/b.md"));
+    CHECK_EQ(items[2], std::string("/docs/a.md"));
+
+    // 重复打开（大小写不敏感）→ 移到最前，不重复
+    recent.add("/Docs/A.MD");
+    items = recent.list();
+    CHECK_EQ(items.size(), std::size_t(3));
+    CHECK_EQ(items[0], std::string("/Docs/A.MD"));
+    CHECK_EQ(items[1], std::string("/docs/c.md"));
+
+    // 空路径忽略
+    recent.add("");
+    CHECK_EQ(recent.list().size(), std::size_t(3));
+
+    // 上限 10：再加 8 个，最旧的被挤出
+    for (int i = 1; i <= 8; ++i)
+        recent.add("/x" + std::to_string(i) + ".md");
+    items = recent.list();
+    CHECK_EQ(items.size(), RecentFiles::kMaxEntries);
+    CHECK_EQ(items[0], std::string("/x8.md"));
+    CHECK_EQ(items[9], std::string("/docs/c.md")); // a.md 与 b.md 已挤出
+
+    // 持久化：同一 store 新建实例仍读到列表
+    RecentFiles reopened(store);
+    CHECK_EQ(reopened.list().size(), RecentFiles::kMaxEntries);
+
+    // 损坏存储容错
+    store.setString("recent_files", "{not json");
+    CHECK(recent.list().empty());
+    store.setString("recent_files", "[\"ok.md\", 42, \"\"]");
+    items = recent.list();
+    CHECK_EQ(items.size(), std::size_t(1));
+    CHECK_EQ(items[0], std::string("ok.md"));
+
+    // 清除记录
+    recent.clear();
+    CHECK(recent.list().empty());
+    CHECK_EQ(store.getString("recent_files"), std::string());
+
+    // 自定义键互不干扰
+    RecentFiles other(store, "other_recent");
+    other.add("/pinned.md");
+    CHECK_EQ(recent.list().size(), std::size_t(0));
+    CHECK_EQ(other.list().size(), std::size_t(1));
+
+    // 含引号/反斜杠/中文路径的编码往返
+    RecentFiles win(store, "win_recent");
+    win.add("C:\\Users\\林\\笔记\"a\".md");
+    auto winItems = win.list();
+    CHECK_EQ(winItems.size(), std::size_t(1));
+    CHECK_EQ(winItems[0], std::string("C:\\Users\\林\\笔记\"a\".md"));
+    // 同一路径换分隔符/大小写视为重复
+    win.add("c:/users/林/笔记\"a\".md");
+    winItems = win.list();
+    CHECK_EQ(winItems.size(), std::size_t(1));
+    CHECK_EQ(winItems[0], std::string("c:/users/林/笔记\"a\".md"));
+}
+
 int main()
 {
     testJson();
@@ -1555,6 +1631,7 @@ int main()
     testImageMessages();
     testPdfPending();
     testCommandTable();
+    testRecentFiles();
 
     if (gFailures == 0) {
         std::printf("core 单测通过：%d 项断言\n", gChecks);

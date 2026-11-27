@@ -69,8 +69,11 @@ add_library(mote_core STATIC
   "${MOTE_REPO_ROOT}/core/js_bridge.cpp"
   "${MOTE_REPO_ROOT}/core/json.cpp"
   "${MOTE_REPO_ROOT}/core/paths.cpp"
+  "${MOTE_REPO_ROOT}/core/recent_files.cpp"
   "${MOTE_REPO_ROOT}/core/text_encoding.cpp")
 target_include_directories(mote_core PUBLIC "${MOTE_REPO_ROOT}")
+# recent_files 只用 SettingsStore 抽象接口头文件（无实现依赖，不构成链接环）
+target_include_directories(mote_core PRIVATE "${MOTE_REPO_ROOT}/modules/update/include")
 
 # 自动更新模块（物理独立目录 modules/update/，内部有自己的 CMakeLists.txt）
 # 头文件暴露在 modules/update/include/mote/，外部 #include "mote/update.h" 即可。
