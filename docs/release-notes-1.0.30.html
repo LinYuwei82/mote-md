@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Mote 1.0.30 发布说明</title>
+  <style>
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+       max-width:720px;margin:40px auto;padding:0 20px;line-height:1.7;color:#222}
+  h1{border-bottom:2px solid #eee;padding-bottom:8px}
+  h2{margin-top:1.5em;color:#111}
+  table{border-collapse:collapse;width:100%;margin:1em 0}
+  th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}
+  th{background:#f6f8fa}
+  code{background:#f0f0f0;padding:1px 6px;border-radius:3px;font-size:.9em}
+  @media (prefers-color-scheme: dark) {
+    body{color:#fdfdfd;background:#1a1a1a}
+    th{background:#2a2d31}
+    th,td{border-color:#444}
+    code{background:#2a2d31}
+  }
+  </style>
+</head>
+<body>
+<h1 id="mote-1.0.30">Mote 1.0.30</h1>
+<h2 id="重要修复">重要修复</h2>
+<ul>
+<li><strong>macOS 关窗崩溃</strong>：1.0.29 中，多窗口打开时关闭任意一个非最后窗口会导致应用崩溃、所有窗口一起消失。已修复（窗口生命周期双重释放），现在可以随意逐个关闭。</li>
+</ul>
+<h2 id="新功能关于-mote-对话框">新功能：「关于 Mote」对话框</h2>
+<ul>
+<li>双平台统一的原生关于面板：应用图标、版本号与构建号、版权信息。</li>
+<li>内置「官网与下载」链接与「检查更新…」按钮，不用绕菜单。</li>
+<li>入口：macOS <code>Mote → 关于 Mote</code>；Windows <code>文件 → 关于 Mote…</code>。</li>
+</ul>
+<h2 id="工程加固">工程加固</h2>
+<ul>
+<li>Windows 发布产物的构建号校验字符串改用链接器强制保留，修复新版 MSVC 死代码消除导致 CI 产物校验降级的问题（不影响功能，提升发布防线）。</li>
+<li>内置示例与用户手册补充多窗口 / 最近打开说明。</li>
+</ul>
+<h2 id="构建与分发">构建与分发</h2>
+<ul>
+<li>macOS 与 Windows 同版本同步发布，构建号 <code>27</code>。</li>
+<li>macOS 安装包使用 <strong>Developer ID 签名 + Apple 公证 + stapler 票据</strong>。</li>
+<li>1.0.29 的多窗口并行编辑、最近打开列表等功能行为不变。</li>
+</ul>
+<h2 id="下载">下载</h2>
+<table>
+<thead>
+<tr><th>平台</th><th>文件</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td>macOS（Apple Silicon）</td><td><code>mote-1.0.30-macos-arm64.dmg</code></td><td>拖拽到「应用程序」即可</td></tr>
+<tr><td>Windows</td><td><code>mote-1.0.30-win64-setup.exe</code></td><td>安装版</td></tr>
+<tr><td>Windows</td><td><code>mote-1.0.30-win64-portable.zip</code></td><td>免安装绿色版</td></tr>
+</tbody>
+</table>
+</body>
+</html>
