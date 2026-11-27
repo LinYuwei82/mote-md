@@ -16,7 +16,7 @@ namespace {
 
 using win_encoding::utf8_to_wide;
 
-constexpr wchar_t *kClassName = L"MoteAboutDialog";
+constexpr const wchar_t *kClassName = L"MoteAboutDialog";
 constexpr int kWidth = 320;
 constexpr int kHeight = 322;
 
@@ -35,7 +35,9 @@ HFONT g_small_font = nullptr;
 
 std::wstring version_line()
 {
-    return L"版本 " MOTE_VERSION L" (" + std::to_wstring(MOTE_BUILD) + L")";
+    // MOTE_VERSION 是窄字符串宏，不能与宽字面量直接拼接
+    return utf8_to_wide(std::string("版本 ") + MOTE_VERSION + " (" +
+                        std::to_string(MOTE_BUILD) + ")");
 }
 
 HWND make_static(HWND parent, int id, const wchar_t *text, HFONT font,
@@ -57,13 +59,13 @@ void layout(HWND dlg)
     metrics.cbSize = sizeof(metrics);
     if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0)) {
         g_text_font = CreateFontIndirectW(&metrics.lfMessageFont);
-        g_small_font = metrics.lfMessageFont;
-        g_small_font.lfHeight = g_small_font.lfHeight * 11 / 12;
-        g_small_font = CreateFontIndirectW(&g_small_font);
-        g_title_font = metrics.lfMessageFont;
-        g_title_font.lfWeight = FW_BOLD;
-        g_title_font.lfHeight = g_title_font.lfHeight * 17 / 12;
-        g_title_font = CreateFontIndirectW(&g_title_font);
+        LOGFONTW small = metrics.lfMessageFont;
+        small.lfHeight = small.lfHeight * 11 / 12;
+        g_small_font = CreateFontIndirectW(&small);
+        LOGFONTW title = metrics.lfMessageFont;
+        title.lfWeight = FW_BOLD;
+        title.lfHeight = title.lfHeight * 17 / 12;
+        g_title_font = CreateFontIndirectW(&title);
     }
 
     int y = 20;
