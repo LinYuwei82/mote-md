@@ -303,6 +303,10 @@ std::string ResolveManifestUrl()
 
 - (void)tick
 {
+    // 懒建：启动关键路径不构建引擎，首个 tick（启动后 10s）才建。
+    // 缺这个判空就会在定时器首跳时空指针崩溃（1.0.27 回归）。
+    if (!_engine)
+        [self buildEngine];
     _engine->tick(std::time(nullptr));
 }
 
