@@ -324,6 +324,9 @@ static NSDictionary<NSNumber *, NSMenuItem *> *gCommandItems = nil;
                     backing:NSBackingStoreBuffered
                       defer:NO];
     window.title = @"Mote";
+    // ARC + strong 属性管理生命周期：默认的 releasedWhenClosed=YES 会让 AppKit
+    // 在关窗时多 release 一次，与属性释放叠加成双重释放（多窗口关窗崩溃）
+    window.releasedWhenClosed = NO;
     window.minSize = NSMakeSize(760, 520);
     window.delegate = self;
     _window = window;
