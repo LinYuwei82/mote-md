@@ -2,6 +2,8 @@
 
 #include "win_encoding/encoding.h"
 
+#include "core/perf.h"
+
 #include <commctrl.h>
 #include <objbase.h>
 #include <shellapi.h>
@@ -22,6 +24,8 @@ std::string wide_to_utf8(const wchar_t *text)
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command)
 {
+    mote::perfReset();
+    mote::perfMark("win:proc_entry");
     // 先声明 DPI 感知，再建窗口：WebView2 的 bounds 才能按物理像素对齐
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
@@ -44,6 +48,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command)
             window.set_pending_path(wide_to_utf8(argv[1]));
         if (window.create()) {
             window.show(show_command);
+            mote::perfMark("win:window_shown");
             exit_code = window.run_message_loop();
         }
     }

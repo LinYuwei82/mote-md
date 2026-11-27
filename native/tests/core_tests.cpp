@@ -1000,6 +1000,20 @@ static void testChunkSplitting()
             joined += chunk;
         CHECK_EQ(joined, mixed);
     }
+
+    // 1MB 级文本（注入分片通道的真实规模）：片数符合预算、拼回逐字节一致
+    std::string big;
+    while (big.size() < 1024 * 1024)
+        big += "段落内容\"含引号与\\反斜杠\" 中文😀\ttab\n";
+    std::string joinedBig;
+    std::size_t pieces = 0;
+    for (const std::string &chunk : splitUtf8ByBudget(big, 512 * 1024)) {
+        CHECK(chunk.size() <= 512 * 1024);
+        joinedBig += chunk;
+        ++pieces;
+    }
+    CHECK(pieces >= 3);
+    CHECK_EQ(joinedBig, big);
 }
 
 static void testBlockLayout()

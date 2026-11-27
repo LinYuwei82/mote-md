@@ -6,6 +6,7 @@
 #include "core/inject_chunks.h"
 #include "core/js_bridge.h"
 #include "core/json.h"
+#include "core/perf.h"
 
 #include <shlobj.h>
 #include <shlwapi.h>
@@ -288,6 +289,7 @@ void WebHostView::initialize()
         Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [this](HRESULT result, ICoreWebView2Environment *environment) -> HRESULT {
                 log_line(L"env callback fired");
+                mote::perfMark("win:webview_env");
                 if (!*alive_)
                     return S_OK;
                 if (FAILED(result) || !environment) {
@@ -303,6 +305,7 @@ void WebHostView::initialize()
                         [this](HRESULT controller_result,
                                ICoreWebView2Controller *controller) -> HRESULT {
                             log_line(L"controller callback fired");
+                            mote::perfMark("win:webview_controller");
                             if (*alive_)
                                 on_controller_created(controller_result, controller);
                             return S_OK;
@@ -389,6 +392,7 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
                     return S_OK;
                 }
                 log_line(L"page loaded");
+                mote::perfMark("win:nav_finish");
                 if (page_loaded_)
                     page_loaded_();
                 return S_OK;
@@ -450,6 +454,7 @@ void WebHostView::load_page(const std::string &base_dir)
     }
     log_line(L"navigate editor page");
     webview_->Navigate(url.c_str());
+    mote::perfMark("win:navigate");
 }
 
 bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
@@ -479,7 +484,8 @@ bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
     const std::string flag = inline_proto_enabled()
         ? "window.MOTE_INLINE_PROTO=true;"
         : "window.MOTE_INLINE_PROTO=false;";
-    replace_all(page, "__MOTE_JS__", flag + js);
+    const std::string perf_flag = mote::perfEnabled() ? "window.MOTE_PERF=true;" : "";
+    replace_all(page, "__MOTE_JS__", flag + perf_flag + js);
 
     if (!base_dir.empty()) {
         const std::string base = html_escape(directory_url(base_dir));
@@ -520,6 +526,7 @@ bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
 
     if (!write_file(page_path, page))
         return false;
+    mote::perfMark("win:page_written");
 
     if (!page_file_.empty() && page_file_ != page_path)
         DeleteFileW(page_file_.c_str());
@@ -655,6 +662,7 @@ void WebHostView::inject_markdown(const std::string &text)
     const std::string quoted = mote::quoteJson(text);
     // 通道一：单条脚本，体积最省
     if (quoted.size() <= kScriptBudget) {
+        mote::perfMark("win:inject_script");
         evaluate_script(mote::js::setMarkdown(text));
         return;
     }
@@ -664,6 +672,7 @@ void WebHostView::inject_markdown(const std::string &text)
         "{\"__mote\":\"setMarkdown\",\"text\":" + quoted + "}";
     if (payload.size() <= kMessageBudget
         && SUCCEEDED(webview_->PostWebMessageAsJson(utf8_to_wide(payload).c_str()))) {
+        mote::perfMark("win:inject_message");
         return;
     }
 
@@ -672,10 +681,15 @@ void WebHostView::inject_markdown(const std::string &text)
         webview_->ExecuteScript(utf8_to_wide(script).c_str(), nullptr);
     };
     run("window.__moteInject=[];");
-    for (const std::string &chunk : mote::splitUtf8ByBudget(text, kScriptBudget))
+    size_t chunks = 0;
+    for (const std::string &chunk : mote::splitUtf8ByBudget(text, kScriptBudget)) {
         run("window.__moteInject.push(" + mote::quoteJson(chunk) + ");");
+        ++chunks;
+    }
     run("(function(){var t=(window.__moteInject||[]).join('');"
         "window.__moteInject=[];window.mote&&window.mote.setMarkdown(t);})();");
+    if (mote::perfEnabled())
+        std::fprintf(stderr, "[perf] win:inject_chunks %zu pieces\n", chunks);
 }
 
 void WebHostView::resize(int width, int height)

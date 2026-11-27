@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <unistd.h>
 
+#include "core/perf.h"
+
 @interface MoteWebHostView () <WKNavigationDelegate>
 @property(nonatomic, strong) WKWebView *webView;
 @property(nonatomic) NSUInteger pageGeneration;
@@ -188,6 +190,8 @@ static NSString *MotePageHTML(void)
         NSString *flag = MoteInlineProtoEnabled()
             ? @"window.MOTE_INLINE_PROTO=true;"
             : @"window.MOTE_INLINE_PROTO=false;";
+        if (std::getenv("MOTE_PERF"))
+            flag = [flag stringByAppendingString:@"window.MOTE_PERF=true;"];
         [built replaceOccurrencesOfString:@"__MOTE_JS__"
                                withString:[flag stringByAppendingString:js]
                                   options:0
@@ -291,6 +295,7 @@ static NSString *MoteHtmlEscaped(NSString *text)
         NSLog(@"Mote: 无法写入临时页面 %@", path);
         return;
     }
+    mote::perfMark("mac:page_written");
     self.pageFile = path;
 
     // 页面代次写进 fragment，消息桥据此丢弃上一个页面迟到的消息
@@ -301,6 +306,7 @@ static NSString *MoteHtmlEscaped(NSString *text)
     components.fragment = [NSString stringWithFormat:@"g%lu", (unsigned long)_pageGeneration];
     [self.webView loadFileURL:components.URL
       allowingReadAccessToURL:[NSURL fileURLWithPath:dir isDirectory:YES]];
+    mote::perfMark("mac:navigate");
 }
 
 - (void)evaluateJavaScript:(NSString *)script
@@ -415,6 +421,20 @@ static NSString *MoteHtmlEscaped(NSString *text)
     (void)action;
     (void)windowFeatures;
     return nil;                // 不弹新窗口
+}
+
+- (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation
+{
+    (void)webView;
+    (void)navigation;
+    mote::perfMark("mac:nav_commit");
+}
+
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation
+{
+    (void)webView;
+    (void)navigation;
+    mote::perfMark("mac:nav_finish");
 }
 
 @end

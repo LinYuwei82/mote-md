@@ -2,21 +2,44 @@
 
 #include "core/base64.h"
 #include "core/image_store.h"
+#include "core/inject_chunks.h"
 #include "core/js_bridge.h"
 #include "core/json.h"
 #include "core/paths.h"
+#include "core/perf.h"
 
 #include <filesystem>
 
 namespace mote {
 
+namespace {
+// 单条脚本体积预算：与 win 壳通道一同口径，超出则走分片，避免
+// 一次性把整篇正文塞进一条 evaluateJavaScript 阻塞页面主线程。
+constexpr std::size_t kScriptBudget = 512 * 1024;
+} // namespace
+
 void EditorHost::injectDocument(const std::string &text)
 {
-    evaluateJs(js::setMarkdown(text));
+    const std::string quoted = quoteJson(text);
+    // 通道一：单条脚本
+    if (quoted.size() <= kScriptBudget) {
+        evaluateJs(js::setMarkdown(text));
+        return;
+    }
+    // 通道二：分片 ExecuteScript，末片之后拼接交给页面（mac 无 PostWebMessageAsJson，
+    // 故 core 默认只到分片；win 覆写为三通道，中间多一条消息通道）。
+    perfMark("core:inject_chunks");
+    evaluateJs("window.__moteInject=[];");
+    for (const std::string &chunk : splitUtf8ByBudget(text, kScriptBudget))
+        evaluateJs("window.__moteInject.push(" + quoteJson(chunk) + ");");
+    evaluateJs("(function(){var t=(window.__moteInject||[]).join('');"
+               "window.__moteInject=[];window.mote&&window.mote.setMarkdown(t);})();");
 }
 
 void EditorController::setMarkdown(const std::string &text, const std::string &baseDir)
 {
+    perfMark(m_pageLoaded && baseDir != m_baseDir ? "core:setmd_reload"
+                                                  : "core:setmd_first");
     if (!m_pageLoaded || baseDir != m_baseDir) {
         m_baseDir = baseDir;
         m_pendingText = text;
@@ -87,6 +110,7 @@ void EditorController::applyBaseHref()
 
 void EditorController::injectMarkdown(const std::string &text)
 {
+    perfMark("core:inject_send");
     m_host.injectDocument(text);
     m_hasPending = false;
 }
@@ -272,6 +296,7 @@ void EditorController::handleMessage(std::string_view json)
     const std::string type = message.stringAt("type");
 
     if (type == "ready") {
+        perfMark("core:ready_msg");
         m_pageReady = true;
         // 先把 <base> 与待注入正文推到当前页，再对外发 ready：
         // 顺序反了会让正文里的相对图片按旧目录解析。

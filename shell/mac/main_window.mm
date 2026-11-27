@@ -10,6 +10,7 @@
 #include "core/editor_controller.h"
 #include "core/js_bridge.h"
 #include "core/paths.h"
+#include "core/perf.h"
 
 #include <cmath>
 #include <cstdio>
@@ -199,7 +200,7 @@ public:
     }
     void logMessage(const std::string &message) override
     {
-        if (std::getenv("MOTE_KEYLOG"))
+        if (std::getenv("MOTE_KEYLOG") || mote::perfEnabled())
             std::fprintf(stderr, "JSLOG %s\n", message.c_str());
     }
 
@@ -563,6 +564,7 @@ private:
     }
     if ([text hasPrefix:@"\uFEFF"])
         text = [text substringFromIndex:1];
+    mote::perfMark("mac:file_read_done");
 
     self.filePath = path;
     self.lastDir = path.stringByDeletingLastPathComponent;
@@ -820,12 +822,14 @@ private:
 
 - (void)loadPageInDirectory:(const std::string &)directory
 {
+    mote::perfMark("mac:loadpage_call");
     NSString *dir = directory.empty() ? @"" : [NSString stringWithUTF8String:directory.c_str()];
     [self.host loadEditorPageInDirectory:dir ?: @""];
 }
 
 - (void)pageBecameReady
 {
+    mote::perfMark("mac:page_ready_cb");
     if (MoteKeyLogEnabled())
         std::fprintf(stderr, "NATIVE ready gen=%llu\n",
                      (unsigned long long)_controller->pageGeneration());
@@ -840,6 +844,20 @@ private:
     [self.host runPageDiagnostics];
     [self runDropProbeIfNeeded];
     [self runStartupCommandIfNeeded];
+    // 诊断用（MOTE_OPEN2=路径）：首屏就绪后再打开第二个文件，模拟热打开，
+    // 用于测跨目录重载 / 同目录纯注入的耗时。
+    const char *open2 = std::getenv("MOTE_OPEN2");
+    static BOOL open2Done = NO;
+    if (open2 && *open2 && !open2Done) {
+        open2Done = YES;
+        NSString *target = [NSString stringWithUTF8String:open2];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            mote::perfReset();
+            mote::perfMark("mac:hot_open_start");
+            [self openPath:target];
+        });
+    }
     [self updateWindowTitle];
 }
 

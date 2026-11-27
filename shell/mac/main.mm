@@ -3,6 +3,8 @@
 #import "main_window.h"
 #import "updater.h"
 
+#include "core/perf.h"
+
 @interface MoteAppDelegate : NSObject <NSApplicationDelegate>
 @property(nonatomic, strong) MoteMainWindow *mainWindow;
 @end
@@ -12,6 +14,7 @@
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
     (void)notification;
+    mote::perfMark("mac:did_finish_launch");
 
     // 第一个命令行参数当作待打开文件：直接交给 init，避免先加载示例页
     // 再换目录重载（两次完整页面解析）
@@ -20,6 +23,7 @@
 
     self.mainWindow = [[MoteMainWindow alloc] initWithPendingFile:pendingPath];
     [self.mainWindow show];
+    mote::perfMark("mac:window_shown");
 
     // 在线更新：自研检查（OSS 上的 manifest.json）负责「有没有新版本」，
     // 用户确认后由 Sparkle 完成下载、验签与替换。启动后延迟一次 + 每 24 小时一次。
@@ -58,6 +62,8 @@ int main(int argc, const char *argv[])
 {
     (void)argc;
     (void)argv;
+    mote::perfReset();
+    mote::perfMark("mac:proc_entry");
     @autoreleasepool {
         // 必须在任何 bundle 取本地化字符串之前执行
         MoteForceChineseUI();

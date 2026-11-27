@@ -12,6 +12,7 @@
 #include "core/editor_controller.h"
 #include "core/js_bridge.h"
 #include "core/paths.h"
+#include "core/perf.h"
 #include "core/text_encoding.h"
 #include "win_encoding/encoding.h"
 
@@ -415,7 +416,8 @@ public:
     void logMessage(const std::string &message) override
     {
         // MOTE_EVAL 是显式诊断请求，结果不应再被 MOTE_KEYLOG 门槛吞掉
-        if (!env_value("MOTE_KEYLOG").empty() || !env_value("MOTE_EVAL").empty())
+        if (!env_value("MOTE_KEYLOG").empty() || !env_value("MOTE_EVAL").empty()
+            || mote::perfEnabled())
             log_line("JSLOG " + message);
     }
 
@@ -830,6 +832,7 @@ void MoteMainWindow::open_path(const std::string &path)
         MoteAlert(hwnd_, L"无法打开", "读取文件失败：\n" + path);
         return;
     }
+    mote::perfMark("win:file_read_done");
 
     file_path_ = resolved;
     last_dir_ = parent_dir(resolved);
@@ -1128,6 +1131,7 @@ void MoteMainWindow::evaluate_script(const std::string &script)
 
 void MoteMainWindow::load_page(const std::string &base_dir)
 {
+    mote::perfMark("win:loadpage_call");
     if (host_)
         host_->load_page(base_dir);
 }
@@ -1145,6 +1149,7 @@ void MoteMainWindow::navigation_completed()
 
 void MoteMainWindow::page_ready()
 {
+    mote::perfMark("win:page_ready_cb");
     log_line("NATIVE ready gen=" + std::to_string(controller_->pageGeneration()));
     if (!pending_status_.empty())
         show_status(pending_status_);
