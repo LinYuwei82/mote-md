@@ -1691,6 +1691,7 @@ void MoteMainWindow::run_startup_command()
 
     const std::pair<const char *, mote::CommandId> table[] = {
         { "new", mote::CommandId::New },
+        { "newwindow", mote::CommandId::NewWindow },
         { "open", mote::CommandId::Open },
         { "save", mote::CommandId::Save },
         { "saveas", mote::CommandId::SaveAs },
