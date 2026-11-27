@@ -24,6 +24,29 @@
 	<string>zh_CN</string>
 	<key>CFBundleAllowMixedLocalizations</key>
 	<true/>
+	<!-- 文档关联：Finder 双击 .md 可选手本应用并直接打开 -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Markdown 文档</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>net.daringfireball.markdown</string>
+			</array>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>md</string>
+				<string>markdown</string>
+				<string>mdown</string>
+				<string>MD</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSMinimumSystemVersion</key>
 	<string>@CMAKE_OSX_DEPLOYMENT_TARGET@</string>
 	<key>NSPrincipalClass</key>

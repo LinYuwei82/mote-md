@@ -243,26 +243,41 @@ static NSString *MoteHtmlEscaped(NSString *text)
 {
     // 临时页面必须用 loadFileURL 加载：loadHTMLString 的页面没有来源，
     // WebKit 会拒绝一切 file:// 子资源（图片永远显示不出来）。
-    // 主文档还必须落在读权限目录内，所以有文档目录时写进文档目录。
-    NSString *dir = directory.length > 0 ? directory : @"";
-    if (dir.length == 0 || ![[NSFileManager defaultManager] isWritableFileAtPath:dir]) {
-        dir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"MoteNative"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:dir
-                                 withIntermediateDirectories:YES
-                                                  attributes:nil
-                                                       error:NULL];
+    // 文档目录在 home 内（绝大多数场景）：页面固定写进 ~/Library/Caches/MoteNative，
+    // 读权限一次性授权整个 home——之后根内换目录只需改 <base> 注入正文，
+    // 不再重载页面（core 只在首载或越界目录时才走到这里）。
+    // 越界目录（/Volumes、外置盘）：退回旧行为，页面写进该目录、只授该目录。
+    NSString *home = NSHomeDirectory();
+    BOOL inHome = directory.length == 0
+        || [directory isEqualToString:home]
+        || [directory hasPrefix:[home stringByAppendingString:@"/"]];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *pageDir;
+    NSString *scopeDir;
+    if (inHome) {
+        pageDir = [home stringByAppendingPathComponent:@"Library/Caches/MoteNative"];
+        [fm createDirectoryAtPath:pageDir withIntermediateDirectories:YES
+                       attributes:nil error:NULL];
+        scopeDir = home;
+    } else {
+        pageDir = directory;
+        if (![fm isWritableFileAtPath:pageDir]) {
+            pageDir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"MoteNative"];
+            [fm createDirectoryAtPath:pageDir withIntermediateDirectories:YES
+                           attributes:nil error:NULL];
+        }
+        scopeDir = pageDir;
     }
-    NSString *path = [dir stringByAppendingPathComponent:
+    NSString *path = [pageDir stringByAppendingPathComponent:
         [NSString stringWithFormat:@".mote-preview-%d.html", (int)getpid()]];
 
     // mermaid 库文件与临时页面放同一目录（该目录在 WebView 读取授权内），
     // 页面按需动态加载；缺文件时前端自然退回「mermaid 块显示源码」。
     NSString *mermaidName = [NSString stringWithFormat:@".mote-mermaid-%d.js", (int)getpid()];
-    NSString *mermaidPath = [dir stringByAppendingPathComponent:mermaidName];
+    NSString *mermaidPath = [pageDir stringByAppendingPathComponent:mermaidName];
     NSURL *mermaidURL = [[NSBundle mainBundle] URLForResource:@"mermaid.min"
                                                  withExtension:@"js"
                                                   subdirectory:@"web"];
-    NSFileManager *fm = [NSFileManager defaultManager];
     if (mermaidURL) {
         unsigned long long want = [[fm attributesOfItemAtPath:mermaidURL.path error:NULL] fileSize];
         unsigned long long have = [[fm attributesOfItemAtPath:mermaidPath error:NULL] fileSize];
@@ -305,7 +320,7 @@ static NSString *MoteHtmlEscaped(NSString *text)
                    resolvingAgainstBaseURL:NO];
     components.fragment = [NSString stringWithFormat:@"g%lu", (unsigned long)_pageGeneration];
     [self.webView loadFileURL:components.URL
-      allowingReadAccessToURL:[NSURL fileURLWithPath:dir isDirectory:YES]];
+      allowingReadAccessToURL:[NSURL fileURLWithPath:scopeDir isDirectory:YES]];
     mote::perfMark("mac:navigate");
 }
 

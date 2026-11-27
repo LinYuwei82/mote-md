@@ -77,6 +77,11 @@ public:
     void setMarkdown(const std::string &text, const std::string &baseDir);
     void newDocument();
     void setBaseDir(const std::string &dir);
+    // 页面读权限授权根（mac=NSHomeDirectory / win=%USERPROFILE%）：壳在创建
+    // 控制器后立即设置。baseDir 落在根内时换文档只需改 <base> 并注入正文，
+    // 不再重载页面（省掉整份前端脚本的重新解析）；越界目录退回重载兜底。
+    // 留空表示不启用（保持「目录变化即重载」的旧行为，作为回滚开关）。
+    void setReadAccessRoot(std::string root) { m_readAccessRoot = std::move(root); }
     void requestSnapshot();
     void notifySaved(const std::string &text);
     void undo();
@@ -129,6 +134,10 @@ private:
     bool m_pageReady = false;
     bool m_dirty = false;
     bool m_crossSelection = false; // 页面自建跨块选区的开关，随换页复位
+    // 换页免重载：授权根由壳设置；m_pageScopedToRoot 记录当前页面实际
+    // 获得的读作用域是否为授权根（越界目录的页面只授了该目录本身）。
+    std::string m_readAccessRoot;
+    bool m_pageScopedToRoot = false;
     std::uint64_t m_pageGeneration = 0;
 };
 

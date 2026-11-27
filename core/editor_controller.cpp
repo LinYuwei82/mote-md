@@ -36,11 +36,32 @@ void EditorHost::injectDocument(const std::string &text)
                "window.__moteInject=[];window.mote&&window.mote.setMarkdown(t);})();");
 }
 
+namespace {
+
+// dir 是否等于 root 或位于其下（按路径段边界比较，兼容 / 与 \\ 分隔符）
+bool underRoot(const std::string &dir, const std::string &root)
+{
+    if (root.empty() || dir.size() < root.size()
+        || dir.compare(0, root.size(), root) != 0)
+        return false;
+    if (dir.size() == root.size())
+        return true;
+    const char sep = dir[root.size()];
+    return sep == '/' || sep == '\\';
+}
+
+} // namespace
+
 void EditorController::setMarkdown(const std::string &text, const std::string &baseDir)
 {
-    perfMark(m_pageLoaded && baseDir != m_baseDir ? "core:setmd_reload"
-                                                  : "core:setmd_first");
-    if (!m_pageLoaded || baseDir != m_baseDir) {
+    // 免重载判定：页面已按授权根取得读作用域，新目录同样落在根内——
+    // 换文档只需改 <base> 并注入正文，不再重走整页导航与脚本解析。
+    const bool inScope = m_pageLoaded && m_pageScopedToRoot
+        && (baseDir.empty() || underRoot(baseDir, m_readAccessRoot));
+    perfMark(m_pageLoaded && baseDir != m_baseDir
+                 ? (inScope ? "core:setmd_inject" : "core:setmd_reload")
+                 : "core:setmd_first");
+    if (!m_pageLoaded || (baseDir != m_baseDir && !inScope)) {
         m_baseDir = baseDir;
         m_pendingText = text;
         m_hasPending = true;
@@ -52,12 +73,24 @@ void EditorController::setMarkdown(const std::string &text, const std::string &b
             m_dirty = false;
             m_host.dirtyChanged(false);
         }
+        // 记录这次 loadPage 实际拿到的作用域：越界目录的页面只授了目录本身，
+        // 之后的换目录仍需重载（壳的授权规则与此处判定保持一致）。
+        m_pageScopedToRoot = !m_readAccessRoot.empty()
+            && (baseDir.empty() || underRoot(baseDir, m_readAccessRoot));
         // 换页前推进代次：旧页面迟到的 ready 会带着旧 token，被消息桥丢弃
         ++m_pageGeneration;
         m_host.loadPage(baseDir);
         return;
     }
 
+    if (baseDir != m_baseDir) {
+        m_baseDir = baseDir;
+        applyBaseHref();
+        if (m_dirty) {
+            m_dirty = false;
+            m_host.dirtyChanged(false);
+        }
+    }
     m_pendingText = text;
     m_hasPending = true;
     if (m_pageReady)
@@ -85,6 +118,11 @@ void EditorController::setBaseDir(const std::string &dir)
         // 页面正在换页：接下来那次 loadPage 已经会用新目录
         return;
     }
+    // 新目录仍在当前页面作用域内：只改 <base>，不重载页面
+    if (m_pageScopedToRoot && (dir.empty() || underRoot(dir, m_readAccessRoot))) {
+        applyBaseHref();
+        return;
+    }
     // 换目录必须重载页面：WebView 允许读取的目录在加载时固定，只改页内 <base>
     // 时新目录下的图片会被拒绝读取。代价：滚动位置回到顶部、撤销栈重置；
     // 正文用最近一次保存的内容恢复。
@@ -92,6 +130,8 @@ void EditorController::setBaseDir(const std::string &dir)
     m_hasPending = true;
     m_pageReady = false;
     m_crossSelection = false;
+    m_pageScopedToRoot = !m_readAccessRoot.empty()
+        && (dir.empty() || underRoot(dir, m_readAccessRoot));
     ++m_pageGeneration;
     m_host.loadPage(dir);
 }

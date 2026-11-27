@@ -7,6 +7,7 @@
 
 @interface MoteAppDelegate : NSObject <NSApplicationDelegate>
 @property(nonatomic, strong) MoteMainWindow *mainWindow;
+@property(nonatomic, copy) NSArray<NSString *> *pendingPaths;
 @end
 
 @implementation MoteAppDelegate
@@ -24,6 +25,10 @@
     self.mainWindow = [[MoteMainWindow alloc] initWithPendingFile:pendingPath];
     [self.mainWindow show];
     mote::perfMark("mac:window_shown");
+    // delegate 设好之前收到的 openFile 会攒在 pendingPaths，这里补发
+    for (NSString *path in self.pendingPaths)
+        [self.mainWindow requestOpenPath:path];
+    self.pendingPaths = @[];
 
     // 在线更新：自研检查（OSS 上的 manifest.json）负责「有没有新版本」，
     // 用户确认后由 Sparkle 完成下载、验签与替换。启动后延迟一次 + 每 24 小时一次。
@@ -33,6 +38,33 @@
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
 {
     (void)sender;
+    return YES;
+}
+
+// Finder 双击 / 拖到 Dock 打开文档：冷启动时系统可能在 delegate 设好之前
+// 就投递 openFile，所以两种时序都要接住（mainWindow 还没建就先存 pending）。
+- (void)application:(NSApplication *)application openFiles:(NSArray<NSString *> *)paths
+{
+    (void)application;
+    for (NSString *path in paths) {
+        if (path.length == 0)
+            continue;
+        if (self.mainWindow)
+            [self.mainWindow requestOpenPath:path];
+        else
+            self.pendingPaths = [self.pendingPaths arrayByAddingObject:path];
+    }
+}
+
+- (BOOL)application:(NSApplication *)application openFile:(NSString *)filename
+{
+    (void)application;
+    if (filename.length == 0)
+        return NO;
+    if (self.mainWindow)
+        [self.mainWindow requestOpenPath:filename];
+    else
+        self.pendingPaths = [self.pendingPaths arrayByAddingObject:filename];
     return YES;
 }
 

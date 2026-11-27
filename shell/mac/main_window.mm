@@ -257,6 +257,9 @@ private:
 
     _shell = std::make_unique<ShellHost>(self);
     _controller = std::make_unique<mote::EditorController>(*_shell);
+    // 换目录免重载：页面读作用域一次性授权 home（见 web_host_view.mm），
+    // 根内打开不同目录的文档不再重走整页导航。清空即回退旧行为。
+    _controller->setReadAccessRoot(NSHomeDirectory().UTF8String ?: "");
     [self setupDropHandlers];
 
     [self installMenu];
@@ -574,6 +577,14 @@ private:
     if (MoteKeyLogEnabled())
         std::fprintf(stderr, "NATIVE open %s\n", path.UTF8String);
     [self showStatus:[NSString stringWithFormat:@"已打开：%@", path]];
+}
+
+- (void)requestOpenPath:(NSString *)path
+{
+    if (path.length == 0)
+        return;
+    if ([self prepareForReplace:MoteAfterSaveOpenPath path:path])
+        [self openPath:path];
 }
 
 - (void)openPathFromDrop:(const std::string &)path
