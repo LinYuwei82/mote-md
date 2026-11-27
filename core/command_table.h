@@ -11,6 +11,7 @@ enum class CommandId {
     Separator = 0,
     // 文件
     New,
+    NewWindow,
     Open,
     Save,
     SaveAs,

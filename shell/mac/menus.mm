@@ -179,6 +179,20 @@ NSMenu *MoteBuildMainMenu(id commandTarget, SEL commandAction)
                 item.state = NSControlStateValueOff;
             [menu addItem:item];
         }
+
+        if (menuSpec.id == mote::MenuId::File) {
+            // 「打开最近…」：条目在菜单展开时由 delegate（AppDelegate）重建
+            [menu addItem:[NSMenuItem separatorItem]];
+            NSMenuItem *recentHolder = [[NSMenuItem alloc] initWithTitle:@"打开最近…"
+                                                                  action:nil
+                                                           keyEquivalent:@""];
+            NSMenu *recentMenu = [[NSMenu alloc] initWithTitle:@"打开最近…"];
+            recentMenu.identifier = MoteRecentMenuIdentifier;
+            recentMenu.autoenablesItems = NO;
+            recentMenu.delegate = (id<NSMenuDelegate>)commandTarget;
+            recentHolder.submenu = recentMenu;
+            [menu addItem:recentHolder];
+        }
     }
 
     // 窗口菜单：系统约定项
@@ -194,6 +208,8 @@ NSMenu *MoteBuildMainMenu(id commandTarget, SEL commandAction)
     [windowMenu addItem:[[NSMenuItem alloc] initWithTitle:@"关闭"
                                                    action:@selector(performClose:)
                                             keyEquivalent:@"w"]];
+    // 交给系统自动维护窗口列表（多窗口切换）
+    NSApp.windowsMenu = windowMenu;
 
     return mainMenu;
 }

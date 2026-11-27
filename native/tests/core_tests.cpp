@@ -1179,7 +1179,7 @@ static void testCommandTable()
                 CHECK(id == CommandId::ExportPdf);
         }
     }
-    CHECK_EQ(seen.size(), static_cast<size_t>(33));
+    CHECK_EQ(seen.size(), static_cast<size_t>(34));
 
     // 格式项与前端 formatAction 的名称必须逐字一致
     const CommandSpec *inlineCode = mote::findCommand(CommandId::FormatInlineCode);

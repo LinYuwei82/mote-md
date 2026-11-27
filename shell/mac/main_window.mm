@@ -3,7 +3,6 @@
 #import "dialogs.h"
 #import "html_export.h"
 #import "menus.h"
-#import "updater.h"
 #import "web_host_view.h"
 
 #include "core/command_table.h"
@@ -11,6 +10,8 @@
 #include "core/js_bridge.h"
 #include "core/paths.h"
 #include "core/perf.h"
+#include "core/recent_files.h"
+#include "mote/update_engine.h"
 
 #include <cmath>
 #include <cstdio>
@@ -31,10 +32,11 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
     MoteAfterSaveDropText,
 };
 
+NSNotificationName const MoteWindowWillCloseNotification = @"MoteWindowWillClose";
+
 @interface MoteMainWindow () <NSWindowDelegate>
 @property(nonatomic, strong) NSWindow *window;
 @property(nonatomic, strong) MoteWebHostView *host;
-@property(nonatomic, strong) NSMutableDictionary<NSNumber *, NSMenuItem *> *commandItems;
 @property(nonatomic, copy) NSString *filePath;
 @property(nonatomic, copy) NSString *lastDir;
 @property(nonatomic, copy) NSString *lastText;
@@ -44,7 +46,6 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
 @property(nonatomic) BOOL saveAsRequested;
 @property(nonatomic) BOOL followSystem;
 @property(nonatomic) BOOL darkMode;
-@property(nonatomic) id keyMonitor;
 @property(nonatomic, copy) NSString *lastStatus;
 
 - (void)evaluateScript:(const std::string &)script;
@@ -62,8 +63,6 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
 - (void)handlePageMessage:(NSDictionary *)body;
 - (void)updateWindowTitle;
 - (void)showStatus:(NSString *)text;
-- (void)installMenu;
-- (void)handleMenuCommand:(NSMenuItem *)item;
 - (void)performCommand:(mote::CommandId)command;
 - (NSEvent *)interceptKeyDown:(NSEvent *)event;
 - (void)sendResponderAction:(SEL)action;
@@ -86,7 +85,7 @@ typedef NS_ENUM(NSInteger, MoteAfterSave) {
 - (void)runStartupCommandIfNeeded;
 - (BOOL)performNativeDrop:(NSArray<NSString *> *)paths;
 - (void)exportPdf;
-- (void)checkForUpdatesFromMenu:(id)sender;
+- (NSString *)normalizedPathForCompare:(NSString *)path;
 @end
 
 static BOOL MoteKeyLogEnabled(void)
@@ -210,6 +209,90 @@ private:
 
 } // namespace
 
+#pragma mark - 最近打开（NSUserDefaults）
+
+namespace {
+
+// 与 updater.mm 的 MacStore 同一存储口径：NSUserDefaults，键名加 "Mote" 前缀
+class DefaultsStore final : public mote::SettingsStore
+{
+public:
+    std::string getString(const std::string &key) override
+    {
+        NSString *value = [NSUserDefaults.standardUserDefaults stringForKey:DefaultKey(key)];
+        return value ? std::string(value.UTF8String) : std::string();
+    }
+    void setString(const std::string &key, const std::string &value) override
+    {
+        NSString *text = [NSString stringWithUTF8String:value.c_str()];
+        [NSUserDefaults.standardUserDefaults setObject:text ?: @"" forKey:DefaultKey(key)];
+    }
+    void clearString(const std::string &key) override
+    {
+        [NSUserDefaults.standardUserDefaults removeObjectForKey:DefaultKey(key)];
+    }
+    std::string newInstallId() override { return std::string(); }
+
+private:
+    static NSString *DefaultKey(const std::string &key)
+    {
+        return [NSString stringWithUTF8String:("Mote" + key).c_str()];
+    }
+};
+
+DefaultsStore gDefaultsStore;
+
+} // namespace
+
+@implementation MoteRecentFiles {
+    std::unique_ptr<mote::RecentFiles> _recent;
+}
+
++ (instancetype)shared
+{
+    static MoteRecentFiles *instance = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        instance = [[MoteRecentFiles alloc] init];
+    });
+    return instance;
+}
+
+- (instancetype)init
+{
+    self = [super init];
+    if (self)
+        _recent = std::make_unique<mote::RecentFiles>(gDefaultsStore);
+    return self;
+}
+
+- (void)addPath:(NSString *)path
+{
+    if (path.length == 0)
+        return;
+    _recent->add(path.UTF8String);
+}
+
+- (NSArray<NSString *> *)paths
+{
+    NSMutableArray<NSString *> *result = [NSMutableArray array];
+    for (const std::string &path : _recent->list()) {
+        NSString *value = [NSString stringWithUTF8String:path.c_str()];
+        if (value)
+            [result addObject:value];
+    }
+    return result;
+}
+
+- (void)clear { _recent->clear(); }
+
+@end
+
+#pragma mark - 主窗口
+
+// 菜单项按 tag 索引：应用级构建一次，各窗口按自身状态同步勾选
+static NSDictionary<NSNumber *, NSMenuItem *> *gCommandItems = nil;
+
 @implementation MoteMainWindow {
     std::unique_ptr<ShellHost> _shell;
     std::unique_ptr<mote::EditorController> _controller;
@@ -262,7 +345,6 @@ private:
     _controller->setReadAccessRoot(NSHomeDirectory().UTF8String ?: "");
     [self setupDropHandlers];
 
-    [self installMenu];
     if (pendingPath.length > 0)
         [self openPath:pendingPath];
     else
@@ -270,20 +352,7 @@ private:
     // 页面就绪前先记住主题，ready 后由 core 补发
     [self applyTheme];
     [window center];
-
-    __weak MoteMainWindow *weakForMonitor = self;
-    _keyMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
-                                                       handler:^NSEvent *(NSEvent *event) {
-        MoteMainWindow *strongSelf = weakForMonitor;
-        return strongSelf ? [strongSelf interceptKeyDown:event] : event;
-    }];
     return self;
-}
-
-- (void)dealloc
-{
-    if (_keyMonitor)
-        [NSEvent removeMonitor:_keyMonitor];
 }
 
 - (void)show
@@ -292,30 +361,21 @@ private:
     [NSApp activateIgnoringOtherApps:YES];
 }
 
-#pragma mark - 菜单
+#pragma mark - 菜单（应用级共享，本窗口只同步状态与执行命令）
 
-- (void)installMenu
++ (void)setSharedCommandItems:(NSDictionary<NSNumber *, NSMenuItem *> *)items
 {
-    NSMenu *menu = MoteBuildMainMenu(self, @selector(handleMenuCommand:));
-    NSApp.mainMenu = menu;
-
-    self.commandItems = [NSMutableDictionary dictionary];
-    for (NSMenuItem *top in menu.itemArray) {
-        for (NSMenuItem *item in top.submenu.itemArray) {
-            if (item.tag > 0)
-                self.commandItems[@(item.tag)] = item;
-        }
-    }
+    gCommandItems = items;
 }
 
-- (void)handleMenuCommand:(NSMenuItem *)item
+- (NSWindow *)nativeWindow
 {
-    [self performCommand:static_cast<mote::CommandId>(item.tag)];
+    return self.window;
 }
 
-- (void)checkForUpdatesFromMenu:(id)sender
+- (void)performMenuCommandWithTag:(NSInteger)tag
 {
-    [[MoteUpdater sharedUpdater] checkForUpdatesFromMenu:sender];
+    [self performCommand:static_cast<mote::CommandId>(tag)];
 }
 
 - (NSEvent *)interceptKeyDown:(NSEvent *)event
@@ -358,6 +418,9 @@ private:
     switch (command) {
     case mote::CommandId::New:
         [self newDocument];
+        return;
+    case mote::CommandId::NewWindow:
+        [(id<MoteAppRouting>)NSApp.delegate openNewWindow];
         return;
     case mote::CommandId::Open:
         [self openDocument];
@@ -463,8 +526,11 @@ private:
 
 - (void)updateMenuStates
 {
+    // 菜单是应用级共享的：只有 keyWindow 的状态才反映到菜单上
+    if (!self.window.isKeyWindow)
+        return;
     void (^setState)(mote::CommandId, BOOL) = ^(mote::CommandId id, BOOL on) {
-        NSMenuItem *item = self.commandItems[@(static_cast<NSInteger>(id))];
+        NSMenuItem *item = gCommandItems[@(static_cast<NSInteger>(id))];
         item.state = on ? NSControlStateValueOn : NSControlStateValueOff;
     };
     setState(mote::CommandId::ToggleToc, _tocOn);
@@ -472,7 +538,7 @@ private:
     setState(mote::CommandId::ToggleDark, _darkMode);
     setState(mote::CommandId::FollowSystem, _followSystem);
 
-    NSMenuItem *pdf = self.commandItems[@(static_cast<NSInteger>(mote::CommandId::ExportPdf))];
+    NSMenuItem *pdf = gCommandItems[@(static_cast<NSInteger>(mote::CommandId::ExportPdf))];
     pdf.enabled = !_sourceOn;
 }
 
@@ -574,17 +640,25 @@ private:
     self.lastText = text;
     _controller->setMarkdown(text.UTF8String, self.lastDir.UTF8String);
     [self updateWindowTitle];
+    [[MoteRecentFiles shared] addPath:path];
     if (MoteKeyLogEnabled())
         std::fprintf(stderr, "NATIVE open %s\n", path.UTF8String);
     [self showStatus:[NSString stringWithFormat:@"已打开：%@", path]];
 }
 
-- (void)requestOpenPath:(NSString *)path
+- (BOOL)isShowingPath:(NSString *)path
 {
-    if (path.length == 0)
-        return;
-    if ([self prepareForReplace:MoteAfterSaveOpenPath path:path])
-        [self openPath:path];
+    if (self.filePath.length == 0 || path.length == 0)
+        return NO;
+    return [[self normalizedPathForCompare:self.filePath]
+        isEqualToString:[self normalizedPathForCompare:path]];
+}
+
+// 比较用规范化：'\' 统一为 '/'，大小写不敏感（APFS 默认大小写不敏感）
+- (NSString *)normalizedPathForCompare:(NSString *)path
+{
+    NSString *slashes = [path stringByReplacingOccurrencesOfString:@"\\" withString:@"/"];
+    return slashes.lowercaseString;
 }
 
 - (void)openPathFromDrop:(const std::string &)path
@@ -592,8 +666,8 @@ private:
     NSString *target = [NSString stringWithUTF8String:path.c_str()];
     if (target.length == 0)
         return;
-    if ([self prepareForReplace:MoteAfterSaveOpenPath path:target])
-        [self openPath:target];
+    // 拖放等同 Finder 双击：新窗口打开，不替换当前文档
+    [(id<MoteAppRouting>)NSApp.delegate openRequestedPath:target];
 }
 
 - (void)acceptDroppedName:(const std::string &)name text:(const std::string &)text
@@ -692,6 +766,7 @@ private:
     // 另存为可能换了目录：图片落盘位置跟随新的 .md 路径
     _controller->setBaseDir(self.lastDir.UTF8String);
     [self updateWindowTitle];
+    [[MoteRecentFiles shared] addPath:path];
     if (MoteKeyLogEnabled())
         std::fprintf(stderr, "NATIVE save %s bytes=%lu\n", path.UTF8String,
                      (unsigned long)[content lengthOfBytesUsingEncoding:NSUTF8StringEncoding]);
@@ -794,6 +869,19 @@ private:
 }
 
 #pragma mark - NSWindowDelegate
+
+- (void)windowWillClose:(NSNotification *)notification
+{
+    (void)notification;
+    [NSNotificationCenter.defaultCenter postNotificationName:MoteWindowWillCloseNotification
+                                                      object:self];
+}
+
+- (void)windowDidBecomeKey:(NSNotification *)notification
+{
+    (void)notification;
+    [self updateMenuStates];
+}
 
 - (BOOL)windowShouldClose:(NSWindow *)sender
 {

@@ -33,7 +33,8 @@ const std::vector<MenuSpec> &menuTable()
         MenuSpec file;
         file.id = MenuId::File;
         file.title = "文件";
-        file.items = {CommandId::New, CommandId::Open, CommandId::Separator, CommandId::Save,
+        file.items = {CommandId::New, CommandId::NewWindow, CommandId::Open,
+                      CommandId::Separator, CommandId::Save,
                       CommandId::SaveAs, CommandId::ExportHtml, CommandId::ExportPdf};
 
         MenuSpec edit;
@@ -71,6 +72,7 @@ const std::vector<CommandSpec> &commandTable()
     static const std::vector<CommandSpec> table = {
         // 文件
         command(CommandId::New, "新建", {"cmd+n"}),
+        command(CommandId::NewWindow, "新建窗口", {"cmd+shift+n"}),
         command(CommandId::Open, "打开", {"cmd+o"}),
         command(CommandId::Save, "保存", {"cmd+s"}),
         command(CommandId::SaveAs, "另存为", {"cmd+shift+s"}),
