@@ -46,18 +46,20 @@
 #define MOTE_BUILD_STR "0"
 #endif
 
-namespace mote::win {
-
-namespace {
-
 // ---- 二进制内构建号标记（供 guard.py 二次校验）
 //
 // 发布脚本从 CMakeCache 读出 MOTE_BUILD 写入清单，
 // guard.py 上传前扫描绿色包 / setup.exe 里的 EXE 字节，比对清单 build 与
 // 本机构建号一致——防止脚本读错 CMakeCache 导致同版本反复提示。
-// 这里放一条不会被 LTO 扔掉的静态字符串 "MOTE_BUILD=<digits>"。
-static const char kBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR;
-[[maybe_unused]] static const char *const kBuildStampRef = kBuildStamp;
+// 必须是 extern "C" 外部符号 + /INCLUDE 强制保留：内部静态数组会被
+// MSVC 14.52（CI runner）的死代码消除剥离（1.0.29 实测），[[maybe_unused]]
+// 与指针引用都挡不住；x64 下 C 符号无修饰，/INCLUDE 直接写符号名。
+#pragma comment(linker, "/INCLUDE:kMoteBuildStamp")
+extern "C" const char kMoteBuildStamp[] = "MOTE_BUILD=" MOTE_BUILD_STR;
+
+namespace mote::win {
+
+namespace {
 
 // 与 macOS 的 SUFeedURL 同源：v2 统一清单放在 updates/stable/manifest.json
 constexpr wchar_t kDefaultManifestUrl[] =
