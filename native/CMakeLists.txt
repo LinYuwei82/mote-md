@@ -312,6 +312,7 @@ else()
     ${MOTE_SHELL_MAC}/main_window.mm
     ${MOTE_SHELL_MAC}/menus.mm
     ${MOTE_SHELL_MAC}/dialogs.mm
+    ${MOTE_SHELL_MAC}/about_window.mm
     ${MOTE_SHELL_MAC}/pdf_export.mm
     ${MOTE_SHELL_MAC}/html_export.mm
     ${MOTE_SHELL_MAC}/updater.mm

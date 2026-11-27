@@ -3,6 +3,7 @@
 #import "main_window.h"
 #import "menus.h"
 #import "updater.h"
+#import "about_window.h"
 
 #include "core/command_table.h"
 #include "core/perf.h"
@@ -152,6 +153,11 @@ static NSString *MoteCanonicalPath(NSString *path)
 - (void)checkForUpdatesFromMenu:(id)sender
 {
     [[MoteUpdater sharedUpdater] checkForUpdatesFromMenu:sender];
+}
+
+- (void)showAboutWindow:(id)sender
+{
+    MoteShowAboutWindow();
 }
 
 #pragma mark - 打开最近…（NSMenuDelegate）
