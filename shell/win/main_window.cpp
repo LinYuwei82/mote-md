@@ -1,6 +1,7 @@
 #include "main_window.h"
 
 #include "dialogs.h"
+#include "about_dialog.h"
 #include "drop_target.h"
 #include "env.h"
 #include "html_export.h"
@@ -830,6 +831,10 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         }
         if (id == mote::win::kCheckUpdateCommandId) {
             mote::win::check_for_updates_now(hwnd);
+            return 0;
+        }
+        if (id == mote::win::kAboutCommandId) {
+            show_about_dialog(hwnd);
             return 0;
         }
         if (id == mote::win::kRecentClearCommandId) {

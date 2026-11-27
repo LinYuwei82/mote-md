@@ -118,9 +118,13 @@ NSMenu *MoteBuildMainMenu(id commandTarget, SEL commandAction)
     NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Mote"];
     appHolder.submenu = appMenu;
     [mainMenu addItem:appHolder];
-    [appMenu addItem:[[NSMenuItem alloc] initWithTitle:@"关于 Mote"
-                                                action:@selector(orderFrontStandardAboutPanel:)
-                                         keyEquivalent:@""]];
+    // 「关于 Mote」走自定义面板（图标/版本(构建号)/版权/官网/检查更新），
+    // 与 Windows 端 about_dialog 同一套文案
+    NSMenuItem *aboutItem = [[NSMenuItem alloc] initWithTitle:@"关于 Mote"
+                                                        action:@selector(showAboutWindow:)
+                                                 keyEquivalent:@""];
+    aboutItem.target = commandTarget;
+    [appMenu addItem:aboutItem];
     [appMenu addItem:[NSMenuItem separatorItem]];
     [appMenu addItem:[[NSMenuItem alloc] initWithTitle:@"隐藏 Mote"
                                                 action:@selector(hide:)
