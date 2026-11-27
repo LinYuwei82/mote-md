@@ -1458,7 +1458,11 @@ void MoteMainWindow::page_ready()
         // 等导航完成后再取页面状态：ready 消息到达时 WebView2 仍在导航，
         // 此刻调用 ExecuteScript 会被静默丢弃（只剩 scheduled、没有结果）
         if (!env_value("MOTE_EVAL").empty()) {
-            SetTimer(hwnd_, kEvalTimer, 700, nullptr);
+            // MOTE_EVAL_DELAY 与 MOTE_SNAPSHOT_DELAY 同义：跨窗口回归需要
+            // 把 eval 推到第二窗口就绪之后再跑
+            const std::string raw = env_value("MOTE_EVAL_DELAY");
+            const double delay = !raw.empty() ? std::atof(raw.c_str()) : 700.0;
+            SetTimer(hwnd_, kEvalTimer, static_cast<UINT>(delay < 0 ? 0 : delay), nullptr);
             log_line("NATIVE eval scheduled");
         }
         const std::string snapshot = env_value("MOTE_SNAPSHOT");
