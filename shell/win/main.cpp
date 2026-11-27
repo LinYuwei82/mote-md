@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include "menus.h"
 
 #include "win_encoding/encoding.h"
 
@@ -18,6 +19,24 @@ std::string wide_to_utf8(const wchar_t *text)
     if (!text)
         return std::string();
     return win_encoding::wide_to_utf8(text);
+}
+
+// 应用级消息循环（多窗口共享）：加速键按当前活动窗口翻译；
+// 末窗 WM_DESTROY 发 PostQuitMessage 后自然退出。
+int run_message_loop()
+{
+    HACCEL accel = mote::win::build_accelerators();
+    MSG message = {};
+    while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+        HWND active = GetActiveWindow();
+        if (accel && active && TranslateAcceleratorW(active, accel, &message))
+            continue;
+        TranslateMessage(&message);
+        DispatchMessageW(&message);
+    }
+    if (accel)
+        DestroyAcceleratorTable(accel);
+    return static_cast<int>(message.wParam);
 }
 
 } // namespace
@@ -41,8 +60,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command)
     int argc = 0;
     LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 
-    // 单实例转发：应用已在运行时双击 .md，把路径交给已有窗口并退出，
-    // 不再冷启动第二个进程（配合免重载，热打开接近秒开）。
+    // 单实例转发：应用已在运行时双击 .md，把路径交给已有实例（由它开新窗口）
+    // 并退出，不再冷启动第二个进程（配合免重载，热打开接近秒开）。
     if (argc > 1 && argv && argv[1]) {
         const std::string forwarded = wide_to_utf8(argv[1]);
         if (MoteMainWindow::forward_path_to_existing(forwarded)) {
@@ -55,13 +74,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command)
 
     int exit_code = 1;
     {
-        MoteMainWindow window(instance);
-        if (argc > 1 && argv && argv[1])
-            window.set_pending_path(wide_to_utf8(argv[1]));
-        if (window.create()) {
-            window.show(show_command);
+        // 首窗口即带命令行文件（保持免双载优化）；后续窗口由转发/菜单创建
+        const std::string pending = argc > 1 && argv && argv[1]
+            ? wide_to_utf8(argv[1])
+            : std::string();
+        if (MoteMainWindow::create_new(instance, pending, show_command)) {
             mote::perfMark("win:window_shown");
-            exit_code = window.run_message_loop();
+            exit_code = run_message_loop();
         }
     }
 

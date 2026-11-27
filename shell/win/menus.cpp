@@ -157,7 +157,7 @@ bool uses_webview_native_edit(CommandId id)
 
 } // namespace
 
-HMENU build_main_menu()
+HMENU build_main_menu(HMENU *recent_submenu)
 {
     HMENU menubar = CreateMenu();
     if (!menubar)
@@ -183,6 +183,15 @@ HMENU build_main_menu()
                         static_cast<UINT_PTR>(id), text.c_str());
         }
         if (spec.id == MenuId::File) {
+            // 「打开最近…」：空占位，条目由窗口在 WM_INITMENUPOPUP 重建
+            HMENU recent = CreatePopupMenu();
+            if (recent) {
+                AppendMenuW(popup, MF_SEPARATOR, 0, nullptr);
+                AppendMenuW(popup, MF_POPUP, reinterpret_cast<UINT_PTR>(recent),
+                            L"打开最近(&R)");
+                if (recent_submenu)
+                    *recent_submenu = recent;
+            }
             AppendMenuW(popup, MF_SEPARATOR, 0, nullptr);
             AppendMenuW(popup, MF_STRING, kCheckUpdateCommandId, L"检查更新(&U)...");
             AppendMenuW(popup, MF_SEPARATOR, 0, nullptr);

@@ -27,11 +27,15 @@ public:
 
     bool create();
     void show(int show_command);
-    int run_message_loop();
     // 带待打开文件启动：WM_CREATE 里直接打开它，跳过内置示例页，
     // 避免「示例页解析完 → 立刻换目录重载」的两次全量页面加载。
     void set_pending_path(const std::string &path);
     void open_path(const std::string &path);
+    // 多窗口工厂：堆上创建 + 注册；消息循环归 main.cpp，末窗销毁才退出。
+    static MoteMainWindow *create_new(HINSTANCE instance, const std::string &pending_path,
+                                      int show_command);
+    // 外部打开统一口径：路径已开则激活既有窗口，否则新窗口打开
+    static void open_requested_path(const std::string &path);
     // 单实例转发（步骤 6）：已有实例窗口存在时把双击的文件路径交给它并返回
     // true，新进程直接退出；没有已有实例或转发失败返回 false（照常启动）。
     static bool forward_path_to_existing(const std::string &path_utf8);
@@ -67,10 +71,15 @@ private:
     enum class AfterSave { None, OpenDialog, OpenPath, NewDocument, Close, ExportPdf, DropDocument };
 
     static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
-    // 低级键盘钩子：WebView2/Chromium 会先吃掉部分组合键（Ctrl+Shift+S、
-    // Ctrl+Alt+E），AcceleratorKeyPressed 收不到，只能在本进程内提前截获
+    // 低级键盘钩子（进程级装一次）：WebView2/Chromium 会先吃掉部分组合键
+    // （Ctrl+Shift+S、Ctrl+Alt+E），AcceleratorKeyPressed 收不到，只能提前截获。
+    // 回调按前台窗口路由到对应实例。
     static LRESULT CALLBACK keyboard_hook(int code, WPARAM wparam, LPARAM lparam);
-    static MoteMainWindow *hook_owner_;
+    // 进程级键盘钩子：首窗装、末窗卸
+    static void ensure_keyboard_hook();
+    static void remove_keyboard_hook();
+    // 当前活跃窗口（前台优先，退回注册表首项）
+    static MoteMainWindow *active_window();
     LRESULT handle_message(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
     void layout();
     void update_title();
@@ -79,7 +88,6 @@ private:
     void new_document();
     void start_new_document();
     void open_document();
-    void open_forwarded(const std::string &path);
     void begin_save_as(bool save_as);
     void save_text(const std::string &text);
     bool write_text(const std::string &text, const std::string &path);
@@ -97,6 +105,7 @@ private:
     void apply_theme();
     bool system_is_dark() const;
     void update_menu_state();
+    void rebuild_recent_menu();
     void run_startup_command();
     void ensure_drop_target();
     void revoke_drop_target();
@@ -107,13 +116,7 @@ private:
     std::unique_ptr<WebHostView> host_;
     std::unique_ptr<ShellHost> shell_;
     std::unique_ptr<mote::EditorController> controller_;
-    HHOOK keyboard_hook_ = nullptr;
-    UINT last_shortcut_key_ = 0;
-    // 钩子里自己维护修饰键状态：真实键盘下 GetAsyncKeyState 可能与回调时序不同步
-    bool hook_ctrl_ = false;
-    bool hook_shift_ = false;
-    bool hook_alt_ = false;
-    HACCEL accel_ = nullptr;
+    HMENU recent_menu_ = nullptr;
     HWND drop_hwnd_ = nullptr;
     void *drop_target_ = nullptr;
     std::string file_path_;

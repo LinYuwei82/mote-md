@@ -12,8 +12,15 @@ namespace mote::win {
 constexpr UINT kExitCommandId = 40005;
 // 「检查更新…」同样只在平台层：macOS 放在应用菜单，Windows 放在文件菜单
 constexpr UINT kCheckUpdateCommandId = 40006;
+// 「打开最近…」子菜单：条目在 WM_INITMENUPOPUP 时按 id 区间重建，
+// kRecentCommandBase + i 对应列表第 i 项，末尾固定「清除记录」
+constexpr UINT kRecentCommandBase = 40100;
+constexpr UINT kRecentMaxItems = 10;
+constexpr UINT kRecentClearCommandId = 40110;
 
-HMENU build_main_menu();
+// recent_submenu 非空时输出「打开最近…」子菜单句柄，供窗口按句柄识别
+// WM_INITMENUPOPUP 并重建条目。
+HMENU build_main_menu(HMENU *recent_submenu = nullptr);
 HACCEL build_accelerators();
 
 // WebView2 在消息循环之前截获键盘，TranslateAccelerator 收不到编辑区的按键；

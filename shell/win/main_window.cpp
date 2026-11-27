@@ -13,7 +13,9 @@
 #include "core/js_bridge.h"
 #include "core/paths.h"
 #include "core/perf.h"
+#include "core/recent_files.h"
 #include "core/text_encoding.h"
+#include "mote/update_engine.h"
 #include "win_encoding/encoding.h"
 
 #include <shlobj.h>
@@ -23,6 +25,7 @@
 #include <wrl/client.h>
 
 #include <cctype>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -356,6 +359,151 @@ std::wstring forward_handoff_path()
     return base + L"\\Mote\\open_forward.txt";
 }
 
+// ---- 多窗口注册表（消息循环在 main.cpp，末窗销毁才 PostQuitMessage）----
+std::vector<MoteMainWindow *> g_windows;
+HINSTANCE g_instance = nullptr;
+
+// 进程级低级键盘钩子：首窗装、末窗卸；修饰键状态全局维护（回调是 LL 级，
+// 按队列顺序收到所有按键，比查窗口实例字段更可靠）
+HHOOK g_keyboard_hook = nullptr;
+bool g_hook_ctrl = false;
+bool g_hook_shift = false;
+bool g_hook_alt = false;
+UINT g_last_shortcut_key = 0;
+
+void MoteMainWindow::ensure_keyboard_hook()
+{
+    if (g_keyboard_hook)
+        return;
+    g_hook_ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    g_hook_shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    g_hook_alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    g_keyboard_hook = SetWindowsHookExW(WH_KEYBOARD_LL, &MoteMainWindow::keyboard_hook,
+                                        GetModuleHandleW(nullptr), 0);
+    log_line(std::string("NATIVE keyboard hook ") + (g_keyboard_hook ? "on" : "failed"));
+}
+
+void MoteMainWindow::remove_keyboard_hook()
+{
+    if (g_keyboard_hook) {
+        UnhookWindowsHookEx(g_keyboard_hook);
+        g_keyboard_hook = nullptr;
+    }
+}
+
+// 「最近打开」持久化：HKCU\Software\Mote 字符串值（与 updater_win 同一键路径）
+class RegStore final : public mote::SettingsStore
+{
+public:
+    std::string getString(const std::string &key) override
+    {
+        HKEY hkey = nullptr;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, kRegKeyName, 0, KEY_QUERY_VALUE, &hkey)
+            != ERROR_SUCCESS)
+            return std::string();
+        wchar_t buffer[8192] = {};
+        DWORD size = sizeof(buffer);
+        DWORD type = 0;
+        const bool ok = RegQueryValueExW(hkey, utf8_to_wide(key).c_str(), nullptr, &type,
+                                         reinterpret_cast<LPBYTE>(buffer), &size)
+                == ERROR_SUCCESS
+            && type == REG_SZ;
+        RegCloseKey(hkey);
+        return ok ? wide_to_utf8(buffer) : std::string();
+    }
+    void setString(const std::string &key, const std::string &value) override
+    {
+        HKEY hkey = nullptr;
+        if (RegCreateKeyExW(HKEY_CURRENT_USER, kRegKeyName, 0, nullptr, 0, KEY_SET_VALUE,
+                            nullptr, &hkey, nullptr)
+            != ERROR_SUCCESS)
+            return;
+        const std::wstring wide = utf8_to_wide(value);
+        const DWORD bytes = static_cast<DWORD>((wide.size() + 1) * sizeof(wchar_t));
+        RegSetValueExW(hkey, utf8_to_wide(key).c_str(), 0, REG_SZ,
+                       reinterpret_cast<const BYTE *>(wide.c_str()), bytes);
+        RegCloseKey(hkey);
+    }
+    void clearString(const std::string &key) override
+    {
+        HKEY hkey = nullptr;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, kRegKeyName, 0, KEY_SET_VALUE, &hkey)
+            == ERROR_SUCCESS) {
+            RegDeleteValueW(hkey, utf8_to_wide(key).c_str());
+            RegCloseKey(hkey);
+        }
+    }
+    std::string newInstallId() override { return std::string(); }
+
+private:
+    static constexpr wchar_t kRegKeyName[] = L"Software\\Mote";
+};
+
+mote::RecentFiles &recent_files()
+{
+    static RegStore store;
+    static mote::RecentFiles recent(store);
+    return recent;
+}
+
+// 比较用规范化：绝对 + 解析 junction/符号链接，失败退回原值
+std::string canonical_path(const std::string &path)
+{
+    try {
+        std::filesystem::path p(utf8_to_wide(path));
+        std::error_code ec;
+        std::filesystem::path resolved = std::filesystem::weakly_canonical(p, ec);
+        if (!ec)
+            return wide_to_utf8(resolved.wstring());
+        return wide_to_utf8(std::filesystem::absolute(p).wstring());
+    } catch (...) {
+        return path;
+    }
+}
+
+bool same_path(const std::string &a, const std::string &b)
+{
+    if (a.empty() || b.empty())
+        return false;
+    std::string left = canonical_path(a);
+    std::string right = canonical_path(b);
+    for (char &c : left) {
+        if (c == '/')
+            c = '\\';
+        else if (c >= 'A' && c <= 'Z')
+            c = static_cast<char>(c + ('a' - 'A'));
+    }
+    for (char &c : right) {
+        if (c == '/')
+            c = '\\';
+        else if (c >= 'A' && c <= 'Z')
+            c = static_cast<char>(c + ('a' - 'A'));
+    }
+    return left == right;
+}
+
+// 当前活跃窗口（更新模块钩子按前台路由，避免多窗口时指向已销毁实例）
+MoteMainWindow *MoteMainWindow::active_window()
+{
+    HWND hwnd = GetActiveWindow();
+    if (!hwnd)
+        hwnd = GetForegroundWindow();
+    if (hwnd) {
+        HWND root = GetAncestor(hwnd, GA_ROOT);
+        if (root) {
+            wchar_t cls[64] = {};
+            GetClassNameW(root, cls, 64);
+            if (wcscmp(cls, kWindowClass) == 0) {
+                auto *self =
+                    reinterpret_cast<MoteMainWindow *>(GetWindowLongPtrW(root, GWLP_USERDATA));
+                if (self && self->hwnd_)
+                    return self;
+            }
+        }
+    }
+    return g_windows.empty() ? nullptr : g_windows.front();
+}
+
 } // namespace
 
 // EditorHost → Win32 的转发层。owner 是应用级单窗口，生命周期覆盖整个进程。
@@ -446,26 +594,11 @@ MoteMainWindow::MoteMainWindow(HINSTANCE instance)
 {
 }
 
-MoteMainWindow::~MoteMainWindow()
-{
-    if (keyboard_hook_) {
-        UnhookWindowsHookEx(keyboard_hook_);
-        keyboard_hook_ = nullptr;
-    }
-    if (hook_owner_ == this)
-        hook_owner_ = nullptr;
-    if (hwnd_ && IsWindow(hwnd_))
-        DestroyWindow(hwnd_);
-}
-
-MoteMainWindow *MoteMainWindow::hook_owner_ = nullptr;
+MoteMainWindow::~MoteMainWindow() = default;
 
 LRESULT CALLBACK MoteMainWindow::keyboard_hook(int code, WPARAM wparam, LPARAM lparam)
 {
     if (code != HC_ACTION)
-        return CallNextHookEx(nullptr, code, wparam, lparam);
-    MoteMainWindow *self = hook_owner_;
-    if (!self || !self->hwnd_)
         return CallNextHookEx(nullptr, code, wparam, lparam);
 
     const UINT key = reinterpret_cast<KBDLLHOOKSTRUCT *>(lparam)->vkCode;
@@ -477,54 +610,63 @@ LRESULT CALLBACK MoteMainWindow::keyboard_hook(int code, WPARAM wparam, LPARAM l
     case VK_CONTROL:
     case VK_LCONTROL:
     case VK_RCONTROL:
-        self->hook_ctrl_ = down;
+        g_hook_ctrl = down;
         break;
     case VK_SHIFT:
     case VK_LSHIFT:
     case VK_RSHIFT:
-        self->hook_shift_ = down;
+        g_hook_shift = down;
         break;
     case VK_MENU:
     case VK_LMENU:
     case VK_RMENU:
-        self->hook_alt_ = down;
+        g_hook_alt = down;
         break;
     default:
         break;
     }
 
     if (up) {
-        self->last_shortcut_key_ = 0;
+        g_last_shortcut_key = 0;
         return CallNextHookEx(nullptr, code, wparam, lparam);
     }
     if (!down)
         return CallNextHookEx(nullptr, code, wparam, lparam);
 
-    // 只管本窗口在前台时的按键，别影响其它程序
+    // 只管本进程 Mote 窗口在前台时的按键，别影响其它程序
     const HWND foreground = GetForegroundWindow();
-    if (!foreground || GetAncestor(foreground, GA_ROOT) != self->hwnd_)
+    const HWND root = foreground ? GetAncestor(foreground, GA_ROOT) : nullptr;
+    if (!root)
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+    wchar_t cls[64] = {};
+    GetClassNameW(root, cls, 64);
+    if (wcscmp(cls, kWindowClass) != 0)
+        return CallNextHookEx(nullptr, code, wparam, lparam);
+    auto *self =
+        reinterpret_cast<MoteMainWindow *>(GetWindowLongPtrW(root, GWLP_USERDATA));
+    if (!self || !self->hwnd_)
         return CallNextHookEx(nullptr, code, wparam, lparam);
 
-    if (key == self->last_shortcut_key_)
+    if (key == g_last_shortcut_key)
         return 1;  // 长按的自动重复只触发一次
 
     WORD modifiers = 0;
-    if (self->hook_ctrl_ || (GetAsyncKeyState(VK_CONTROL) & 0x8000))
+    if (g_hook_ctrl || (GetAsyncKeyState(VK_CONTROL) & 0x8000))
         modifiers |= FCONTROL;
-    if (self->hook_shift_ || (GetAsyncKeyState(VK_SHIFT) & 0x8000))
+    if (g_hook_shift || (GetAsyncKeyState(VK_SHIFT) & 0x8000))
         modifiers |= FSHIFT;
-    if (self->hook_alt_ || (GetAsyncKeyState(VK_MENU) & 0x8000))
+    if (g_hook_alt || (GetAsyncKeyState(VK_MENU) & 0x8000))
         modifiers |= FALT;
 
     mote::CommandId command = mote::CommandId::New;
     if (!mote::win::command_for_shortcut(modifiers, key, &command))
         return CallNextHookEx(nullptr, code, wparam, lparam);
 
-    self->last_shortcut_key_ = key;
+    g_last_shortcut_key = key;
     if (!env_value("MOTE_KEYLOG").empty())
         log_line("NATIVE key vk=" + std::to_string(key)
                  + " mods=" + std::to_string(modifiers));
-    PostMessageW(self->hwnd_, kShortcutMessage, static_cast<WPARAM>(command), 0);
+    PostMessageW(root, kShortcutMessage, static_cast<WPARAM>(command), 0);
     return 1;  // 已由外壳处理，Chromium 不再执行默认行为
 }
 
@@ -552,14 +694,8 @@ bool MoteMainWindow::create()
         return false;
 
     // Chromium 在编辑区会先消费 Ctrl+Shift+S / Ctrl+Alt+E，连 AcceleratorKeyPressed
-    // 都收不到；用进程内低级键盘钩子提前截获，键位与命令表保持一致。
-    hook_owner_ = this;
-    hook_ctrl_ = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-    hook_shift_ = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-    hook_alt_ = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-    keyboard_hook_ = SetWindowsHookExW(WH_KEYBOARD_LL, &MoteMainWindow::keyboard_hook,
-                                       GetModuleHandleW(nullptr), 0);
-    log_line(std::string("NATIVE keyboard hook ") + (keyboard_hook_ ? "on" : "failed"));
+    // 都收不到；用进程内低级键盘钩子提前截获（首窗装一次，末窗卸）。
+    ensure_keyboard_hook();
     return true;
 }
 
@@ -571,16 +707,36 @@ void MoteMainWindow::show(int show_command)
     UpdateWindow(hwnd_);
 }
 
-int MoteMainWindow::run_message_loop()
+MoteMainWindow *MoteMainWindow::create_new(HINSTANCE instance, const std::string &pending_path,
+                                          int show_command)
 {
-    MSG message = {};
-    while (GetMessageW(&message, nullptr, 0, 0) > 0) {
-        if (accel_ && TranslateAcceleratorW(hwnd_, accel_, &message))
-            continue;
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
+    if (instance)
+        g_instance = instance;
+    auto *window = new MoteMainWindow(g_instance);
+    if (!pending_path.empty())
+        window->set_pending_path(pending_path);
+    if (!window->create()) {
+        delete window;
+        return nullptr;
     }
-    return static_cast<int>(message.wParam);
+    g_windows.push_back(window);
+    window->show(show_command);
+    return window;
+}
+
+void MoteMainWindow::open_requested_path(const std::string &path)
+{
+    if (path.empty())
+        return;
+    for (MoteMainWindow *window : g_windows) {
+        if (same_path(window->file_path_, path)) {
+            if (IsIconic(window->hwnd_))
+                ShowWindow(window->hwnd_, SW_RESTORE);
+            SetForegroundWindow(window->hwnd_);
+            return;
+        }
+    }
+    create_new(g_instance, path, SW_SHOWNORMAL);
 }
 
 LRESULT CALLBACK MoteMainWindow::window_proc(HWND hwnd, UINT message, WPARAM wparam,
@@ -632,18 +788,25 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         }
         layout();
 
-        SetMenu(hwnd, mote::win::build_main_menu());
-        accel_ = mote::win::build_accelerators();
+        SetMenu(hwnd, mote::win::build_main_menu(&recent_menu_));
         follow_system_ = true;
         apply_theme();
-        // 更新模块不直接依赖 EditorController：脏标记与退出都由这里注入
+        // 更新模块不直接依赖 EditorController：脏标记与退出都由这里注入。
+        // 多窗口下按「当前活跃窗口」动态取，避免指向已销毁实例。
         mote::win::set_update_hooks(
-            [this] { return controller_ && controller_->dirty(); },
-            [hwnd] { PostMessageW(hwnd, WM_CLOSE, 0, 0); });
+            [] {
+                MoteMainWindow *window = active_window();
+                return window && window->controller_ && window->controller_->dirty();
+            },
+            [] {
+                MoteMainWindow *window = active_window();
+                if (window)
+                    PostMessageW(window->hwnd_, WM_CLOSE, 0, 0);
+            });
         mote::win::start_update_checker(hwnd);
         return 0;
     case kForwardMessage: {
-        // 单实例转发：另一个进程双击了 .md，唤起本窗口并打开交接文件里的路径
+        // 单实例转发：另一个进程双击了 .md，按统一口径新窗口打开（已开则激活）
         const std::wstring handoff = forward_handoff_path();
         std::ifstream in(std::filesystem::path(handoff), std::ios::binary);
         std::string path;
@@ -651,9 +814,13 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             std::getline(in, path, '\0');
         DeleteFileW(handoff.c_str());
         if (!path.empty())
-            open_forwarded(path);
+            open_requested_path(path);
         return 0;
     }
+    case WM_INITMENUPOPUP:
+        if (recent_menu_ && (HMENU)wparam == recent_menu_)
+            rebuild_recent_menu();
+        return 0;
     case WM_COMMAND: {
         const UINT id = LOWORD(wparam);
         if (id == mote::win::kExitCommandId) {
@@ -662,6 +829,18 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         }
         if (id == mote::win::kCheckUpdateCommandId) {
             mote::win::check_for_updates_now(hwnd);
+            return 0;
+        }
+        if (id == mote::win::kRecentClearCommandId) {
+            recent_files().clear();
+            return 0;
+        }
+        if (id >= mote::win::kRecentCommandBase
+            && id < mote::win::kRecentCommandBase + mote::win::kRecentMaxItems) {
+            const auto paths = recent_files().list();
+            const size_t index = id - mote::win::kRecentCommandBase;
+            if (index < paths.size())
+                open_requested_path(paths[index]);
             return 0;
         }
         // 菜单项 id 就是 CommandId；未知 id（控件通知等）直接忽略
@@ -776,11 +955,16 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         host_.reset();
         controller_.reset();
         shell_.reset();
-        if (accel_) {
-            DestroyAcceleratorTable(accel_);
-            accel_ = nullptr;
+        recent_menu_ = nullptr;
+        hwnd_ = nullptr;
+        // 多窗口：末窗销毁才退出进程；窗口对象在这里回收
+        g_windows.erase(std::remove(g_windows.begin(), g_windows.end(), this),
+                        g_windows.end());
+        if (g_windows.empty()) {
+            remove_keyboard_hook();
+            PostQuitMessage(0);
         }
-        PostQuitMessage(0);
+        delete this;
         return 0;
     case WM_GETMINMAXINFO: {
         const UINT dpi = GetDpiForWindow(hwnd);
@@ -877,18 +1061,31 @@ bool MoteMainWindow::forward_path_to_existing(const std::string &path_utf8)
     return true;
 }
 
-void MoteMainWindow::open_forwarded(const std::string &path)
+void MoteMainWindow::rebuild_recent_menu()
 {
-    if (IsIconic(hwnd_))
-        ShowWindow(hwnd_, SW_RESTORE);
-    SetForegroundWindow(hwnd_);
-    if (!controller_) {
-        // 窗口还在初始化：暂存，WM_CREATE 尾部会消费
-        set_pending_path(path);
+    if (!recent_menu_)
         return;
+    while (GetMenuItemCount(recent_menu_) > 0)
+        DeleteMenu(recent_menu_, 0, MF_BYPOSITION);
+    const auto paths = recent_files().list();
+    const size_t count = paths.size() < static_cast<size_t>(mote::win::kRecentMaxItems)
+        ? paths.size()
+        : static_cast<size_t>(mote::win::kRecentMaxItems);
+    for (size_t i = 0; i < count; ++i) {
+        std::wstring title = utf8_to_wide(file_name(paths[i]));
+        title += L"\t";
+        title += utf8_to_wide(parent_dir(paths[i]));
+        std::error_code ec;
+        const bool exists = std::filesystem::exists(
+            std::filesystem::path(utf8_to_wide(paths[i])), ec);
+        AppendMenuW(recent_menu_,
+                    MF_STRING | (exists ? 0 : MF_GRAYED),
+                    static_cast<UINT_PTR>(mote::win::kRecentCommandBase + i),
+                    title.c_str());
     }
-    if (prepare_for_replace(AfterSave::OpenPath, path))
-        open_path(path);
+    if (count > 0)
+        AppendMenuW(recent_menu_, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(recent_menu_, MF_STRING, mote::win::kRecentClearCommandId, L"清除记录");
 }
 
 void MoteMainWindow::set_pending_path(const std::string &path)
@@ -923,6 +1120,7 @@ void MoteMainWindow::open_path(const std::string &path)
     crlf_ = text.find("\r\n") != std::string::npos;
     controller_->setMarkdown(text, last_dir_);
     update_title();
+    recent_files().add(resolved);
     log_line("NATIVE open " + path);
     status_message("已打开：" + path);
 }
@@ -991,6 +1189,7 @@ void MoteMainWindow::save_text(const std::string &text)
     // 另存为可能换了目录：图片落盘位置跟随新的 .md 路径
     controller_->setBaseDir(last_dir_);
     update_title();
+    recent_files().add(path);
     log_line("NATIVE save " + path);
     status_message("已保存：" + path);
     run_after_save();
@@ -1330,6 +1529,9 @@ void MoteMainWindow::perform_command(mote::CommandId command)
     case mote::CommandId::New:
         new_document();
         return;
+    case mote::CommandId::NewWindow:
+        create_new(g_instance, std::string(), SW_SHOWNORMAL);
+        return;
     case mote::CommandId::Open:
         open_document();
         return;
@@ -1520,9 +1722,8 @@ void MoteMainWindow::file_drop_requested(const std::string &path)
 {
     if (path.empty())
         return;
-    if (!prepare_for_replace(AfterSave::OpenPath, path))
-        return;
-    open_path(path);
+    // 拖放等同双击：新窗口打开，不替换当前文档
+    open_requested_path(path);
 }
 
 bool MoteMainWindow::clipboard_image(std::vector<std::uint8_t> *bytes, std::string *mime)
