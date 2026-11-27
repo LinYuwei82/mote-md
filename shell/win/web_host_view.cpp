@@ -6,6 +6,7 @@
 #include "core/inject_chunks.h"
 #include "core/js_bridge.h"
 #include "core/json.h"
+#include "core/perf.h"
 
 #include <shlobj.h>
 #include <shlwapi.h>
@@ -82,6 +83,11 @@ std::wstring exe_directory()
 
 std::wstring user_data_directory()
 {
+    // 诊断覆盖：SSH 无头会话的 KnownFolder 可能指向不可写配置的用户目录，
+    // 设 MOTE_WEBVIEW2_DATA 可把 WebView2 数据目录指到可写位置。
+    const std::string override_dir = env_value("MOTE_WEBVIEW2_DATA");
+    if (!override_dir.empty())
+        return utf8_to_wide(override_dir);
     PWSTR local_app_data = nullptr;
     std::wstring result;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &local_app_data))
@@ -288,6 +294,7 @@ void WebHostView::initialize()
         Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [this](HRESULT result, ICoreWebView2Environment *environment) -> HRESULT {
                 log_line(L"env callback fired");
+                mote::perfMark("win:webview_env");
                 if (!*alive_)
                     return S_OK;
                 if (FAILED(result) || !environment) {
@@ -303,6 +310,7 @@ void WebHostView::initialize()
                         [this](HRESULT controller_result,
                                ICoreWebView2Controller *controller) -> HRESULT {
                             log_line(L"controller callback fired");
+                            mote::perfMark("win:webview_controller");
                             if (*alive_)
                                 on_controller_created(controller_result, controller);
                             return S_OK;
@@ -389,6 +397,7 @@ void WebHostView::on_controller_created(HRESULT result, ICoreWebView2Controller 
                     return S_OK;
                 }
                 log_line(L"page loaded");
+                mote::perfMark("win:nav_finish");
                 if (page_loaded_)
                     page_loaded_();
                 return S_OK;
@@ -450,6 +459,7 @@ void WebHostView::load_page(const std::string &base_dir)
     }
     log_line(L"navigate editor page");
     webview_->Navigate(url.c_str());
+    mote::perfMark("win:navigate");
 }
 
 bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
@@ -479,7 +489,8 @@ bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
     const std::string flag = inline_proto_enabled()
         ? "window.MOTE_INLINE_PROTO=true;"
         : "window.MOTE_INLINE_PROTO=false;";
-    replace_all(page, "__MOTE_JS__", flag + js);
+    const std::string perf_flag = mote::perfEnabled() ? "window.MOTE_PERF=true;" : "";
+    replace_all(page, "__MOTE_JS__", flag + perf_flag + js);
 
     if (!base_dir.empty()) {
         const std::string base = html_escape(directory_url(base_dir));
@@ -489,15 +500,34 @@ bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
         }
     }
 
+    // 页目录选择与 core 的免重载判定同口径：文档目录在 %USERPROFILE% 内
+    // （或未命名）→ 页面固定写 %TEMP%\MoteNative，换目录无需重载；
+    // 越界目录 → 页面写进该目录（沿用旧的读权限形态），由 core 触发重载。
     std::wstring directory;
-    if (base_dir.empty()) {
+    const auto under_profile = [](const std::wstring &dir) {
+        wchar_t buf[MAX_PATH] = {};
+        const DWORD n = GetEnvironmentVariableW(L"USERPROFILE", buf, MAX_PATH);
+        if (n == 0 || n >= MAX_PATH)
+            return false;
+        std::wstring root = buf;
+        while (!root.empty() && root.back() == L'\\')
+            root.pop_back();
+        if (dir.size() < root.size() || dir.compare(0, root.size(), root) != 0)
+            return false;
+        return dir.size() == root.size() || dir[root.size()] == L'\\';
+    };
+    const std::wstring base_w = utf8_to_wide(base_dir);
+    if (base_dir.empty() || under_profile(base_w)) {
         wchar_t temp[MAX_PATH] = {};
         GetTempPathW(MAX_PATH, temp);
         directory = temp;
         if (!directory.empty() && directory.back() == L'\\')
             directory.pop_back();
+        directory += L"\\MoteNative";
+        std::error_code ec;
+        std::filesystem::create_directories(directory, ec);
     } else {
-        directory = utf8_to_wide(base_dir);
+        directory = base_w;
     }
 
     const std::wstring name = L"\\.mote-preview-"
@@ -520,6 +550,7 @@ bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
 
     if (!write_file(page_path, page))
         return false;
+    mote::perfMark("win:page_written");
 
     if (!page_file_.empty() && page_file_ != page_path)
         DeleteFileW(page_file_.c_str());
@@ -655,6 +686,7 @@ void WebHostView::inject_markdown(const std::string &text)
     const std::string quoted = mote::quoteJson(text);
     // 通道一：单条脚本，体积最省
     if (quoted.size() <= kScriptBudget) {
+        mote::perfMark("win:inject_script");
         evaluate_script(mote::js::setMarkdown(text));
         return;
     }
@@ -664,6 +696,7 @@ void WebHostView::inject_markdown(const std::string &text)
         "{\"__mote\":\"setMarkdown\",\"text\":" + quoted + "}";
     if (payload.size() <= kMessageBudget
         && SUCCEEDED(webview_->PostWebMessageAsJson(utf8_to_wide(payload).c_str()))) {
+        mote::perfMark("win:inject_message");
         return;
     }
 
@@ -672,10 +705,15 @@ void WebHostView::inject_markdown(const std::string &text)
         webview_->ExecuteScript(utf8_to_wide(script).c_str(), nullptr);
     };
     run("window.__moteInject=[];");
-    for (const std::string &chunk : mote::splitUtf8ByBudget(text, kScriptBudget))
+    size_t chunks = 0;
+    for (const std::string &chunk : mote::splitUtf8ByBudget(text, kScriptBudget)) {
         run("window.__moteInject.push(" + mote::quoteJson(chunk) + ");");
+        ++chunks;
+    }
     run("(function(){var t=(window.__moteInject||[]).join('');"
         "window.__moteInject=[];window.mote&&window.mote.setMarkdown(t);})();");
+    if (mote::perfEnabled())
+        std::fprintf(stderr, "[perf] win:inject_chunks %zu pieces\n", chunks);
 }
 
 void WebHostView::resize(int width, int height)
@@ -694,5 +732,8 @@ void WebHostView::focus()
 
 void WebHostView::fail(const wchar_t *message)
 {
-    MessageBoxW(parent_, message, L"Mote", MB_OK | MB_ICONERROR);
+    log_line((std::wstring(L"FAIL ") + message).c_str());
+    // 打点/自动化模式不弹阻塞对话框（无头会话里会卡死整个进程）
+    if (!mote::perfEnabled())
+        MessageBoxW(parent_, message, L"Mote", MB_OK | MB_ICONERROR);
 }

@@ -32,6 +32,9 @@ public:
     // 避免「示例页解析完 → 立刻换目录重载」的两次全量页面加载。
     void set_pending_path(const std::string &path);
     void open_path(const std::string &path);
+    // 单实例转发（步骤 6）：已有实例窗口存在时把双击的文件路径交给它并返回
+    // true，新进程直接退出；没有已有实例或转发失败返回 false（照常启动）。
+    static bool forward_path_to_existing(const std::string &path_utf8);
 
     // ShellHost → 外壳
     void evaluate_script(const std::string &script);
@@ -76,6 +79,7 @@ private:
     void new_document();
     void start_new_document();
     void open_document();
+    void open_forwarded(const std::string &path);
     void begin_save_as(bool save_as);
     void save_text(const std::string &text);
     bool write_text(const std::string &text, const std::string &path);
@@ -125,6 +129,7 @@ private:
     bool follow_system_ = true;
     bool dark_mode_ = false;
     bool startup_command_done_ = false;
+    bool open2_done_ = false;
     bool diagnostics_started_ = false;
     bool drop_probe_done_ = false;
     std::vector<std::string> drop_probe_paths_;

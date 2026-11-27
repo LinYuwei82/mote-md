@@ -11,6 +11,8 @@
 - (instancetype)initWithPendingFile:(NSString *)path;
 - (void)show;
 - (void)openPath:(NSString *)path;
+// 外部打开请求（Finder 双击 / 拖到 Dock）：先走未保存确认，再打开。
+- (void)requestOpenPath:(NSString *)path;
 - (BOOL)applicationShouldTerminate;
 
 @end

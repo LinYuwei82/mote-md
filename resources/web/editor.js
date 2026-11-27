@@ -38,6 +38,12 @@
   var tocVisible = false;
   var tocItems = [];
   var tocTimer = null;
+  // 可见区外代码块延迟高亮（仅整篇载入路径启用）：首挂先渲染转义纯文本，
+  // 首屏立即补、其余空闲分批补，把大文档打开时的整篇着色成本摊平。
+  var deferredCode = null;
+  var deferredCodeTimer = 0;
+  // 页面加载后的第一次挂载：新页首布局已含滚动条高度，无需补偿。
+  var pageFresh = true;
   // 目录项的文档纵坐标缓存：滚动高亮改二分查表，不再每次滚动对每个标题
   // 调 getBoundingClientRect（900 个标题时每帧 900 次布局读取）。
   var tocTops = null;
@@ -837,11 +843,20 @@
     + ' fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">'
     + '<path d="M3.2 8.6l3 3 6.6-6.8"></path></svg>';
 
-  function renderCode(el, code, lang) {
+  function renderCode(el, code, lang, defer) {
     // 结尾的 \n 属于正文（末行之后的空行），不能再剥掉，否则编辑-重排往返会
     // 悄悄少一行；围栏前那个 \n 已由 renderBlock 的匹配式吃掉。
     var lines = String(code).split('\n');
-    var colored = highlightCode(el, lines.join('\n'), lang);
+    var colored;
+    if (defer && hasLangSpec(lang)) {
+      // 未识别语言本来就只有转义成本，不值得延迟
+      colored = lines.map(escapeHtml);
+      if (!deferredCode)
+        deferredCode = [];
+      deferredCode.push({ el: el, code: lines.join('\n'), lang: lang });
+    } else {
+      colored = highlightCode(el, lines.join('\n'), lang);
+    }
     var gutter = '';
     for (var i = 0; i < lines.length; i++)
       gutter += (i ? '<br>' : '') + (i + 1);
@@ -891,15 +906,78 @@
   // .code-scroll 的 border box，块高会比初次渲染少一个滚动条（本机实测 15px）。
   // 关键是要动 overflow-y：横向滚动条是画在纵轴这块空间里的，只改 overflow-x
   // 不会让 WebKit 重新计算滚动条占位；改成 auto 再还原即可触发一次正确布局。
+  // 优化：两段式批量——先全部写 auto（不强制布局），单次读 offsetHeight 触发
+  // 一次布局，再全部还原。把 N 次强制重排压缩成 1 次（9000+ 块场景从 ~5.5s 降到
+  // 几十毫秒）。
   function normalizeCodeScrolls(scope) {
     var list = (scope || root).querySelectorAll('.code-scroll');
+    if (!list.length)
+      return;
+    var original = new Array(list.length);
     for (var i = 0; i < list.length; i++) {
-      var sc = list[i];
-      var value = sc.style.overflowY;
-      sc.style.overflowY = 'auto';
-      void sc.offsetHeight;
-      sc.style.overflowY = value;
+      original[i] = list[i].style.overflowY;
+      list[i].style.overflowY = 'auto';
     }
+    void list[0].offsetHeight;
+    for (var i = 0; i < list.length; i++) {
+      list[i].style.overflowY = original[i];
+    }
+  }
+
+  // 语言是否有着色规则（无规则的高亮本来就只是转义，不必延迟）。
+  function hasLangSpec(lang) {
+    var key = LANG_ALIAS[String(lang || '').trim().toLowerCase()] || '';
+    return !!key && !!SPEC[key];
+  }
+
+  // 补画一个延迟代码块：文本已被编辑改动就跳过（编辑路径自己会重着色）；
+  // 光标正落在其中也跳过，避免打断选区——编辑路径随后会接管着色。
+  // 只换 innerHTML 里的 span（几何不变），不读滚动位置：读 scrollLeft 会
+  // 在批量补画时反复强制布局。
+  function drawDeferredCode(entry) {
+    var el = entry.el;
+    var code = el.isConnected ? codeEl(el) : null;
+    if (!code || code.textContent !== entry.code)
+      return;
+    var sel = window.getSelection();
+    if (sel && sel.anchorNode && code.contains(sel.anchorNode))
+      return;
+    code.innerHTML = highlightCode(el, entry.code, entry.lang).join('\n');
+    el._codeDrawn = (el.dataset.lang || '') + '\n' + entry.code;
+  }
+
+  // 整篇挂载后结算延迟高亮：前 FIRST_PAINT_BLOCKS 块（约覆盖首屏）立即补画，
+  // 其余在浏览器空闲时分批补画（每批 80 块）。不用 IntersectionObserver：
+  // 上千个 observe() 会强制整篇布局并阻塞 setMarkdown；空闲分批既不打断
+  // 交互，也保证滚到之前基本画完。
+  var FIRST_PAINT_BLOCKS = 30;
+  function flushDeferredCode() {
+    if (deferredCodeTimer) {
+      clearTimeout(deferredCodeTimer);
+      deferredCodeTimer = 0;
+    }
+    var list = deferredCode;
+    deferredCode = null;
+    if (!list || !list.length)
+      return;
+    var head = list.length < FIRST_PAINT_BLOCKS ? list.length : FIRST_PAINT_BLOCKS;
+    for (var i = 0; i < head; i++)
+      drawDeferredCode(list[i]);
+    if (list.length <= head)
+      return;
+    var cursor = head;
+    function pump() {
+      deferredCodeTimer = 0;
+      var end = Math.min(cursor + 80, list.length);
+      while (cursor < end) {
+        drawDeferredCode(list[cursor]);
+        cursor++;
+      }
+      // 帧间隔让路：每批约几毫秒，主线程仍能响应输入与绘制
+      if (cursor < list.length)
+        deferredCodeTimer = setTimeout(pump, 16);
+    }
+    deferredCodeTimer = setTimeout(pump, 16);
   }
 
   // 未转义 | 的下标。逐字符扫描而不是用正则后行断言：后者在 WebKit 16.4 之前
@@ -1339,7 +1417,7 @@
     setTimeout(commitHistory, 0);
   }
 
-  function renderBlock(el, raw) {
+  function renderBlock(el, raw, deferHi) {
     raw = String(raw === undefined || raw === null ? '' : raw);
     var kind = 'p';
     var html = '';
@@ -1351,7 +1429,7 @@
     if (fence) {
       kind = 'code';
       el.dataset.lang = fence[1];
-      html = renderCode(el, fence[2], fence[1]);
+      html = renderCode(el, fence[2], fence[1], deferHi);
     } else if (heading && lines.length === 1) {
       var level = heading[1].length;
       kind = 'h' + level;
@@ -1906,7 +1984,8 @@
   }
 
   // gaps 省略时全部按默认间隔（新建块之间的 2 个换行），供只关心文本的调用方使用
-  function mountBlocks(blocks, gaps, trail) {
+  function mountBlocks(blocks, gaps, trail, deferHi, skipNormalize) {
+    var _t0 = window.MOTE_PERF ? performance.now() : 0;
     // 整篇重建后旧的绝对偏移全部失效，跨块选区必须先清掉
     clearCrossSelection();
     closeLangMenu();
@@ -1917,21 +1996,35 @@
     if (blockHandle)
       blockHandle.style.display = 'none';
     root.innerHTML = '';
+    var _t1 = window.MOTE_PERF ? performance.now() : 0;
+    var fragment = document.createDocumentFragment();
     for (var i = 0; i < blocks.length; i++) {
       var el = document.createElement('div');
       el.className = 'block';
       el.setAttribute('contenteditable', 'true');
       if (gaps)
         el.dataset.gap = String(gapBefore(gaps, i));
-      renderBlock(el, blocks[i]);
-      root.appendChild(el);
+      renderBlock(el, blocks[i], deferHi);
+      fragment.appendChild(el);
     }
+    root.appendChild(fragment);
+    var _t2 = window.MOTE_PERF ? performance.now() : 0;
     if (typeof trail === 'number')
       trailingNewlines = trail > 0 ? trail : 0;
-    // 全部挂载完成、文档结构稳定后再归一化，避免逐个元素强制布局
-    normalizeCodeScrolls();
+    // 全部挂载完成、文档结构稳定后再归一化，避免逐个元素强制布局；
+    // 新页首挂（skipNormalize）时浏览器本来就按含滚动条的高度排版，跳过这次补偿。
+    if (!skipNormalize)
+      normalizeCodeScrolls();
+    var _t3 = window.MOTE_PERF ? performance.now() : 0;
     postWordCount();
     scheduleMermaid();
+    flushDeferredCode();
+    var _t4 = window.MOTE_PERF ? performance.now() : 0;
+    if (window.MOTE_PERF) {
+      post({type:'log', message:'PERF mountBlocks cleanup:' + (_t1-_t0).toFixed(1)
+        + ' | mount:' + (_t2-_t1).toFixed(1) + ' | norm:' + (_t3-_t2).toFixed(1)
+        + ' | wc:' + (_t4-_t3).toFixed(1) + ' | blocks:' + blocks.length});
+    }
   }
 
   // 绝对偏移 → 所在块下标与块内偏移（undo/redo 恢复选区用）
@@ -8502,25 +8595,34 @@
     setTheme: setTheme,
     setStatus: setStatus,
     setMarkdown: function (text) {
+      var _t0 = window.MOTE_PERF ? performance.now() : 0;
       closeSlash(false);
       closeTurnMenu();
       closeLangMenu();
       closeBlockMenu();
       hideBlockHandle();
       var normalized = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n');
+      var _t1 = window.MOTE_PERF ? performance.now() : 0;
 
       suppressEvents = true;
+      var _t2 = _t1;
       if (mode === 'source') {
         sourceEl.value = normalized;
         trailingNewlines = trailingNewlineCount(normalized);
       } else {
         var layout = splitSourceLayout(normalized);
-        mountBlocks(layout.blocks, layout.gaps, layout.trail);
+        _t2 = window.MOTE_PERF ? performance.now() : 0;
+        // 整篇载入路径启用延迟高亮；本页首挂跳过滚动条补偿（新页布局本来就对）
+        var fresh = pageFresh;
+        pageFresh = false;
+        mountBlocks(layout.blocks, layout.gaps, layout.trail, true, fresh);
       }
       suppressEvents = false;
+      var _t3 = window.MOTE_PERF ? performance.now() : 0;
 
       // 以规范化后的序列化结果为基准，避免尾部空行造成“一打开就是已修改”
       savedText = currentSource();
+      var _t4 = window.MOTE_PERF ? performance.now() : 0;
 
       // 换文档时历史从当前状态重新开始
       if (commitTimer) {
@@ -8535,6 +8637,13 @@
       updatePlaceholder();
       post({ type: 'dirty', value: false });
       postView();
+      var _t5 = window.MOTE_PERF ? performance.now() : 0;
+      if (window.MOTE_PERF) {
+        post({type:'log', message:'PERF setMarkdown norm:' + (_t1-_t0).toFixed(1)
+          + ' | split:' + (_t2-_t1).toFixed(1) + ' | mount:' + (_t3-_t2).toFixed(1)
+          + ' | serialize:' + (_t4-_t3).toFixed(1) + ' | history+toc:' + (_t5-_t4).toFixed(1)
+          + ' | total:' + (_t5-_t0).toFixed(1)});
+      }
     },
     // 保存成功后由 Qt 回填基准文本；之后再撤销会重新变成“已修改”，
     // 重做回保存点则圆点消失
@@ -8731,5 +8840,7 @@
   applyZoom();
   if (INLINE_PROTO)
     document.body.classList.add('inline-proto');
+  if (window.MOTE_PERF)
+    post({ type: 'log', message: 'PERF page_scripts ' + performance.now().toFixed(1) + 'ms' });
   post({ type: 'ready' });
 })();

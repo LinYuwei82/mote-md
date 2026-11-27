@@ -262,9 +262,7 @@ std::string ResolveManifestUrl()
         return;
     _started = YES;
 
-    if (!_engine)
-        [self buildEngine];
-
+    // 引擎构建挪到首次 tick（懒建已覆盖）：不占启动关键路径
     __weak MoteUpdater *weakSelf = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kStartupDelay * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
