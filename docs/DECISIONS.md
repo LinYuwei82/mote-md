@@ -75,6 +75,27 @@
 - **理由**：仓库与构建都离开同步目录后，打包稳定且不产生同步噪声；行尾规则让 Windows 克隆拿到 CRLF 的批处理与 LF 的脚本。
 - **代价**：迁移后旧的绝对路径脚本需要改（已改）；`.gitattributes` 生效后 Windows 侧首次检出会出现行尾差异，属预期。
 
+### 11. 多窗口：一窗一文档，外部打开走新窗口（1.0.29）
+
+- **问题**：单窗口模型下外部打开（双击/拖放/命令行）会替换当前文档，脏内容靠保存询问兜底，但无法并行编辑多篇。
+- **选择**：一个窗口一篇文档；外部打开一律新窗口；同路径已打开则聚焦既有窗口。mac 由 AppDelegate 持 `moteWindows` 注册表路由命令；win 消息循环上收 `main.cpp`、窗口注册表 + `GWLP_USERDATA` 钩子路由、单实例转发改投新窗口。撤销栈天然按窗口隔离（每窗独立前端实例）。
+- **理由**：与编辑器内核「页面即文档」模型一致，隔离性最好；聚焦而非重复打开避免同文件双窗口互踩。
+- **代价**：菜单状态/键监视器上收到应用级；关窗/退出要遍历注册表逐个做脏保存询问。「最近打开」存储 mac=`UserDefaults Moterecent_files`、win=`HKCU\Software\Mote`，各 10 条、最新在前、不存在置灰。
+
+### 12. 「关于 Mote」双平台原生控件对话框（1.0.30 待发布）
+
+- **问题**：mac 原用系统 `orderFrontStandardAboutPanel:`（只有图标+版本，过于简陋），win 完全没有关于入口。
+- **选择**：mac `shell/mac/about_window.mm` 代码构建 NSWindow（无 xib）；win `shell/win/about_dialog.cpp` 手写 Win32 模态框（无 .rc 资源）。文案版式逐字对齐：图标 / Mote / 版本 x.y.z (build) / 版权 / 官网链接 / 检查更新… / 关闭。入口不进 core 命令表，走 shell 私有 id（win `kAboutCommandId=40007`）。
+- **理由**：与薄壳架构一致、零额外资源、打开开销小；复用各自现成更新链路。
+- **代价**：双端两处实现要人工保持文案同步。win 侧踩坑：控制 id 不能用 `IDC_*` 前缀（`IDC_ICON` 是 winuser.h 游标宏），变量名避开 `small`（rpcndr.h `#define small char`）。
+
+### 13. 构建号 stamp 用 extern "C" + /INCLUDE 强制保留
+
+- **问题**：1.0.29 CI 产物（MSVC 14.52）把 `static const char kBuildStamp[]` + `[[maybe_unused]]` 引用当死代码剥离，guard.py 的 BUILD_STR 二次校验降级 WARN，二进制字符串防线在 CI 产物上失效（本机 VS2022 14.44 不剥离，本地测不出）。
+- **选择**：`extern "C" const char kMoteBuildStamp[]` + `#pragma comment(linker, "/INCLUDE:kMoteBuildStamp")`（x64 C 符号无修饰）。
+- **理由**：/INCLUDE 是 MSVC 官方强制保留机制，链接器与 LTCG 都尊重。
+- **代价**：客户端更新判定本就读编译整数值，不受影响；此改动只恢复发布校验强度，最终确认看下次发布 preflight 输出「✓ 构建号一致」。
+
 ## 二、硬约束（改动会连带破坏其它功能）
 
 1. **零位移**：进入/离开编辑态不改变任何块的宽度与高度；标记必须零宽。
@@ -82,6 +103,7 @@
 3. **标记不进入选区复制**：复制出去应是 Markdown 原文，不能带出 UI 控件或提示标签的文字。
 4. **块几何只在该变的地方变**：插入/转换只影响目标块高度与其下方块的位移，上方块 `top` 不变。
 5. **撤销以整篇快照为单位**：任何会改 `raw` 的新交互都必须走同一条历史入口，否则一次撤销还原不了。
+6. **mac NSWindow 必须显式 `releasedWhenClosed=NO`**：ARC strong 属性 + 默认 YES 会在关窗时双重释放（1.0.29 多窗口关窗崩溃即此，`87509a3` 修复）。新建窗口一律遵守。
 
 ## 三、已知未解决 / 待验证 / 设计取舍
 

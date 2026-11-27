@@ -78,8 +78,9 @@ core/
   command_table           菜单唯一来源
   inject_chunks           大文档分片切分（UTF-8 安全）
   update                  更新清单解析、版本比较与升级判定
-shell/mac/               AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
-shell/win/               Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
+  recent_files            最近打开列表：去重、上限 10、最新在前（存储由两端壳各自落地：UserDefaults / HKCU）
+shell/mac/               AppKit + WKWebView：多窗口（AppDelegate 注册表）、菜单、对话框（含 about_window 关于面板）、PDF/HTML、拖放、更新检查
+shell/win/               Win32 + WebView2：多窗口（main.cpp 循环 + 注册表 + GWLP_USERDATA 路由）、菜单、对话框（含 about_dialog 关于模态框）、拖放、PDF/HTML、更新检查
 resources/
   web/editor.html         唯一页面骨架（三个占位符：CSS / mermaid / JS）
   web/editor.css          全部样式（含打印与 PDF 清理）
@@ -430,6 +431,18 @@ Gitee release 详情接口不返回 `assets.size`。
 **P39 先建发行版再推 tag，结果生成了轻量标签**
 Gitee 在 `tag_name` 不存在时会按 `target_commitish` 自建 tag。
 → 顺序固定：先 `git push origin vX.Y.Z`（附注标签），再 `POST /releases`。
+
+**P40 macOS 多窗口关闭非最后一个窗口必崩（1.0.29 实际发生）**
+`NSWindow` 默认 `releasedWhenClosed=YES`，关窗时 AppKit release 一次；ARC strong 属性（注册表/控制器持有）再 release 一次 → 双重释放，主 runloop 排空自动释放池时 `objc_release` 野指针 SIGSEGV。只关最后一个窗口时进程随即退出，掩盖问题。
+→ 所有代码创建的窗口显式 `window.releasedWhenClosed = NO`，生命周期只交给 ARC。
+
+**P41 win32 手写对话框撞 SDK 宏**
+控制 id 命名 `IDC_ICON` 会撞上 winuser.h 的游标宏（`MAKEINTRESOURCE` 展开成语法错误）；局部变量名 `small` 撞上 rpcndr.h 的 `#define small char`。报错行号指向自己的代码，很迷惑。
+→ 私有控件 id 用产品前缀（本项目用 `ABO_*`），变量避开 `small/title/handle` 类裸名。
+
+**P42 CI 产物里找不到构建号 stamp 字符串**
+MSVC 14.52（GitHub runner）会把无人引用的内部静态 `static const char kBuildStamp[]` 当死代码剥离，`[[maybe_unused]]` + 指针引用挡不住；本机 VS2022 14.44 保留，本地测不出。guard.py 缺标记只 WARN 跳过，不阻断。
+→ `extern "C"` 外部符号 + `#pragma comment(linker, "/INCLUDE:kMoteBuildStamp")` 强制保留（x64 C 符号无修饰）。客户端更新判定用编译整数值，与此字符串无关，功能不受影响。
 
 ---
 

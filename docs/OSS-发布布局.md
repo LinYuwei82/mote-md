@@ -1,6 +1,6 @@
 # OSS 发布布局（安装包 / 更新清单 / 手册 / 官网）
 
-> 更新日期：2026-11-20（末尾更新 2026-11-20：DevCard BUILD_STR 双宏落地 + guard.py selftest 补充 DevCard 正向用例 + sync_guard.sh --check-build-str 覆盖 DevCard；三仓库新增 UTF-8 BOM 三道闸）
+> 更新日期：2026-11-28（末尾更新 2026-11-28：线上快照刷新为 Mote 1.0.29+26——多窗口+最近打开；1.0.29 发布实操教训已写入《发布工作流》：Release 页需 `.md`、mac 发布环境变量为 `MOTE_BUILD`、双平台清单竞态顺序、CI MSVC 14.52 剥离 kBuildStamp 已用 extern "C" + /INCLUDE 加固）
 > **当前发布口径**：正式发布从 tag `v<semver>+<seq>` 触发，`build = seq`（从 1 起，无固定基数）；下面带日期的版本号与构建号是发布当时的快照，最新值以线上 `manifest.json` 为准。
 > 数据来源：`oss://xiaotu-update`、`oss://xiaotu-site` 线上对象与元数据实测
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
@@ -126,13 +126,13 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 ### 3.3 Mote（macOS 当前 1.0.6，Windows 当前 1.0.6）
 
-当前版本（v2 命名，`dl.xiaotu.online/mote/`，2026-11-20 发布）：
+当前版本（v2 命名，`dl.xiaotu.online/mote/`，2026-11-27 发布 1.0.29+26）：
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
-| DMG | `mote/mote-1.0.6-macos-arm64.dmg` | 1,829,951 | `application/octet-stream` |
-| EXE | `mote/mote-1.0.6-win64-setup.exe` | 2,662,393 | `application/octet-stream` |
-| ZIP | `mote/mote-1.0.6-win64-portable.zip` | 693,311 | `application/zip` |
+| DMG | `mote/mote-1.0.29-macos-arm64.dmg` | 3,207,735 | `application/octet-stream` |
+| EXE | `mote/mote-1.0.29-win64-setup.exe` | 3,555,479 | `application/octet-stream` |
+| ZIP | `mote/mote-1.0.29-win64-portable.zip` | 1,868,499 | `application/zip` |
 
 > 线上清单里 `windows.build` 是发布当时的旧编号（`202611191435`）；从下一个版本起
 > `build` = tag 序号。macOS 客户端自 2026-11-20 起把编译期 `MOTE_BUILD`（与 Info.plist
