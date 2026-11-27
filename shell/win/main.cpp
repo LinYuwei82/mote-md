@@ -41,6 +41,18 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command)
     int argc = 0;
     LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 
+    // 单实例转发：应用已在运行时双击 .md，把路径交给已有窗口并退出，
+    // 不再冷启动第二个进程（配合免重载，热打开接近秒开）。
+    if (argc > 1 && argv && argv[1]) {
+        const std::string forwarded = wide_to_utf8(argv[1]);
+        if (MoteMainWindow::forward_path_to_existing(forwarded)) {
+            LocalFree(argv);
+            if (SUCCEEDED(com))
+                CoUninitialize();
+            return 0;
+        }
+    }
+
     int exit_code = 1;
     {
         MoteMainWindow window(instance);

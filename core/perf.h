@@ -13,8 +13,19 @@ namespace mote {
 
 inline bool perfEnabled()
 {
+#if defined(_MSC_VER)
+    static const bool enabled = [] {
+        char *raw = nullptr;
+        std::size_t size = 0;
+        const bool on = _dupenv_s(&raw, &size, "MOTE_PERF") == 0 && raw != nullptr;
+        std::free(raw);
+        return on;
+    }();
+    return enabled;
+#else
     static const bool enabled = std::getenv("MOTE_PERF") != nullptr;
     return enabled;
+#endif
 }
 
 inline std::chrono::steady_clock::time_point &perfOrigin()

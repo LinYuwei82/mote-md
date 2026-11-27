@@ -83,6 +83,11 @@ std::wstring exe_directory()
 
 std::wstring user_data_directory()
 {
+    // 诊断覆盖：SSH 无头会话的 KnownFolder 可能指向不可写配置的用户目录，
+    // 设 MOTE_WEBVIEW2_DATA 可把 WebView2 数据目录指到可写位置。
+    const std::string override_dir = env_value("MOTE_WEBVIEW2_DATA");
+    if (!override_dir.empty())
+        return utf8_to_wide(override_dir);
     PWSTR local_app_data = nullptr;
     std::wstring result;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &local_app_data))
@@ -495,15 +500,34 @@ bool WebHostView::build_page(const std::string &base_dir, std::wstring *url)
         }
     }
 
+    // 页目录选择与 core 的免重载判定同口径：文档目录在 %USERPROFILE% 内
+    // （或未命名）→ 页面固定写 %TEMP%\MoteNative，换目录无需重载；
+    // 越界目录 → 页面写进该目录（沿用旧的读权限形态），由 core 触发重载。
     std::wstring directory;
-    if (base_dir.empty()) {
+    const auto under_profile = [](const std::wstring &dir) {
+        wchar_t buf[MAX_PATH] = {};
+        const DWORD n = GetEnvironmentVariableW(L"USERPROFILE", buf, MAX_PATH);
+        if (n == 0 || n >= MAX_PATH)
+            return false;
+        std::wstring root = buf;
+        while (!root.empty() && root.back() == L'\\')
+            root.pop_back();
+        if (dir.size() < root.size() || dir.compare(0, root.size(), root) != 0)
+            return false;
+        return dir.size() == root.size() || dir[root.size()] == L'\\';
+    };
+    const std::wstring base_w = utf8_to_wide(base_dir);
+    if (base_dir.empty() || under_profile(base_w)) {
         wchar_t temp[MAX_PATH] = {};
         GetTempPathW(MAX_PATH, temp);
         directory = temp;
         if (!directory.empty() && directory.back() == L'\\')
             directory.pop_back();
+        directory += L"\\MoteNative";
+        std::error_code ec;
+        std::filesystem::create_directories(directory, ec);
     } else {
-        directory = utf8_to_wide(base_dir);
+        directory = base_w;
     }
 
     const std::wstring name = L"\\.mote-preview-"
@@ -708,5 +732,8 @@ void WebHostView::focus()
 
 void WebHostView::fail(const wchar_t *message)
 {
-    MessageBoxW(parent_, message, L"Mote", MB_OK | MB_ICONERROR);
+    log_line((std::wstring(L"FAIL ") + message).c_str());
+    // 打点/自动化模式不弹阻塞对话框（无头会话里会卡死整个进程）
+    if (!mote::perfEnabled())
+        MessageBoxW(parent_, message, L"Mote", MB_OK | MB_ICONERROR);
 }

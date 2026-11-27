@@ -47,8 +47,11 @@ constexpr UINT_PTR kSnapshotTimer = 2;
 constexpr UINT_PTR kDropProbeTimer = 3;
 // 5 起避开 updater_win.cpp 的 kUpdateTimer（4），否则 WM_TIMER 会被先匹配走
 constexpr UINT_PTR kEvalTimer = 5;
+constexpr UINT_PTR kOpen2Timer = 6;
 // 键盘钩子截获的组合键回到窗口线程后，再用这条消息统一走 perform_command
 constexpr UINT kShortcutMessage = WM_APP + 7;
+// 单实例转发通知（路径经 forward_handoff_path 交接文件传递）
+constexpr UINT kForwardMessage = WM_APP + 9;
 
 using win_encoding::utf8_to_wide;
 using win_encoding::wide_to_utf8;
@@ -340,6 +343,19 @@ void put_clipboard_bytes(UINT format, const std::string &bytes)
         GlobalFree(memory);
 }
 
+// 单实例转发交接文件：两个进程会话不同（TEMP 可能指向不同用户目录），
+// ProgramData 对双方都可读写。第二个实例写路径 + PostMessage 通知，
+// 主实例读后即删——避免 SendMessage 跨进程同步阻塞消息循环。
+std::wstring forward_handoff_path()
+{
+    wchar_t buf[MAX_PATH] = {};
+    const DWORD n = GetEnvironmentVariableW(L"ProgramData", buf, MAX_PATH);
+    std::wstring base = (n > 0 && n < MAX_PATH) ? buf : L"C:\\ProgramData";
+    while (!base.empty() && (base.back() == L'\\' || base.back() == L'/'))
+        base.pop_back();
+    return base + L"\\Mote\\open_forward.txt";
+}
+
 } // namespace
 
 // EditorHost → Win32 的转发层。owner 是应用级单窗口，生命周期覆盖整个进程。
@@ -598,6 +614,14 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             });
         shell_ = std::make_unique<ShellHost>(*this);
         controller_ = std::make_unique<mote::EditorController>(*shell_);
+        // 换目录免重载：home 内文档的页面固定写在 %TEMP%\MoteNative（见
+        // web_host_view.cpp），根内换目录只改 <base> 注入正文；越界目录
+        // （其他盘符）退回「页面写进该目录 + 重载」兜底。
+        {
+            const std::string profile = env_value("USERPROFILE");
+            if (!profile.empty())
+                controller_->setReadAccessRoot(profile);
+        }
         // 命令行带文件：直接打开它，跳过示例页（省一次全量页面加载）
         if (!pending_path_.empty()) {
             const std::string pending = pending_path_;
@@ -618,6 +642,18 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
             [hwnd] { PostMessageW(hwnd, WM_CLOSE, 0, 0); });
         mote::win::start_update_checker(hwnd);
         return 0;
+    case kForwardMessage: {
+        // 单实例转发：另一个进程双击了 .md，唤起本窗口并打开交接文件里的路径
+        const std::wstring handoff = forward_handoff_path();
+        std::ifstream in(std::filesystem::path(handoff), std::ios::binary);
+        std::string path;
+        if (in)
+            std::getline(in, path, '\0');
+        DeleteFileW(handoff.c_str());
+        if (!path.empty())
+            open_forwarded(path);
+        return 0;
+    }
     case WM_COMMAND: {
         const UINT id = LOWORD(wparam);
         if (id == mote::win::kExitCommandId) {
@@ -644,6 +680,16 @@ LRESULT MoteMainWindow::handle_message(HWND hwnd, UINT message, WPARAM wparam, L
         if (wparam == kStartupCommandTimer) {
             KillTimer(hwnd, kStartupCommandTimer);
             run_startup_command();
+            return 0;
+        }
+        if (wparam == kOpen2Timer) {
+            KillTimer(hwnd, kOpen2Timer);
+            const std::string p = env_value("MOTE_OPEN2");
+            if (!p.empty()) {
+                mote::perfReset();
+                mote::perfMark("win:hot_open_start");
+                open_path(p);
+            }
             return 0;
         }
         if (wparam == mote::win::kUpdateTimer) {
@@ -806,6 +852,42 @@ void MoteMainWindow::open_document()
     const std::string dir = last_dir_.empty() ? documents_dir() : last_dir_;
     const std::string path = MoteOpenMarkdownDialog(hwnd_, dir);
     if (!path.empty())
+        open_path(path);
+}
+
+bool MoteMainWindow::forward_path_to_existing(const std::string &path_utf8)
+{
+    HWND hwnd = FindWindowW(kWindowClass, nullptr);
+    if (!hwnd)
+        return false;
+    const std::wstring handoff = forward_handoff_path();
+    std::error_code ec;
+    std::filesystem::create_directories(
+        std::filesystem::path(handoff).parent_path(), ec);
+    std::ofstream out(std::filesystem::path(handoff),
+                      std::ios::binary | std::ios::trunc);
+    if (!out)
+        return false;
+    out << path_utf8;
+    out.close();
+    if (!PostMessageW(hwnd, kForwardMessage, 0, 0)) {
+        DeleteFileW(handoff.c_str());
+        return false;
+    }
+    return true;
+}
+
+void MoteMainWindow::open_forwarded(const std::string &path)
+{
+    if (IsIconic(hwnd_))
+        ShowWindow(hwnd_, SW_RESTORE);
+    SetForegroundWindow(hwnd_);
+    if (!controller_) {
+        // 窗口还在初始化：暂存，WM_CREATE 尾部会消费
+        set_pending_path(path);
+        return;
+    }
+    if (prepare_for_replace(AfterSave::OpenPath, path))
         open_path(path);
 }
 
@@ -1158,6 +1240,12 @@ void MoteMainWindow::page_ready()
     // MOTE_COMMAND 诊断钩子：页面就绪后再等 700ms，避开首帧布局
     if (!startup_command_done_ && !env_value("MOTE_COMMAND").empty())
         SetTimer(hwnd_, kStartupCommandTimer, 700, nullptr);
+
+    // 与 mac 同名钩子：首屏就绪 600ms 后再打开第二个文件（测热打开）
+    if (!open2_done_ && !env_value("MOTE_OPEN2").empty()) {
+        open2_done_ = true;
+        SetTimer(hwnd_, kOpen2Timer, 600, nullptr);
+    }
 
     // 与 mac 同名的诊断钩子：MOTE_EVAL 打一条 JSLOG，MOTE_SNAPSHOT 出 PNG
     if (!diagnostics_started_) {
