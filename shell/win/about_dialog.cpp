@@ -20,13 +20,13 @@ constexpr const wchar_t *kClassName = L"MoteAboutDialog";
 constexpr int kWidth = 320;
 constexpr int kHeight = 322;
 
-constexpr UINT_PTR IDC_ICON = 100;
-constexpr UINT_PTR IDC_NAME = 101;
-constexpr UINT_PTR IDC_VERSION = 102;
-constexpr UINT_PTR IDC_COPYRIGHT = 103;
-constexpr UINT_PTR IDC_LINK = 104;
-constexpr UINT_PTR IDC_CHECK = 105;
-constexpr UINT_PTR IDC_CLOSE = 106;
+constexpr UINT_PTR ABO_ICON = 100;
+constexpr UINT_PTR ABO_NAME = 101;
+constexpr UINT_PTR ABO_VERSION = 102;
+constexpr UINT_PTR ABO_COPYRIGHT = 103;
+constexpr UINT_PTR ABO_LINK = 104;
+constexpr UINT_PTR ABO_CHECK = 105;
+constexpr UINT_PTR ABO_CLOSE = 106;
 
 HWND g_hwnd = nullptr;
 HFONT g_title_font = nullptr;
@@ -59,13 +59,13 @@ void layout(HWND dlg)
     metrics.cbSize = sizeof(metrics);
     if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0)) {
         g_text_font = CreateFontIndirectW(&metrics.lfMessageFont);
-        LOGFONTW small = metrics.lfMessageFont;
-        small.lfHeight = small.lfHeight * 11 / 12;
-        g_small_font = CreateFontIndirectW(&small);
-        LOGFONTW title = metrics.lfMessageFont;
-        title.lfWeight = FW_BOLD;
-        title.lfHeight = title.lfHeight * 17 / 12;
-        g_title_font = CreateFontIndirectW(&title);
+        LOGFONTW lf_small = metrics.lfMessageFont;
+        lf_small.lfHeight = lf_small.lfHeight * 11 / 12;
+        g_small_font = CreateFontIndirectW(&lf_small);
+        LOGFONTW lf_title = metrics.lfMessageFont;
+        lf_title.lfWeight = FW_BOLD;
+        lf_title.lfHeight = lf_title.lfHeight * 17 / 12;
+        g_title_font = CreateFontIndirectW(&lf_title);
     }
 
     int y = 20;
@@ -76,18 +76,18 @@ void layout(HWND dlg)
     CreateWindowExW(0, L"STATIC", nullptr,
                     WS_CHILD | WS_VISIBLE | SS_ICON,
                     (kWidth - 64) / 2, y, 64, 64, dlg,
-                    reinterpret_cast<HMENU>(IDC_ICON), instance, nullptr);
+                    reinterpret_cast<HMENU>(ABO_ICON), instance, nullptr);
     if (icon)
-        SendMessageW(GetDlgItem(dlg, static_cast<int>(IDC_ICON)), STM_SETICON,
+        SendMessageW(GetDlgItem(dlg, static_cast<int>(ABO_ICON)), STM_SETICON,
                      reinterpret_cast<WPARAM>(icon), 0);
 
     y += 64 + 12;
-    make_static(dlg, IDC_NAME, L"Mote", g_title_font, 0, y, kWidth, 24);
+    make_static(dlg, ABO_NAME, L"Mote", g_title_font, 0, y, kWidth, 24);
     y += 24 + 4;
     static std::wstring version = version_line();
-    make_static(dlg, IDC_VERSION, version.c_str(), g_text_font, 0, y, kWidth, 18);
+    make_static(dlg, ABO_VERSION, version.c_str(), g_text_font, 0, y, kWidth, 18);
     y += 18 + 4;
-    make_static(dlg, IDC_COPYRIGHT, L"© 2026 xiaotu · 小图在线", g_small_font,
+    make_static(dlg, ABO_COPYRIGHT, L"© 2026 xiaotu · 小图在线", g_small_font,
                 0, y, kWidth, 16);
     y += 16 + 14;
 
@@ -95,7 +95,7 @@ void layout(HWND dlg)
                                 L"<a href=\"https://dl.xiaotu.online/mote/\">官网与下载</a>",
                                 WS_CHILD | WS_VISIBLE | SS_CENTER,
                                 0, y, kWidth, 18, dlg,
-                                reinterpret_cast<HMENU>(IDC_LINK), instance, nullptr);
+                                reinterpret_cast<HMENU>(ABO_LINK), instance, nullptr);
     SendMessageW(link, WM_SETFONT, reinterpret_cast<WPARAM>(g_text_font), TRUE);
     y += 18 + 18;
 
@@ -103,7 +103,7 @@ void layout(HWND dlg)
     HWND check = CreateWindowExW(0, L"BUTTON", L"检查更新…",
                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                  (kWidth - check_w) / 2, y, check_w, 26, dlg,
-                                 reinterpret_cast<HMENU>(IDC_CHECK), instance, nullptr);
+                                 reinterpret_cast<HMENU>(ABO_CHECK), instance, nullptr);
     SendMessageW(check, WM_SETFONT, reinterpret_cast<WPARAM>(g_text_font), TRUE);
     y += 26 + 8;
 
@@ -111,7 +111,7 @@ void layout(HWND dlg)
     HWND close = CreateWindowExW(0, L"BUTTON", L"关闭",
                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                  (kWidth - close_w) / 2, y, close_w, 26, dlg,
-                                 reinterpret_cast<HMENU>(IDC_CLOSE), instance, nullptr);
+                                 reinterpret_cast<HMENU>(ABO_CLOSE), instance, nullptr);
     SendMessageW(close, WM_SETFONT, reinterpret_cast<WPARAM>(g_text_font), TRUE);
 }
 
@@ -128,11 +128,11 @@ LRESULT CALLBACK about_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
     }
     case WM_COMMAND:
         switch (LOWORD(wparam)) {
-        case IDC_CHECK:
+        case ABO_CHECK:
             // 自研检查链路是异步的，模态循环保有 owner 消息泵，结果弹窗照常出现
             mote::win::check_for_updates_now(GetParent(hwnd));
             return 0;
-        case IDC_CLOSE:
+        case ABO_CLOSE:
         case IDCANCEL:
             DestroyWindow(hwnd);
             return 0;
@@ -140,7 +140,7 @@ LRESULT CALLBACK about_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         return 0;
     case WM_NOTIFY: {
         const LPNMHDR header = reinterpret_cast<LPNMHDR>(lparam);
-        if (header->idFrom == IDC_LINK && header->code == NM_CLICK) {
+        if (header->idFrom == ABO_LINK && header->code == NM_CLICK) {
             const PNMLINK link = reinterpret_cast<PNMLINK>(lparam);
             ShellExecuteW(hwnd, L"open", link->item.szUrl, nullptr, nullptr, SW_SHOWNORMAL);
         }
@@ -224,7 +224,7 @@ void show_about_dialog(HWND owner)
         EnableWindow(owner, FALSE);
     ShowWindow(g_hwnd, SW_SHOW);
     SetForegroundWindow(g_hwnd);
-    if (HWND focus = GetDlgItem(g_hwnd, static_cast<int>(IDC_CLOSE)))
+    if (HWND focus = GetDlgItem(g_hwnd, static_cast<int>(ABO_CLOSE)))
         SetFocus(focus);
 
     MSG msg{};
