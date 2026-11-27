@@ -298,7 +298,6 @@ static NSDictionary<NSNumber *, NSMenuItem *> *gCommandItems = nil;
     std::unique_ptr<mote::EditorController> _controller;
     BOOL _tocOn;
     BOOL _sourceOn;
-    BOOL _dropProbeDone;
     double _lastZoom;
 }
 
@@ -1037,12 +1036,15 @@ static NSDictionary<NSNumber *, NSMenuItem *> *gCommandItems = nil;
 // 页面就绪后把同一套拖放处理按时调用一次。
 - (void)runDropProbeIfNeeded
 {
-    if (_dropProbeDone)
+    // 进程级只跑一次：多窗口下每个新窗口的 ready 不能再触发，
+    // 否则拖放打开新窗口会连环重复
+    static BOOL done = NO;
+    if (done)
         return;
     const char *probe = std::getenv("MOTE_DROP");
     if (!probe || !*probe)
         return;
-    _dropProbeDone = YES;
+    done = YES;
 
     NSString *text = [NSString stringWithUTF8String:probe];
     NSMutableArray<NSString *> *paths = [NSMutableArray array];

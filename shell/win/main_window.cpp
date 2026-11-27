@@ -1437,19 +1437,24 @@ void MoteMainWindow::page_ready()
         show_status(pending_status_);
     update_title();
     update_menu_state();
+    // 诊断钩子全部进程级只跑一次：多窗口下每个新窗口的 ready 不能再触发，
+    // 否则 MOTE_COMMAND=newwindow 会连环开窗口
+    static bool startup_command_done = false;
+    static bool open2_done = false;
+    static bool diagnostics_started = false;
     // MOTE_COMMAND 诊断钩子：页面就绪后再等 700ms，避开首帧布局
-    if (!startup_command_done_ && !env_value("MOTE_COMMAND").empty())
+    if (!startup_command_done && !env_value("MOTE_COMMAND").empty())
         SetTimer(hwnd_, kStartupCommandTimer, 700, nullptr);
 
     // 与 mac 同名钩子：首屏就绪 600ms 后再打开第二个文件（测热打开）
-    if (!open2_done_ && !env_value("MOTE_OPEN2").empty()) {
-        open2_done_ = true;
+    if (!open2_done && !env_value("MOTE_OPEN2").empty()) {
+        open2_done = true;
         SetTimer(hwnd_, kOpen2Timer, 600, nullptr);
     }
 
     // 与 mac 同名的诊断钩子：MOTE_EVAL 打一条 JSLOG，MOTE_SNAPSHOT 出 PNG
-    if (!diagnostics_started_) {
-        diagnostics_started_ = true;
+    if (!diagnostics_started) {
+        diagnostics_started = true;
         // 等导航完成后再取页面状态：ready 消息到达时 WebView2 仍在导航，
         // 此刻调用 ExecuteScript 会被静默丢弃（只剩 scheduled、没有结果）
         if (!env_value("MOTE_EVAL").empty()) {
@@ -1464,10 +1469,9 @@ void MoteMainWindow::page_ready()
         }
         // 与 mac 同名同义：页面就绪 900ms 后把指定路径当成一次真实拖放。
         // mac 用 ':' 分隔；Windows 盘符本身带 ':'，这里改成分号。
-        if (!drop_probe_done_) {
+        {
             const std::string paths = env_value("MOTE_DROP");
             if (!paths.empty()) {
-                drop_probe_done_ = true;
                 const std::string list = paths;
                 size_t start = 0;
                 while (start <= list.size()) {
@@ -1675,12 +1679,13 @@ void MoteMainWindow::update_menu_state()
 
 void MoteMainWindow::run_startup_command()
 {
-    if (startup_command_done_)
+    static bool done = false;
+    if (done)
         return;
     const std::string raw = env_value("MOTE_COMMAND");
     if (raw.empty())
         return;
-    startup_command_done_ = true;
+    done = true;
 
     std::string name;
     for (const char *item = raw.c_str(); *item; ++item) {
