@@ -5,12 +5,12 @@
     if (!block || !block.parentNode)
       return;
     EditingSnapshot.commitHistory();
-    var el = TurnMenu.makeBlockEl('');
+    var el = Menus.makeBlockEl('');
     if (above)
       root.insertBefore(el, block);
     else
       root.insertBefore(el, block.nextSibling);
-    TurnMenu.afterBlockStructureChange();
+    Menus.afterBlockStructureChange();
     el.classList.add('editing');
     el.focus();
     CaretCode.setCaret(el, 0);
@@ -23,9 +23,9 @@
     if (!block || !block.parentNode)
       return;
     EditingSnapshot.commitHistory();
-    var el = TurnMenu.makeBlockEl(BlockParse.rawOf(block));
+    var el = Menus.makeBlockEl(BlockParse.rawOf(block));
     root.insertBefore(el, block.nextSibling);
-    TurnMenu.afterBlockStructureChange();
+    Menus.afterBlockStructureChange();
   }
 
   function removeBlock(block) {
@@ -46,7 +46,7 @@
     block.remove();
     if (blockHandleTarget === block)
       BlockHandle.setHandleBlock(focusEl);
-    TurnMenu.afterBlockStructureChange();
+    Menus.afterBlockStructureChange();
     if (focusEl) {
       focusEl.classList.add('editing');
       focusEl.focus();
@@ -77,7 +77,7 @@
           BlockConvert.insertBlockAfter(anchor, lines[li], lines[li].length);
           anchor = anchor.nextElementSibling;
         }
-        TurnMenu.normalizeBlockGaps();
+        Menus.normalizeBlockGaps();
         Toc.scheduleTocRefresh();
         EditingSnapshot.commitHistory();   // 拆分合成一个撤销步
         return;

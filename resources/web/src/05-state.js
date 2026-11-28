@@ -3,11 +3,6 @@
   var crossAnnounced = false; // 与外壳同步的「是否有跨块选区」状态
   var dragCross = null;       // { anchor, el, x, y, goalX }
   var dragScrollTimer = 0;
-  var slashState = null;   // { el, start, end, index }
-  var slashMenu = null;
-  var turnMenu = null;
-  var langMenu = null;       // 挂在 body 上的下拉面板
-  var langComposing = false; // 搜索框自己的输入法组字状态
   var blockHandle = null;
   var blockHandleTarget = null;   // 手柄当前停靠的块
   var blockHandleKeep = false;    // 指针停在手柄上，离开正文也不隐藏

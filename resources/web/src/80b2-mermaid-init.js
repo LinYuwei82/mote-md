@@ -15,9 +15,9 @@
     setStatus: Util.setStatus,
     setMarkdown: function (text) {
       var _t0 = window.MOTE_PERF ? performance.now() : 0;
-      SlashMenu.closeSlash(false);
-      TurnMenu.closeTurnMenu();
-      LangMenu.closeLangMenu();
+      Menus.closeSlash(false);
+      Menus.closeTurnMenu();
+      Menus.closeLangMenu();
       BlockMenu.closeBlockMenu();
       BlockHandle.hideBlockHandle();
       var normalized = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n');
@@ -86,9 +86,9 @@
         Find.closeFind();
       if (tocVisible)
         Toc.toggleToc();
-      SlashMenu.closeSlash(false);
-      TurnMenu.closeTurnMenu();
-      LangMenu.closeLangMenu();
+      Menus.closeSlash(false);
+      Menus.closeTurnMenu();
+      Menus.closeLangMenu();
       ViewState.setZoom(1);
       window.mote.setMarkdown('');
       // 目录已关闭时 refreshToc 会早退，旧标题节点仍留在 DOM 里；新建必须清掉
@@ -231,7 +231,7 @@
       return ExportHtml.pdfContentReady();
     },
     pdfBegin: function () {
-      LangMenu.closeLangMenu();
+      Menus.closeLangMenu();
       pdfSavedScrollY = window.pageYOffset || 0;
       document.body.classList.add('pdf-export');
       var ed = document.getElementById('editor');

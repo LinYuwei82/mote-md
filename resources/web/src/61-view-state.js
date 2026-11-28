@@ -56,7 +56,7 @@
     // 查找/替换绑定当前模式的命中（DOM 区间或 textarea 区间），切模式前先关掉
     if (Find.isOpen())
       Find.closeFind();
-    LangMenu.closeLangMenu();
+    Menus.closeLangMenu();
     // 块手柄与块菜单是渲染态浮层：切到源码模式必须一并收起，
     // 否则菜单悬空且动作会作用到即将被重建的旧 DOM 上
     BlockMenu.closeBlockMenu();

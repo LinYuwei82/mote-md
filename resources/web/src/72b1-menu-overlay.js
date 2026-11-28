@@ -36,7 +36,7 @@
       node.parentNode.removeChild(node);
   }
 
-  function caretClientRect() {
+  function caretClientRect(fallbackEl) {
     var selection = window.getSelection();
     if (selection && selection.rangeCount) {
       var range = selection.getRangeAt(0).cloneRange();
@@ -45,9 +45,8 @@
       if (rect && (rect.width || rect.height || rect.top))
         return rect;
     }
-    var el = slashState ? slashState.el : null;
-    if (el)
-      return el.getBoundingClientRect();
+    if (fallbackEl)
+      return fallbackEl.getBoundingClientRect();
     return null;
   }
 

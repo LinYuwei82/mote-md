@@ -45,21 +45,20 @@
       return;
 
     // 斜杠浮层打开时先吃掉导航键：上下选择、Enter/Tab 插入、Esc 删除已输入的 /
-    if (slashState) {
+    if (Menus.isSlashOpen()) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
-        SlashMenu.moveSlash(event.key === 'ArrowDown' ? 1 : -1);
+        Menus.moveSlash(event.key === 'ArrowDown' ? 1 : -1);
         return;
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault();
-        SlashMenu.insertSlashItem();
+        Menus.insertSlashItem();
         return;
       }
       if (event.key === 'Escape') {
         event.preventDefault();
-        slashState.end = CaretOffset.caretOffset(slashState.el);
-        SlashMenu.closeSlash(true);
+        Menus.cancelSlash();
         return;
       }
     }

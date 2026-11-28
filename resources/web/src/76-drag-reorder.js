@@ -59,7 +59,7 @@
       if (insertLine)
         insertLine.style.display = 'none';
       if (moved)
-        TurnMenu.afterBlockStructureChange();
+        Menus.afterBlockStructureChange();
       BlockHandle.positionBlockHandle();
     } else if (dragPending && blockHandleTarget) {
       // 没有位移 = 单击：在手柄下方弹出块菜单

@@ -18,7 +18,7 @@
     if (badgeHit) {
       event.preventDefault();
       pendingOffset = null;
-      LangMenu.openLangMenu(el, badgeHit);
+      Menus.openLangMenu(el, badgeHit);
       return;
     }
 
@@ -216,7 +216,7 @@
       return;
     el.dataset.raw = el.textContent;
     MenuOverlay.updatePlaceholder();
-    SlashMenu.handleSlashInput(el);
+    Menus.handleSlashInput(el);
     DocumentModel.scheduleDirty();
     EditingSnapshot.scheduleCommit();
     Toc.scheduleTocRefresh();

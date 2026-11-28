@@ -10,8 +10,8 @@
   function openBlockMenu(block, x, y) {
     if (!block || mode === 'source')
       return;
-    TurnMenu.closeTurnMenu();
-    SlashMenu.closeSlash(false);
+    Menus.closeTurnMenu();
+    Menus.closeSlash(false);
     closeBlockMenu();
     blockMenuTarget = block;
     blockMenu = document.createElement('div');
@@ -23,7 +23,7 @@
     html += '<div class="turn-item" data-act="delete">删除</div>';
     html += '<div class="turn-sep"></div>';
     html += '<div class="turn-title">转为</div>';
-    TurnMenu.TURN_ITEMS.forEach(function (item) {
+    Menus.TURN_ITEMS.forEach(function (item) {
       html += '<div class="turn-item" data-key="' + item.key + '">' + Util.escapeHtml(item.label) + '</div>';
     });
     blockMenu.innerHTML = html;
