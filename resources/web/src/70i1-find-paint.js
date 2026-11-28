@@ -64,8 +64,8 @@
       runs.push({ text: text, nodes: table });
     }
 
-    if (isCodeBlock(block)) {
-      var code = codeEl(block);
+    if (LayoutCode.isCodeBlock(block)) {
+      var code = LayoutCode.codeEl(block);
       if (code)
         collect(code);
       return runs;

@@ -6,7 +6,7 @@
   function selectionPlainText() {
     // 自建跨块选区：原生选区是折叠的，必须按绝对区间自己取文本
     if (crossSel)
-      return crossSelectionPlainText();
+      return TableCross.crossSelectionPlainText();
     var selection = window.getSelection();
     if (!selection || selection.isCollapsed || !selection.rangeCount)
       return '';
@@ -21,7 +21,7 @@
         sub.setStart(range.startContainer, range.startOffset);
       if (el.contains(range.endContainer))
         sub.setEnd(range.endContainer, range.endOffset);
-      parts.push(cleanCopyFragment(sub.cloneContents()));
+      parts.push(ClipboardPaste.cleanCopyFragment(sub.cloneContents()));
     }
     return parts.join('\n');
   }
@@ -174,7 +174,7 @@
     if (clipboardTextIsBlank(text)) {
       // 不写剪贴板：否则空段落块的 "\n" 会覆盖用户上一次复制的内容
       event.preventDefault();
-      post({ type: 'status', message: '没有可复制的内容：先选中文字' });
+      Util.post({ type: 'status', message: '没有可复制的内容：先选中文字' });
       return;
     }
     event.clipboardData.setData('text/plain', text);
@@ -192,7 +192,7 @@
     if (crossSel) {
       // 原生选区是折叠的，WebKit 不会自己剪切：算好内容写剪贴板再删区间
       event.preventDefault();
-      var crossText = crossSelectionPlainText();
+      var crossText = TableCross.crossSelectionPlainText();
       if (event.clipboardData) {
         if (!clipboardTextIsBlank(crossText))
           event.clipboardData.setData('text/plain', crossText);
@@ -206,7 +206,7 @@
     if (!clipboardTextIsBlank(selectionPlainText()))
       return;
     event.preventDefault();
-    post({ type: 'status', message: '没有可剪切的内容：先选中文字' });
+    Util.post({ type: 'status', message: '没有可剪切的内容：先选中文字' });
   });
 
   return {
@@ -219,11 +219,3 @@
     clipboardTextIsBlank: clipboardTextIsBlank
   };
   })();
-
-  var selectionPlainText = CopySelection.selectionPlainText;
-  var blockSemantic = CopySelection.blockSemantic;
-  var applyCopyStyle = CopySelection.applyCopyStyle;
-  var inlineCodeTokenColors = CopySelection.inlineCodeTokenColors;
-  var selectionHtml = CopySelection.selectionHtml;
-  var sanitizeCopyHtml = CopySelection.sanitizeCopyHtml;
-  var clipboardTextIsBlank = CopySelection.clipboardTextIsBlank;

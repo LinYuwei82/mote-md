@@ -249,10 +249,3 @@
     renderInline: renderInline
   };
   })();
-
-  var post = Util.post;
-  var setStatus = Util.setStatus;
-  var escapeHtml = Util.escapeHtml;
-  var marker = Util.marker;
-  var newlineMarker = Util.newlineMarker;
-  var renderInline = Util.renderInline;

@@ -22,7 +22,7 @@
     if (active === crossAnnounced)
       return;
     crossAnnounced = active;
-    post({ type: 'crossSelection', active: active });
+    Util.post({ type: 'crossSelection', active: active });
   }
 
   function clearCrossSelection() {
@@ -35,15 +35,15 @@
 
   // 第 index 块在整篇里的字符长度与起点（与撤销栈同一口径）
   function blockAbsoluteSpan(blocks, gaps, index) {
-    var base = blockStartOffset(blocks, gaps, index);
+    var base = DocumentModel.blockStartOffset(blocks, gaps, index);
     return { base: base, stop: base + blocks[index].length };
   }
 
   // 区间里是否真的有块正文：块间空白处投点得到的「只跨过空行」区间画不出任何
   // 高亮，扩展时要跳过这种落点，继续往下一可视行找。
   function crossRangeCoversText(from, to) {
-    var blocks = collectBlocks();
-    var gaps = collectGaps();
+    var blocks = DocumentModel.collectBlocks();
+    var gaps = DocumentModel.collectGaps();
     var base = 0;
     for (var i = 0; i < blocks.length && base < to; i++) {
       var span = blockAbsoluteSpan(blocks, gaps, i);
@@ -61,9 +61,9 @@
     var index = list.indexOf(el);
     if (index < 0)
       return null;
-    var blocks = collectBlocks();
-    var gaps = collectGaps();
-    return blockStartOffset(blocks, gaps, index) + rawOffsetAtPoint(el, node, offset);
+    var blocks = DocumentModel.collectBlocks();
+    var gaps = DocumentModel.collectGaps();
+    return DocumentModel.blockStartOffset(blocks, gaps, index) + rawOffsetAtPoint(el, node, offset);
   }
 
   // 块内某个 DOM 点 → 块内 raw 偏移（代码块补上围栏前缀）
@@ -76,7 +76,7 @@
     } catch (error) {
       return 0;
     }
-    return prefix.toString().length + (isCodeBlock(el) ? codePrefixLength(el) : 0);
+    return prefix.toString().length + (LayoutCode.isCodeBlock(el) ? LayoutCode.codePrefixLength(el) : 0);
   }
 
   // 块内 raw 区间 → Range。分隔线没有可量测的文字，原型里不画它的高亮。
@@ -86,14 +86,14 @@
     var scope = navScope(el);
     if (!scope)
       return null;
-    var prefix = isCodeBlock(el) ? codePrefixLength(el) : 0;
+    var prefix = LayoutCode.isCodeBlock(el) ? LayoutCode.codePrefixLength(el) : 0;
     var limit = scope.textContent.length;
     var from = Math.max(0, Math.min(start - prefix, limit));
     var to = Math.max(0, Math.min(end - prefix, limit));
     if (to <= from)
       return null;
-    var a = locateOffset(scope, from);
-    var b = locateOffset(scope, to);
+    var a = CaretOffset.locateOffset(scope, from);
+    var b = CaretOffset.locateOffset(scope, to);
     var range = document.createRange();
     try {
       range.setStart(a.node, a.offset);
@@ -116,13 +116,3 @@
     crossBlockRange: crossBlockRange
   };
   })();
-
-  var dropCrossLayer = CrossRange.dropCrossLayer;
-  var ensureCrossLayer = CrossRange.ensureCrossLayer;
-  var announceCross = CrossRange.announceCross;
-  var clearCrossSelection = CrossRange.clearCrossSelection;
-  var blockAbsoluteSpan = CrossRange.blockAbsoluteSpan;
-  var crossRangeCoversText = CrossRange.crossRangeCoversText;
-  var absoluteOf = CrossRange.absoluteOf;
-  var rawOffsetAtPoint = CrossRange.rawOffsetAtPoint;
-  var crossBlockRange = CrossRange.crossBlockRange;

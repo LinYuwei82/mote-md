@@ -50,4 +50,3 @@
   // 标题集合的签名：正文段落增删不应导致目录整天重建。
   var tocSig = null;
   var spyScheduled = false;
-

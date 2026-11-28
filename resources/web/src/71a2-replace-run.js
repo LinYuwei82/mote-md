@@ -6,7 +6,7 @@
     }
     var match = findMatches[findActive];
     var repl = findReplace ? findReplace.value : '';
-    var problem = replacementProblem(match, repl);
+    var problem = FindMatch.replacementProblem(match, repl);
     if (problem) {
       setFindNote(problem);
       return;
@@ -15,9 +15,9 @@
     if (findInSource) {
       var value = sourceEl.value;
       sourceEl.value = value.slice(0, match.start) + repl + value.slice(match.end);
-      commitHistory();
-      scheduleTocRefresh();
-      findScan(findInput.value);
+      EditingSnapshot.commitHistory();
+      Toc.scheduleTocRefresh();
+      FindScan.findScan(findInput.value);
       if (findMatches.length) {
         findActive = Math.min(keep, findMatches.length - 1);
         updateFindCount();
@@ -25,23 +25,23 @@
       setFindNote('已替换 1 处');
       return;
     }
-    var span = findMatchSpan(match);
+    var span = FindMatch.findMatchSpan(match);
     if (!span) {
       setFindNote('命中已失效，请重新查找');
       return;
     }
     if (!span.sameBlock) {
-      var text = currentSource();
+      var text = DocumentModel.currentSource();
       if (span.end > text.length) {
         setFindNote('命中已失效，请重新查找');
         return;
       }
-      var landed = rebuildFromSourceText(
+      var landed = FindMatch.rebuildFromSourceText(
         text.slice(0, span.start) + repl + text.slice(span.end),
         span.start + repl.length);
       findCaret = landed.block ? { block: landed.block, offset: landed.offset } : null;
       findJumped = null;
-      findScan(findInput.value);
+      FindScan.findScan(findInput.value);
       if (findMatches.length) {
         findActive = Math.min(keep, findMatches.length - 1);
         paintFind();
@@ -55,11 +55,11 @@
     var block = span.startBlock;
     var raw = block.dataset.raw || '';
     var wasEditing = block.classList.contains('editing');
-    rerenderFromRaw(block,
+    FindMatch.rerenderFromRaw(block,
       raw.slice(0, span.startRelative) + repl + raw.slice(span.endRelative), wasEditing);
-    commitHistory();
-    scheduleTocRefresh();
-    findScan(findInput.value);
+    EditingSnapshot.commitHistory();
+    Toc.scheduleTocRefresh();
+    FindScan.findScan(findInput.value);
     if (findMatches.length) {
       findActive = Math.min(keep, findMatches.length - 1);
       paintFind();
@@ -70,15 +70,15 @@
 
   // 只要有一个跨块命中就统一按绝对区间从后往前改整篇源码，最后重建一次。
   function replaceAllAcrossBlocks(repl, query) {
-    var text = currentSource();
+    var text = DocumentModel.currentSource();
     var spans = [];
     var skipped = 0;
     for (var m = 0; m < findMatches.length; m++) {
-      if (replacementProblem(findMatches[m], repl)) {
+      if (FindMatch.replacementProblem(findMatches[m], repl)) {
         skipped++;
         continue;
       }
-      var span = findMatchSpan(findMatches[m]);
+      var span = FindMatch.findMatchSpan(findMatches[m]);
       if (!span || span.end > text.length) {
         skipped++;
         continue;
@@ -94,10 +94,10 @@
     var caret = spans[0].start + repl.length;
     for (var i = 0; i < spans.length; i++)
       text = text.slice(0, spans[i].start) + repl + text.slice(spans[i].end);
-    var landed = rebuildFromSourceText(text, caret);
+    var landed = FindMatch.rebuildFromSourceText(text, caret);
     findCaret = landed.block ? { block: landed.block, offset: landed.offset } : null;
     findJumped = null;
-    findScan(query);
+    FindScan.findScan(query);
     paintFind();
     updateFindCount();
     if (findInput)
@@ -123,9 +123,9 @@
         value = value.slice(0, findMatches[i].start) + repl + value.slice(findMatches[i].end);
       done = findMatches.length;
       sourceEl.value = value;
-      commitHistory();
-      scheduleTocRefresh();
-      findScan(query);
+      EditingSnapshot.commitHistory();
+      Toc.scheduleTocRefresh();
+      FindScan.findScan(query);
       updateFindCount();
       setFindNote('全部替换 ' + done + ' 处');
       return;
@@ -134,7 +134,7 @@
     // 只要命中里有跨块的，就整篇改一次；否则保持按块重排（更快，也保留编辑态）
     var hasCross = false;
     for (var c = 0; c < findMatches.length; c++) {
-      var crossSpan = findMatchSpan(findMatches[c]);
+      var crossSpan = FindMatch.findMatchSpan(findMatches[c]);
       if (crossSpan && !crossSpan.sameBlock) {
         hasCross = true;
         break;
@@ -148,12 +148,12 @@
     // 按块分组（保持文档顺序），块内从后往前改 raw，前面命中的下标不受影响
     var groups = [];
     for (var m = 0; m < findMatches.length; m++) {
-      var problem = replacementProblem(findMatches[m], repl);
+      var problem = FindMatch.replacementProblem(findMatches[m], repl);
       if (problem) {
         skipped++;
         continue;
       }
-      var span = findMatchSpan(findMatches[m]);
+      var span = FindMatch.findMatchSpan(findMatches[m]);
       if (!span) {
         skipped++;
         continue;
@@ -178,13 +178,13 @@
       var spans = groups[n].spans.sort(function (a, b) { return b.start - a.start; });
       for (var s = 0; s < spans.length; s++)
         text = text.slice(0, spans[s].start) + repl + text.slice(spans[s].end);
-      rerenderFromRaw(target, text, target.classList.contains('editing'));
+      FindMatch.rerenderFromRaw(target, text, target.classList.contains('editing'));
       done += spans.length;
     }
     if (done) {
-      commitHistory();
-      scheduleTocRefresh();
-      findScan(query);
+      EditingSnapshot.commitHistory();
+      Toc.scheduleTocRefresh();
+      FindScan.findScan(query);
       paintFind();
       updateFindCount();
     }
@@ -198,6 +198,3 @@
     replaceAll: replaceAll
   };
   })();
-
-  var replaceCurrent = ReplaceRun.replaceCurrent;
-  var replaceAll = ReplaceRun.replaceAll;

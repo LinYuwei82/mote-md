@@ -4,7 +4,7 @@
   function insertBlockNear(block, above) {
     if (!block || !block.parentNode)
       return;
-    commitHistory();
+    EditingSnapshot.commitHistory();
     var el = makeBlockEl('');
     if (above)
       root.insertBefore(el, block);
@@ -13,16 +13,16 @@
     afterBlockStructureChange();
     el.classList.add('editing');
     el.focus();
-    setCaret(el, 0);
+    CaretCode.setCaret(el, 0);
     if (el.scrollIntoView)
       el.scrollIntoView({ block: 'nearest' });
-    setHandleBlock(el);
+    BlockHandle.setHandleBlock(el);
   }
 
   function duplicateBlock(block) {
     if (!block || !block.parentNode)
       return;
-    commitHistory();
+    EditingSnapshot.commitHistory();
     var el = makeBlockEl(rawOf(block));
     root.insertBefore(el, block.nextSibling);
     afterBlockStructureChange();
@@ -31,12 +31,12 @@
   function removeBlock(block) {
     if (!block || !block.parentNode)
       return;
-    commitHistory();
+    EditingSnapshot.commitHistory();
     if (blockList().length <= 1) {
       // 最后一块不删结构：清空内容，保持可编辑；清空后的状态也要落一步，
       // 否则撤销会直接跳过这一步回到更早的历史，内容找不回来
       applyRawToBlock(block, '', 0, 0, true);
-      commitHistory();
+      EditingSnapshot.commitHistory();
       return;
     }
     var prev = block.previousElementSibling;
@@ -45,14 +45,14 @@
       : ((next && next.classList.contains('block')) ? next : null);
     block.remove();
     if (blockHandleTarget === block)
-      setHandleBlock(focusEl);
+      BlockHandle.setHandleBlock(focusEl);
     afterBlockStructureChange();
     if (focusEl) {
       focusEl.classList.add('editing');
       focusEl.focus();
       // 偏移必须按 raw 口径给：代码块的 textContent 不含围栏，直接给
       // textContent.length 会被换算成块首而不是块尾
-      placeBlockCaret(focusEl, rawOf(focusEl).length);
+      CaretEdit.placeBlockCaret(focusEl, rawOf(focusEl).length);
     }
   }
 
@@ -61,7 +61,7 @@
       ul: 'ul', ol: 'ol', quote: 'quote', codeBlock: 'code' }[key];
     if (!type || !block || !block.parentNode)
       return;
-    commitHistory();
+    EditingSnapshot.commitHistory();
     var raw = rawOf(block);
     var before = kindOfRaw(raw);
     var next = convertRaw(raw, type, false);
@@ -78,13 +78,13 @@
           anchor = anchor.nextElementSibling;
         }
         normalizeBlockGaps();
-        scheduleTocRefresh();
-        commitHistory();   // 拆分合成一个撤销步
+        Toc.scheduleTocRefresh();
+        EditingSnapshot.commitHistory();   // 拆分合成一个撤销步
         return;
       }
     }
     applyRawToBlock(block, next, next.length, next.length, true);
-    setTimeout(commitHistory, 0);
+    setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   return {
@@ -94,8 +94,3 @@
     turnBlockTo: turnBlockTo
   };
   })();
-
-  var insertBlockNear = BlockMenuActions.insertBlockNear;
-  var duplicateBlock = BlockMenuActions.duplicateBlock;
-  var removeBlock = BlockMenuActions.removeBlock;
-  var turnBlockTo = BlockMenuActions.turnBlockTo;

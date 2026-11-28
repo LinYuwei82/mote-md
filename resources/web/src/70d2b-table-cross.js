@@ -2,7 +2,7 @@
   // 表格块内的横向步进：格内逐字；跨格落到相邻格的首/末可见字符，绝不落进
   // | 标记或对齐行。返回 null 表示这个方向已经到表格两端，该跨出整块
   function crossStepInTable(el, abs, dir) {
-    var spans = tableVisibleSpans(el);
+    var spans = CrossStep.tableVisibleSpans(el);
     if (!spans.length)
       return null;
     if (abs < spans[0].start)
@@ -24,11 +24,11 @@
 
   // 表格块里 raw 偏移 → 单元格可见文本里的点（不能停在 | 标记上）
   function tableCaretAt(el, offset) {
-    var cells = tableCellList(el);
+    var cells = RenderBlocks.tableCellList(el);
     for (var i = 0; i < cells.length; i++) {
-      var nodes = editableTextNodes(cells[i]);
+      var nodes = MarkerCaret.editableTextNodes(cells[i]);
       for (var n = 0; n < nodes.length; n++) {
-        var start = rawOffsetAtPoint(el, nodes[n], 0);
+        var start = CrossRange.rawOffsetAtPoint(el, nodes[n], 0);
         var len = nodes[n].nodeValue.length;
         if (offset <= start + len)
           return { node: nodes[n], offset: Math.max(0, offset - start) };
@@ -40,10 +40,10 @@
   // 把折叠光标落到整篇绝对偏移处，返回实际落点（切块时会先 focus 触发
   // enterEdit 与滚动；表格要收进单元格可见文本，代码块要跳过围栏）
   function focusCrossAt(abs) {
-    var blocks = collectBlocks();
-    var gaps = collectGaps();
+    var blocks = DocumentModel.collectBlocks();
+    var gaps = DocumentModel.collectGaps();
     var list = blockList();
-    var at = locateBlock(blocks, gaps, abs);
+    var at = EditingSnapshot.locateBlock(blocks, gaps, abs);
     var el = list[at.index];
     if (!el)
       return null;
@@ -60,19 +60,19 @@
           var selection = window.getSelection();
           selection.removeAllRanges();
           selection.addRange(range);
-          var placed = absoluteOf(el, caret.node, caret.offset);
+          var placed = CrossRange.absoluteOf(el, caret.node, caret.offset);
           if (placed !== null)
             return placed;
         } catch (error) { /* 退回块内统一落点 */ }
       }
     }
-    placeBlockCaret(el, offset);
+    CaretEdit.placeBlockCaret(el, offset);
     var live = window.getSelection();
     if (!live.rangeCount)
       return null;
     var settled = live.getRangeAt(0);
-    var result = absoluteOf(el, settled.startContainer, settled.startOffset);
-    return result === null ? blockStartOffset(blocks, gaps, at.index) + offset : result;
+    var result = CrossRange.absoluteOf(el, settled.startContainer, settled.startOffset);
+    return result === null ? DocumentModel.blockStartOffset(blocks, gaps, at.index) + offset : result;
   }
 
   // Shift+←/→：块首/块尾才升级成跨块选区；升级后由这里逐字接管，块内横向
@@ -88,24 +88,24 @@
     var focusAbs = null;
     var collapseNative = null;
     if (!crossSel) {
-      var blocks = collectBlocks();
-      var gaps = collectGaps();
+      var blocks = DocumentModel.collectBlocks();
+      var gaps = DocumentModel.collectGaps();
       var list = blockList();
       // 看移动端（焦点）是否已经顶到块首/块尾；原生单块选区在这里一并升格
-      var focusEl = blockOf(selection.focusNode) || el;
+      var focusEl = CaretCode.blockOf(selection.focusNode) || el;
       var index = list.indexOf(focusEl);
       if (index < 0)
         return false;
-      var off = rawOffsetAtPoint(focusEl, selection.focusNode, selection.focusOffset);
+      var off = CrossRange.rawOffsetAtPoint(focusEl, selection.focusNode, selection.focusOffset);
       // 代码块的可视行首/行尾在围栏之内、表格的首/末可见字符在 | 标记之后，
       // 这几个位置同样算作块首/块尾
       var visibleStart = 0;
       var visibleEnd = blocks[index].length;
-      if (isCodeBlock(focusEl)) {
-        visibleStart = codePrefixLength(focusEl);
-        visibleEnd = crossEditableLength(focusEl, blocks[index]);
+      if (LayoutCode.isCodeBlock(focusEl)) {
+        visibleStart = LayoutCode.codePrefixLength(focusEl);
+        visibleEnd = CrossStep.crossEditableLength(focusEl, blocks[index]);
       } else if (focusEl.classList.contains('table')) {
-        var core = tableCoreOffsets(focusEl);
+        var core = CrossStep.tableCoreOffsets(focusEl);
         if (core) {
           visibleStart = core.start;
           visibleEnd = core.end;
@@ -113,16 +113,16 @@
       }
       if (left ? off > visibleStart : off < visibleEnd)
         return false;
-      focusAbs = blockStartOffset(blocks, gaps, index) + off;
+      focusAbs = DocumentModel.blockStartOffset(blocks, gaps, index) + off;
       if (range.collapsed) {
         anchorAbs = focusAbs;
       } else {
-        var anchorEl = blockOf(selection.anchorNode);
+        var anchorEl = CaretCode.blockOf(selection.anchorNode);
         var anchorIndex = anchorEl ? list.indexOf(anchorEl) : -1;
         if (anchorIndex < 0)
           return false;
-        anchorAbs = blockStartOffset(blocks, gaps, anchorIndex)
-          + rawOffsetAtPoint(anchorEl, selection.anchorNode, selection.anchorOffset);
+        anchorAbs = DocumentModel.blockStartOffset(blocks, gaps, anchorIndex)
+          + CrossRange.rawOffsetAtPoint(anchorEl, selection.anchorNode, selection.anchorOffset);
         // 确定要接管后才把原生选区收成焦点处的折叠光标，高亮交给覆盖层；
         // 先收起会在边界上白白丢掉用户已有的选区
         collapseNative = document.createRange();
@@ -136,7 +136,7 @@
       }
     }
     var from = crossSel ? crossSel.focus : focusAbs;
-    var to = crossStepTarget(from, left ? -1 : 1);
+    var to = CrossStep.crossStepTarget(from, left ? -1 : 1);
     if (to === null)
       return false;
     if (collapseNative) {
@@ -152,10 +152,10 @@
     // 横向移动后原来的目标列已经没意义，上下扩展时按新光标重新取
     crossSel.goalX = null;
     if (crossSel.anchor === crossSel.focus)
-      clearCrossSelection();
+      CrossRange.clearCrossSelection();
     else
-      paintCrossSelection();
-    announceCross();
+      CrossPaint.paintCrossSelection();
+    CrossRange.announceCross();
     return true;
   }
 
@@ -173,13 +173,13 @@
     var bounds = crossBounds();
     if (!bounds || bounds.from === bounds.to)
       return '';
-    var blocks = collectBlocks();
-    var gaps = collectGaps();
+    var blocks = DocumentModel.collectBlocks();
+    var gaps = DocumentModel.collectGaps();
     var list = blockList();
     var parts = [];
     var base = 0;
     for (var i = 0; i < blocks.length && base < bounds.to; i++) {
-      var span = blockAbsoluteSpan(blocks, gaps, i);
+      var span = CrossRange.blockAbsoluteSpan(blocks, gaps, i);
       base = span.base;
       var lo = Math.max(bounds.from, span.base);
       var hi = Math.min(bounds.to, span.stop);
@@ -194,8 +194,8 @@
         base = span.stop;
         continue;
       }
-      var range = crossBlockRange(list[i], lo - span.base, hi - span.base);
-      parts.push(range ? cleanCopyFragment(range.cloneContents()) : '');
+      var range = CrossRange.crossBlockRange(list[i], lo - span.base, hi - span.base);
+      parts.push(range ? ClipboardPaste.cleanCopyFragment(range.cloneContents()) : '');
       base = span.stop;
     }
     return parts.join('\n');
@@ -203,13 +203,13 @@
 
   // 表格单元格可见文本的整篇绝对区间；空格子没有可量测的文字，返回 null
   function tableCellAbsSpan(el, cell) {
-    var nodes = editableTextNodes(cell);
+    var nodes = MarkerCaret.editableTextNodes(cell);
     if (!nodes.length)
       return null;
     var first = nodes[0];
     var last = nodes[nodes.length - 1];
-    var start = absoluteOf(el, first, 0);
-    var end = absoluteOf(el, last, last.nodeValue.length);
+    var start = CrossRange.absoluteOf(el, first, 0);
+    var end = CrossRange.absoluteOf(el, last, last.nodeValue.length);
     if (start === null || end === null)
       return null;
     return { start: start, end: end };
@@ -217,7 +217,7 @@
 
   // 单元格里截取 [from, to)（单元格内可见文本口径）的克隆片段
   function cellClipContents(cell, from, to) {
-    var nodes = editableTextNodes(cell);
+    var nodes = MarkerCaret.editableTextNodes(cell);
     var acc = 0;
     var startNode = null, startOffset = 0, endNode = null, endOffset = 0;
     for (var i = 0; i < nodes.length && to > acc; i++) {
@@ -254,10 +254,3 @@
     cellClipContents: cellClipContents
   };
   })();
-
-  var crossStepInTable = TableCross.crossStepInTable;
-  var extendCrossSelectionHorizontal = TableCross.extendCrossSelectionHorizontal;
-  var crossBounds = TableCross.crossBounds;
-  var crossSelectionPlainText = TableCross.crossSelectionPlainText;
-  var tableCellAbsSpan = TableCross.tableCellAbsSpan;
-  var cellClipContents = TableCross.cellClipContents;

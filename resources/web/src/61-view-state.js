@@ -30,7 +30,7 @@
   }
 
   function postView() {
-    post({
+    Util.post({
       type: 'view',
       toc: tocVisible,
       source: mode === 'source',
@@ -41,25 +41,25 @@
   function currentCaretOffset() {
     if (mode === 'source')
       return sourceEl.selectionStart;
-    var el = blockOf(document.activeElement);
+    var el = CaretCode.blockOf(document.activeElement);
     if (!el || !el.classList.contains('editing'))
       return 0;
-    var blocks = collectBlocks();
-    return absoluteOffsets(blocks, editingSelection()).start;
+    var blocks = DocumentModel.collectBlocks();
+    return EditingSnapshot.absoluteOffsets(blocks, EditingSnapshot.editingSelection()).start;
   }
 
   function setMode(next) {
     if (next === mode)
       return;
     // 自建跨块选区只在渲染态有效：切模式前先收起覆盖层
-    clearCrossSelection();
+    CrossRange.clearCrossSelection();
     // 查找/替换绑定当前模式的命中（DOM 区间或 textarea 区间），切模式前先关掉
     if (findBar)
-      closeFind();
+      FindUi.closeFind();
     closeLangMenu();
     // 块手柄与块菜单是渲染态浮层：切到源码模式必须一并收起，
     // 否则菜单悬空且动作会作用到即将被重建的旧 DOM 上
-    closeBlockMenu();
+    BlockMenu.closeBlockMenu();
     if (blockHandle)
       blockHandle.style.display = 'none';
     blockHandleTarget = null;
@@ -67,9 +67,9 @@
       clearTimeout(commitTimer);
       commitTimer = null;
     }
-    commitHistory();
+    EditingSnapshot.commitHistory();
 
-    var text = currentSource();
+    var text = DocumentModel.currentSource();
     var caret = currentCaretOffset();
 
     suppressEvents = true;
@@ -84,30 +84,30 @@
       } catch (error) { /* ignore */ }
     } else {
       mode = 'wysiwyg';
-      var layout = splitSourceLayout(text);
+      var layout = LayoutCode.splitSourceLayout(text);
       var blocks = layout.blocks;
-      mountBlocks(blocks, layout.gaps, layout.trail);
+      EditingSnapshot.mountBlocks(blocks, layout.gaps, layout.trail);
       document.body.classList.remove('source-mode');
       suppressEvents = false;
 
       var base = 0;
       for (var i = 0; i < blocks.length; i++) {
-        base += gapBefore(layout.gaps, i);
+        base += DocumentModel.gapBefore(layout.gaps, i);
         var stop = base + blocks[i].length;
         if (caret <= stop || i === blocks.length - 1) {
           var target = root.children[i];
           if (target) {
-            if (inPlaceEditable(target)) {
-              renderBlock(target, blocks[i]);
+            if (CellEdit.inPlaceEditable(target)) {
+              RenderBlocks.renderBlock(target, blocks[i]);
               target.classList.add('editing');
               target.focus();
               var rel = Math.max(0, caret - base);
-              placeBlockCaret(target, rel, rel);
+              CaretEdit.placeBlockCaret(target, rel, rel);
             } else {
               target.classList.add('editing');
               target.textContent = blocks[i];
               target.focus();
-              setSelectionRange(target, Math.max(0, Math.min(caret - base, blocks[i].length)));
+              CaretOffset.setSelectionRange(target, Math.max(0, Math.min(caret - base, blocks[i].length)));
             }
           }
           break;
@@ -117,9 +117,9 @@
     }
 
     // 同一份文本：这里只同步选区，不会新增撤销步骤
-    commitHistory();
-    scheduleDirty();
-    refreshToc();
+    EditingSnapshot.commitHistory();
+    DocumentModel.scheduleDirty();
+    Toc.refreshToc();
     postView();
   }
 
@@ -131,9 +131,3 @@
     setMode: setMode
   };
   })();
-
-  var applyZoom = ViewState.applyZoom;
-  var setTheme = ViewState.setTheme;
-  var setZoom = ViewState.setZoom;
-  var postView = ViewState.postView;
-  var setMode = ViewState.setMode;

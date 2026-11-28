@@ -25,11 +25,11 @@
   }
 
   function splitBlock(el) {
-    commitHistory();   // 先把分段前的状态固定为一个步骤
+    EditingSnapshot.commitHistory();   // 先把分段前的状态固定为一个步骤
 
     var raw = el.textContent;
-    var offset = caretOffset(el);
-    var kind = blockType(el);
+    var offset = CaretOffset.caretOffset(el);
+    var kind = JoinIndent.blockType(el);
     var before, after;
     var exitStructure = false;
     // 列表/有序列表/引用按行拆分：后半段必须保留结构前缀，否则 "\n- b" 这类
@@ -89,16 +89,16 @@
     before = balanced[0];
     after = balanced[1];
 
-    renderBlock(el, before);
+    RenderBlocks.renderBlock(el, before);
 
     if (exitStructure && !before && !after) {
       // 唯一一行就是空条目：本块直接退回空正文即可，不再拆出新块
       el.classList.add('editing');
       el.focus();
-      setCaret(el, 0);
-      scheduleDirty();
-      commitHistory();   // 分段后的状态单独成一个步骤
-      scheduleTocRefresh();
+      CaretCode.setCaret(el, 0);
+      DocumentModel.scheduleDirty();
+      EditingSnapshot.commitHistory();   // 分段后的状态单独成一个步骤
+      Toc.scheduleTocRefresh();
       return;
     }
 
@@ -106,18 +106,16 @@
     neo.className = 'block';
     neo.setAttribute('contenteditable', 'true');
     root.insertBefore(neo, el.nextSibling);
-    renderBlock(neo, after);
+    RenderBlocks.renderBlock(neo, after);
     neo.classList.add('editing');
     neo.focus();
-    setCaret(neo, 0);
-    scheduleDirty();
-    commitHistory();   // 分段后的状态单独成一个步骤
-    scheduleTocRefresh();
+    CaretCode.setCaret(neo, 0);
+    DocumentModel.scheduleDirty();
+    EditingSnapshot.commitHistory();   // 分段后的状态单独成一个步骤
+    Toc.scheduleTocRefresh();
   }
 
   return {
     splitBlock: splitBlock
   };
   })();
-
-  var splitBlock = SplitBlock.splitBlock;

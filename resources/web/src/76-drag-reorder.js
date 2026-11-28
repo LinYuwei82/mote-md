@@ -8,7 +8,7 @@
     event.preventDefault();
     if (!blockHandleTarget || mode === 'source')
       return;
-    ensureBlockHandle();
+    BlockHandle.ensureBlockHandle();
     dragPending = { x: event.clientX, y: event.clientY };
     document.addEventListener('mousemove', onHandleMove, true);
     document.addEventListener('mouseup', onHandleUp, true);
@@ -25,13 +25,13 @@
         dragPending = null;
         return;
       }
-      commitHistory();   // 拖拽前的块序固定为一个撤销步骤
+      EditingSnapshot.commitHistory();   // 拖拽前的块序固定为一个撤销步骤
       blockDrag.classList.add('block-dragging');
-      closeBlockMenu();
+      BlockMenu.closeBlockMenu();
       blockHandle.style.display = 'none';
     }
     event.preventDefault();
-    positionInsertLine(blockDropRef(event.clientY));
+    InsertLine.positionInsertLine(InsertLine.blockDropRef(event.clientY));
     // 拖到视口上下边缘时自动滚动，长文档也能一路拖到底
     if (event.clientY < 40)
       window.scrollBy(0, -14);
@@ -43,7 +43,7 @@
     document.removeEventListener('mousemove', onHandleMove, true);
     document.removeEventListener('mouseup', onHandleUp, true);
     if (blockDrag) {
-      var ref = blockDropRef(event.clientY);
+      var ref = InsertLine.blockDropRef(event.clientY);
       var moved = false;
       if (ref) {
         if (ref !== blockDrag.nextElementSibling) {
@@ -60,11 +60,11 @@
         insertLine.style.display = 'none';
       if (moved)
         afterBlockStructureChange();
-      positionBlockHandle();
+      BlockHandle.positionBlockHandle();
     } else if (dragPending && blockHandleTarget) {
       // 没有位移 = 单击：在手柄下方弹出块菜单
       var r = blockHandle.getBoundingClientRect();
-      openBlockMenu(blockHandleTarget, r.left, r.bottom + 4);
+      BlockMenu.openBlockMenu(blockHandleTarget, r.left, r.bottom + 4);
     }
     dragPending = null;
   }
@@ -74,6 +74,3 @@
     onHandleUp: onHandleUp
   };
   })();
-
-  var onHandleDown = DragReorder.onHandleDown;
-  var onHandleUp = DragReorder.onHandleUp;

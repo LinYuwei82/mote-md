@@ -110,7 +110,7 @@
     for (var i = 0; i < tocItems.length; i++) {
       var item = tocItems[i];
       html += '<a class="toc-item" data-toc="' + i + '" style="padding-left:'
-        + (0.5 + (item.level - 1) * 0.75) + 'rem">' + escapeHtml(item.label) + '</a>';
+        + (0.5 + (item.level - 1) * 0.75) + 'rem">' + Util.escapeHtml(item.label) + '</a>';
     }
     tocList.innerHTML = html || '<div class="toc-empty">没有标题</div>';
     tocTops = null;
@@ -167,7 +167,7 @@
     // 同步做会把点击/快捷键那一帧顶住。
     if (tocVisible)
       setTimeout(function () { if (tocVisible) refreshToc(); }, 0);
-    postView();
+    ViewState.postView();
   }
 
   return {
@@ -181,11 +181,3 @@
     toggleToc: toggleToc
   };
   })();
-
-  var headingLevel = Toc.headingLevel;
-  var headingSlug = Toc.headingSlug;
-  var scrollToAnchor = Toc.scrollToAnchor;
-  var refreshToc = Toc.refreshToc;
-  var scheduleTocRefresh = Toc.scheduleTocRefresh;
-  var updateActiveHeading = Toc.updateActiveHeading;
-  var toggleToc = Toc.toggleToc;

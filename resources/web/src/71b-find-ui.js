@@ -5,7 +5,7 @@
     findTimer = setTimeout(function () {
       findTimer = 0;
       if (findInput)
-        findScan(findInput.value);
+        FindScan.findScan(findInput.value);
     }, 120);
   }
 
@@ -44,7 +44,7 @@
     findReplace.addEventListener('keydown', function (event) {
       if (event.key === 'Enter') {
         event.preventDefault();
-        replaceCurrent();
+        ReplaceRun.replaceCurrent();
       }
     });
     findInput.addEventListener('keydown', function (event) {
@@ -56,12 +56,12 @@
         return;
       }
       event.preventDefault();
-      goFind(event.shiftKey ? -1 : 1);
+      FindScan.goFind(event.shiftKey ? -1 : 1);
     });
-    document.getElementById('find-prev').addEventListener('click', function () { goFind(-1); });
-    document.getElementById('find-next').addEventListener('click', function () { goFind(1); });
-    document.getElementById('find-replace-one').addEventListener('click', replaceCurrent);
-    document.getElementById('find-replace-all').addEventListener('click', replaceAll);
+    document.getElementById('find-prev').addEventListener('click', function () { FindScan.goFind(-1); });
+    document.getElementById('find-next').addEventListener('click', function () { FindScan.goFind(1); });
+    document.getElementById('find-replace-one').addEventListener('click', ReplaceRun.replaceCurrent);
+    document.getElementById('find-replace-all').addEventListener('click', ReplaceRun.replaceAll);
     document.getElementById('find-close').addEventListener('click', function () { closeFind(); });
   }
 
@@ -69,14 +69,14 @@
     if (findBar)
       return;
     // 查找条打开后焦点交给查找框，覆盖层选区先收起
-    clearCrossSelection();
+    CrossRange.clearCrossSelection();
     findInSource = mode === 'source';
     if (findInSource) {
       findCaret = { source: true, start: sourceEl.selectionStart, end: sourceEl.selectionEnd };
     } else {
-      var block = document.activeElement ? blockOf(document.activeElement) : null;
+      var block = document.activeElement ? CaretCode.blockOf(document.activeElement) : null;
       // 关掉查找栏时走 placeBlockCaret（原文口径），这里也按原文口径取
-      findCaret = block ? { block: block, offset: rawCaretOffset(block) } : null;
+      findCaret = block ? { block: block, offset: CaretOffset.rawCaretOffset(block) } : null;
     }
     findJumped = null;
 
@@ -98,7 +98,7 @@
       findInput.value = picked;
     findInput.select();
     growFindInput();
-    findScan(findInput.value);
+    FindScan.findScan(findInput.value);
   }
 
   function closeFind() {
@@ -130,7 +130,7 @@
         try {
           sourceEl.setSelectionRange(target.start, target.end === undefined ? target.start : target.end);
         } catch (error) { /* ignore */ }
-        scrollSourceTo(target.start);
+        FindScan.scrollSourceTo(target.start);
       }
       return;
     }
@@ -142,12 +142,12 @@
         jumped.block.focus();
       var selection = window.getSelection();
       selection.removeAllRanges();
-      selection.addRange(findSelectRange(jumped));
+      selection.addRange(FindScan.findSelectRange(jumped));
     } else if (caret && caret.block && caret.block.isConnected) {
       // 没跳转过：回到打开查找前的光标位置
       if (document.activeElement !== caret.block)
         caret.block.focus();
-      placeBlockCaret(caret.block, caret.offset);
+      CaretEdit.placeBlockCaret(caret.block, caret.offset);
     }
   }
 
@@ -178,7 +178,7 @@
         && target.closest('.block')) {
       event.preventDefault();
       event.stopPropagation();
-      goFind(event.shiftKey ? -1 : 1);
+      FindScan.goFind(event.shiftKey ? -1 : 1);
     }
   }, true);
 
@@ -196,7 +196,7 @@
       paintFind();
     // 覆盖层是文档绝对坐标，缩放/换行变化后必须按新几何重画
     if (crossSel)
-      paintCrossSelection();
+      CrossPaint.paintCrossSelection();
   });
 
   // 命中的块里图片晚一步解码完、字体替换完成时块高会变，但都不触发 resize。
@@ -206,7 +206,7 @@
     if (target && target.nodeName === 'IMG') {
       scheduleFindPaint();
       if (crossSel)
-        paintCrossSelection();
+        CrossPaint.paintCrossSelection();
     }
   }, true);
 
@@ -215,13 +215,13 @@
       document.fonts.ready.then(function () {
         scheduleFindPaint();
         if (crossSel)
-          paintCrossSelection();
+          CrossPaint.paintCrossSelection();
       });
     if (document.fonts.addEventListener)
       document.fonts.addEventListener('loadingdone', function () {
         scheduleFindPaint();
         if (crossSel)
-          paintCrossSelection();
+          CrossPaint.paintCrossSelection();
       });
   }
 
@@ -231,7 +231,7 @@
     spyScheduled = true;
     requestAnimationFrame(function () {
       spyScheduled = false;
-      updateActiveHeading();
+      Toc.updateActiveHeading();
     });
   });
 
@@ -249,7 +249,7 @@
         return;
       item.el.scrollIntoView({ block: 'start' });
       window.scrollBy(0, -16);
-      updateActiveHeading();
+      Toc.updateActiveHeading();
     });
   }
 
@@ -266,12 +266,12 @@
     // 图片走 base64 落盘（与粘贴同一管道）；.md 等文本仍回退为「未关联路径」载入。
     // 原生层装好 NSDraggingDestination 后，文件拖放会先被原生接走，这里只是兜底。
     if (/^image\//i.test(file.type || '')) {
-      postImageFile(file, 'drop');
+      ClipboardPaste.postImageFile(file, 'drop');
       return;
     }
     var reader = new FileReader();
     reader.onload = function () {
-      post({ type: 'drop', name: file.name, text: String(reader.result) });
+      Util.post({ type: 'drop', name: file.name, text: String(reader.result) });
     };
     reader.readAsText(file);
   });
@@ -281,6 +281,3 @@
     closeFind: closeFind
   };
   })();
-
-  var scheduleFind = FindUi.scheduleFind;
-  var closeFind = FindUi.closeFind;

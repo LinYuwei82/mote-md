@@ -12,13 +12,13 @@
     if (blockMenu && blockMenu.contains(t))
       return;
     if (mode === 'source' || !root.contains(t)) {
-      hideBlockHandle();
+      BlockHandle.hideBlockHandle();
       return;
     }
-    var el = blockOf(t);
+    var el = CaretCode.blockOf(t);
     if (el) {
-      ensureBlockHandle();
-      setHandleBlock(el);
+      BlockHandle.ensureBlockHandle();
+      BlockHandle.setHandleBlock(el);
     }
   });
 
@@ -26,30 +26,29 @@
     // 拖拽中指针移出窗口时 mouseup 不会送达：按当前位置落块收尾，
     // 否则 blockDrag 卡住，手柄与指示线都会悬死
     if (blockDrag && dragPending) {
-      onHandleUp(event);
+      DragReorder.onHandleUp(event);
       return;
     }
-    hideBlockHandle();
+    BlockHandle.hideBlockHandle();
   });
 
   root.addEventListener('focusin', function (event) {
-    var el = blockOf(event.target);
+    var el = CaretCode.blockOf(event.target);
     if (el) {
-      ensureBlockHandle();
-      setHandleBlock(el);
+      BlockHandle.ensureBlockHandle();
+      BlockHandle.setHandleBlock(el);
     }
   });
 
   window.addEventListener('scroll', function () {
     if (blockDrag)
       return;
-    positionBlockHandle();
-    closeBlockMenu();
+    BlockHandle.positionBlockHandle();
+    BlockMenu.closeBlockMenu();
   }, true);
 
   window.addEventListener('resize', function () {
-    positionBlockHandle();
-    closeBlockMenu();
+    BlockHandle.positionBlockHandle();
+    BlockMenu.closeBlockMenu();
   });
   })();
-

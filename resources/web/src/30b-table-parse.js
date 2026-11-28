@@ -81,7 +81,7 @@
   // 表格里的 | / 对齐行 / 换行都是零宽标记：参与 textContent（dataset.raw 靠它
   // 逐字还原原文），但不占版面；pipe 标记不带 <i>，编辑时不会浮出淡色标签。
   function pipeMarker(text) {
-    return '<span class="mk mk-pipe" contenteditable="false">' + escapeHtml(text) + '</span>';
+    return '<span class="mk mk-pipe" contenteditable="false">' + Util.escapeHtml(text) + '</span>';
   }
 
   function tableRowHtml(line, align, tag, withNewline) {
@@ -101,10 +101,10 @@
         for (var g = 0; g < segs.length; g++) {
           if (g > 0)
             html += '<span class="mk mk-pipeesc" contenteditable="false">\\</span>|';
-          html += renderInline(segs[g]);
+          html += Util.renderInline(segs[g]);
         }
       } else {
-        html += renderInline(cellText);
+        html += Util.renderInline(cellText);
       }
       if (cell.sep)
         html += pipeMarker(cell.sep);
@@ -112,7 +112,7 @@
         if (row.tail)
           html += pipeMarker(row.tail);
         if (withNewline)
-          html += newlineMarker();
+          html += Util.newlineMarker();
       }
       html += '</' + tag + '>';
     }
@@ -247,10 +247,3 @@
     tableColgroupHtml: tableColgroupHtml
   };
   })();
-
-  var tableCells = TableParse.tableCells;
-  var isTableSource = TableParse.isTableSource;
-  var splitTableLine = TableParse.splitTableLine;
-  var tableAlignments = TableParse.tableAlignments;
-  var tableRowHtml = TableParse.tableRowHtml;
-  var tableColgroupHtml = TableParse.tableColgroupHtml;

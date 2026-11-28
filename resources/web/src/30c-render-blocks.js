@@ -1,7 +1,7 @@
   var RenderBlocks = (function renderBlocksModule() {
   function renderTable(lines, el) {
-    var align = tableAlignments(lines[1]);
-    var head = splitTableLine(lines[0]);
+    var align = TableParse.tableAlignments(lines[1]);
+    var head = TableParse.splitTableLine(lines[0]);
     var body = [];
     for (var r = 2; r < lines.length; r++) {
       if (lines[r].trim())
@@ -9,16 +9,16 @@
     }
     // 对齐行不参与渲染（display:none，零高度），但原文按 DOM 顺序留在表头与表体
     // 之间，textContent 才能逐字还原 `| a | b |\n|---|...|`。
-    var layout = tableColgroupHtml(head, body, el ? el.clientWidth : 0);
+    var layout = TableParse.tableColgroupHtml(head, body, el ? el.clientWidth : 0);
     var html = '<table class="md-table"'
       + (layout.minWidth ? ' style="min-width:' + layout.minWidth + 'px"' : '')
       + '>' + layout.colgroup + '<thead>'
-      + tableRowHtml(lines[0], align, 'th', true)
+      + TableParse.tableRowHtml(lines[0], align, 'th', true)
       + '<tr class="tbl-align" aria-hidden="true"><td colspan="' + Math.max(1, head.cells.length) + '">'
-      + escapeHtml(lines[1]) + (body.length ? newlineMarker() : '') + '</td></tr>'
+      + Util.escapeHtml(lines[1]) + (body.length ? Util.newlineMarker() : '') + '</td></tr>'
       + '</thead><tbody>';
     for (var b = 0; b < body.length; b++)
-      html += tableRowHtml(body[b], align, 'td', b < body.length - 1);
+      html += TableParse.tableRowHtml(body[b], align, 'td', b < body.length - 1);
     return html + '</tbody></table>';
   }
 
@@ -44,23 +44,23 @@
     var count = headRow.children.length;
     if (!count)
       return false;
-    commitHistory();
+    EditingSnapshot.commitHistory();
     // 原来的最后一行没有换行标记（它就是原文最后一行）。追加前先补一个，
     // 否则新行会拼进上一行的 textContent，dataset.raw 里两行会变成同一行。
     var existing = body.children;
     if (existing.length) {
       var lastCell = existing[existing.length - 1].lastElementChild;
       if (lastCell)
-        lastCell.insertAdjacentHTML('beforeend', newlineMarker());
+        lastCell.insertAdjacentHTML('beforeend', Util.newlineMarker());
     }
     var lines = String(el.dataset.raw || '').split('\n');
-    var align = tableAlignments(lines[1] || '');
+    var align = TableParse.tableAlignments(lines[1] || '');
     var line = '|' + new Array(count + 1).join('  |');
-    body.insertAdjacentHTML('beforeend', tableRowHtml(line, align, 'td', false));
+    body.insertAdjacentHTML('beforeend', TableParse.tableRowHtml(line, align, 'td', false));
     el.dataset.raw = el.textContent;
-    scheduleDirty();
-    scheduleCommit();
-    commitHistory();
+    DocumentModel.scheduleDirty();
+    EditingSnapshot.scheduleCommit();
+    EditingSnapshot.commitHistory();
     return true;
   }
 
@@ -71,7 +71,7 @@
   // 任何一行漏掉 \n，相邻两行就会在 textContent 里粘连，下次重渲染被解析成
   // 同一行（列数翻倍）。光标始终落在新行同列的单元格末尾。
   function insertTableRow(el, below) {
-    var cell = activeCell(el);
+    var cell = CellEdit.activeCell(el);
     if (!cell)
       return false;
     var row = cell.parentNode;
@@ -81,9 +81,9 @@
     if (!count)
       return false;
     var lines = String(el.dataset.raw || '').split('\n');
-    var align = tableAlignments(lines[1] || '');
+    var align = TableParse.tableAlignments(lines[1] || '');
     var line = '|' + new Array(count + 1).join('  |');
-    commitHistory();
+    EditingSnapshot.commitHistory();
     var newRow = null;
     if (below) {
       // 当前行的换行标记始终保留（它是当前行的行尾）。新行只在"插到末行之后"
@@ -95,12 +95,12 @@
         // 对齐行），改为落到对齐行之后、表体首行。
         var tbody = el.querySelector('tbody');
         var hasBody = tbody.children.length > 0;
-        tbody.insertAdjacentHTML('afterbegin', tableRowHtml(line, align, 'td', hasBody));
+        tbody.insertAdjacentHTML('afterbegin', TableParse.tableRowHtml(line, align, 'td', hasBody));
         newRow = tbody.firstElementChild;
       } else {
-        row.insertAdjacentHTML('afterend', tableRowHtml(line, align, 'td', !isLast));
+        row.insertAdjacentHTML('afterend', TableParse.tableRowHtml(line, align, 'td', !isLast));
         if (isLast)
-          last.insertAdjacentHTML('beforeend', newlineMarker());
+          last.insertAdjacentHTML('beforeend', Util.newlineMarker());
         newRow = row.nextElementSibling;
       }
     } else {
@@ -112,23 +112,23 @@
       var inHead = row.parentNode.tagName === 'THEAD';
       if (inHead) {
         var body = el.querySelector('tbody');
-        body.insertAdjacentHTML('afterbegin', tableRowHtml(line, align, 'td', true));
+        body.insertAdjacentHTML('afterbegin', TableParse.tableRowHtml(line, align, 'td', true));
         newRow = body.firstElementChild;
       } else {
-        row.insertAdjacentHTML('beforebegin', tableRowHtml(line, align, 'td', true));
+        row.insertAdjacentHTML('beforebegin', TableParse.tableRowHtml(line, align, 'td', true));
         if (!had) {
           var tail = row.lastElementChild;
           if (tail)
-            tail.insertAdjacentHTML('beforeend', newlineMarker());
+            tail.insertAdjacentHTML('beforeend', Util.newlineMarker());
         }
         newRow = row.previousElementSibling;
       }
     }
     el.dataset.raw = el.textContent;
-    caretInCellEnd(newRow.children[Math.min(cell.cellIndex, newRow.children.length - 1)]);
-    scheduleDirty();
-    scheduleCommit();
-    commitHistory();
+    CaretEdit.caretInCellEnd(newRow.children[Math.min(cell.cellIndex, newRow.children.length - 1)]);
+    DocumentModel.scheduleDirty();
+    EditingSnapshot.scheduleCommit();
+    EditingSnapshot.commitHistory();
     return true;
   }
 
@@ -136,7 +136,7 @@
     var cells = tableCellList(el);
     if (!cells.length)
       return;
-    var index = cells.indexOf(activeCell(el));
+    var index = cells.indexOf(CellEdit.activeCell(el));
     if (index < 0)
       index = 0;
     var next = index + delta;
@@ -150,7 +150,7 @@
         next = cells.length - 1;
       }
     }
-    caretInCellEnd(cells[next]);
+    CaretEdit.caretInCellEnd(cells[next]);
   }
 
   // 任务列表项：复选框只是控件，"[ ] " / "[x] " 仍以零宽标记留在 DOM 里，
@@ -161,25 +161,25 @@
     var indent = /^\s*/.exec(lead)[0].length;
     // 缩进子项在扁平列表里用左边距表达层级（原文的前导空格仍由标记承载）
     var style = indent ? ' style="margin-left:' + (indent * 0.6) + 'em"' : '';
-    var head = (index && INLINE_PROTO ? newlineMarker() : '')
-      + (INLINE_PROTO ? marker(lead, 'bullet') : '');
+    var head = (index && INLINE_PROTO ? Util.newlineMarker() : '')
+      + (INLINE_PROTO ? Util.marker(lead, 'bullet') : '');
     if (!task)
-      return '<li' + style + '>' + head + renderInline(rest) + '</li>';
+      return '<li' + style + '>' + head + Util.renderInline(rest) + '</li>';
     return '<li class="task"' + style + '>' + head
       // 任务标记不做成原子对象：编辑态它显示为可见文本，光标可以进入并用键盘
       // 把 [ ] 改成 [x]；渲染态 font-size:0 隐藏，由复选框代替。文字包一层 <i>，
       // 编辑态才能绝对定位压到复选框那块占位上，做到进出编辑态零位移。
-      + (INLINE_PROTO ? '<span class="mk mk-task"><i>' + escapeHtml(task[0]) + '</i></span>' : '')
+      + (INLINE_PROTO ? '<span class="mk mk-task"><i>' + Util.escapeHtml(task[0]) + '</i></span>' : '')
       + '<input type="checkbox" class="task-check" contenteditable="false" tabindex="-1"'
       + (task[1] === ' ' ? '' : ' checked') + '>'
-      + renderInline(rest.slice(task[0].length)) + '</li>';
+      + Util.renderInline(rest.slice(task[0].length)) + '</li>';
   }
 
   // 点击复选框：只改写该行的 [ ] / [x]，重新渲染并落一个撤销步。
   // 控件本身不承载文本，dataset.raw 与 textContent 仍由 .mk 标记保持一致。
   function toggleTaskCheckbox(box) {
     var li = box.closest ? box.closest('li') : null;
-    var el = li ? blockOf(li) : null;
+    var el = li ? CaretCode.blockOf(li) : null;
     if (!li || !el || !el.classList.contains('block'))
       return;
     var lines = rawOf(el).split('\n');
@@ -192,9 +192,9 @@
     if (next === lines[index])
       return;
     lines[index] = next;
-    commitHistory();
+    EditingSnapshot.commitHistory();
     applyRawToBlock(el, lines.join('\n'), undefined, undefined, false);
-    setTimeout(commitHistory, 0);
+    setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   function renderBlock(el, raw, deferHi) {
@@ -209,15 +209,15 @@
     if (fence) {
       kind = 'code';
       el.dataset.lang = fence[1];
-      html = renderCode(el, fence[2], fence[1], deferHi);
+      html = LayoutCode.renderCode(el, fence[2], fence[1], deferHi);
     } else if (heading && lines.length === 1) {
       var level = heading[1].length;
       kind = 'h' + level;
       // 前缀按原文原样折叠（含 # 后的空白），否则 textContent 少一个空格，
       // 离开编辑态时块类型会悄悄变掉
-      var prefix = INLINE_PROTO ? marker(heading[1] + heading[2], 'head') : '';
-      html = '<h' + level + '>' + prefix + renderInline(heading[3]) + '</h' + level + '>';
-    } else if (isTableSource(lines)) {
+      var prefix = INLINE_PROTO ? Util.marker(heading[1] + heading[2], 'head') : '';
+      html = '<h' + level + '>' + prefix + Util.renderInline(heading[3]) + '</h' + level + '>';
+    } else if (TableParse.isTableSource(lines)) {
       kind = 'table';
       html = renderTable(lines, el);
     } else if (lines.length && lines.every(function (line) { return /^\s*[-*+]\s+/.test(line); })) {
@@ -242,15 +242,15 @@
       lines.forEach(function (line, index) {
         var lead = /^\s*>\s?/.exec(line)[0];
         if (index)
-          html += '<br>' + (INLINE_PROTO ? newlineMarker() : '');
-        html += (INLINE_PROTO ? marker(lead, 'quote') : '') + renderInline(line.slice(lead.length));
+          html += '<br>' + (INLINE_PROTO ? Util.newlineMarker() : '');
+        html += (INLINE_PROTO ? Util.marker(lead, 'quote') : '') + Util.renderInline(line.slice(lead.length));
       });
       html += '</blockquote>';
     } else if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(raw.trim())) {
       kind = 'hr';
       html = '<hr>';
     } else {
-      html = lines.map(renderInline).join(INLINE_PROTO ? '<br>' + newlineMarker() : '<br>');
+      html = lines.map(Util.renderInline).join(INLINE_PROTO ? '<br>' + Util.newlineMarker() : '<br>');
     }
 
     el.dataset.raw = raw;
@@ -266,9 +266,3 @@
     renderBlock: renderBlock
   };
   })();
-
-  var tableCellList = RenderBlocks.tableCellList;
-  var insertTableRow = RenderBlocks.insertTableRow;
-  var moveTableCell = RenderBlocks.moveTableCell;
-  var toggleTaskCheckbox = RenderBlocks.toggleTaskCheckbox;
-  var renderBlock = RenderBlocks.renderBlock;

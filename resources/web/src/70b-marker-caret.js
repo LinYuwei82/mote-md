@@ -188,9 +188,3 @@
     deleteVisibleChar: deleteVisibleChar
   };
   })();
-
-  var collapseAt = MarkerCaret.collapseAt;
-  var markerAdjacent = MarkerCaret.markerAdjacent;
-  var caretInsideMarker = MarkerCaret.caretInsideMarker;
-  var editableTextNodes = MarkerCaret.editableTextNodes;
-  var deleteVisibleChar = MarkerCaret.deleteVisibleChar;

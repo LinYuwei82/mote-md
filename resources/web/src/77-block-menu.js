@@ -11,7 +11,7 @@
     if (!block || mode === 'source')
       return;
     closeTurnMenu();
-    closeSlash(false);
+    SlashMenu.closeSlash(false);
     closeBlockMenu();
     blockMenuTarget = block;
     blockMenu = document.createElement('div');
@@ -24,7 +24,7 @@
     html += '<div class="turn-sep"></div>';
     html += '<div class="turn-title">转为</div>';
     TURN_ITEMS.forEach(function (item) {
-      html += '<div class="turn-item" data-key="' + item.key + '">' + escapeHtml(item.label) + '</div>';
+      html += '<div class="turn-item" data-key="' + item.key + '">' + Util.escapeHtml(item.label) + '</div>';
     });
     blockMenu.innerHTML = html;
     // 按下不抢焦点、不动选区（与 turn-menu 同一处理）；动作在 mouseup 派发
@@ -43,15 +43,15 @@
       if (!target || !target.parentNode)
         return;
       if (act === 'above')
-        insertBlockNear(target, true);
+        BlockMenuActions.insertBlockNear(target, true);
       else if (act === 'below')
-        insertBlockNear(target, false);
+        BlockMenuActions.insertBlockNear(target, false);
       else if (act === 'duplicate')
-        duplicateBlock(target);
+        BlockMenuActions.duplicateBlock(target);
       else if (act === 'delete')
-        removeBlock(target);
+        BlockMenuActions.removeBlock(target);
       else if (key)
-        turnBlockTo(target, key);
+        BlockMenuActions.turnBlockTo(target, key);
     });
     placeMenu(blockMenu, { left: x, top: y, bottom: y, right: x });
   }
@@ -61,6 +61,3 @@
     openBlockMenu: openBlockMenu
   };
   })();
-
-  var closeBlockMenu = BlockMenu.closeBlockMenu;
-  var openBlockMenu = BlockMenu.openBlockMenu;

@@ -13,7 +13,7 @@
       return 'ol';
     if (lines.length && lines.every(function (line) { return /^\s*>/.test(line); }))
       return 'quote';
-    if (isTableSource(lines))
+    if (TableParse.isTableSource(lines))
       return 'table';
     if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(raw.trim()))
       return 'hr';
@@ -48,7 +48,7 @@
       for (var ri = 0; ri < rows.length; ri++) {
         if (ri === 1)
           continue;
-        texts.push(tableCells(rows[ri]).join(' '));
+        texts.push(TableParse.tableCells(rows[ri]).join(' '));
       }
       return texts.join('\n');
     }
@@ -105,8 +105,8 @@
   // 编辑中的块以 textContent 为准（input 已逐次同步 dataset.raw，但组合输入
   // 结束前可能有半帧差）；其余块一律用 dataset.raw。
   function rawOf(el) {
-    if (isCodeBlock(el))
-      return el.dataset.raw === undefined ? codeRaw(el, codeText(el)) : el.dataset.raw;
+    if (LayoutCode.isCodeBlock(el))
+      return el.dataset.raw === undefined ? LayoutCode.codeRaw(el, LayoutCode.codeText(el)) : el.dataset.raw;
     if (el.classList.contains('editing'))
       return el.textContent;
     return el.dataset.raw === undefined ? el.textContent : el.dataset.raw;
@@ -122,7 +122,7 @@
   // 三击/拖选会让选区边界落在 #editor 本身（而不是某个块里），
   // 此时按子节点下标取相邻块，否则多选转换会被误判成“没有块”。
   function blockAtBoundary(node, offset, preferPrevious) {
-    var el = blockOf(node);
+    var el = CaretCode.blockOf(node);
     if (el)
       return el;
     if (node !== root)
@@ -167,19 +167,19 @@
 
   // 渲染一个新原文并恢复编辑态；start/end 是「块原文」口径的偏移。
   function applyRawToBlock(el, raw, start, end, editing) {
-    renderBlock(el, raw);
-    normalizeCodeScrolls(el);
+    RenderBlocks.renderBlock(el, raw);
+    LayoutCode.normalizeCodeScrolls(el);
     if (editing) {
       el.classList.add('editing');
       el.focus();
       var limit = raw.length;
       var from = Math.max(0, Math.min(start === undefined || start === null ? limit : start, limit));
       var to = Math.max(from, Math.min(end === undefined || end === null ? from : end, limit));
-      placeBlockCaret(el, from, to);
+      CaretEdit.placeBlockCaret(el, from, to);
     }
     updatePlaceholder();
-    scheduleDirty();
-    scheduleTocRefresh();
+    DocumentModel.scheduleDirty();
+    Toc.scheduleTocRefresh();
   }
 
   // 多块合并型转换（列表/引用/代码块）：把选中块的内容按行拼进一个块。
@@ -188,14 +188,14 @@
   // 跨块选区是虚拟覆盖层，DOM 光标折叠在焦点块；selectedBlocks 只读 DOM 选区
   // 会漏掉选区覆盖的其他块。这里按整篇源码偏移把覆盖到的块收集出来。
   function crossSelBlocks() {
-    var bounds = crossBounds();
+    var bounds = TableCross.crossBounds();
     if (!bounds)
       return null;
     var els = blockList();
     var out = [];
     var offset = 0;
     for (var i = 0; i < els.length; i++) {
-      offset += blockGap(els[i], i === 0);
+      offset += DocumentModel.blockGap(els[i], i === 0);
       var len = rawOf(els[i]).length;
       if (offset + len > bounds.from && offset < bounds.to)
         out.push(els[i]);
@@ -203,4 +203,3 @@
     }
     return out;
   }
-

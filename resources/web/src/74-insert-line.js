@@ -60,6 +60,3 @@
     positionInsertLine: positionInsertLine
   };
   })();
-
-  var blockDropRef = InsertLine.blockDropRef;
-  var positionInsertLine = InsertLine.positionInsertLine;

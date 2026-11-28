@@ -21,8 +21,8 @@
     var html = '';
     list.forEach(function (item, index) {
       html += '<div class="slash-item' + (index === slashState.index ? ' active' : '')
-        + '" data-key="' + item.key + '"><span class="slash-label">' + escapeHtml(item.label)
-        + '</span><span class="slash-hint">' + escapeHtml(item.hint) + '</span></div>';
+        + '" data-key="' + item.key + '"><span class="slash-label">' + Util.escapeHtml(item.label)
+        + '</span><span class="slash-hint">' + Util.escapeHtml(item.hint) + '</span></div>';
     });
     if (!list.length)
       html = '<div class="slash-empty">没有匹配的命令</div>';
@@ -67,10 +67,10 @@
 
   // 输入时维护「/ + 查询词」的范围；斜杠只在空行/行首触发。
   function handleSlashInput(el) {
-    if (!el || el.classList.contains('table') || isCodeBlock(el))
+    if (!el || el.classList.contains('table') || LayoutCode.isCodeBlock(el))
       return;
     var raw = rawOf(el);
-    var caret = caretOffset(el);
+    var caret = CaretOffset.caretOffset(el);
     if (!slashState) {
       if (raw.charAt(caret - 1) !== '/')
         return;
@@ -105,9 +105,9 @@
       return;
     var end = Math.min(state.end, raw.length);
     var next = raw.slice(0, state.start) + raw.slice(end);
-    commitHistory();
+    EditingSnapshot.commitHistory();
     applyRawToBlock(el, next, state.start, state.start, true);
-    setTimeout(commitHistory, 0);
+    setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   function insertSlashItem() {
@@ -122,7 +122,7 @@
     var end = Math.min(slashState.end, rawOf(el).length);
     var base = rawOf(el).slice(0, start) + rawOf(el).slice(end);
     closeSlash(false);
-    commitHistory();
+    EditingSnapshot.commitHistory();
     var key = item.key;
 
     if (key === 'code') {
@@ -150,16 +150,16 @@
     } else {
       var type = { h1: 'h1', h2: 'h2', h3: 'h3', ul: 'ul', ol: 'ol', quote: 'quote' }[key];
       if (!type) {
-        setTimeout(commitHistory, 0);
+        setTimeout(EditingSnapshot.commitHistory, 0);
         return;
       }
       var converted = buildBlockRaw(type, base);
       var shift = leadLength(converted, kindOfRaw(converted)) - leadLength(base, kindOfRaw(base));
       applyRawToBlock(el, converted, Math.max(0, start + shift), Math.max(0, start + shift), true);
     }
-    scheduleDirty();
-    scheduleTocRefresh();
-    setTimeout(commitHistory, 0);
+    DocumentModel.scheduleDirty();
+    Toc.scheduleTocRefresh();
+    setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   return {
@@ -169,8 +169,3 @@
     insertSlashItem: insertSlashItem
   };
   })();
-
-  var moveSlash = SlashMenu.moveSlash;
-  var handleSlashInput = SlashMenu.handleSlashInput;
-  var closeSlash = SlashMenu.closeSlash;
-  var insertSlashItem = SlashMenu.insertSlashItem;

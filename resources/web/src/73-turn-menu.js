@@ -16,7 +16,7 @@
   }
 
   function openTurnMenu(x, y) {
-    closeSlash(false);
+    SlashMenu.closeSlash(false);
     closeTurnMenu();
     var selection = window.getSelection();
     // 剪切/复制要有非空选区才可用；粘贴是否可用取决于系统剪贴板，页面没有读取
@@ -31,7 +31,7 @@
     html += '<div class="turn-sep"></div>';
     html += '<div class="turn-title">转为</div>';
     TURN_ITEMS.forEach(function (item) {
-      html += '<div class="turn-item" data-key="' + item.key + '">' + escapeHtml(item.label) + '</div>';
+      html += '<div class="turn-item" data-key="' + item.key + '">' + Util.escapeHtml(item.label) + '</div>';
     });
     turnMenu.innerHTML = html;
     turnMenu.addEventListener('mousedown', function (event) {
@@ -46,7 +46,7 @@
       closeTurnMenu();
       // 剪贴板三项交回宿主执行，与编辑菜单、快捷键完全同一条路径
       if (command)
-        post({ type: 'editCommand', command: command });
+        Util.post({ type: 'editCommand', command: command });
       else
         formatAction(hit.getAttribute('data-key'));
     });
@@ -60,7 +60,7 @@
   document.addEventListener('contextmenu', function (event) {
     if (mode === 'source')
       return;
-    var el = blockOf(event.target);
+    var el = CaretCode.blockOf(event.target);
     if (!el)
       return;
     event.preventDefault();
@@ -76,14 +76,14 @@
     var keepSelection = !!(selection && !selection.isCollapsed && rangeBlocks.length > 1
       && rangeBlocks.indexOf(el) >= 0);
     if (!keepSelection) {
-      var host = selection && selection.rangeCount ? blockOf(selection.anchorNode) : null;
+      var host = selection && selection.rangeCount ? CaretCode.blockOf(selection.anchorNode) : null;
       if (host !== el) {
         el.classList.add('editing');
         el.focus();
         // 不能直接 setSelectionRange：表格末尾的偏移会落在尾部 | 标记之后，
         // 之后的输入就写到分隔符外面去了。placeBlockCaret 会带上
         // ensureCellCaret 把光标收回单元格可见文本里。
-        placeBlockCaret(el, el.textContent.length);
+        CaretEdit.placeBlockCaret(el, el.textContent.length);
       }
     }
     openTurnMenu(event.clientX, event.clientY);
@@ -99,9 +99,9 @@
     // 手柄自己的按下会弹菜单，这里不能把它当成「点外部」提前关掉
     if (blockMenu && !blockMenu.contains(event.target)
         && !(blockHandle && blockHandle.contains(event.target)))
-      closeBlockMenu();
-    if (slashMenu && !slashMenu.contains(event.target) && !blockOf(event.target))
-      closeSlash(true);
+      BlockMenu.closeBlockMenu();
+    if (slashMenu && !slashMenu.contains(event.target) && !CaretCode.blockOf(event.target))
+      SlashMenu.closeSlash(true);
     // 徽标自己的 mousedown 会先打开/切换下拉，这里不能把它当成「点外部」关掉
     if (langMenu && !langMenu.contains(event.target)
         && !(event.target.closest && event.target.closest('.code-lang')))
@@ -116,7 +116,7 @@
       return;
     if (slashState) {
       event.preventDefault();
-      closeSlash(true);
+      SlashMenu.closeSlash(true);
     } else if (turnMenu) {
       event.preventDefault();
       closeTurnMenu();
@@ -125,7 +125,7 @@
       closeLangMenu();
     } else if (blockMenu) {
       event.preventDefault();
-      closeBlockMenu();
+      BlockMenu.closeBlockMenu();
     }
   }, true);
 
@@ -167,24 +167,23 @@
   // 所有块级结构操作（插入/删除/副本/重排）的统一收尾
   function afterBlockStructureChange() {
     normalizeBlockGaps();
-    clearCrossSelection();
-    commitHistory();
-    scheduleDirty();
-    scheduleTocRefresh();
+    CrossRange.clearCrossSelection();
+    EditingSnapshot.commitHistory();
+    DocumentModel.scheduleDirty();
+    Toc.scheduleTocRefresh();
     updatePlaceholder();
-    scheduleMermaid();
+    MermaidInit.scheduleMermaid();
     // 结构一变，查找命中引用的旧文本节点可能已被重建（拖拽重排实测会失联），
     // 原地重画只会把高亮层清空：查找条开着就按当前关键词重扫，命中与位置一起刷新
     if (findBar)
-      scheduleFind();
+      FindUi.scheduleFind();
   }
 
   function makeBlockEl(raw) {
     var el = document.createElement('div');
     el.className = 'block';
     el.setAttribute('contenteditable', 'true');
-    renderBlock(el, raw);
-    normalizeCodeScrolls(el);
+    RenderBlocks.renderBlock(el, raw);
+    LayoutCode.normalizeCodeScrolls(el);
     return el;
   }
-

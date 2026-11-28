@@ -30,7 +30,7 @@
   // 光标在单元格可见文本里的位置（标记不计入）。offset 为 -1 表示判断不了
   // （例如光标落进了不可编辑标记内部），调用方按“不是边界”处理。
   function cellCaretInfo(cell, range) {
-    var nodes = editableTextNodes(cell);
+    var nodes = MarkerCaret.editableTextNodes(cell);
     var total = 0;
     var i;
     for (i = 0; i < nodes.length; i++)
@@ -176,7 +176,7 @@
       // 清理把承载起点的那段格式容器删掉了：光标落回该格可见文本末尾；
       // 若该格已空，就落在格内首个可编辑位置（结构标记之间）。
       if (cellVisibleText(firstCell).length)
-        caretInCellEnd(firstCell);
+        CaretEdit.caretInCellEnd(firstCell);
       else
         caretAtEdge(firstCell, false);
     } else if (first.node.isConnected) {
@@ -189,8 +189,8 @@
       selection.addRange(caret);
     }
     el.dataset.raw = el.textContent;
-    scheduleDirty();
-    scheduleCommit();
+    DocumentModel.scheduleDirty();
+    EditingSnapshot.scheduleCommit();
     return true;
   }
 
@@ -204,11 +204,3 @@
     clearSelectedCellText: clearSelectedCellText
   };
   })();
-
-  var inPlaceEditable = CellEdit.inPlaceEditable;
-  var caretAtEdge = CellEdit.caretAtEdge;
-  var activeCell = CellEdit.activeCell;
-  var atCellEdge = CellEdit.atCellEdge;
-  var rangeCrossesCells = CellEdit.rangeCrossesCells;
-  var cellVisibleText = CellEdit.cellVisibleText;
-  var clearSelectedCellText = CellEdit.clearSelectedCellText;

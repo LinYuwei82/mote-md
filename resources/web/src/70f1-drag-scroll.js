@@ -13,10 +13,10 @@
     var range = document.caretRangeFromPoint(x, y);
     if (!range)
       return null;
-    var el = blockOf(range.startContainer);
-    if (!el || !crossHitNodeOk(el, range.startContainer))
+    var el = CaretCode.blockOf(range.startContainer);
+    if (!el || !CrossPaint.crossHitNodeOk(el, range.startContainer))
       return null;
-    var abs = absoluteOf(el, range.startContainer, range.startOffset);
+    var abs = CrossRange.absoluteOf(el, range.startContainer, range.startOffset);
     if (abs === null)
       return null;
     return { el: el, range: range, abs: abs };
@@ -74,14 +74,14 @@
       if (hit.el === dragCross.el)
         return;
       crossSel = { anchor: dragCross.anchor, focus: hit.abs, goalX: dragCross.goalX };
-      announceCross();
+      CrossRange.announceCross();
     } else if (hit.abs === crossSel.anchor) {
-      clearCrossSelection();
+      CrossRange.clearCrossSelection();
       return;
     }
     crossSel.focus = hit.abs;
     collapseAtCrossHit(hit);
-    paintCrossSelection();
+    CrossPaint.paintCrossSelection();
   }
 
   return {
@@ -90,7 +90,3 @@
     updateCrossDrag: updateCrossDrag
   };
   })();
-
-  var stopDragScroll = DragScroll.stopDragScroll;
-  var crossHitAt = DragScroll.crossHitAt;
-  var updateCrossDrag = DragScroll.updateCrossDrag;

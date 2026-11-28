@@ -32,7 +32,7 @@
     sourceEl.focus();
     sourceEl.setSelectionRange(start, end);
     sourceEl.dispatchEvent(new Event('input', { bubbles: true }));
-    setTimeout(commitHistory, 0);
+    setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   function sourceInline(kind) {
@@ -42,7 +42,7 @@
     var out = inlineTransform(text, start, end, kind);
     if (out.raw === text)
       return;
-    commitHistory();
+    EditingSnapshot.commitHistory();
     applySourceText(out.raw, out.start, out.end);
   }
 
@@ -63,7 +63,7 @@
     if (next === raw)
       return;
     var shift = leadLength(next, kindOfRaw(next)) - leadLength(raw, kindOfRaw(raw));
-    commitHistory();
+    EditingSnapshot.commitHistory();
     applySourceText(text.slice(0, range.start) + next + text.slice(range.end),
       Math.max(range.start, start + shift), Math.max(range.start, end + shift));
   }
@@ -74,6 +74,3 @@
     sourceConvert: sourceConvert
   };
   })();
-
-  var sourceInline = SourceConvert.sourceInline;
-  var sourceConvert = SourceConvert.sourceConvert;

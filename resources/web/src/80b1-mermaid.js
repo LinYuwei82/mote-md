@@ -54,7 +54,7 @@
   }
 
   function isMermaidBlock(el) {
-    return isCodeBlock(el) && (el.dataset.lang || '').trim().toLowerCase() === 'mermaid';
+    return LayoutCode.isCodeBlock(el) && (el.dataset.lang || '').trim().toLowerCase() === 'mermaid';
   }
 
   function mermaidFigure(el) {
@@ -71,14 +71,14 @@
     // 图不可编辑：点图直接回到源码编辑（enterEdit 会把光标放进 <code>）
     fig.addEventListener('mousedown', function (ev) {
       ev.preventDefault();
-      enterEdit(el);
+      CaretEdit.enterEdit(el);
     });
     pre.insertBefore(fig, pre.firstChild);
     return fig;
   }
 
   function renderMermaidBlock(el) {
-    var src = codeText(el).trim();
+    var src = LayoutCode.codeText(el).trim();
     if (!src) {
       el.classList.remove('has-mermaid');
       return;
@@ -149,4 +149,3 @@
       }
     }
   }
-

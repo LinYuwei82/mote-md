@@ -168,12 +168,12 @@
     var colored;
     if (defer && hasLangSpec(lang)) {
       // 未识别语言本来就只有转义成本，不值得延迟
-      colored = lines.map(escapeHtml);
+      colored = lines.map(Util.escapeHtml);
       if (!deferredCode)
         deferredCode = [];
       deferredCode.push({ el: el, code: lines.join('\n'), lang: lang });
     } else {
-      colored = highlightCode(el, lines.join('\n'), lang);
+      colored = HighlightCache.highlightCode(el, lines.join('\n'), lang);
     }
     var gutter = '';
     for (var i = 0; i < lines.length; i++)
@@ -193,8 +193,8 @@
       + '<div class="code-tools" contenteditable="false">'
       + '<span class="code-lang" contenteditable="false" spellcheck="false"'
       + ' role="button" aria-haspopup="listbox" aria-expanded="false"'
-      + (lang ? ' title="' + escapeHtml(lang) + '"' : '')
-      + ' aria-label="代码语言">' + escapeHtml(lang || '') + '</span>'
+      + (lang ? ' title="' + Util.escapeHtml(lang) + '"' : '')
+      + ' aria-label="代码语言">' + Util.escapeHtml(lang || '') + '</span>'
       + '<span class="code-lang-caret" aria-hidden="true"></span>'
       + '<button type="button" class="code-copy" tabindex="-1"'
       + ' aria-label="复制代码" title="复制代码">' + COPY_ICON + DONE_ICON + '</button>'
@@ -210,7 +210,7 @@
     var block = btn && btn.closest ? btn.closest('.block.code') : null;
     if (!block)
       return;
-    post({ type: 'clipboardWrite', text: codeText(block) });
+    Util.post({ type: 'clipboardWrite', text: codeText(block) });
     btn.classList.add('copied');
     if (btn._copiedTimer)
       clearTimeout(btn._copiedTimer);
@@ -260,7 +260,7 @@
     var sel = window.getSelection();
     if (sel && sel.anchorNode && code.contains(sel.anchorNode))
       return;
-    code.innerHTML = highlightCode(el, entry.code, entry.lang).join('\n');
+    code.innerHTML = HighlightCache.highlightCode(el, entry.code, entry.lang).join('\n');
     el._codeDrawn = (el.dataset.lang || '') + '\n' + entry.code;
   }
 
@@ -315,18 +315,3 @@
     flushDeferredCode: flushDeferredCode
   };
   })();
-
-  var splitSourceLayout = LayoutCode.splitSourceLayout;
-  var trailingNewlineCount = LayoutCode.trailingNewlineCount;
-  var isCodeBlock = LayoutCode.isCodeBlock;
-  var codeEl = LayoutCode.codeEl;
-  var codeText = LayoutCode.codeText;
-  var codeRaw = LayoutCode.codeRaw;
-  var codePrefixLength = LayoutCode.codePrefixLength;
-  var updateGutter = LayoutCode.updateGutter;
-  var gutterLineAt = LayoutCode.gutterLineAt;
-  var codeLineStart = LayoutCode.codeLineStart;
-  var renderCode = LayoutCode.renderCode;
-  var copyCodeBlock = LayoutCode.copyCodeBlock;
-  var normalizeCodeScrolls = LayoutCode.normalizeCodeScrolls;
-  var flushDeferredCode = LayoutCode.flushDeferredCode;

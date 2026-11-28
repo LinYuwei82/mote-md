@@ -2,29 +2,29 @@
   // 逐块切开绝对区间取客户矩形，画成覆盖层色块（不插入任何正文节点）
   function paintCrossSelection() {
     if (!crossSel) {
-      dropCrossLayer();
+      CrossRange.dropCrossLayer();
       return;
     }
     var from = Math.min(crossSel.anchor, crossSel.focus);
     var to = Math.max(crossSel.anchor, crossSel.focus);
     if (from === to) {
-      dropCrossLayer();
+      CrossRange.dropCrossLayer();
       return;
     }
-    var blocks = collectBlocks();
-    var gaps = collectGaps();
+    var blocks = DocumentModel.collectBlocks();
+    var gaps = DocumentModel.collectGaps();
     var list = blockList();
-    var layer = ensureCrossLayer();
+    var layer = CrossRange.ensureCrossLayer();
     while (layer.firstChild)
       layer.removeChild(layer.firstChild);
     var base = 0;
     for (var i = 0; i < blocks.length && base < to; i++) {
-      var span = blockAbsoluteSpan(blocks, gaps, i);
+      var span = CrossRange.blockAbsoluteSpan(blocks, gaps, i);
       base = span.base;
       var lo = Math.max(from, span.base);
       var hi = Math.min(to, span.stop);
       if (hi > lo) {
-        var range = crossBlockRange(list[i], lo - span.base, hi - span.base);
+        var range = CrossRange.crossBlockRange(list[i], lo - span.base, hi - span.base);
         var rects = range ? range.getClientRects() : [];
         for (var r = 0; r < rects.length; r++) {
           if (rects[r].width <= 0.5 || rects[r].height <= 0.5)
@@ -53,9 +53,9 @@
   }
 
   function blockAtAbsolute(abs) {
-    var blocks = collectBlocks();
-    var gaps = collectGaps();
-    var at = locateBlock(blocks, gaps, abs);
+    var blocks = DocumentModel.collectBlocks();
+    var gaps = DocumentModel.collectGaps();
+    var at = EditingSnapshot.locateBlock(blocks, gaps, abs);
     return { el: blockList()[at.index] || null, index: at.index, start: at.start };
   }
 
@@ -107,10 +107,10 @@
         if (!probe)
           continue;
         var node = probe.startContainer;
-        var target = blockOf(node);
+        var target = CaretCode.blockOf(node);
         if (!target || !crossHitNodeOk(target, node))
           continue;
-        var abs = absoluteOf(target, node, probe.startOffset);
+        var abs = CrossRange.absoluteOf(target, node, probe.startOffset);
         // 只认「按方向真正前进」的落点：块内边距里投点会得到更靠后的坐标，
         // 反向落点会让选区原地打转
         if (abs === null || (up ? abs >= crossSel.focus : abs <= crossSel.focus))
@@ -120,7 +120,7 @@
         if (charRect && (up ? charRect.bottom > line.top + 1 : charRect.top < line.bottom - 1))
           continue;
         // 块间空白处的投点只会得到「跨过空行」的区间，画不出高亮：继续往下找
-        if (!crossRangeCoversText(crossSel.focus, abs))
+        if (!CrossRange.crossRangeCoversText(crossSel.focus, abs))
           continue;
         hit = { el: target, range: probe, abs: abs };
         break;
@@ -138,7 +138,7 @@
       if (!selection.rangeCount)
         return false;
       var settled = selection.getRangeAt(0);
-      var settledAbs = absoluteOf(next, settled.startContainer, settled.startOffset);
+      var settledAbs = CrossRange.absoluteOf(next, settled.startContainer, settled.startOffset);
       if (settledAbs === null)
         return false;
       hit = { el: next, range: settled.cloneRange(), abs: settledAbs };
@@ -167,17 +167,17 @@
       var index = blockList().indexOf(el);
       if (index < 0)
         return false;
-      var blocks = collectBlocks();
-      var gaps = collectGaps();
-      var base = blockStartOffset(blocks, gaps, index);
+      var blocks = DocumentModel.collectBlocks();
+      var gaps = DocumentModel.collectGaps();
+      var base = DocumentModel.blockStartOffset(blocks, gaps, index);
       var anchorAbs, focusAbs;
       if (range.collapsed) {
-        anchorAbs = focusAbs = base + rawOffsetAtPoint(el, range.startContainer, range.startOffset);
+        anchorAbs = focusAbs = base + CrossRange.rawOffsetAtPoint(el, range.startContainer, range.startOffset);
       } else {
         // 原生单块选区升格：锚点取 anchor 端，焦点取 focus 端；随后把原生选区
         // 收成焦点处的折叠光标，高亮整段交给覆盖层
-        anchorAbs = base + rawOffsetAtPoint(el, selection.anchorNode, selection.anchorOffset);
-        focusAbs = base + rawOffsetAtPoint(el, selection.focusNode, selection.focusOffset);
+        anchorAbs = base + CrossRange.rawOffsetAtPoint(el, selection.anchorNode, selection.anchorOffset);
+        focusAbs = base + CrossRange.rawOffsetAtPoint(el, selection.focusNode, selection.focusOffset);
         var collapsed = document.createRange();
         try {
           collapsed.setStart(selection.focusNode, selection.focusOffset);
@@ -195,10 +195,10 @@
     }
     moveCrossFocus(up);
     if (crossSel.anchor === crossSel.focus)
-      clearCrossSelection();
+      CrossRange.clearCrossSelection();
     else
       paintCrossSelection();
-    announceCross();
+    CrossRange.announceCross();
     return true;
   }
 
@@ -208,7 +208,3 @@
     extendCrossSelection: extendCrossSelection
   };
   })();
-
-  var paintCrossSelection = CrossPaint.paintCrossSelection;
-  var crossHitNodeOk = CrossPaint.crossHitNodeOk;
-  var extendCrossSelection = CrossPaint.extendCrossSelection;

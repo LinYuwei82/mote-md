@@ -4,7 +4,7 @@
     if (!selection.rangeCount)
       return 0;
     // 代码块的光标偏移只按 <code> 里的正文计算，行号栏不能算进去
-    var scope = isCodeBlock(el) ? codeEl(el) : el;
+    var scope = LayoutCode.isCodeBlock(el) ? LayoutCode.codeEl(el) : el;
     if (!scope)
       return 0;
     var range = selection.getRangeAt(0);
@@ -22,7 +22,7 @@
   // 口径（dataset.raw，含围栏行）；要在两处之间存取光标（如查找栏开/关）必须
   // 先补齐围栏长度，否则回来时会被 placeBlockCaret 再减一次，光标往左偏。
   function rawCaretOffset(el) {
-    return caretOffset(el) + (isCodeBlock(el) ? codePrefixLength(el) : 0);
+    return caretOffset(el) + (LayoutCode.isCodeBlock(el) ? LayoutCode.codePrefixLength(el) : 0);
   }
 
   function blockIndex(el) {
@@ -86,9 +86,3 @@
     setSelectionRange: setSelectionRange
   };
   })();
-
-  var caretOffset = CaretOffset.caretOffset;
-  var rawCaretOffset = CaretOffset.rawCaretOffset;
-  var blockIndex = CaretOffset.blockIndex;
-  var locateOffset = CaretOffset.locateOffset;
-  var setSelectionRange = CaretOffset.setSelectionRange;

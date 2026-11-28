@@ -1,6 +1,6 @@
   // 导航作用域：代码块只看 <code>（行号栏不参与），普通块就是块本身。
   function navScope(el) {
-    return isCodeBlock(el) ? codeEl(el) : el;
+    return LayoutCode.isCodeBlock(el) ? LayoutCode.codeEl(el) : el;
   }
 
   // 取 scope 内首/末一个「可见字符」的矩形。折叠 Range 在 WebKit 里常是 0×0，
@@ -47,7 +47,7 @@
     if (el.classList.contains('hr'))
       return textCharRect(el.querySelector('.hr-src'), atEnd);
     if (el.classList.contains('table')) {
-      var cells = tableCellList(el);
+      var cells = RenderBlocks.tableCellList(el);
       if (!cells.length)
         return null;
       for (var i = 0; i < cells.length; i++) {
@@ -114,7 +114,7 @@
         : caret.bottom >= line.bottom - height * 0.5;
     }
     var scope = navScope(el) || el;
-    return up ? caretOffset(el) === 0 : caretOffset(el) >= scope.textContent.length;
+    return up ? CaretOffset.caretOffset(el) === 0 : CaretOffset.caretOffset(el) >= scope.textContent.length;
   }
 
   // 投点是否落在目标块可编辑范围内（表格必须落进单元格，代码块必须落进 <code>）。
@@ -138,8 +138,8 @@
   // 结构上的块尾/块首（表格落单元格、代码落 <code>、分隔线落原文行）。
   function placeCaretInBlock(target, up, x) {
     if (target.classList.contains('hr')) {
-      var src = ensureHrSource(target);
-      setSelectionRange(src, up ? src.textContent.length : 0);
+      var src = CaretEdit.ensureHrSource(target);
+      CaretOffset.setSelectionRange(src, up ? src.textContent.length : 0);
       return;
     }
     var line = contentEdgeRect(target, up);
@@ -153,18 +153,18 @@
       }
     }
     if (target.classList.contains('table')) {
-      var cells = tableCellList(target);
+      var cells = RenderBlocks.tableCellList(target);
       if (!cells.length)
         return;
       if (up)
-        caretInCellEnd(cells[cells.length - 1]);
+        CaretEdit.caretInCellEnd(cells[cells.length - 1]);
       else
-        caretAtEdge(cells[0], true);
+        CellEdit.caretAtEdge(cells[0], true);
       return;
     }
     var scope = navScope(target);
     if (scope)
-      setSelectionRange(scope, up ? scope.textContent.length : 0);
+      CaretOffset.setSelectionRange(scope, up ? scope.textContent.length : 0);
   }
 
   // 在相邻块之间搬光标；返回 false 表示不该接管（还在块内、或已是首/末块）。
@@ -198,4 +198,3 @@
   var crossSel = null;        // { anchor, focus, goalX }，整篇绝对字符偏移
   var crossLayer = null;      // 覆盖层（position:absolute，挂在 body）
   var crossAnnounced = false; // 与外壳同步的「是否有跨块选区」状态
-

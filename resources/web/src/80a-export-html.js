@@ -57,9 +57,9 @@
     var seen = {};
     for (var n = 0; n < blocks.length; n++) {
       var heading = blocks[n];
-      if (!headingLevel(heading))
+      if (!Toc.headingLevel(heading))
         continue;
-      var slug = headingSlug(heading.dataset.raw || heading.textContent);
+      var slug = Toc.headingSlug(heading.dataset.raw || heading.textContent);
       if (!slug)
         continue;
       var count = seen[slug] || 0;
@@ -230,4 +230,3 @@
     }
     return true;
   }
-

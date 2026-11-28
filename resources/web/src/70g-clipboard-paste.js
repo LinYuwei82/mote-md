@@ -29,7 +29,7 @@
       var comma = url.indexOf(',');
       if (comma < 0)
         return;
-      post({
+      Util.post({
         type: 'image',
         source: source,
         name: file.name || '',
@@ -47,34 +47,34 @@
     // 块外粘贴在补空块之前已经落过撤销基线（baselineDone）：这里若再提交，
     // 会把「只多一个空块」的中间态写进历史，一次 Cmd+Z 就停在空块上。
     if (!baselineDone)
-      commitHistory();
+      EditingSnapshot.commitHistory();
     if (el && el.classList.contains('table')) {
       // 单元格是单行结构：整张 Markdown 表格直接替换当前表格；其余多行文本
       // 压成一行插入（换行会被 WebKit 变成 <div>/<br>，把表格结构写坏）。
       var raw = text.replace(/\r\n?/g, '\n');
       var rows = raw.split('\n');
-      if (isTableSource(rows)) {
-        renderBlock(el, raw.replace(/\n+$/, ''));
+      if (TableParse.isTableSource(rows)) {
+        RenderBlocks.renderBlock(el, raw.replace(/\n+$/, ''));
         el.classList.add('editing');
         var first = el.querySelector('th, td');
         if (first)
-          caretInCellEnd(first);
+          CaretEdit.caretInCellEnd(first);
       } else {
         document.execCommand('insertText', false, raw.replace(/\n+/g, ' '));
-        ensureCellCaret(el);
+        CaretEdit.ensureCellCaret(el);
       }
-      scheduleDirty();
-      scheduleCommit();
-      setTimeout(commitHistory, 0);
+      DocumentModel.scheduleDirty();
+      EditingSnapshot.scheduleCommit();
+      setTimeout(EditingSnapshot.commitHistory, 0);
       return;
     }
-    if (el && isCodeBlock(el)) {
+    if (el && LayoutCode.isCodeBlock(el)) {
       // 代码块直接按字符插入，多行粘贴不会变成 <div>/<br>，结构始终是行文本
-      if (!insertCodeText(el, text.replace(/\r\n?/g, '\n')))
+      if (!CaretCode.insertCodeText(el, text.replace(/\r\n?/g, '\n')))
         document.execCommand('insertText', false, text);
-      scheduleDirty();
-      scheduleCommit();
-      setTimeout(commitHistory, 0);
+      DocumentModel.scheduleDirty();
+      EditingSnapshot.scheduleCommit();
+      setTimeout(EditingSnapshot.commitHistory, 0);
       return;
     }
     if (text.indexOf('\n') >= 0) {
@@ -82,21 +82,21 @@
       return;
     }
     document.execCommand('insertText', false, text);
-    setTimeout(commitHistory, 0);
+    setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   // 多行粘贴：单个换行是块内软换行（与 renderBlock 的 <br> + mk-nl 表示一致），
   // 空行是块分隔。整段交给 execCommand('insertText') 的话，WKWebView 会把换行
   // 变成 <div>，块内 textContent 只剩一段文字，落盘时行与行就粘在一起了。
   function multilinePasteHtml(text) {
-    return text.split('\n').map(escapeHtml).join('<br>' + newlineMarker());
+    return text.split('\n').map(Util.escapeHtml).join('<br>' + Util.newlineMarker());
   }
 
   function insertMultilinePaste(el, text, baselineDone) {
-    var layout = splitSourceLayout(String(text).replace(/\r\n?/g, '\n').replace(/\n+$/, ''));
+    var layout = LayoutCode.splitSourceLayout(String(text).replace(/\r\n?/g, '\n').replace(/\n+$/, ''));
     var chunks = layout.blocks;
     if (!baselineDone)
-      commitHistory();
+      EditingSnapshot.commitHistory();
     document.execCommand('insertHTML', false, multilinePasteHtml(chunks[0]));
     var last = el;
     for (var i = 1; i < chunks.length; i++) {
@@ -104,20 +104,20 @@
       neo.className = 'block';
       neo.setAttribute('contenteditable', 'true');
       // 粘贴文本里的连续空行原样保留，不压回 2 个换行
-      neo.dataset.gap = String(gapBefore(layout.gaps, i));
+      neo.dataset.gap = String(DocumentModel.gapBefore(layout.gaps, i));
       root.insertBefore(neo, last.nextSibling);
-      renderBlock(neo, '');
+      RenderBlocks.renderBlock(neo, '');
       neo.innerHTML = multilinePasteHtml(chunks[i]);
       neo.classList.add('editing');
       last = neo;
     }
     if (last !== el) {
       last.focus();
-      setCaret(last, last.textContent.length);
+      CaretCode.setCaret(last, last.textContent.length);
     }
-    scheduleDirty();
-    scheduleCommit();
-    setTimeout(commitHistory, 0);
+    DocumentModel.scheduleDirty();
+    EditingSnapshot.scheduleCommit();
+    setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   // 光标停在块外（#editor 直接子节点之间）时，在光标处补一个空段落块并交还
@@ -134,9 +134,9 @@
     neo.className = 'block';
     neo.setAttribute('contenteditable', 'true');
     range.insertNode(neo);
-    renderBlock(neo, '');
+    RenderBlocks.renderBlock(neo, '');
     neo.focus();
-    setCaret(neo, 0);
+    CaretCode.setCaret(neo, 0);
     return neo;
   }
 
@@ -147,10 +147,10 @@
     neo.className = 'block';
     neo.setAttribute('contenteditable', 'true');
     root.appendChild(neo);
-    renderBlock(neo, '');
+    RenderBlocks.renderBlock(neo, '');
     neo.classList.add('editing');
     neo.focus();
-    setCaret(neo, 0);
+    CaretCode.setCaret(neo, 0);
     if (neo.scrollIntoView)
       neo.scrollIntoView({ block: 'nearest' });
     return neo;
@@ -178,7 +178,7 @@
       return;
     }
     event.preventDefault();
-    var el = blockOf(target);
+    var el = CaretCode.blockOf(target);
     // 跨块选区还在：粘贴等价于「用剪贴板文本替换选区」，仍走整篇源码重建
     if (crossSel) {
       replaceCrossSelection(clipboard.getData('text/plain'));
@@ -188,7 +188,7 @@
     if (!el) {
       // 块外粘贴要先补块才有落点。撤销基线必须落在补块之前：否则快照里已经
       // 含这个空块，Cmd+Z 只撤掉文字，空块与落盘空行都会留下。
-      commitHistory();
+      EditingSnapshot.commitHistory();
       baselineDone = true;
       el = inRoot ? caretParagraphBlock() : appendParagraphBlock();
     }
@@ -244,10 +244,3 @@
     cleanCopyFragment: cleanCopyFragment
   };
   })();
-
-  var clipboardImageFile = ClipboardPaste.clipboardImageFile;
-  var postImageFile = ClipboardPaste.postImageFile;
-  var insertPastedText = ClipboardPaste.insertPastedText;
-  var caretParagraphBlock = ClipboardPaste.caretParagraphBlock;
-  var appendParagraphBlock = ClipboardPaste.appendParagraphBlock;
-  var cleanCopyFragment = ClipboardPaste.cleanCopyFragment;

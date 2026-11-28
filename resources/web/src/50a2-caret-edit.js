@@ -28,7 +28,7 @@
   // 单元格末尾必须落在最后一个可见文本节点之后、尾部 | 标记之前：
   // 落在标记之后会让新输入跑到 `|` 外面，重排时那一行会凭空多出一列。
   function caretInCellEnd(cell) {
-    var nodes = editableTextNodes(cell);
+    var nodes = MarkerCaret.editableTextNodes(cell);
     var range = document.createRange();
     if (!nodes.length) {
       // 空格子里没有可依附的可见文本：光标要放在尾部结构标记（| / \n）之前。
@@ -56,7 +56,7 @@
   // 光标必须落在单元格里：一旦落到表格外，后续输入会写进块级文本（甚至 <hr>
   // 外侧），原文就坏了。这里只兜底，不改变正常点击的位置。
   function ensureCellCaret(el) {
-    var cell = activeCell(el);
+    var cell = CellEdit.activeCell(el);
     if (cell) {
       // 元素级光标停在单元格末尾（尾部 | 之后）同样会写坏原文：新输入会跑到
       // 分隔符外面，下次重排那一行就多出一列。收回到可见文本末尾。
@@ -92,19 +92,19 @@
     if (el.classList.contains('hr')) {
       var src = ensureHrSource(el);
       var hrLen = src.textContent.length;
-      setSelectionRange(src, Math.max(0, Math.min(start, hrLen)), Math.max(0, Math.min(end, hrLen)));
+      CaretOffset.setSelectionRange(src, Math.max(0, Math.min(start, hrLen)), Math.max(0, Math.min(end, hrLen)));
       return;
     }
-    if (isCodeBlock(el)) {
+    if (LayoutCode.isCodeBlock(el)) {
       // 快照里是 dataset.raw 口径（含围栏），换成 <code> 内偏移
-      var code = codeEl(el);
-      var prefix = codePrefixLength(el);
+      var code = LayoutCode.codeEl(el);
+      var prefix = LayoutCode.codePrefixLength(el);
       var limit = code.textContent.length;
-      setSelectionRange(code, Math.max(0, Math.min(start - prefix, limit)),
+      CaretOffset.setSelectionRange(code, Math.max(0, Math.min(start - prefix, limit)),
         Math.max(0, Math.min(end - prefix, limit)));
       return;
     }
-    setSelectionRange(el, start, end);
+    CaretOffset.setSelectionRange(el, start, end);
     if (el.classList.contains('table'))
       ensureCellCaret(el);
   }
@@ -114,41 +114,41 @@
       return;
     el.classList.add('editing');
 
-    if (inPlaceEditable(el)) {
+    if (CellEdit.inPlaceEditable(el)) {
       // 不重建内容。渲染态 DOM 原样进入编辑，标记/行号栏本来就常驻，
       // 因此进入某块只切换一个 class，不产生任何重排。
       var at = pendingOffset;
       pendingOffset = null;
       if (el.classList.contains('hr')) {
         // 横线保持原位，原文以绝对定位的淡色行叠在线上（不占高度）
-        caretAtEdge(ensureHrSource(el), false);
+        CellEdit.caretAtEdge(ensureHrSource(el), false);
         return;
       }
-      if (isCodeBlock(el)) {
-        var code = codeEl(el);
+      if (LayoutCode.isCodeBlock(el)) {
+        var code = LayoutCode.codeEl(el);
         if (!code)
           return;
-        ensureLangBadge(el);
+        CaretCode.ensureLangBadge(el);
         var limit = code.textContent.length;
-        setSelectionRange(code, at === null ? limit : Math.max(0, Math.min(at, limit)));
+        CaretOffset.setSelectionRange(code, at === null ? limit : Math.max(0, Math.min(at, limit)));
         return;
       }
       // 必须走 locateOffset（标记按零宽原子取整）：setCaret 会数进标记文本，
       // 点击行首时可能把光标塞进折叠标记里。
       if (el.classList.contains('table')) {
         if (at === null) {
-          var cells = tableCellList(el);
+          var cells = RenderBlocks.tableCellList(el);
           if (cells.length) {
             caretInCellEnd(cells[cells.length - 1]);
             return;
           }
         }
-        setSelectionRange(el, at === null ? el.textContent.length
+        CaretOffset.setSelectionRange(el, at === null ? el.textContent.length
                                           : Math.max(0, Math.min(at, el.textContent.length)));
         ensureCellCaret(el);
         return;
       }
-      setSelectionRange(el, at === null ? el.textContent.length
+      CaretOffset.setSelectionRange(el, at === null ? el.textContent.length
                                         : Math.max(0, Math.min(at, el.textContent.length)));
       return;
     }
@@ -156,7 +156,7 @@
     el.textContent = el.dataset.raw === undefined ? el.textContent : el.dataset.raw;
     var offset = pendingOffset === null ? el.textContent.length : pendingOffset;
     pendingOffset = null;
-    setCaret(el, Math.max(0, Math.min(offset, el.textContent.length)));
+    CaretCode.setCaret(el, Math.max(0, Math.min(offset, el.textContent.length)));
   }
 
   function leaveEdit(el) {
@@ -165,28 +165,28 @@
     // 撤销时整篇重建会把旧节点摘掉，focusout 可能在游离节点上触发
     if (!el.isConnected)
       return;
-    if (isCodeBlock(el)) {
+    if (LayoutCode.isCodeBlock(el)) {
       // 编辑期间 DOM 一直保持渲染态（行号栏 + 高亮 span），离开只摘掉 class。
       // 组合输入若没来得及收尾，这里补一次同步，仍不重建整块结构。
       if (el._codeStale)
-        syncCode(el, true);
+        CaretCode.syncCode(el, true);
       el.classList.remove('editing');
-      commitHistory();
-      scheduleTocRefresh();
-      scheduleMermaid();
+      EditingSnapshot.commitHistory();
+      Toc.scheduleTocRefresh();
+      MermaidInit.scheduleMermaid();
       return;
     }
     if (el.classList.contains('hr') || el.classList.contains('table')) {
       // 编辑期间结构一直是渲染态（表格行/单元格/横线都在），离开时按 DOM 原文
       // 重排一次：表格对齐行回到隐藏行、单元格内新输入的 ** 等标记重新着色。
-      renderBlock(el, el.textContent);
-      commitHistory();
-      scheduleTocRefresh();
+      RenderBlocks.renderBlock(el, el.textContent);
+      EditingSnapshot.commitHistory();
+      Toc.scheduleTocRefresh();
       return;
     }
-    renderBlock(el, el.textContent.replace(/\n+$/, ''));
-    commitHistory();
-    scheduleTocRefresh();
+    RenderBlocks.renderBlock(el, el.textContent.replace(/\n+$/, ''));
+    EditingSnapshot.commitHistory();
+    Toc.scheduleTocRefresh();
   }
 
 
@@ -200,11 +200,3 @@
     leaveEdit: leaveEdit
   };
   })();
-
-  var cellFromPoint = CaretEdit.cellFromPoint;
-  var caretInCellEnd = CaretEdit.caretInCellEnd;
-  var ensureCellCaret = CaretEdit.ensureCellCaret;
-  var ensureHrSource = CaretEdit.ensureHrSource;
-  var placeBlockCaret = CaretEdit.placeBlockCaret;
-  var enterEdit = CaretEdit.enterEdit;
-  var leaveEdit = CaretEdit.leaveEdit;

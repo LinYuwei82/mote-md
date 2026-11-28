@@ -10,7 +10,7 @@
       // 未识别的语言没有跨行状态，逐行转义即可，也不留缓存
       if (el)
         el._codeCache = null;
-      return lines.map(escapeHtml);
+      return lines.map(Util.escapeHtml);
     }
 
     var cache = el ? el._codeCache : null;
@@ -42,7 +42,7 @@
     for (var i = start; i < lines.length; i++) {
       next.texts[i] = lines[i];
       next.states[i] = { end: state.end, kind: state.kind };
-      next.html[i] = spec.html ? scanHtmlLine(lines[i], state) : scanLine(lines[i], spec, state);
+      next.html[i] = spec.html ? HighlightScan.scanHtmlLine(lines[i], state) : HighlightScan.scanLine(lines[i], spec, state);
       var after = cache.states[i + 1];
       if (i === lastDiff && after && after.end === state.end && after.kind === state.kind) {
         for (var k = i + 1; k < lines.length; k++) {
@@ -62,5 +62,3 @@
     highlightCode: highlightCode
   };
   })();
-
-  var highlightCode = HighlightCache.highlightCode;

@@ -69,4 +69,3 @@
     node.style.left = x + 'px';
     node.style.top = y + 'px';
   }
-

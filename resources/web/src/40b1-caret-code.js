@@ -11,7 +11,7 @@
   function setCaret(el, offset) {
     // 折叠标记模式下，偏移必须按零宽原子取整，否则光标会落进 <i> 里
     if (INLINE_PROTO) {
-      setSelectionRange(el, offset);
+      CaretOffset.setSelectionRange(el, offset);
       return;
     }
     var range = document.createRange();
@@ -110,7 +110,7 @@
   // 重着色 + 按字符偏移复位光标。用 lang+正文当签名：已经画过的这版内容不再
   // 整段替换（徽标合并重着色、连续 input 都会撞到）。
   function drawCode(el) {
-    var code = codeEl(el);
+    var code = LayoutCode.codeEl(el);
     if (!code)
       return null;
     var text = code.textContent;
@@ -118,10 +118,10 @@
     if (el._codeDrawn === sig)
       return code;
     var range = rangeIn(code);
-    setCodeHtml(el, code, highlightCode(el, text, el.dataset.lang).join('\n'));
+    setCodeHtml(el, code, HighlightCache.highlightCode(el, text, el.dataset.lang).join('\n'));
     el._codeDrawn = sig;
     if (range)
-      setSelectionRange(code, range.start, range.end);
+      CaretOffset.setSelectionRange(code, range.start, range.end);
     return code;
   }
 
@@ -139,22 +139,22 @@
       badge.title = lang;
     }
     el.dataset.lang = lang;
-    el.dataset.raw = codeRaw(el);
+    el.dataset.raw = LayoutCode.codeRaw(el);
     el._codeStale = false;
-    if (codeEl(el))
+    if (LayoutCode.codeEl(el))
       drawCode(el);
-    scheduleMermaid();
+    MermaidInit.scheduleMermaid();
   }
 
   // 把代码正文重新着色：只重建 <code> 的行内 span（文本不变，字体/行高/宽度
   // 都不变），随后按字符偏移把光标放回原处。组合输入期间不调用。
   function syncCode(el, highlight) {
-    var code = codeEl(el);
+    var code = LayoutCode.codeEl(el);
     if (!code)
       return;
     var text = code.textContent;
-    el.dataset.raw = codeRaw(el, text);
-    updateGutter(el, text);
+    el.dataset.raw = LayoutCode.codeRaw(el, text);
+    LayoutCode.updateGutter(el, text);
     el._codeStale = false;
     if (highlight)
       drawCode(el);
@@ -163,7 +163,7 @@
   // 在代码正文的选区处插入纯文本（回车、粘贴共用）。返回值表示是否处理成功；
   // 成功时同步原文/行号并保持光标在插入内容之后。
   function insertCodeText(el, text) {
-    var code = codeEl(el);
+    var code = LayoutCode.codeEl(el);
     if (!code)
       return false;
     var range = rangeIn(code);
@@ -171,12 +171,12 @@
     if (!range)
       range = { start: value.length, end: value.length };
     var next = value.slice(0, range.start) + text + value.slice(range.end);
-    el.dataset.raw = codeRaw(el, next);
-    updateGutter(el, next);
+    el.dataset.raw = LayoutCode.codeRaw(el, next);
+    LayoutCode.updateGutter(el, next);
     el._codeStale = false;
-    setCodeHtml(el, code, highlightCode(el, next, el.dataset.lang).join('\n'));
+    setCodeHtml(el, code, HighlightCache.highlightCode(el, next, el.dataset.lang).join('\n'));
     el._codeDrawn = (el.dataset.lang || '') + '\n' + next;
-    setSelectionRange(code, range.start + text.length);
+    CaretOffset.setSelectionRange(code, range.start + text.length);
     return true;
   }
 
@@ -191,12 +191,3 @@
     insertCodeText: insertCodeText
   };
   })();
-
-  var blockOf = CaretCode.blockOf;
-  var setCaret = CaretCode.setCaret;
-  var offsetIn = CaretCode.offsetIn;
-  var rangeIn = CaretCode.rangeIn;
-  var ensureLangBadge = CaretCode.ensureLangBadge;
-  var applyCodeLang = CaretCode.applyCodeLang;
-  var syncCode = CaretCode.syncCode;
-  var insertCodeText = CaretCode.insertCodeText;

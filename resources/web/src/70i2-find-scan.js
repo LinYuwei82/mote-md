@@ -156,7 +156,7 @@
   // 覆盖成命中范围。enterEdit 是同步的，先 focus 后设选区，落点才是命中本身；
   // 反过来先设选区会被 enterEdit 的 setSelectionRange 覆盖掉。
   function applyFindCaret(match) {
-    var block = blockOf(match.range.startContainer) || match.block;
+    var block = CaretCode.blockOf(match.range.startContainer) || match.block;
     if (!block || !block.isConnected || !match.range.startContainer.isConnected)
       return false;
     if (document.activeElement !== block)
@@ -212,8 +212,3 @@
     goFind: goFind
   };
   })();
-
-  var findScan = FindScan.findScan;
-  var findSelectRange = FindScan.findSelectRange;
-  var scrollSourceTo = FindScan.scrollSourceTo;
-  var goFind = FindScan.goFind;

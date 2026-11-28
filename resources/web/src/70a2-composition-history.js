@@ -12,21 +12,21 @@
       clearTimeout(commitTimer);
       commitTimer = null;
     }
-    commitHistory();   // 组合输入前的已输入内容先单独成步
+    EditingSnapshot.commitHistory();   // 组合输入前的已输入内容先单独成步
     composing = true;
   });
 
   root.addEventListener('compositionend', function (event) {
     composing = false;
-    var el = blockOf(event.target);
+    var el = CaretCode.blockOf(event.target);
     if (el) {
-      if (isCodeBlock(el))
-        syncCode(el, true);   // 上屏后补一次着色，会话期间没有动过 DOM 结构
+      if (LayoutCode.isCodeBlock(el))
+        CaretCode.syncCode(el, true);   // 上屏后补一次着色，会话期间没有动过 DOM 结构
       else
         el.dataset.raw = el.textContent;
-      scheduleDirty();
+      DocumentModel.scheduleDirty();
     }
-    commitHistory();   // 上屏内容整体作为一步
+    EditingSnapshot.commitHistory();   // 上屏内容整体作为一步
   });
 
   // 源码模式：textarea 自己的原生撤销也会被 beforeinput 拦下，统一走自建栈
@@ -34,10 +34,10 @@
     if (suppressEvents)
       return;
     if (findBar)
-      scheduleFind();
-    scheduleDirty();
-    scheduleCommit();
-    scheduleTocRefresh();
+      FindUi.scheduleFind();
+    DocumentModel.scheduleDirty();
+    EditingSnapshot.scheduleCommit();
+    Toc.scheduleTocRefresh();
   });
 
   sourceEl.addEventListener('compositionstart', function () {
@@ -47,26 +47,26 @@
       clearTimeout(commitTimer);
       commitTimer = null;
     }
-    commitHistory();
+    EditingSnapshot.commitHistory();
     composing = true;
   });
 
   sourceEl.addEventListener('compositionend', function () {
     composing = false;
-    commitHistory();
+    EditingSnapshot.commitHistory();
   });
 
   sourceEl.addEventListener('paste', function (event) {
     var clipboard = event.clipboardData || window.clipboardData;
-    var picture = clipboard ? clipboardImageFile(clipboard) : null;
+    var picture = clipboard ? ClipboardPaste.clipboardImageFile(clipboard) : null;
     if (picture) {
       // 源码态没有渲染节点：仍先落盘，由原生回调 insertImage 插到 textarea 光标处
       event.preventDefault();
-      postImageFile(picture, 'paste');
+      ClipboardPaste.postImageFile(picture, 'paste');
       return;
     }
-    commitHistory();
-    setTimeout(commitHistory, 0);
+    EditingSnapshot.commitHistory();
+    setTimeout(EditingSnapshot.commitHistory, 0);
   });
 
   // 撤销/重做挂到 document 上，未聚焦任何块时也能用；并拦住 WebKit 自带的
@@ -87,13 +87,13 @@
         return;
       }
       // 其余输入类型不由这里接管：先收起自建选区，避免原生操作折叠光标
-      clearCrossSelection();
+      CrossRange.clearCrossSelection();
     }
     // 表格单元格内输入裸 |：转成转义的 \|，否则下次重排会被当成列分隔符、
     // 把整表撑出多余一列。渲染时 \| 显示为 |（反斜杠零宽），raw 保留转义。
     if (event.inputType === 'insertText' && event.data === '|' && !suppressEvents) {
-      var el = blockOf(event.target);
-      if (el && el.classList.contains('table') && activeCell(el)) {
+      var el = CaretCode.blockOf(event.target);
+      if (el && el.classList.contains('table') && CellEdit.activeCell(el)) {
         event.preventDefault();
         document.execCommand('insertText', false, '\\|');
       }
@@ -108,27 +108,26 @@
       if (key === 'z') {
         event.preventDefault();
         if (event.shiftKey)
-          redo();
+          EditingSnapshot.redo();
         else
-          undo();
+          EditingSnapshot.undo();
         return;
       }
       if (key === 'y') {
         event.preventDefault();
-        redo();
+        EditingSnapshot.redo();
         return;
       }
       if (key === 's') {
         event.preventDefault();
-        post({ type: 'save', text: currentSource() });
+        Util.post({ type: 'save', text: DocumentModel.currentSource() });
         return;
       }
       if (key === 'o') {
         event.preventDefault();
-        post({ type: 'open' });
+        Util.post({ type: 'open' });
         return;
       }
     }
   }, true);
   })();
-

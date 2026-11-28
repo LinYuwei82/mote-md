@@ -16,7 +16,7 @@
     if (!INLINE_PROTO || composing)
       return;
     clearLiveMarkers();
-    var el = blockOf(document.activeElement);
+    var el = CaretCode.blockOf(document.activeElement);
     if (!el || !el.classList.contains('editing'))
       return;
     var selection = window.getSelection();
@@ -28,7 +28,7 @@
     var markers = el.querySelectorAll('.mk');
     if (!markers.length)
       return;
-    var caret = offsetIn(el, range.startContainer, range.startOffset);
+    var caret = CaretCode.offsetIn(el, range.startContainer, range.startOffset);
     if (caret < 0)
       return;
     var best = null;
@@ -36,7 +36,7 @@
     for (var i = 0; i < markers.length; i++) {
       var mk = markers[i];
       var index = Array.prototype.indexOf.call(mk.parentNode.childNodes, mk);
-      var start = offsetIn(el, mk.parentNode, index);
+      var start = CaretCode.offsetIn(el, mk.parentNode, index);
       if (start < 0)
         continue;
       var end = start + mk.textContent.length;
@@ -65,4 +65,3 @@
 
   document.addEventListener('selectionchange', scheduleLiveMarker);
   })();
-

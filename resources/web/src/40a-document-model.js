@@ -5,7 +5,7 @@
   // dataset.raw 逐次同步（见 syncCode），渲染态本来就用 dataset.raw。
   function blockRawText(el) {
     var raw;
-    if (isCodeBlock(el))
+    if (LayoutCode.isCodeBlock(el))
       raw = el.dataset.raw;
     else
       raw = el.classList.contains('editing') ? el.textContent : el.dataset.raw;
@@ -76,7 +76,7 @@
       clearTimeout(dirtyTimer);
     dirtyTimer = setTimeout(function () {
       dirtyTimer = null;
-      post({ type: 'dirty', value: currentSource() !== savedText });
+      Util.post({ type: 'dirty', value: currentSource() !== savedText });
       postWordCount();
     }, 220);
   }
@@ -125,7 +125,7 @@
     var label = document.getElementById('status-stats');
     if (label)
       label.textContent = '中文 ' + stats.cjk + ' 字 · 英文 ' + stats.words + ' 词';
-    post({ type: 'stats', cjk: stats.cjk, words: stats.words });
+    Util.post({ type: 'stats', cjk: stats.cjk, words: stats.words });
   }
 
   return {
@@ -142,13 +142,3 @@
     countText: countText
   };
   })();
-
-  var collectBlocks = DocumentModel.collectBlocks;
-  var blockGap = DocumentModel.blockGap;
-  var collectGaps = DocumentModel.collectGaps;
-  var gapBefore = DocumentModel.gapBefore;
-  var layoutText = DocumentModel.layoutText;
-  var blockStartOffset = DocumentModel.blockStartOffset;
-  var currentSource = DocumentModel.currentSource;
-  var scheduleDirty = DocumentModel.scheduleDirty;
-  var postWordCount = DocumentModel.postWordCount;

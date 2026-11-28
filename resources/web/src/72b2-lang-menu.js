@@ -85,7 +85,7 @@
         + (isCurrent ? ' is-current' : '');
       html += '<div class="' + cls + '" role="option" data-index="' + i + '"'
         + ' aria-selected="' + (i === langMenuState.active ? 'true' : 'false') + '">'
-        + '<span class="lang-name">' + escapeHtml(item.name) + '</span>'
+        + '<span class="lang-name">' + Util.escapeHtml(item.name) + '</span>'
         + (isCurrent ? '<span class="lang-check">✓</span>' : '')
         + '</div>';
     }
@@ -126,9 +126,9 @@
       return;
     // 与原来的改语言一致：更新 dataset.lang/围栏并重着色，再走同一条
     // 置脏与合并入撤销栈的路径。
-    applyCodeLang(el, item.value);
-    scheduleDirty();
-    scheduleCommit();
+    CaretCode.applyCodeLang(el, item.value);
+    DocumentModel.scheduleDirty();
+    EditingSnapshot.scheduleCommit();
   }
 
   function closeLangMenu() {
@@ -147,7 +147,7 @@
       closeLangMenu();
       return;
     }
-    closeSlash(false);
+    SlashMenu.closeSlash(false);
     closeTurnMenu();
     closeLangMenu();
     var items = langItems('');
@@ -238,4 +238,3 @@
       return;
     closeLangMenu();
   }, true);
-

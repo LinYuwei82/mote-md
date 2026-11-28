@@ -1,6 +1,6 @@
   function convertBlocks(type, toggle) {
     if (mode === 'source') {
-      sourceConvert(type, toggle);
+      SourceConvert.sourceConvert(type, toggle);
       return;
     }
     var blocks;
@@ -8,25 +8,25 @@
       blocks = crossSelBlocks();
       if (!blocks || !blocks.length)
         return;
-      clearCrossSelection();   // 结构即将改变，覆盖层失效
+      CrossRange.clearCrossSelection();   // 结构即将改变，覆盖层失效
     } else {
       blocks = selectedBlocks();
       if (!blocks.length)
         return;
     }
     var target = blocks[0];
-    var selection = rangeIn(target);
+    var selection = CaretCode.rangeIn(target);
 
     if (blocks.length > 1 && MERGE_TYPES[type]) {
       var content = blocks.map(function (el) {
         return contentOfRaw(rawOf(el), kindOfRaw(rawOf(el)));
       }).join('\n');
       var merged = buildBlockRaw(type, content);
-      commitHistory();
+      EditingSnapshot.commitHistory();
       for (var i = blocks.length - 1; i >= 1; i--)
         blocks[i].remove();
       applyRawToBlock(target, merged, merged.length, merged.length, true);
-      setTimeout(commitHistory, 0);
+      setTimeout(EditingSnapshot.commitHistory, 0);
       return;
     }
 
@@ -35,7 +35,7 @@
     var multi = blocks.length > 1;
     // 列表/引用 → 正文会把每行还原成独立段落，也算一次批量改动
     var splitting = type === 'p';
-    commitHistory();
+    EditingSnapshot.commitHistory();
     if (multi || splitting)
       commitBatch++;
     blocks.forEach(function (el) {
@@ -69,14 +69,14 @@
     if (multi || splitting)
       commitBatch--;
     if (!changed) {
-      commitHistory();
+      EditingSnapshot.commitHistory();
       return;
     }
     // 多块/拆分转换合成一个撤销步：一次 Cmd+Z 全部还原
     if (multi || splitting)
-      commitHistory();
+      EditingSnapshot.commitHistory();
     else
-      setTimeout(commitHistory, 0);
+      setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   // 光标 / 选区落在行内时，给当前块套（或取消）行内标记。
@@ -150,27 +150,27 @@
 
   function toggleInline(kind) {
     if (mode === 'source') {
-      sourceInline(kind);
+      SourceConvert.sourceInline(kind);
       return;
     }
     var blocks = selectedBlocks();
     if (!blocks.length)
       return;
     var el = blocks[0];
-    if (isCodeBlock(el) || el.classList.contains('table') || el.classList.contains('hr')) {
-      post({ type: 'status', message: '当前块不支持行内格式' });
+    if (LayoutCode.isCodeBlock(el) || el.classList.contains('table') || el.classList.contains('hr')) {
+      Util.post({ type: 'status', message: '当前块不支持行内格式' });
       return;
     }
-    var selection = rangeIn(el);
+    var selection = CaretCode.rangeIn(el);
     if (!selection)
       return;
     var raw = rawOf(el);
     var out = inlineTransform(raw, selection.start, selection.end, kind);
     if (out.raw === raw)
       return;
-    commitHistory();
+    EditingSnapshot.commitHistory();
     applyRawToBlock(el, out.raw, out.start, out.end, true);
-    setTimeout(commitHistory, 0);
+    setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   var TABLE_TEMPLATE = '| 列 1 | 列 2 |\n| --- | --- |\n|  |  |';
@@ -180,15 +180,15 @@
     var block = document.createElement('div');
     block.className = 'block';
     block.setAttribute('contenteditable', 'true');
-    renderBlock(block, raw);
+    RenderBlocks.renderBlock(block, raw);
     if (el && el.parentNode === root)
       root.insertBefore(block, el.nextSibling);
     else
       root.appendChild(block);
-    normalizeCodeScrolls(block);
+    LayoutCode.normalizeCodeScrolls(block);
     block.classList.add('editing');
     block.focus();
-    placeBlockCaret(block, caret === undefined ? raw.length : caret);
+    CaretEdit.placeBlockCaret(block, caret === undefined ? raw.length : caret);
     if (block.scrollIntoView)
       block.scrollIntoView({ block: 'nearest' });
     updatePlaceholder();
@@ -198,7 +198,7 @@
   function insertTableBlock() {
     var blocks = selectedBlocks();
     var el = blocks.length ? blocks[blocks.length - 1] : root.lastElementChild;
-    commitHistory();
+    EditingSnapshot.commitHistory();
     var elKind = el && el.classList.contains('block') ? kindOfRaw(rawOf(el)) : '';
     // hr/表格的内容按定义可能为空，但它们是实打实的结构块：不能当成空块被替换掉
     var empty = el && el.classList.contains('block')
@@ -209,15 +209,15 @@
     } else {
       insertBlockAfter(el, TABLE_TEMPLATE, 2);
     }
-    scheduleDirty();
-    scheduleTocRefresh();
-    setTimeout(commitHistory, 0);
+    DocumentModel.scheduleDirty();
+    Toc.scheduleTocRefresh();
+    setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   function insertHrBlock() {
     var blocks = selectedBlocks();
     var el = blocks.length ? blocks[blocks.length - 1] : root.lastElementChild;
-    commitHistory();
+    EditingSnapshot.commitHistory();
     var elKind = el && el.classList.contains('block') ? kindOfRaw(rawOf(el)) : '';
     // hr/表格的内容按定义可能为空，但它们是实打实的结构块：不能当成空块被替换掉
     var empty = el && el.classList.contains('block')
@@ -230,9 +230,9 @@
       insertBlockAfter(el, '---', 3);
       insertBlockAfter(el.nextSibling, '', 0);
     }
-    scheduleDirty();
-    scheduleTocRefresh();
-    setTimeout(commitHistory, 0);
+    DocumentModel.scheduleDirty();
+    Toc.scheduleTocRefresh();
+    setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   // 统一动作名：原生菜单、斜杠菜单、快捷键都只传这些字符串
@@ -255,4 +255,3 @@
     // 快捷键/菜单是切换语义：同类型再按一次回正文（codeBlock 回正文=去围栏）
     convertBlocks(type, true);
   }
-

@@ -47,7 +47,7 @@
     blockHandle.textContent = '⋮⋮';
     blockHandle.setAttribute('aria-hidden', 'true');
     document.body.appendChild(blockHandle);
-    blockHandle.addEventListener('mousedown', onHandleDown);
+    blockHandle.addEventListener('mousedown', DragReorder.onHandleDown);
     blockHandle.addEventListener('mouseenter', function () { blockHandleKeep = true; });
     blockHandle.addEventListener('mouseleave', function () { blockHandleKeep = false; });
     return blockHandle;
@@ -60,8 +60,3 @@
     ensureBlockHandle: ensureBlockHandle
   };
   })();
-
-  var positionBlockHandle = BlockHandle.positionBlockHandle;
-  var setHandleBlock = BlockHandle.setHandleBlock;
-  var hideBlockHandle = BlockHandle.hideBlockHandle;
-  var ensureBlockHandle = BlockHandle.ensureBlockHandle;

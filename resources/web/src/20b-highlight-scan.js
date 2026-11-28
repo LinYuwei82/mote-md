@@ -1,6 +1,6 @@
   var HighlightScan = (function highlightScanModule() {
   function token(text, kind) {
-    return '<span class="tok-' + kind + '">' + escapeHtml(text) + '</span>';
+    return '<span class="tok-' + kind + '">' + Util.escapeHtml(text) + '</span>';
   }
 
   function scanNumber(line, i) {
@@ -44,13 +44,13 @@
         var segment = stop < 0 ? line.slice(i) : line.slice(i, stop + 1);
         var tag = /^<\/?[A-Za-z0-9:_-]+/.exec(segment);
         if (tag)
-          html += token(tag[0], 'k') + escapeHtml(segment.slice(tag[0].length));
+          html += token(tag[0], 'k') + Util.escapeHtml(segment.slice(tag[0].length));
         else
-          html += escapeHtml(segment);
+          html += Util.escapeHtml(segment);
         i = stop < 0 ? n : stop + 1;
         continue;
       }
-      html += escapeHtml(line.charAt(i));
+      html += Util.escapeHtml(line.charAt(i));
       i++;
     }
     return html;
@@ -195,7 +195,7 @@
       cls = 'f';
     else if (spec.shellCommand && i === firstNonSpace)
       cls = 'f';
-    return { html: cls ? token(word, cls) : escapeHtml(word), i: after, done: false };
+    return { html: cls ? token(word, cls) : Util.escapeHtml(word), i: after, done: false };
   }
 
   function scanLine(line, spec, state) {
@@ -223,7 +223,7 @@
         scanNumberToken(line, i) ||
         scanWordToken(line, i, n, rest, spec, firstNonSpace);
       if (!step) {
-        html += escapeHtml(line.charAt(i));
+        html += Util.escapeHtml(line.charAt(i));
         i++;
         continue;
       }
@@ -241,7 +241,3 @@
     scanLine: scanLine
   };
   })();
-
-  var token = HighlightScan.token;
-  var scanHtmlLine = HighlightScan.scanHtmlLine;
-  var scanLine = HighlightScan.scanLine;
