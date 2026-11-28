@@ -217,7 +217,7 @@
     // 导出要求所有 mermaid 块都已画成图（含光标所在块），否则会量到源码块的高度；
     // 库未就绪时 scanMermaid 会触发懒加载并计入 pending，这里统一等它完成
     Mermaid.scanMermaid(true);
-    if (mermaidPending > 0)
+    if (Mermaid.hasPending())
       return false;
     if (pdfImagesPending > 0)
       return false;

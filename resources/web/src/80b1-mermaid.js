@@ -3,6 +3,7 @@
   // Typora 把 ```mermaid 画成图；渲染态与 PDF 导出同样换成图，点图回到源码编辑。
   // 渲染是异步的，pdfContentReady 会等它完成再量高度，避免量到 0 高度。
   var mermaidSeq = 0;
+  var mermaidPending = 0;       // 尚未完成的异步渲染计数，导出等它归零
   var mermaidReady = !!(window.mermaid && window.mermaid.initialize);
   var mermaidLoading = false;
   var mermaidLoadQueue = [];
@@ -149,6 +150,7 @@
     }
   }
   return {
-    scanMermaid: scanMermaid
+    scanMermaid: scanMermaid,
+    hasPending: function () { return mermaidPending > 0; }
   };
   })();

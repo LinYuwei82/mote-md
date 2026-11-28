@@ -1,4 +1,6 @@
   var MermaidInit = (function mermaidInitModule() {
+  var mermaidTimer = null;
+  var pdfSavedScrollY = 0;
   function scheduleMermaid() {
     if (mermaidTimer)
       return;

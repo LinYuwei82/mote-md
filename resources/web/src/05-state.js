@@ -16,6 +16,3 @@
   var blockDrag = null;           // 正在拖拽的块
   var dragPending = null;         // 手柄按下的起点（尚未确认是拖拽还是单击）
   var insertLine = null;
-  var pdfSavedScrollY = 0;
-  var mermaidPending = 0;
-  var mermaidTimer = null;
