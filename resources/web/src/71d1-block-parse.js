@@ -189,7 +189,7 @@
   // 跨块选区是虚拟覆盖层，DOM 光标折叠在焦点块；selectedBlocks 只读 DOM 选区
   // 会漏掉选区覆盖的其他块。这里按整篇源码偏移把覆盖到的块收集出来。
   function crossSelBlocks() {
-    var bounds = TableCross.crossBounds();
+    var bounds = Cross.crossBounds();
     if (!bounds)
       return null;
     var els = blockList();

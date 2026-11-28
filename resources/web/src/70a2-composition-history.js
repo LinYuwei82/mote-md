@@ -6,8 +6,8 @@
       return;
     // 组合输入不在原型范围，但也不能「选了却没删」：先按整篇源码删掉跨块选区，
     // 候选上屏就落在替换点上；若输入法因此中断，用户重新输入即可。
-    if (crossSel)
-      CrossHtmlReplace.replaceCrossSelection('');
+    if (Cross.isActive())
+      Cross.replaceCrossSelection('');
     if (commitTimer) {
       clearTimeout(commitTimer);
       commitTimer = null;
@@ -75,19 +75,19 @@
     if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo')
       event.preventDefault();
     // 跨块选区上的输入：折叠光标只覆盖焦点一个字符，必须先按整篇源码替换区间
-    if (crossSel && !suppressEvents && mode === 'wysiwyg') {
+    if (Cross.isActive() && !suppressEvents && mode === 'wysiwyg') {
       if (event.inputType === 'insertText' && typeof event.data === 'string') {
         event.preventDefault();
-        CrossHtmlReplace.replaceCrossSelection(event.data);
+        Cross.replaceCrossSelection(event.data);
         return;
       }
       if (event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak') {
         event.preventDefault();
-        CrossHtmlReplace.replaceCrossSelection('\n');
+        Cross.replaceCrossSelection('\n');
         return;
       }
       // 其余输入类型不由这里接管：先收起自建选区，避免原生操作折叠光标
-      CrossRange.clearCrossSelection();
+      Cross.clearCrossSelection();
     }
     // 表格单元格内输入裸 |：转成转义的 \|，否则下次重排会被当成列分隔符、
     // 把整表撑出多余一列。渲染时 \| 显示为 |（反斜杠零宽），raw 保留转义。

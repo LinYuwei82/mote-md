@@ -837,7 +837,7 @@
     if (findBar)
       return;
     // 查找条打开后焦点交给查找框，覆盖层选区先收起
-    CrossRange.clearCrossSelection();
+    Cross.clearCrossSelection();
     findInSource = mode === 'source';
     if (findInSource) {
       findCaret = { source: true, start: sourceEl.selectionStart, end: sourceEl.selectionEnd };
@@ -963,8 +963,8 @@
     if (findLayer && findMatches.length)
       FindPaint.paintFind();
     // 覆盖层是文档绝对坐标，缩放/换行变化后必须按新几何重画
-    if (crossSel)
-      CrossPaint.paintCrossSelection();
+    if (Cross.isActive())
+      Cross.paintCrossSelection();
   });
 
   // 命中的块里图片晚一步解码完、字体替换完成时块高会变，但都不触发 resize。
@@ -973,8 +973,8 @@
     var target = event.target;
     if (target && target.nodeName === 'IMG') {
       FindPaint.scheduleFindPaint();
-      if (crossSel)
-        CrossPaint.paintCrossSelection();
+      if (Cross.isActive())
+        Cross.paintCrossSelection();
     }
   }, true);
 
@@ -982,14 +982,14 @@
     if (document.fonts.ready && document.fonts.ready.then)
       document.fonts.ready.then(function () {
         FindPaint.scheduleFindPaint();
-        if (crossSel)
-          CrossPaint.paintCrossSelection();
+        if (Cross.isActive())
+          Cross.paintCrossSelection();
       });
     if (document.fonts.addEventListener)
       document.fonts.addEventListener('loadingdone', function () {
         FindPaint.scheduleFindPaint();
-        if (crossSel)
-          CrossPaint.paintCrossSelection();
+        if (Cross.isActive())
+          Cross.paintCrossSelection();
       });
   }
 

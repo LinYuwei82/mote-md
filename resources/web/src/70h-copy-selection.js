@@ -5,8 +5,8 @@
   // 复制、剪切与右键菜单共用这一个口径。
   function selectionPlainText() {
     // 自建跨块选区：原生选区是折叠的，必须按绝对区间自己取文本
-    if (crossSel)
-      return TableCross.crossSelectionPlainText();
+    if (Cross.isActive())
+      return Cross.crossSelectionPlainText();
     var selection = window.getSelection();
     if (!selection || selection.isCollapsed || !selection.rangeCount)
       return '';
@@ -84,8 +84,8 @@
   // 复制走 HTML 是给“粘到外部应用”用的；粘回 Mote 仍只读 text/plain。
   function selectionHtml() {
     // 自建跨块选区：原生选区是折叠的，必须按绝对区间自己取 HTML
-    if (crossSel)
-      return CrossHtmlReplace.crossSelectionHtml();
+    if (Cross.isActive())
+      return Cross.crossSelectionHtml();
     var selection = window.getSelection();
     if (!selection || selection.isCollapsed || !selection.rangeCount)
       return '';
@@ -189,18 +189,18 @@
   document.addEventListener('cut', function (event) {
     if (mode === 'source')
       return;
-    if (crossSel) {
+    if (Cross.isActive()) {
       // 原生选区是折叠的，WebKit 不会自己剪切：算好内容写剪贴板再删区间
       event.preventDefault();
-      var crossText = TableCross.crossSelectionPlainText();
+      var crossText = Cross.crossSelectionPlainText();
       if (event.clipboardData) {
         if (!clipboardTextIsBlank(crossText))
           event.clipboardData.setData('text/plain', crossText);
-        var crossHtml = CrossHtmlReplace.crossSelectionHtml();
+        var crossHtml = Cross.crossSelectionHtml();
         if (crossHtml)
           event.clipboardData.setData('text/html', crossHtml);
       }
-      CrossHtmlReplace.replaceCrossSelection('');
+      Cross.replaceCrossSelection('');
       return;
     }
     if (!clipboardTextIsBlank(selectionPlainText()))

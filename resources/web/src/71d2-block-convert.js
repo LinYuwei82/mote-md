@@ -5,11 +5,11 @@
       return;
     }
     var blocks;
-    if (crossSel) {
+    if (Cross.isActive()) {
       blocks = BlockParse.crossSelBlocks();
       if (!blocks || !blocks.length)
         return;
-      CrossRange.clearCrossSelection();   // 结构即将改变，覆盖层失效
+      Cross.clearCrossSelection();   // 结构即将改变，覆盖层失效
     } else {
       blocks = BlockParse.selectedBlocks();
       if (!blocks.length)

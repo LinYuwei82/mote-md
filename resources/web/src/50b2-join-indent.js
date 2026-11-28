@@ -103,8 +103,8 @@
     var last = BlockParse.blockAtBoundary(range.endContainer, range.endOffset, true);
     if (!first || !last || first === last)
       return false;
-    var from = CrossRange.absoluteOf(first, range.startContainer, range.startOffset);
-    var to = CrossRange.absoluteOf(last, range.endContainer, range.endOffset);
+    var from = Cross.absoluteOf(first, range.startContainer, range.startOffset);
+    var to = Cross.absoluteOf(last, range.endContainer, range.endOffset);
     if (from === null || to === null) {
       var list = BlockParse.blockList();
       var blocks = DocumentModel.collectBlocks();

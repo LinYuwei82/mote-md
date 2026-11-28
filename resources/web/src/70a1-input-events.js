@@ -4,7 +4,7 @@
   // 点击渲染态时记录光标大致位置，切到源码态后尽量落在同一处
   document.addEventListener('mousedown', function (event) {
     // 任何一次按下都结束自建跨块选区：原生选区接管，覆盖层不能残留
-    CrossRange.clearCrossSelection();
+    Cross.clearCrossSelection();
     var el = CaretCode.blockOf(event.target);
     if (!el || !document.caretRangeFromPoint) {
       pendingOffset = null;

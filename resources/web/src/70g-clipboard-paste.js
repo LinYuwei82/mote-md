@@ -180,8 +180,8 @@
     event.preventDefault();
     var el = CaretCode.blockOf(target);
     // 跨块选区还在：粘贴等价于「用剪贴板文本替换选区」，仍走整篇源码重建
-    if (crossSel) {
-      CrossHtmlReplace.replaceCrossSelection(clipboard.getData('text/plain'));
+    if (Cross.isActive()) {
+      Cross.replaceCrossSelection(clipboard.getData('text/plain'));
       return;
     }
     var baselineDone = false;

@@ -594,7 +594,7 @@
   // 所有块级结构操作（插入/删除/副本/重排）的统一收尾
   function afterBlockStructureChange() {
     normalizeBlockGaps();
-    CrossRange.clearCrossSelection();
+    Cross.clearCrossSelection();
     EditingSnapshot.commitHistory();
     DocumentModel.scheduleDirty();
     Toc.scheduleTocRefresh();

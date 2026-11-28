@@ -134,8 +134,8 @@
       Util.post({ type: 'clipboardWrite', text: text, html: CopySelection.selectionHtml() });
       if (cut) {
         // 跨块选区的原生选区是折叠的，原生 delete 删不掉它，按整篇源码替换
-        if (crossSel) {
-          CrossHtmlReplace.replaceCrossSelection('');
+        if (Cross.isActive()) {
+          Cross.replaceCrossSelection('');
           return true;
         }
         EditingSnapshot.commitHistory();

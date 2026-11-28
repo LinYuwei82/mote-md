@@ -52,7 +52,7 @@
     if (next === mode)
       return;
     // 自建跨块选区只在渲染态有效：切模式前先收起覆盖层
-    CrossRange.clearCrossSelection();
+    Cross.clearCrossSelection();
     // 查找/替换绑定当前模式的命中（DOM 区间或 textarea 区间），切模式前先关掉
     if (Find.isOpen())
       Find.closeFind();
