@@ -1,3 +1,4 @@
+  var LayoutCode = (function layoutCodeModule() {
   /* ---------------- Markdown 渲染 ---------------- */
 
   // 按空行切块，同时记录块间空行：改动前只取块文本，连续多个空行会被归并成
@@ -297,3 +298,35 @@
     deferredCodeTimer = setTimeout(pump, 16);
   }
 
+  return {
+    splitSourceLayout: splitSourceLayout,
+    trailingNewlineCount: trailingNewlineCount,
+    isCodeBlock: isCodeBlock,
+    codeEl: codeEl,
+    codeText: codeText,
+    codeRaw: codeRaw,
+    codePrefixLength: codePrefixLength,
+    updateGutter: updateGutter,
+    gutterLineAt: gutterLineAt,
+    codeLineStart: codeLineStart,
+    renderCode: renderCode,
+    copyCodeBlock: copyCodeBlock,
+    normalizeCodeScrolls: normalizeCodeScrolls,
+    flushDeferredCode: flushDeferredCode
+  };
+  })();
+
+  var splitSourceLayout = LayoutCode.splitSourceLayout;
+  var trailingNewlineCount = LayoutCode.trailingNewlineCount;
+  var isCodeBlock = LayoutCode.isCodeBlock;
+  var codeEl = LayoutCode.codeEl;
+  var codeText = LayoutCode.codeText;
+  var codeRaw = LayoutCode.codeRaw;
+  var codePrefixLength = LayoutCode.codePrefixLength;
+  var updateGutter = LayoutCode.updateGutter;
+  var gutterLineAt = LayoutCode.gutterLineAt;
+  var codeLineStart = LayoutCode.codeLineStart;
+  var renderCode = LayoutCode.renderCode;
+  var copyCodeBlock = LayoutCode.copyCodeBlock;
+  var normalizeCodeScrolls = LayoutCode.normalizeCodeScrolls;
+  var flushDeferredCode = LayoutCode.flushDeferredCode;

@@ -1,3 +1,4 @@
+  var DocumentModel = (function documentModelModule() {
   /* ---------------- 文档模型与选区 ---------------- */
 
   // 块原文：代码块的 DOM 里还有行号栏，textContent 不能代表原文，编辑期间由
@@ -127,3 +128,27 @@
     post({ type: 'stats', cjk: stats.cjk, words: stats.words });
   }
 
+  return {
+    collectBlocks: collectBlocks,
+    blockGap: blockGap,
+    collectGaps: collectGaps,
+    gapBefore: gapBefore,
+    layoutText: layoutText,
+    blockStartOffset: blockStartOffset,
+    currentSource: currentSource,
+    scheduleDirty: scheduleDirty,
+    postWordCount: postWordCount,
+    plainTextOfRaw: plainTextOfRaw,
+    countText: countText
+  };
+  })();
+
+  var collectBlocks = DocumentModel.collectBlocks;
+  var blockGap = DocumentModel.blockGap;
+  var collectGaps = DocumentModel.collectGaps;
+  var gapBefore = DocumentModel.gapBefore;
+  var layoutText = DocumentModel.layoutText;
+  var blockStartOffset = DocumentModel.blockStartOffset;
+  var currentSource = DocumentModel.currentSource;
+  var scheduleDirty = DocumentModel.scheduleDirty;
+  var postWordCount = DocumentModel.postWordCount;

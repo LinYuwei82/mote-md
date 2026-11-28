@@ -1,3 +1,4 @@
+  var CrossRange = (function crossRangeModule() {
   function dropCrossLayer() {
     if (crossLayer && crossLayer.parentNode)
       crossLayer.parentNode.removeChild(crossLayer);
@@ -103,3 +104,25 @@
     return range;
   }
 
+  return {
+    dropCrossLayer: dropCrossLayer,
+    ensureCrossLayer: ensureCrossLayer,
+    announceCross: announceCross,
+    clearCrossSelection: clearCrossSelection,
+    blockAbsoluteSpan: blockAbsoluteSpan,
+    crossRangeCoversText: crossRangeCoversText,
+    absoluteOf: absoluteOf,
+    rawOffsetAtPoint: rawOffsetAtPoint,
+    crossBlockRange: crossBlockRange
+  };
+  })();
+
+  var dropCrossLayer = CrossRange.dropCrossLayer;
+  var ensureCrossLayer = CrossRange.ensureCrossLayer;
+  var announceCross = CrossRange.announceCross;
+  var clearCrossSelection = CrossRange.clearCrossSelection;
+  var blockAbsoluteSpan = CrossRange.blockAbsoluteSpan;
+  var crossRangeCoversText = CrossRange.crossRangeCoversText;
+  var absoluteOf = CrossRange.absoluteOf;
+  var rawOffsetAtPoint = CrossRange.rawOffsetAtPoint;
+  var crossBlockRange = CrossRange.crossBlockRange;

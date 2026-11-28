@@ -1,3 +1,4 @@
+  var BlockHandle = (function blockHandleModule() {
   /* ---------- 手柄显示与定位 ---------- */
 
   function positionBlockHandle() {
@@ -52,3 +53,15 @@
     return blockHandle;
   }
 
+  return {
+    positionBlockHandle: positionBlockHandle,
+    setHandleBlock: setHandleBlock,
+    hideBlockHandle: hideBlockHandle,
+    ensureBlockHandle: ensureBlockHandle
+  };
+  })();
+
+  var positionBlockHandle = BlockHandle.positionBlockHandle;
+  var setHandleBlock = BlockHandle.setHandleBlock;
+  var hideBlockHandle = BlockHandle.hideBlockHandle;
+  var ensureBlockHandle = BlockHandle.ensureBlockHandle;

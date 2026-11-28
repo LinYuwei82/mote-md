@@ -1,3 +1,4 @@
+  var SplitBlock = (function splitBlockModule() {
   // 拆分块后平衡成对行内标记（**、`、__、~~）：前半未闭合时——若后半以该标记
   // 开头（拆分点恰在闭合标记前）把闭合标记挪到前半；否则前半补闭合、后半重开。
   function balanceInlineMarkers(before, after) {
@@ -114,3 +115,9 @@
     scheduleTocRefresh();
   }
 
+  return {
+    splitBlock: splitBlock
+  };
+  })();
+
+  var splitBlock = SplitBlock.splitBlock;

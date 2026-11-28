@@ -1,3 +1,4 @@
+  var MarkerCaret = (function markerCaretModule() {
   // 原型模式：标记是 contenteditable=false 的原子对象，退格/删除一旦作用到它
   // 就会只删掉一半 * 或 `，留下坏结构。这里判断光标与标记之间是否“没有可见字符”，
   // 是则把光标移到标记另一侧，绝不删除标记本身。
@@ -179,3 +180,17 @@
      「光标位于块的第一/最后一可视行」时接管，把光标搬到相邻块对应位置；
      其余情况交回原生，块内逐行移动、表格/代码块内部导航都不受影响。 */
 
+  return {
+    collapseAt: collapseAt,
+    markerAdjacent: markerAdjacent,
+    caretInsideMarker: caretInsideMarker,
+    editableTextNodes: editableTextNodes,
+    deleteVisibleChar: deleteVisibleChar
+  };
+  })();
+
+  var collapseAt = MarkerCaret.collapseAt;
+  var markerAdjacent = MarkerCaret.markerAdjacent;
+  var caretInsideMarker = MarkerCaret.caretInsideMarker;
+  var editableTextNodes = MarkerCaret.editableTextNodes;
+  var deleteVisibleChar = MarkerCaret.deleteVisibleChar;

@@ -1,3 +1,4 @@
+  var DragScroll = (function dragScrollModule() {
   function stopDragScroll() {
     if (dragScrollTimer) {
       clearInterval(dragScrollTimer);
@@ -83,3 +84,13 @@
     paintCrossSelection();
   }
 
+  return {
+    stopDragScroll: stopDragScroll,
+    crossHitAt: crossHitAt,
+    updateCrossDrag: updateCrossDrag
+  };
+  })();
+
+  var stopDragScroll = DragScroll.stopDragScroll;
+  var crossHitAt = DragScroll.crossHitAt;
+  var updateCrossDrag = DragScroll.updateCrossDrag;

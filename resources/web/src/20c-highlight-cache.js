@@ -1,3 +1,4 @@
+  var HighlightCache = (function highlightCacheModule() {
   // 返回按行拆好的 HTML 片段；跨行结构（块注释、三引号、模板串）用 carry 状态衔接。
   // 行级缓存：只重扫从第一处改动开始的行；若扫到"最后一处改动"时跨行状态与上次
   // 一致，尾部未改动的行直接复用（输出与整块重扫逐字相同）。el 传 null 表示不缓存。
@@ -57,3 +58,9 @@
     return next.html;
   }
 
+  return {
+    highlightCode: highlightCode
+  };
+  })();
+
+  var highlightCode = HighlightCache.highlightCode;

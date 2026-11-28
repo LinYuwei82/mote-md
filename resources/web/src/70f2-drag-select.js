@@ -1,3 +1,4 @@
+  (function dragSelectModule() {
   // 在冒泡阶段记录锚点：块内的特殊按下（徽标、行号栏、表格格线）已经
   // preventDefault，不能再起拖选
   document.addEventListener('mousedown', function (event) {
@@ -284,6 +285,4 @@
         indentCurrentLine(el);
     }
   }, true);
-
-  /* ---------------- 图片：粘贴 / 拖入 ----------------
-     页面拿不到文件真实路径（WebKit 安全限制），所以图片一律以 base64 交给原生层，
+  })();

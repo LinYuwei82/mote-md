@@ -1,3 +1,4 @@
+  var BlockMenu = (function blockMenuModule() {
   /* ---------- 块菜单 ---------- */
 
   function closeBlockMenu() {
@@ -55,3 +56,11 @@
     placeMenu(blockMenu, { left: x, top: y, bottom: y, right: x });
   }
 
+  return {
+    closeBlockMenu: closeBlockMenu,
+    openBlockMenu: openBlockMenu
+  };
+  })();
+
+  var closeBlockMenu = BlockMenu.closeBlockMenu;
+  var openBlockMenu = BlockMenu.openBlockMenu;

@@ -1,3 +1,4 @@
+  var BlockMenuActions = (function blockMenuActionsModule() {
   /* ---------- 块菜单动作 ---------- */
 
   function insertBlockNear(block, above) {
@@ -86,3 +87,15 @@
     setTimeout(commitHistory, 0);
   }
 
+  return {
+    insertBlockNear: insertBlockNear,
+    duplicateBlock: duplicateBlock,
+    removeBlock: removeBlock,
+    turnBlockTo: turnBlockTo
+  };
+  })();
+
+  var insertBlockNear = BlockMenuActions.insertBlockNear;
+  var duplicateBlock = BlockMenuActions.duplicateBlock;
+  var removeBlock = BlockMenuActions.removeBlock;
+  var turnBlockTo = BlockMenuActions.turnBlockTo;

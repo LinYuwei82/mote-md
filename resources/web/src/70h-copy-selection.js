@@ -1,4 +1,4 @@
-  }
+  var CopySelection = (function copySelectionModule() {
 
   // 选区 → 纯文本。块与块之间必须补一个换行：textContent 会把相邻块的文字
   // 直接粘在一起（跨两段复制曾得到「第一段第二段」）。块内仍按复制规则清理。
@@ -209,3 +209,21 @@
     post({ type: 'status', message: '没有可剪切的内容：先选中文字' });
   });
 
+  return {
+    selectionPlainText: selectionPlainText,
+    blockSemantic: blockSemantic,
+    applyCopyStyle: applyCopyStyle,
+    inlineCodeTokenColors: inlineCodeTokenColors,
+    selectionHtml: selectionHtml,
+    sanitizeCopyHtml: sanitizeCopyHtml,
+    clipboardTextIsBlank: clipboardTextIsBlank
+  };
+  })();
+
+  var selectionPlainText = CopySelection.selectionPlainText;
+  var blockSemantic = CopySelection.blockSemantic;
+  var applyCopyStyle = CopySelection.applyCopyStyle;
+  var inlineCodeTokenColors = CopySelection.inlineCodeTokenColors;
+  var selectionHtml = CopySelection.selectionHtml;
+  var sanitizeCopyHtml = CopySelection.sanitizeCopyHtml;
+  var clipboardTextIsBlank = CopySelection.clipboardTextIsBlank;

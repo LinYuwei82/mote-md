@@ -1,3 +1,4 @@
+  var HighlightScan = (function highlightScanModule() {
   function token(text, kind) {
     return '<span class="tok-' + kind + '">' + escapeHtml(text) + '</span>';
   }
@@ -234,3 +235,13 @@
     return html;
   }
 
+  return {
+    token: token,
+    scanHtmlLine: scanHtmlLine,
+    scanLine: scanLine
+  };
+  })();
+
+  var token = HighlightScan.token;
+  var scanHtmlLine = HighlightScan.scanHtmlLine;
+  var scanLine = HighlightScan.scanLine;

@@ -1,3 +1,4 @@
+  var CrossStep = (function crossStepModule() {
   // 可编辑长度：代码块的围栏前缀与收尾围栏都不可编辑，只算正文
   function crossEditableLength(el, raw) {
     if (!el || !isCodeBlock(el))
@@ -114,3 +115,15 @@
     return spans;
   }
 
+  return {
+    crossEditableLength: crossEditableLength,
+    crossStepTarget: crossStepTarget,
+    tableCoreOffsets: tableCoreOffsets,
+    tableVisibleSpans: tableVisibleSpans
+  };
+  })();
+
+  var crossEditableLength = CrossStep.crossEditableLength;
+  var crossStepTarget = CrossStep.crossStepTarget;
+  var tableCoreOffsets = CrossStep.tableCoreOffsets;
+  var tableVisibleSpans = CrossStep.tableVisibleSpans;

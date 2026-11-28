@@ -1,3 +1,4 @@
+  var CellEdit = (function cellEditModule() {
   /* ---------------- 所见即所得编辑 ---------------- */
 
   // 行内折叠接管「渲染态 == 原文」的块：段落/标题/列表/引用/代码块，以及
@@ -193,3 +194,21 @@
     return true;
   }
 
+  return {
+    inPlaceEditable: inPlaceEditable,
+    caretAtEdge: caretAtEdge,
+    activeCell: activeCell,
+    atCellEdge: atCellEdge,
+    rangeCrossesCells: rangeCrossesCells,
+    cellVisibleText: cellVisibleText,
+    clearSelectedCellText: clearSelectedCellText
+  };
+  })();
+
+  var inPlaceEditable = CellEdit.inPlaceEditable;
+  var caretAtEdge = CellEdit.caretAtEdge;
+  var activeCell = CellEdit.activeCell;
+  var atCellEdge = CellEdit.atCellEdge;
+  var rangeCrossesCells = CellEdit.rangeCrossesCells;
+  var cellVisibleText = CellEdit.cellVisibleText;
+  var clearSelectedCellText = CellEdit.clearSelectedCellText;

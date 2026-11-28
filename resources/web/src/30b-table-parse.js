@@ -1,3 +1,4 @@
+  var TableParse = (function tableParseModule() {
   // 未转义 | 的下标。逐字符扫描而不是用正则后行断言：后者在 WebKit 16.4 之前
   // 是解析期语法错误，整份脚本都会加载失败。
   function pipeIndexes(line) {
@@ -237,3 +238,19 @@
     return { colgroup: out + '</colgroup>', minWidth: sumLo > W ? Math.ceil(sumLo) : 0 };
   }
 
+  return {
+    tableCells: tableCells,
+    isTableSource: isTableSource,
+    splitTableLine: splitTableLine,
+    tableAlignments: tableAlignments,
+    tableRowHtml: tableRowHtml,
+    tableColgroupHtml: tableColgroupHtml
+  };
+  })();
+
+  var tableCells = TableParse.tableCells;
+  var isTableSource = TableParse.isTableSource;
+  var splitTableLine = TableParse.splitTableLine;
+  var tableAlignments = TableParse.tableAlignments;
+  var tableRowHtml = TableParse.tableRowHtml;
+  var tableColgroupHtml = TableParse.tableColgroupHtml;

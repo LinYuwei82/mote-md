@@ -1,3 +1,4 @@
+  var FindUi = (function findUiModule() {
   function scheduleFind() {
     if (findTimer)
       clearTimeout(findTimer);
@@ -275,3 +276,11 @@
     reader.readAsText(file);
   });
 
+  return {
+    scheduleFind: scheduleFind,
+    closeFind: closeFind
+  };
+  })();
+
+  var scheduleFind = FindUi.scheduleFind;
+  var closeFind = FindUi.closeFind;

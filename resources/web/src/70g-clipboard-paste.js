@@ -1,3 +1,6 @@
+  var ClipboardPaste = (function clipboardPasteModule() {
+  /* ---------------- 图片：粘贴 / 拖入 ----------------
+     页面拿不到文件真实路径（WebKit 安全限制），所以图片一律以 base64 交给原生层，
      由原生写到「md 同目录/assets/」（目录不存在就创建，重名自动加 -2/-3），
      再用 window.mote.insertImage(相对路径) 回调页面插入 ![](…)，
      渲染态当场可见。撤销只撤 Markdown 插入，不删除已落盘的图片文件。 */
@@ -230,3 +233,21 @@
       junk[i].parentNode.removeChild(junk[i]);
     }
     return fragment.textContent;
+  }
+
+  return {
+    clipboardImageFile: clipboardImageFile,
+    postImageFile: postImageFile,
+    insertPastedText: insertPastedText,
+    caretParagraphBlock: caretParagraphBlock,
+    appendParagraphBlock: appendParagraphBlock,
+    cleanCopyFragment: cleanCopyFragment
+  };
+  })();
+
+  var clipboardImageFile = ClipboardPaste.clipboardImageFile;
+  var postImageFile = ClipboardPaste.postImageFile;
+  var insertPastedText = ClipboardPaste.insertPastedText;
+  var caretParagraphBlock = ClipboardPaste.caretParagraphBlock;
+  var appendParagraphBlock = ClipboardPaste.appendParagraphBlock;
+  var cleanCopyFragment = ClipboardPaste.cleanCopyFragment;

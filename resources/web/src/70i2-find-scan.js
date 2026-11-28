@@ -1,3 +1,4 @@
+  var FindScan = (function findScanModule() {
   function findBuildDocument() {
     var blocks = blockList();
     var parts = [];
@@ -204,3 +205,15 @@
     updateFindCount();
   }
 
+  return {
+    findScan: findScan,
+    findSelectRange: findSelectRange,
+    scrollSourceTo: scrollSourceTo,
+    goFind: goFind
+  };
+  })();
+
+  var findScan = FindScan.findScan;
+  var findSelectRange = FindScan.findSelectRange;
+  var scrollSourceTo = FindScan.scrollSourceTo;
+  var goFind = FindScan.goFind;

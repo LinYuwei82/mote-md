@@ -1,3 +1,4 @@
+  var JoinIndent = (function joinIndentModule() {
   // 结构类型：只有类型相同的相邻块才允许合并。段落原文接进表格、标题、列表或
   // 引用的原文里会把结构写坏（表格会把段落文字并进最后一行末格）。
   function blockType(el) {
@@ -204,3 +205,19 @@
     scheduleTocRefresh();
   }
 
+  return {
+    blockType: blockType,
+    joinPrevLine: joinPrevLine,
+    indentCurrentLine: indentCurrentLine,
+    outdentCurrentLine: outdentCurrentLine,
+    deleteNativeCrossSelection: deleteNativeCrossSelection,
+    mergeBack: mergeBack
+  };
+  })();
+
+  var blockType = JoinIndent.blockType;
+  var joinPrevLine = JoinIndent.joinPrevLine;
+  var indentCurrentLine = JoinIndent.indentCurrentLine;
+  var outdentCurrentLine = JoinIndent.outdentCurrentLine;
+  var deleteNativeCrossSelection = JoinIndent.deleteNativeCrossSelection;
+  var mergeBack = JoinIndent.mergeBack;

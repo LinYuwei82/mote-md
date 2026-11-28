@@ -1,3 +1,4 @@
+  var Util = (function utilModule() {
   /* ---------------- 基础工具 ---------------- */
 
   function post(message) {
@@ -238,3 +239,20 @@
     return out;
   }
 
+  return {
+    post: post,
+    setStatus: setStatus,
+    escapeHtml: escapeHtml,
+    marker: marker,
+    newlineMarker: newlineMarker,
+    inlineHtml: inlineHtml,
+    renderInline: renderInline
+  };
+  })();
+
+  var post = Util.post;
+  var setStatus = Util.setStatus;
+  var escapeHtml = Util.escapeHtml;
+  var marker = Util.marker;
+  var newlineMarker = Util.newlineMarker;
+  var renderInline = Util.renderInline;

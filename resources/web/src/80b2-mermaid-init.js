@@ -1,3 +1,4 @@
+  var MermaidInit = (function mermaidInitModule() {
   function scheduleMermaid() {
     if (mermaidTimer)
       return;
@@ -259,4 +260,10 @@
   if (window.MOTE_PERF)
     post({ type: 'log', message: 'PERF page_scripts ' + performance.now().toFixed(1) + 'ms' });
   post({ type: 'ready' });
+  return {
+    scheduleMermaid: scheduleMermaid
+  };
+  })();
+
+  var scheduleMermaid = MermaidInit.scheduleMermaid;
 })();

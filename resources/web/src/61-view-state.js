@@ -1,3 +1,4 @@
+  var ViewState = (function viewStateModule() {
   /* ---------------- 缩放与视图状态 ---------------- */
 
   function applyZoom() {
@@ -122,3 +123,17 @@
     postView();
   }
 
+  return {
+    applyZoom: applyZoom,
+    setTheme: setTheme,
+    setZoom: setZoom,
+    postView: postView,
+    setMode: setMode
+  };
+  })();
+
+  var applyZoom = ViewState.applyZoom;
+  var setTheme = ViewState.setTheme;
+  var setZoom = ViewState.setZoom;
+  var postView = ViewState.postView;
+  var setMode = ViewState.setMode;

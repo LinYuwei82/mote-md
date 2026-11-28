@@ -1,3 +1,4 @@
+  var ReplaceRun = (function replaceRunModule() {
   function replaceCurrent() {
     if (!findMatches.length) {
       setFindNote('没有可替换的命中');
@@ -192,3 +193,11 @@
       : '全部替换 ' + done + ' 处');
   }
 
+  return {
+    replaceCurrent: replaceCurrent,
+    replaceAll: replaceAll
+  };
+  })();
+
+  var replaceCurrent = ReplaceRun.replaceCurrent;
+  var replaceAll = ReplaceRun.replaceAll;

@@ -1,3 +1,4 @@
+  var TableCross = (function tableCrossModule() {
   // 表格块内的横向步进：格内逐字；跨格落到相邻格的首/末可见字符，绝不落进
   // | 标记或对齐行。返回 null 表示这个方向已经到表格两端，该跨出整块
   function crossStepInTable(el, abs, dir) {
@@ -244,3 +245,19 @@
     return range.cloneContents();
   }
 
+  return {
+    crossStepInTable: crossStepInTable,
+    extendCrossSelectionHorizontal: extendCrossSelectionHorizontal,
+    crossBounds: crossBounds,
+    crossSelectionPlainText: crossSelectionPlainText,
+    tableCellAbsSpan: tableCellAbsSpan,
+    cellClipContents: cellClipContents
+  };
+  })();
+
+  var crossStepInTable = TableCross.crossStepInTable;
+  var extendCrossSelectionHorizontal = TableCross.extendCrossSelectionHorizontal;
+  var crossBounds = TableCross.crossBounds;
+  var crossSelectionPlainText = TableCross.crossSelectionPlainText;
+  var tableCellAbsSpan = TableCross.tableCellAbsSpan;
+  var cellClipContents = TableCross.cellClipContents;

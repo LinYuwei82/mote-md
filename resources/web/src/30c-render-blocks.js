@@ -1,3 +1,4 @@
+  var RenderBlocks = (function renderBlocksModule() {
   function renderTable(lines, el) {
     var align = tableAlignments(lines[1]);
     var head = splitTableLine(lines[0]);
@@ -257,3 +258,17 @@
     el.innerHTML = html || '<br>';
   }
 
+  return {
+    tableCellList: tableCellList,
+    insertTableRow: insertTableRow,
+    moveTableCell: moveTableCell,
+    toggleTaskCheckbox: toggleTaskCheckbox,
+    renderBlock: renderBlock
+  };
+  })();
+
+  var tableCellList = RenderBlocks.tableCellList;
+  var insertTableRow = RenderBlocks.insertTableRow;
+  var moveTableCell = RenderBlocks.moveTableCell;
+  var toggleTaskCheckbox = RenderBlocks.toggleTaskCheckbox;
+  var renderBlock = RenderBlocks.renderBlock;

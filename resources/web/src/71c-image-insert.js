@@ -1,3 +1,4 @@
+  var ImageInsert = (function imageInsertModule() {
   // 原生层落盘成功后回调：把 ![](相对路径) 插到光标处。
   // 渲染态直接改 dataset.raw 再整块重排，图片立刻可见；表格/代码块里没有
   // 「行内图片」的位置，改为在其后插入独立段落。源码态插到 textarea 选区。
@@ -56,3 +57,9 @@
      三种入口只调用这里的 convertBlocks / toggleInline / insertTemplate，
      不允许各自拼 Markdown 字符串：同一操作无论从哪进来，产物必须逐字相同。 */
 
+  return {
+    insertImage: insertImage
+  };
+  })();
+
+  var insertImage = ImageInsert.insertImage;

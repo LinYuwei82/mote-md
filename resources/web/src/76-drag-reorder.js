@@ -1,3 +1,4 @@
+  var DragReorder = (function dragReorderModule() {
   /* ---------- 拖拽重排（指针事件，不依赖 HTML5 DnD） ---------- */
 
   function onHandleDown(event) {
@@ -68,3 +69,11 @@
     dragPending = null;
   }
 
+  return {
+    onHandleDown: onHandleDown,
+    onHandleUp: onHandleUp
+  };
+  })();
+
+  var onHandleDown = DragReorder.onHandleDown;
+  var onHandleUp = DragReorder.onHandleUp;

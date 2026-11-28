@@ -116,28 +116,28 @@ function sourceText() {
   }).join('');
 }
 
-var HOOK_NAMES = [
-  'escapeHtml',
-  'inlineHtml',
-  'renderInline',
-  'highlightCode',
-  'splitSourceLayout',
-  'trailingNewlineCount',
-  'layoutText',
-  'blockStartOffset',
-  'kindOfRaw',
-  'contentOfRaw',
-  'buildBlockRaw',
-  'convertRaw',
-  'leadLength',
-  'splitTableLine',
-  'tableCells',
-  'tableAlignments',
-  'isTableSource',
-  'plainTextOfRaw',
-  'countText',
-  'plainLabel',
-  'headingSlug'
+var HOOKS = [
+  ['escapeHtml', 'Util.escapeHtml'],
+  ['inlineHtml', 'Util.inlineHtml'],
+  ['renderInline', 'Util.renderInline'],
+  ['highlightCode', 'HighlightCache.highlightCode'],
+  ['splitSourceLayout', 'LayoutCode.splitSourceLayout'],
+  ['trailingNewlineCount', 'LayoutCode.trailingNewlineCount'],
+  ['layoutText', 'DocumentModel.layoutText'],
+  ['blockStartOffset', 'DocumentModel.blockStartOffset'],
+  ['kindOfRaw', 'kindOfRaw'],
+  ['contentOfRaw', 'contentOfRaw'],
+  ['buildBlockRaw', 'buildBlockRaw'],
+  ['convertRaw', 'convertRaw'],
+  ['leadLength', 'leadLength'],
+  ['splitTableLine', 'TableParse.splitTableLine'],
+  ['tableCells', 'TableParse.tableCells'],
+  ['tableAlignments', 'TableParse.tableAlignments'],
+  ['isTableSource', 'TableParse.isTableSource'],
+  ['plainTextOfRaw', 'DocumentModel.plainTextOfRaw'],
+  ['countText', 'DocumentModel.countText'],
+  ['plainLabel', 'Toc.plainLabel'],
+  ['headingSlug', 'Toc.headingSlug']
 ];
 
 function loadHooks() {
@@ -147,7 +147,7 @@ function loadHooks() {
   if (at < 0)
     throw new Error('找不到 editor.js 的 IIFE 结尾，无法注入测试挂钩');
   var hook = '\n  globalThis.__MOTE_TEST__ = {' +
-    HOOK_NAMES.map(function (name) { return name + ': ' + name; }).join(', ') +
+    HOOKS.map(function (item) { return item[0] + ': ' + item[1]; }).join(', ') +
     '};\n';
   installDomStub();
   globalThis.__MOTE_TEST__ = null;
@@ -155,9 +155,9 @@ function loadHooks() {
   var hooks = globalThis.__MOTE_TEST__;
   if (!hooks)
     throw new Error('测试挂钩注入失败');
-  HOOK_NAMES.forEach(function (name) {
-    if (typeof hooks[name] !== 'function')
-      throw new Error('测试挂钩缺少函数：' + name);
+  HOOKS.forEach(function (item) {
+    if (typeof hooks[item[0]] !== 'function')
+      throw new Error('测试挂钩缺少函数：' + item[0]);
   });
   return hooks;
 }

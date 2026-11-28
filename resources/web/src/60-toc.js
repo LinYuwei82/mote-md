@@ -1,3 +1,4 @@
+  var Toc = (function tocModule() {
   /* ---------------- 目录侧栏 ---------------- */
 
   function headingLevel(el) {
@@ -169,3 +170,22 @@
     postView();
   }
 
+  return {
+    headingLevel: headingLevel,
+    headingSlug: headingSlug,
+    plainLabel: plainLabel,
+    scrollToAnchor: scrollToAnchor,
+    refreshToc: refreshToc,
+    scheduleTocRefresh: scheduleTocRefresh,
+    updateActiveHeading: updateActiveHeading,
+    toggleToc: toggleToc
+  };
+  })();
+
+  var headingLevel = Toc.headingLevel;
+  var headingSlug = Toc.headingSlug;
+  var scrollToAnchor = Toc.scrollToAnchor;
+  var refreshToc = Toc.refreshToc;
+  var scheduleTocRefresh = Toc.scheduleTocRefresh;
+  var updateActiveHeading = Toc.updateActiveHeading;
+  var toggleToc = Toc.toggleToc;

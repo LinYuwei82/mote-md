@@ -1,3 +1,4 @@
+  var CaretEdit = (function caretEditModule() {
   // 命中点落在格线/边框/内边距上时，按几何距离挑最近的单元格
   function cellFromPoint(el, x, y) {
     var stack = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
@@ -189,3 +190,21 @@
   }
 
 
+  return {
+    cellFromPoint: cellFromPoint,
+    caretInCellEnd: caretInCellEnd,
+    ensureCellCaret: ensureCellCaret,
+    ensureHrSource: ensureHrSource,
+    placeBlockCaret: placeBlockCaret,
+    enterEdit: enterEdit,
+    leaveEdit: leaveEdit
+  };
+  })();
+
+  var cellFromPoint = CaretEdit.cellFromPoint;
+  var caretInCellEnd = CaretEdit.caretInCellEnd;
+  var ensureCellCaret = CaretEdit.ensureCellCaret;
+  var ensureHrSource = CaretEdit.ensureHrSource;
+  var placeBlockCaret = CaretEdit.placeBlockCaret;
+  var enterEdit = CaretEdit.enterEdit;
+  var leaveEdit = CaretEdit.leaveEdit;

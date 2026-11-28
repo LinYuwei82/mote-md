@@ -1,3 +1,4 @@
+  (function hoverFocusScrollModule() {
   /* ---------- 悬停 / 焦点 / 滚动联动 ---------- */
 
   document.addEventListener('mousemove', function (event) {
@@ -50,4 +51,5 @@
     positionBlockHandle();
     closeBlockMenu();
   });
+  })();
 

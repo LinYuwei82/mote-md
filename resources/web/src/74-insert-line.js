@@ -1,3 +1,4 @@
+  var InsertLine = (function insertLineModule() {
   /* ---------- 插入指示线 ---------- */
 
   function ensureInsertLine() {
@@ -54,3 +55,11 @@
     line.style.display = 'block';
   }
 
+  return {
+    blockDropRef: blockDropRef,
+    positionInsertLine: positionInsertLine
+  };
+  })();
+
+  var blockDropRef = InsertLine.blockDropRef;
+  var positionInsertLine = InsertLine.positionInsertLine;

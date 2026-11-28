@@ -1,3 +1,4 @@
+  var CaretOffset = (function caretOffsetModule() {
   function caretOffset(el) {
     var selection = window.getSelection();
     if (!selection.rangeCount)
@@ -77,3 +78,17 @@
     selection.addRange(range);
   }
 
+  return {
+    caretOffset: caretOffset,
+    rawCaretOffset: rawCaretOffset,
+    blockIndex: blockIndex,
+    locateOffset: locateOffset,
+    setSelectionRange: setSelectionRange
+  };
+  })();
+
+  var caretOffset = CaretOffset.caretOffset;
+  var rawCaretOffset = CaretOffset.rawCaretOffset;
+  var blockIndex = CaretOffset.blockIndex;
+  var locateOffset = CaretOffset.locateOffset;
+  var setSelectionRange = CaretOffset.setSelectionRange;

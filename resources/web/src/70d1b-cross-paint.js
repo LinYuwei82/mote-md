@@ -1,3 +1,4 @@
+  var CrossPaint = (function crossPaintModule() {
   // 逐块切开绝对区间取客户矩形，画成覆盖层色块（不插入任何正文节点）
   function paintCrossSelection() {
     if (!crossSel) {
@@ -201,3 +202,13 @@
     return true;
   }
 
+  return {
+    paintCrossSelection: paintCrossSelection,
+    crossHitNodeOk: crossHitNodeOk,
+    extendCrossSelection: extendCrossSelection
+  };
+  })();
+
+  var paintCrossSelection = CrossPaint.paintCrossSelection;
+  var crossHitNodeOk = CrossPaint.crossHitNodeOk;
+  var extendCrossSelection = CrossPaint.extendCrossSelection;

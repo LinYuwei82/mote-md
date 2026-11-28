@@ -1,3 +1,4 @@
+  (function liveMarkersModule() {
   /* ---------------- 标记标签避让 ---------------- */
 
   var liveFrame = 0;
@@ -63,4 +64,5 @@
   }
 
   document.addEventListener('selectionchange', scheduleLiveMarker);
+  })();
 

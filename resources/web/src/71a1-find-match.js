@@ -1,3 +1,4 @@
+  var FindMatch = (function findMatchModule() {
   /* ---- 替换：命中 → 整篇原文的绝对区间 ---- */
 
   // 命中边界落在行内格式内部时，整段替换会把外侧的开标记留下、把闭标记删掉，
@@ -130,3 +131,15 @@
     return { block: root.children[at.index] || null, offset: at.start };
   }
 
+  return {
+    findMatchSpan: findMatchSpan,
+    replacementProblem: replacementProblem,
+    rerenderFromRaw: rerenderFromRaw,
+    rebuildFromSourceText: rebuildFromSourceText
+  };
+  })();
+
+  var findMatchSpan = FindMatch.findMatchSpan;
+  var replacementProblem = FindMatch.replacementProblem;
+  var rerenderFromRaw = FindMatch.rerenderFromRaw;
+  var rebuildFromSourceText = FindMatch.rebuildFromSourceText;

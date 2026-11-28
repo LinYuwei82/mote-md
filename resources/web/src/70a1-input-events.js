@@ -1,3 +1,4 @@
+  (function inputEventsModule() {
   /* ---------------- DOM 事件 ---------------- */
 
   // 点击渲染态时记录光标大致位置，切到源码态后尽量落在同一处
@@ -220,4 +221,5 @@
     scheduleCommit();
     scheduleTocRefresh();
   });
+  })();
 

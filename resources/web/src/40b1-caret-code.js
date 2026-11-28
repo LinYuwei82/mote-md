@@ -1,3 +1,4 @@
+  var CaretCode = (function caretCodeModule() {
   function blockOf(node) {
     while (node && node !== root) {
       if (node.classList && node.classList.contains('block'))
@@ -179,3 +180,23 @@
     return true;
   }
 
+  return {
+    blockOf: blockOf,
+    setCaret: setCaret,
+    offsetIn: offsetIn,
+    rangeIn: rangeIn,
+    ensureLangBadge: ensureLangBadge,
+    applyCodeLang: applyCodeLang,
+    syncCode: syncCode,
+    insertCodeText: insertCodeText
+  };
+  })();
+
+  var blockOf = CaretCode.blockOf;
+  var setCaret = CaretCode.setCaret;
+  var offsetIn = CaretCode.offsetIn;
+  var rangeIn = CaretCode.rangeIn;
+  var ensureLangBadge = CaretCode.ensureLangBadge;
+  var applyCodeLang = CaretCode.applyCodeLang;
+  var syncCode = CaretCode.syncCode;
+  var insertCodeText = CaretCode.insertCodeText;

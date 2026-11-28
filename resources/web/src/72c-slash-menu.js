@@ -1,3 +1,4 @@
+  var SlashMenu = (function slashMenuModule() {
   function filteredSlashItems() {
     if (!slashState)
       return [];
@@ -161,3 +162,15 @@
     setTimeout(commitHistory, 0);
   }
 
+  return {
+    moveSlash: moveSlash,
+    handleSlashInput: handleSlashInput,
+    closeSlash: closeSlash,
+    insertSlashItem: insertSlashItem
+  };
+  })();
+
+  var moveSlash = SlashMenu.moveSlash;
+  var handleSlashInput = SlashMenu.handleSlashInput;
+  var closeSlash = SlashMenu.closeSlash;
+  var insertSlashItem = SlashMenu.insertSlashItem;

@@ -1,3 +1,4 @@
+  var EditingSnapshot = (function editingSnapshotModule() {
   // 当前块内选区 → 整篇绝对偏移。失焦（没有活动编辑块）时 has 为 false
   function editingSelection() {
     var active = document.activeElement;
@@ -259,3 +260,25 @@
     rebuildFromSnapshot(history[historyIndex]);
   }
 
+  return {
+    editingSelection: editingSelection,
+    absoluteOffsets: absoluteOffsets,
+    snapshotState: snapshotState,
+    commitHistory: commitHistory,
+    scheduleCommit: scheduleCommit,
+    mountBlocks: mountBlocks,
+    locateBlock: locateBlock,
+    undo: undo,
+    redo: redo
+  };
+  })();
+
+  var editingSelection = EditingSnapshot.editingSelection;
+  var absoluteOffsets = EditingSnapshot.absoluteOffsets;
+  var snapshotState = EditingSnapshot.snapshotState;
+  var commitHistory = EditingSnapshot.commitHistory;
+  var scheduleCommit = EditingSnapshot.scheduleCommit;
+  var mountBlocks = EditingSnapshot.mountBlocks;
+  var locateBlock = EditingSnapshot.locateBlock;
+  var undo = EditingSnapshot.undo;
+  var redo = EditingSnapshot.redo;

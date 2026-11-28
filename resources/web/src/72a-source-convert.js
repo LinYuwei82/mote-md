@@ -1,3 +1,4 @@
+  var SourceConvert = (function sourceConvertModule() {
   /* ---------- 源码模式：同一套规则作用于 textarea 文本 ---------- */
 
   // 段落起点：回退到空白行之后。连续多个空行要整段跨过，不能只退两格，
@@ -68,3 +69,11 @@
   }
 
 
+  return {
+    sourceInline: sourceInline,
+    sourceConvert: sourceConvert
+  };
+  })();
+
+  var sourceInline = SourceConvert.sourceInline;
+  var sourceConvert = SourceConvert.sourceConvert;
