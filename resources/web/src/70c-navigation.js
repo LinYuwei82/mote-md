@@ -1,3 +1,4 @@
+  var Navigation = (function navigationModule() {
   // 导航作用域：代码块只看 <code>（行号栏不参与），普通块就是块本身。
   function navScope(el) {
     return LayoutCode.isCodeBlock(el) ? LayoutCode.codeEl(el) : el;
@@ -195,6 +196,13 @@
      打开查找、切源码模式都会清除。原型边界：输入法组合输入、跨表格单元格的精细
      边界都不接管，遇到时回退到原生单块行为。 */
 
-  var crossSel = null;        // { anchor, focus, goalX }，整篇绝对字符偏移
-  var crossLayer = null;      // 覆盖层（position:absolute，挂在 body）
-  var crossAnnounced = false; // 与外壳同步的「是否有跨块选区」状态
+  return {
+    navScope: navScope,
+    contentEdgeRect: contentEdgeRect,
+    caretRectOfSelection: caretRectOfSelection,
+    caretAtBlockEdge: caretAtBlockEdge,
+    pointInNavScope: pointInNavScope,
+    placeCaretInBlock: placeCaretInBlock,
+    moveCaretAcrossBlock: moveCaretAcrossBlock
+  };
+  })();

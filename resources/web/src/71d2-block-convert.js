@@ -1,3 +1,4 @@
+  var BlockConvert = (function blockConvertModule() {
   function convertBlocks(type, toggle) {
     if (mode === 'source') {
       SourceConvert.sourceConvert(type, toggle);
@@ -5,27 +6,27 @@
     }
     var blocks;
     if (crossSel) {
-      blocks = crossSelBlocks();
+      blocks = BlockParse.crossSelBlocks();
       if (!blocks || !blocks.length)
         return;
       CrossRange.clearCrossSelection();   // 结构即将改变，覆盖层失效
     } else {
-      blocks = selectedBlocks();
+      blocks = BlockParse.selectedBlocks();
       if (!blocks.length)
         return;
     }
     var target = blocks[0];
     var selection = CaretCode.rangeIn(target);
 
-    if (blocks.length > 1 && MERGE_TYPES[type]) {
+    if (blocks.length > 1 && BlockParse.MERGE_TYPES[type]) {
       var content = blocks.map(function (el) {
-        return contentOfRaw(rawOf(el), kindOfRaw(rawOf(el)));
+        return BlockParse.contentOfRaw(BlockParse.rawOf(el), BlockParse.kindOfRaw(BlockParse.rawOf(el)));
       }).join('\n');
-      var merged = buildBlockRaw(type, content);
+      var merged = BlockParse.buildBlockRaw(type, content);
       EditingSnapshot.commitHistory();
       for (var i = blocks.length - 1; i >= 1; i--)
         blocks[i].remove();
-      applyRawToBlock(target, merged, merged.length, merged.length, true);
+      BlockParse.applyRawToBlock(target, merged, merged.length, merged.length, true);
       setTimeout(EditingSnapshot.commitHistory, 0);
       return;
     }
@@ -39,18 +40,18 @@
     if (multi || splitting)
       commitBatch++;
     blocks.forEach(function (el) {
-      var raw = rawOf(el);
-      var before = kindOfRaw(raw);
-      var next = convertRaw(raw, type, toggle);
+      var raw = BlockParse.rawOf(el);
+      var before = BlockParse.kindOfRaw(raw);
+      var next = BlockParse.convertRaw(raw, type, toggle);
       if (next === raw)
         return;
       changed = true;
       // 列表/引用/表格/代码回正文：逐行拆回独立段落，避免一个块里塞进硬换行
       if (type === 'p' && (before === 'ul' || before === 'ol' || before === 'quote' ||
                            before === 'table' || before === 'code')) {
-        var lines = contentOfRaw(raw, before).replace(/\n+$/, '').split('\n');
+        var lines = BlockParse.contentOfRaw(raw, before).replace(/\n+$/, '').split('\n');
         if (lines.length > 1) {
-          applyRawToBlock(el, lines[0], lines[0].length, lines[0].length, true);
+          BlockParse.applyRawToBlock(el, lines[0], lines[0].length, lines[0].length, true);
           var anchor = el;
           for (var li = 1; li < lines.length; li++) {
             insertBlockAfter(anchor, lines[li], lines[li].length);
@@ -59,12 +60,12 @@
           return;
         }
       }
-      var shift = leadLength(next, kindOfRaw(next)) - leadLength(raw, before);
+      var shift = BlockParse.leadLength(next, BlockParse.kindOfRaw(next)) - BlockParse.leadLength(raw, before);
       // 只有选区所在的块沿用选区偏移，其余块光标放末尾
       var hasCaret = selection && el === target;
       var start = hasCaret ? Math.max(0, selection.start + shift) : next.length;
       var end = hasCaret ? Math.max(start, selection.end + shift) : next.length;
-      applyRawToBlock(el, next, start, end, true);
+      BlockParse.applyRawToBlock(el, next, start, end, true);
     });
     if (multi || splitting)
       commitBatch--;
@@ -153,7 +154,7 @@
       SourceConvert.sourceInline(kind);
       return;
     }
-    var blocks = selectedBlocks();
+    var blocks = BlockParse.selectedBlocks();
     if (!blocks.length)
       return;
     var el = blocks[0];
@@ -164,12 +165,12 @@
     var selection = CaretCode.rangeIn(el);
     if (!selection)
       return;
-    var raw = rawOf(el);
+    var raw = BlockParse.rawOf(el);
     var out = inlineTransform(raw, selection.start, selection.end, kind);
     if (out.raw === raw)
       return;
     EditingSnapshot.commitHistory();
-    applyRawToBlock(el, out.raw, out.start, out.end, true);
+    BlockParse.applyRawToBlock(el, out.raw, out.start, out.end, true);
     setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
@@ -191,21 +192,21 @@
     CaretEdit.placeBlockCaret(block, caret === undefined ? raw.length : caret);
     if (block.scrollIntoView)
       block.scrollIntoView({ block: 'nearest' });
-    updatePlaceholder();
+    MenuOverlay.updatePlaceholder();
   }
 
   // 表格 / 分隔线：不改动已有内容，在当前块之后插入
   function insertTableBlock() {
-    var blocks = selectedBlocks();
+    var blocks = BlockParse.selectedBlocks();
     var el = blocks.length ? blocks[blocks.length - 1] : root.lastElementChild;
     EditingSnapshot.commitHistory();
-    var elKind = el && el.classList.contains('block') ? kindOfRaw(rawOf(el)) : '';
+    var elKind = el && el.classList.contains('block') ? BlockParse.kindOfRaw(BlockParse.rawOf(el)) : '';
     // hr/表格的内容按定义可能为空，但它们是实打实的结构块：不能当成空块被替换掉
     var empty = el && el.classList.contains('block')
       && elKind !== 'hr' && elKind !== 'table'
-      && contentOfRaw(rawOf(el), elKind).trim() === '';
+      && BlockParse.contentOfRaw(BlockParse.rawOf(el), elKind).trim() === '';
     if (empty) {
-      applyRawToBlock(el, TABLE_TEMPLATE, 2, 2, true);
+      BlockParse.applyRawToBlock(el, TABLE_TEMPLATE, 2, 2, true);
     } else {
       insertBlockAfter(el, TABLE_TEMPLATE, 2);
     }
@@ -215,16 +216,16 @@
   }
 
   function insertHrBlock() {
-    var blocks = selectedBlocks();
+    var blocks = BlockParse.selectedBlocks();
     var el = blocks.length ? blocks[blocks.length - 1] : root.lastElementChild;
     EditingSnapshot.commitHistory();
-    var elKind = el && el.classList.contains('block') ? kindOfRaw(rawOf(el)) : '';
+    var elKind = el && el.classList.contains('block') ? BlockParse.kindOfRaw(BlockParse.rawOf(el)) : '';
     // hr/表格的内容按定义可能为空，但它们是实打实的结构块：不能当成空块被替换掉
     var empty = el && el.classList.contains('block')
       && elKind !== 'hr' && elKind !== 'table'
-      && contentOfRaw(rawOf(el), elKind).trim() === '';
+      && BlockParse.contentOfRaw(BlockParse.rawOf(el), elKind).trim() === '';
     if (empty) {
-      applyRawToBlock(el, '---', 3, 3, true);
+      BlockParse.applyRawToBlock(el, '---', 3, 3, true);
       insertBlockAfter(el, '', 0);
     } else {
       insertBlockAfter(el, '---', 3);
@@ -255,3 +256,12 @@
     // 快捷键/菜单是切换语义：同类型再按一次回正文（codeBlock 回正文=去围栏）
     convertBlocks(type, true);
   }
+  return {
+    convertBlocks: convertBlocks,
+    inlineTransform: inlineTransform,
+    toggleInline: toggleInline,
+    insertBlockAfter: insertBlockAfter,
+    formatAction: formatAction,
+    TABLE_TEMPLATE: TABLE_TEMPLATE
+  };
+  })();

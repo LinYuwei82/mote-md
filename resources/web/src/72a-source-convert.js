@@ -39,7 +39,7 @@
     var text = sourceEl.value;
     var start = sourceEl.selectionStart;
     var end = sourceEl.selectionEnd;
-    var out = inlineTransform(text, start, end, kind);
+    var out = BlockConvert.inlineTransform(text, start, end, kind);
     if (out.raw === text)
       return;
     EditingSnapshot.commitHistory();
@@ -59,10 +59,10 @@
     if (range.start < 0)
       range.start = 0;
     var raw = text.slice(range.start, range.end);
-    var next = convertRaw(raw, type, toggle);
+    var next = BlockParse.convertRaw(raw, type, toggle);
     if (next === raw)
       return;
-    var shift = leadLength(next, kindOfRaw(next)) - leadLength(raw, kindOfRaw(raw));
+    var shift = BlockParse.leadLength(next, BlockParse.kindOfRaw(next)) - BlockParse.leadLength(raw, BlockParse.kindOfRaw(raw));
     EditingSnapshot.commitHistory();
     applySourceText(text.slice(0, range.start) + next + text.slice(range.end),
       Math.max(range.start, start + shift), Math.max(range.start, end + shift));

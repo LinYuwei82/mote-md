@@ -1,9 +1,8 @@
+  var Mermaid = (function mermaidModule() {
   // ---- mermaid 代码块 ----
   // Typora 把 ```mermaid 画成图；渲染态与 PDF 导出同样换成图，点图回到源码编辑。
   // 渲染是异步的，pdfContentReady 会等它完成再量高度，避免量到 0 高度。
-  var mermaidPending = 0;
   var mermaidSeq = 0;
-  var mermaidTimer = null;
   var mermaidReady = !!(window.mermaid && window.mermaid.initialize);
   var mermaidLoading = false;
   var mermaidLoadQueue = [];
@@ -149,3 +148,7 @@
       }
     }
   }
+  return {
+    scanMermaid: scanMermaid
+  };
+  })();

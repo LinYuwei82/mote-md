@@ -1,12 +1,13 @@
+  var MenuOverlay = (function menuOverlayModule() {
   /* ---------- 空白文档占位提示 ----------
      提示用 CSS ::before 绘制，不属于 textContent，因此绝不会写进 dataset.raw；
      只在「整篇只有一个空块」时出现，正常文档里回车产生的新空块不受影响。 */
   function updatePlaceholder() {
     if (!root)
       return;
-    var blocks = blockList();
+    var blocks = BlockParse.blockList();
     var bare = mode !== 'source' && blocks.length === 1
-      && String(rawOf(blocks[0])).trim() === '';
+      && String(BlockParse.rawOf(blocks[0])).trim() === '';
     if (bare !== root.classList.contains('bare'))
       root.classList.toggle('bare', bare);
   }
@@ -29,9 +30,6 @@
     { key: 'link', label: '链接', hint: '[]()', words: 'link lianjie 链接' }
   ];
 
-  var slashState = null;   // { el, start, end, index }
-  var slashMenu = null;
-  var turnMenu = null;
 
   function removeMenu(node) {
     if (node && node.parentNode)
@@ -69,3 +67,11 @@
     node.style.left = x + 'px';
     node.style.top = y + 'px';
   }
+  return {
+    updatePlaceholder: updatePlaceholder,
+    removeMenu: removeMenu,
+    caretClientRect: caretClientRect,
+    placeMenu: placeMenu,
+    SLASH_ITEMS: SLASH_ITEMS
+  };
+  })();

@@ -49,7 +49,7 @@
       start += LayoutCode.codePrefixLength(startBlock);
     if (LayoutCode.isCodeBlock(endBlock))
       end += LayoutCode.codePrefixLength(endBlock);
-    var list = blockList();
+    var list = BlockParse.blockList();
     var si = list.indexOf(startBlock);
     var ei = list.indexOf(endBlock);
     if (si < 0 || ei < 0 || ei < si)
@@ -88,7 +88,7 @@
           || span.startBlock.classList.contains('hr')
           || span.endBlock.classList.contains('hr'))
         return '跨块替换不支持代码块/表格/分隔线边界';
-      var list = blockList();
+      var list = BlockParse.blockList();
       for (var i = span.startIndex + 1; i < span.endIndex; i++) {
         var between = list[i];
         if (LayoutCode.isCodeBlock(between) || between.classList.contains('table')

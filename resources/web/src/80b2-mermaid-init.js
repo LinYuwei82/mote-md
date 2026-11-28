@@ -4,7 +4,7 @@
       return;
     mermaidTimer = setTimeout(function () {
       mermaidTimer = null;
-      scanMermaid(false);
+      Mermaid.scanMermaid(false);
     }, 120);
   }
 
@@ -14,8 +14,8 @@
     setMarkdown: function (text) {
       var _t0 = window.MOTE_PERF ? performance.now() : 0;
       SlashMenu.closeSlash(false);
-      closeTurnMenu();
-      closeLangMenu();
+      TurnMenu.closeTurnMenu();
+      LangMenu.closeLangMenu();
       BlockMenu.closeBlockMenu();
       BlockHandle.hideBlockHandle();
       var normalized = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n');
@@ -51,7 +51,7 @@
       EditingSnapshot.commitHistory();
       window.scrollTo(0, 0);
       Toc.refreshToc();
-      updatePlaceholder();
+      MenuOverlay.updatePlaceholder();
       Util.post({ type: 'dirty', value: false });
       ViewState.postView();
       var _t5 = window.MOTE_PERF ? performance.now() : 0;
@@ -85,8 +85,8 @@
       if (tocVisible)
         Toc.toggleToc();
       SlashMenu.closeSlash(false);
-      closeTurnMenu();
-      closeLangMenu();
+      TurnMenu.closeTurnMenu();
+      LangMenu.closeLangMenu();
       ViewState.setZoom(1);
       window.mote.setMarkdown('');
       // 目录已关闭时 refreshToc 会早退，旧标题节点仍留在 DOM 里；新建必须清掉
@@ -106,7 +106,7 @@
     },
     // 供原生菜单 / 快捷键直接驱动（不依赖页面是否收到 keydown）
     format: function (name) {
-      formatAction(String(name === undefined || name === null ? '' : name));
+      BlockConvert.formatAction(String(name === undefined || name === null ? '' : name));
     },
     // 剪贴板：外壳菜单 / 快捷键 / 右键菜单的唯一下发点。平台 WebView 没有
     // 可编程的编辑命令接口（WKWebView 的 copy:/paste: 只存在于菜单响应链，
@@ -133,7 +133,7 @@
       if (cut) {
         // 跨块选区的原生选区是折叠的，原生 delete 删不掉它，按整篇源码替换
         if (crossSel) {
-          replaceCrossSelection('');
+          CrossHtmlReplace.replaceCrossSelection('');
           return true;
         }
         EditingSnapshot.commitHistory();
@@ -181,7 +181,7 @@
       }
       var type = { paragraph: 'p', h1: 'h1', h2: 'h2', h3: 'h3', ul: 'ul', ol: 'ol', quote: 'quote', codeBlock: 'code' }[kind];
       if (type)
-        convertBlocks(type, false);
+        BlockConvert.convertBlocks(type, false);
     },
     undo: function () {
       EditingSnapshot.undo();
@@ -219,22 +219,22 @@
     },
     // 原生「导出 HTML…」：拼好整篇自包含 HTML 后回传，由 Qt 侧写盘并内嵌图片
     exportHtml: function (title) {
-      Util.post({ type: 'export', html: buildExportHtml(title) });
+      Util.post({ type: 'export', html: ExportHtml.buildExportHtml(title) });
     },
     // PDF 导出：createPDF / PrintToPdf 走屏幕媒体，@media print 不生效，
     // 所以由宿主在导出前加 body.pdf-export（样式里清外壳），导出完成立刻移除。
     // 只动 body 的 class，不碰正文节点，因此不改文档、不进撤销栈、不置脏标记。
     // 字体/图片是否已经可以进入导出：宿主在 pdfBegin 之前轮询，避免量到错的高度
     pdfContentReady: function () {
-      return pdfContentReady();
+      return ExportHtml.pdfContentReady();
     },
     pdfBegin: function () {
-      closeLangMenu();
+      LangMenu.closeLangMenu();
       pdfSavedScrollY = window.pageYOffset || 0;
       document.body.classList.add('pdf-export');
       var ed = document.getElementById('editor');
       var rect = ed ? ed.getBoundingClientRect() : { width: 0 };
-      var geo = pdfSafeCuts(ed);
+      var geo = ExportHtml.pdfSafeCuts(ed);
       return JSON.stringify({
         w: Math.ceil(rect.width || 0),
         h: geo.bottom,

@@ -244,8 +244,8 @@
 
   // 语言是否有着色规则（无规则的高亮本来就只是转义，不必延迟）。
   function hasLangSpec(lang) {
-    var key = LANG_ALIAS[String(lang || '').trim().toLowerCase()] || '';
-    return !!key && !!SPEC[key];
+    var key = HighlightLangs.LANG_ALIAS[String(lang || '').trim().toLowerCase()] || '';
+    return !!key && !!HighlightLangs.SPEC[key];
   }
 
   // 补画一个延迟代码块：文本已被编辑改动就跳过（编辑路径自己会重着色）；

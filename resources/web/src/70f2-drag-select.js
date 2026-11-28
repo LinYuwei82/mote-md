@@ -69,12 +69,12 @@
     if (crossSel) {
       if (event.key === 'Backspace' || event.key === 'Delete') {
         event.preventDefault();
-        replaceCrossSelection('');
+        CrossHtmlReplace.replaceCrossSelection('');
         return;
       }
       if (event.key === 'Enter') {
         event.preventDefault();
-        replaceCrossSelection('\n');
+        CrossHtmlReplace.replaceCrossSelection('\n');
         return;
       }
       if (event.key === 'Escape') {
@@ -116,7 +116,7 @@
       if (navSelection && navSelection.rangeCount
           && navSelection.getRangeAt(0).collapsed
           && el.contains(navSelection.getRangeAt(0).startContainer)
-          && moveCaretAcrossBlock(el, event.key === 'ArrowUp')) {
+          && Navigation.moveCaretAcrossBlock(el, event.key === 'ArrowUp')) {
         event.preventDefault();
         return;
       }
@@ -196,9 +196,9 @@
           if (prevBlock && prevBlock.classList.contains('block') && JoinIndent.blockType(prevBlock) === JoinIndent.blockType(el))
             JoinIndent.mergeBack(el);
           else {
-            var blockRaw = rawOf(el);
+            var blockRaw = BlockParse.rawOf(el);
             EditingSnapshot.commitHistory();
-            applyRawToBlock(el, contentOfRaw(blockRaw, kindOfRaw(blockRaw)), 0, 0, true);
+            BlockParse.applyRawToBlock(el, BlockParse.contentOfRaw(blockRaw, BlockParse.kindOfRaw(blockRaw)), 0, 0, true);
             setTimeout(EditingSnapshot.commitHistory, 0);
           }
           return;
@@ -241,7 +241,7 @@
         // 分割线凭空消失。回车应在其后插入一个空正文块，分割线留在原地。
         event.preventDefault();
         EditingSnapshot.commitHistory();
-        insertBlockAfter(el, '', 0);
+        BlockConvert.insertBlockAfter(el, '', 0);
         EditingSnapshot.commitHistory();
         DocumentModel.scheduleDirty();
         return;
@@ -270,7 +270,7 @@
             || kind1 === 'code' || kind1.charAt(0) === 'h') {
           event.preventDefault();
           EditingSnapshot.commitHistory();
-          applyRawToBlock(el, contentOfRaw(rawOf(el), kind1), 0, 0, true);
+          BlockParse.applyRawToBlock(el, BlockParse.contentOfRaw(BlockParse.rawOf(el), kind1), 0, 0, true);
           setTimeout(EditingSnapshot.commitHistory, 0);
           return;
         }

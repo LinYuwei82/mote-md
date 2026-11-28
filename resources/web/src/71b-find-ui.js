@@ -118,7 +118,7 @@
     findJumped = null;
     findCaret = null;
     findInSource = false;
-    dropFindLayer();
+    FindPaint.dropFindLayer();
     if (findBar && findBar.parentNode)
       findBar.parentNode.removeChild(findBar);
     findBar = findInput = findReplace = findCount = findNote = null;
@@ -188,12 +188,12 @@
     if (!findLayer || !findMatches.length)
       return;
     if (event.target && event.target.closest && event.target.closest('.code-scroll'))
-      paintFind();
+      FindPaint.paintFind();
   }, true);
 
   window.addEventListener('resize', function () {
     if (findLayer && findMatches.length)
-      paintFind();
+      FindPaint.paintFind();
     // 覆盖层是文档绝对坐标，缩放/换行变化后必须按新几何重画
     if (crossSel)
       CrossPaint.paintCrossSelection();
@@ -204,7 +204,7 @@
   document.addEventListener('load', function (event) {
     var target = event.target;
     if (target && target.nodeName === 'IMG') {
-      scheduleFindPaint();
+      FindPaint.scheduleFindPaint();
       if (crossSel)
         CrossPaint.paintCrossSelection();
     }
@@ -213,13 +213,13 @@
   if (document.fonts) {
     if (document.fonts.ready && document.fonts.ready.then)
       document.fonts.ready.then(function () {
-        scheduleFindPaint();
+        FindPaint.scheduleFindPaint();
         if (crossSel)
           CrossPaint.paintCrossSelection();
       });
     if (document.fonts.addEventListener)
       document.fonts.addEventListener('loadingdone', function () {
-        scheduleFindPaint();
+        FindPaint.scheduleFindPaint();
         if (crossSel)
           CrossPaint.paintCrossSelection();
       });

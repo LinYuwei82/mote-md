@@ -1,16 +1,15 @@
+  var LangMenu = (function langMenuModule() {
   /* ---------------- 代码块语言选择器 ----------------
      下拉挂在 body 上（position:fixed），因此不会被 .code-scroll / pre 的
      overflow 裁掉，也不参与代码块排版。点徽标开、再点同一个徽标或点外部关闭，
     支持搜索过滤、方向键/Enter/Esc 与自定义语言。 */
 
-  var langMenu = null;       // 挂在 body 上的下拉面板
   var langMenuState = null;  // { el, badge, items, active }
-  var langComposing = false; // 搜索框自己的输入法组字状态
 
   function langItems(query) {
     var raw = String(query || '').trim();
     var q = raw.toLowerCase();
-    var items = LANG_PICKS.filter(function (item) {
+    var items = HighlightLangs.LANG_PICKS.filter(function (item) {
       if (!q)
         return true;
       return (item.name + ' ' + item.value + ' ' + item.words).toLowerCase().indexOf(q) >= 0;
@@ -47,7 +46,7 @@
   function langCurrentIndex(items, current) {
     current = String(current || '').toLowerCase();
     var groupHit = -1;
-    var group = LANG_ALIAS[current] || '';
+    var group = HighlightLangs.LANG_ALIAS[current] || '';
     var count = 0;
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
@@ -61,7 +60,7 @@
       }
       if (value === current || item.name.toLowerCase() === current)
         return i;
-      if (groupHit < 0 && group && LANG_ALIAS[value] === group) {
+      if (groupHit < 0 && group && HighlightLangs.LANG_ALIAS[value] === group) {
         groupHit = i;
         count++;
       }
@@ -135,7 +134,7 @@
     var state = langMenuState;
     langMenuState = null;
     langComposing = false;
-    removeMenu(langMenu);
+    MenuOverlay.removeMenu(langMenu);
     langMenu = null;
     if (state && state.badge)
       state.badge.setAttribute('aria-expanded', 'false');
@@ -148,7 +147,7 @@
       return;
     }
     SlashMenu.closeSlash(false);
-    closeTurnMenu();
+    TurnMenu.closeTurnMenu();
     closeLangMenu();
     var items = langItems('');
     langMenuState = { el: el, badge: badge, items: items, active: 0 };
@@ -211,7 +210,7 @@
       chooseLangItem(Number(hit.getAttribute('data-index')));
     });
     renderLangItems();
-    placeMenu(langMenu, badge.getBoundingClientRect());
+    MenuOverlay.placeMenu(langMenu, badge.getBoundingClientRect());
     badge.setAttribute('aria-expanded', 'true');
     // 真实点击的 mouseup/click 可能把焦点交回页面；同步聚焦后再补一次，
     // 确保搜索框在整次点击结束后仍然拿到焦点。不用 focusout 关下拉：
@@ -238,3 +237,8 @@
       return;
     closeLangMenu();
   }, true);
+  return {
+    closeLangMenu: closeLangMenu,
+    openLangMenu: openLangMenu
+  };
+  })();

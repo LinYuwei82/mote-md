@@ -39,8 +39,8 @@
       return;
     }
     var y = dragCross.y;
-    var step = y < DRAG_EDGE ? -DRAG_STEP
-      : (y > window.innerHeight - DRAG_EDGE ? DRAG_STEP : 0);
+    var step = y < CrossHtmlReplace.DRAG_EDGE ? -CrossHtmlReplace.DRAG_STEP
+      : (y > window.innerHeight - CrossHtmlReplace.DRAG_EDGE ? CrossHtmlReplace.DRAG_STEP : 0);
     if (!step) {
       stopDragScroll();
       return;
@@ -60,7 +60,7 @@
     dragCross.x = x;
     dragCross.y = y;
     // 拖到视口上下边缘时自己滚：原生拖选的自动滚动已经被折叠光标打断
-    if (y < DRAG_EDGE || y > window.innerHeight - DRAG_EDGE) {
+    if (y < CrossHtmlReplace.DRAG_EDGE || y > window.innerHeight - CrossHtmlReplace.DRAG_EDGE) {
       if (!dragScrollTimer)
         dragScrollTimer = setInterval(dragScrollTick, 60);
     } else {

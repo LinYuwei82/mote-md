@@ -57,7 +57,7 @@
   }
 
   function absoluteOf(el, node, offset) {
-    var list = blockList();
+    var list = BlockParse.blockList();
     var index = list.indexOf(el);
     if (index < 0)
       return null;
@@ -68,7 +68,7 @@
 
   // 块内某个 DOM 点 → 块内 raw 偏移（代码块补上围栏前缀）
   function rawOffsetAtPoint(el, node, offset) {
-    var scope = navScope(el) || el;
+    var scope = Navigation.navScope(el) || el;
     var prefix = document.createRange();
     prefix.selectNodeContents(scope);
     try {
@@ -83,7 +83,7 @@
   function crossBlockRange(el, start, end) {
     if (!el || el.classList.contains('hr'))
       return null;
-    var scope = navScope(el);
+    var scope = Navigation.navScope(el);
     if (!scope)
       return null;
     var prefix = LayoutCode.isCodeBlock(el) ? LayoutCode.codePrefixLength(el) : 0;

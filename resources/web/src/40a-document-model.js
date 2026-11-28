@@ -15,7 +15,7 @@
   }
 
   function collectBlocks() {
-    return blockList().map(blockRawText);
+    return BlockParse.blockList().map(blockRawText);
   }
 
   // 第 index 块之前的空行数：载入、撤销重建时写进 data-gap；用户新建的块没有
@@ -28,7 +28,7 @@
   }
 
   function collectGaps() {
-    var list = blockList();
+    var list = BlockParse.blockList();
     var gaps = [];
     for (var i = 0; i < list.length; i++)
       gaps.push(blockGap(list[i], i === 0));

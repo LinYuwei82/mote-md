@@ -1,3 +1,4 @@
+  var HighlightLangs = (function highlightLangsModule() {
   /* ---------------- 代码块语法高亮 ---------------- */
 
   var LANG_ALIAS = {
@@ -119,3 +120,9 @@
     },
     html: { html: true, line: [], quotes: [] }
   };
+  return {
+    LANG_ALIAS: LANG_ALIAS,
+    LANG_PICKS: LANG_PICKS,
+    SPEC: SPEC
+  };
+  })();

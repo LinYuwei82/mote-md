@@ -1,3 +1,4 @@
+  var FindPaint = (function findPaintModule() {
   /* ---------------- 查找 / 替换（Cmd+F） ----------------
      高亮用「覆盖层」画：用 Range.getClientRects() 取每个命中的几何，把绝对定位的
      色块盖在上面（#find-layer 挂在 body、pointer-events:none）。文档里不插入任何
@@ -29,13 +30,7 @@
 
      关闭时若跳转过，光标留在最后一个命中；没跳转过就回到打开查找前的原位置。 */
 
-  var findBar = null, findInput = null, findReplace = null;
-  var findCount = null, findNote = null, findLayer = null;
-  var findMatches = [], findActive = -1, findTimer = 0, findNoteTimer = 0;
   var findPaintFrame = 0;       // 合并同一帧内的多次重画请求
-  var findCaret = null;         // 打开查找前的原光标
-  var findJumped = null;        // 最近一次跳转到的命中
-  var findInSource = false;     // 本轮命中是 sourceEl.value 上的区间
 
   function findRuns(block) {
     var runs = [];
@@ -195,3 +190,14 @@
   // 整篇可见文本：每个块占一段，块与块之间用一个虚拟换行连接；表格单元格之间、
   // 分隔线两侧用不可匹配的 \0 隔开。返回全文与文本段索引（at 为段在全文中的起点），
   // 命中下标 → 段 → DOM 点都靠这张表。
+  return {
+    findRuns: findRuns,
+    findPoint: findPoint,
+    dropFindLayer: dropFindLayer,
+    findRects: findRects,
+    paintFind: paintFind,
+    scheduleFindPaint: scheduleFindPaint,
+    updateFindCount: updateFindCount,
+    setFindNote: setFindNote
+  };
+  })();

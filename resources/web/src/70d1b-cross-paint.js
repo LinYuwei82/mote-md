@@ -13,7 +13,7 @@
     }
     var blocks = DocumentModel.collectBlocks();
     var gaps = DocumentModel.collectGaps();
-    var list = blockList();
+    var list = BlockParse.blockList();
     var layer = CrossRange.ensureCrossLayer();
     while (layer.firstChild)
       layer.removeChild(layer.firstChild);
@@ -44,7 +44,7 @@
 
   // 投点是否落在可编辑正文里：行号栏、语言徽标与工具条都不是正文
   function crossHitNodeOk(el, node) {
-    if (!node || !pointInNavScope(el, node))
+    if (!node || !Navigation.pointInNavScope(el, node))
       return false;
     var host = node.nodeType === 1 ? node : node.parentNode;
     if (host && host.closest && host.closest('.gutter, .code-lang, .code-tools'))
@@ -56,7 +56,7 @@
     var blocks = DocumentModel.collectBlocks();
     var gaps = DocumentModel.collectGaps();
     var at = EditingSnapshot.locateBlock(blocks, gaps, abs);
-    return { el: blockList()[at.index] || null, index: at.index, start: at.start };
+    return { el: BlockParse.blockList()[at.index] || null, index: at.index, start: at.start };
   }
 
   // 量某个 DOM 点旁边那个字符的矩形（WebKit 的折叠 Range 常是 0×0）。
@@ -91,8 +91,8 @@
     var el = at.el;
     if (!el)
       return false;
-    var caret = caretRectOfSelection();
-    var line = caret || contentEdgeRect(el, up);
+    var caret = Navigation.caretRectOfSelection();
+    var line = caret || Navigation.contentEdgeRect(el, up);
     if (!line)
       return false;
     var height = line.height || 20;
@@ -133,7 +133,7 @@
       if (!next)
         return false;
       next.focus();   // 视口外时由焦点滚动带进视野
-      placeCaretInBlock(next, up, x);
+      Navigation.placeCaretInBlock(next, up, x);
       var selection = window.getSelection();
       if (!selection.rangeCount)
         return false;
@@ -161,10 +161,10 @@
       return false;
     var range = selection.getRangeAt(0);
     if (!crossSel) {
-      var caret = caretRectOfSelection();
-      if (!caretAtBlockEdge(el, up, caret))
+      var caret = Navigation.caretRectOfSelection();
+      if (!Navigation.caretAtBlockEdge(el, up, caret))
         return false;
-      var index = blockList().indexOf(el);
+      var index = BlockParse.blockList().indexOf(el);
       if (index < 0)
         return false;
       var blocks = DocumentModel.collectBlocks();
@@ -185,7 +185,7 @@
           selection.removeAllRanges();
           selection.addRange(collapsed);
         } catch (error) { /* ignore */ }
-        caret = caretRectOfSelection();
+        caret = Navigation.caretRectOfSelection();
       }
       crossSel = {
         anchor: anchorAbs,

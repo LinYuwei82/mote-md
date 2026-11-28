@@ -13,7 +13,7 @@
   function crossStepTarget(abs, dir) {
     var blocks = DocumentModel.collectBlocks();
     var gaps = DocumentModel.collectGaps();
-    var list = blockList();
+    var list = BlockParse.blockList();
     var base = 0;
     for (var i = 0; i < blocks.length; i++) {
       var gap = DocumentModel.gapBefore(gaps, i);

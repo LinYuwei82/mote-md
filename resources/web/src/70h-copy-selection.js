@@ -11,7 +11,7 @@
     if (!selection || selection.isCollapsed || !selection.rangeCount)
       return '';
     var range = selection.getRangeAt(0);
-    var blocks = selectedBlocks();
+    var blocks = BlockParse.selectedBlocks();
     var parts = [];
     for (var i = 0; i < blocks.length; i++) {
       var el = blocks[i];
@@ -85,12 +85,12 @@
   function selectionHtml() {
     // 自建跨块选区：原生选区是折叠的，必须按绝对区间自己取 HTML
     if (crossSel)
-      return crossSelectionHtml();
+      return CrossHtmlReplace.crossSelectionHtml();
     var selection = window.getSelection();
     if (!selection || selection.isCollapsed || !selection.rangeCount)
       return '';
     var range = selection.getRangeAt(0);
-    var blocks = selectedBlocks();
+    var blocks = BlockParse.selectedBlocks();
     var holder = document.createElement('div');
     for (var i = 0; i < blocks.length; i++) {
       var el = blocks[i];
@@ -196,11 +196,11 @@
       if (event.clipboardData) {
         if (!clipboardTextIsBlank(crossText))
           event.clipboardData.setData('text/plain', crossText);
-        var crossHtml = crossSelectionHtml();
+        var crossHtml = CrossHtmlReplace.crossSelectionHtml();
         if (crossHtml)
           event.clipboardData.setData('text/html', crossHtml);
       }
-      replaceCrossSelection('');
+      CrossHtmlReplace.replaceCrossSelection('');
       return;
     }
     if (!clipboardTextIsBlank(selectionPlainText()))

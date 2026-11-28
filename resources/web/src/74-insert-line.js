@@ -14,7 +14,7 @@
   // 指针纵坐标 → 落点参照块（插到它前面）；null 表示插到文档末尾。
   // 拖拽块自身跳过，不参与落点判定。
   function blockDropRef(clientY) {
-    var list = blockList();
+    var list = BlockParse.blockList();
     for (var i = 0; i < list.length; i++) {
       var el = list[i];
       if (el === blockDrag)
@@ -29,7 +29,7 @@
   function positionInsertLine(ref) {
     var line = ensureInsertLine();
     if (!ref) {
-      var list = blockList();
+      var list = BlockParse.blockList();
       var last = null;
       for (var i = list.length - 1; i >= 0; i--) {
         if (list[i] !== blockDrag) {

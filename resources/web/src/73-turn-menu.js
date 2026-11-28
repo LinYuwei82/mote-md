@@ -1,3 +1,4 @@
+  var TurnMenu = (function turnMenuModule() {
   /* ---------- 右键「转为」 ---------- */
   var TURN_ITEMS = [
     { key: 'paragraph', label: '正文' },
@@ -11,7 +12,7 @@
   ];
 
   function closeTurnMenu() {
-    removeMenu(turnMenu);
+    MenuOverlay.removeMenu(turnMenu);
     turnMenu = null;
   }
 
@@ -48,9 +49,9 @@
       if (command)
         Util.post({ type: 'editCommand', command: command });
       else
-        formatAction(hit.getAttribute('data-key'));
+        BlockConvert.formatAction(hit.getAttribute('data-key'));
     });
-    placeMenu(turnMenu, { left: x, top: y, bottom: y, right: x });
+    MenuOverlay.placeMenu(turnMenu, { left: x, top: y, bottom: y, right: x });
   }
 
   // WebKit 在右键按下后、contextmenu 之前会把跨块选区折叠成光标，
@@ -72,7 +73,7 @@
     }
     lastRangeSelection = null;
     // 多块选区右键时保留整段选区，否则「转为」只会作用于光标所在块。
-    var rangeBlocks = selectedBlocks();
+    var rangeBlocks = BlockParse.selectedBlocks();
     var keepSelection = !!(selection && !selection.isCollapsed && rangeBlocks.length > 1
       && rangeBlocks.indexOf(el) >= 0);
     if (!keepSelection) {
@@ -105,7 +106,7 @@
     // 徽标自己的 mousedown 会先打开/切换下拉，这里不能把它当成「点外部」关掉
     if (langMenu && !langMenu.contains(event.target)
         && !(event.target.closest && event.target.closest('.code-lang')))
-      closeLangMenu();
+      LangMenu.closeLangMenu();
   }, true);
 
   document.addEventListener('keydown', function (event) {
@@ -122,7 +123,7 @@
       closeTurnMenu();
     } else if (langMenu) {
       event.preventDefault();
-      closeLangMenu();
+      LangMenu.closeLangMenu();
     } else if (blockMenu) {
       event.preventDefault();
       BlockMenu.closeBlockMenu();
@@ -138,18 +139,10 @@
      dataset.raw / data-gap 跟着节点走，currentSource 由块序重新拼接，撤销走
      snapshotState 的 blocks/gaps 快照，与现有块模型完全一致。 */
 
-  var blockHandle = null;
-  var blockHandleTarget = null;   // 手柄当前停靠的块
-  var blockHandleKeep = false;    // 指针停在手柄上，离开正文也不隐藏
-  var blockMenu = null;
-  var blockMenuTarget = null;
-  var blockDrag = null;           // 正在拖拽的块
-  var dragPending = null;         // 手柄按下的起点（尚未确认是拖拽还是单击）
-  var insertLine = null;
 
   // 结构变动后的间隔归一：首块前不留空行；离开首位的老首块补回块间默认间隔
   function normalizeBlockGaps() {
-    var list = blockList();
+    var list = BlockParse.blockList();
     for (var i = 0; i < list.length; i++) {
       var value = list[i].dataset.gap;
       if (value === undefined || value === '')
@@ -171,7 +164,7 @@
     EditingSnapshot.commitHistory();
     DocumentModel.scheduleDirty();
     Toc.scheduleTocRefresh();
-    updatePlaceholder();
+    MenuOverlay.updatePlaceholder();
     MermaidInit.scheduleMermaid();
     // 结构一变，查找命中引用的旧文本节点可能已被重建（拖拽重排实测会失联），
     // 原地重画只会把高亮层清空：查找条开着就按当前关键词重扫，命中与位置一起刷新
@@ -187,3 +180,11 @@
     LayoutCode.normalizeCodeScrolls(el);
     return el;
   }
+  return {
+    closeTurnMenu: closeTurnMenu,
+    normalizeBlockGaps: normalizeBlockGaps,
+    afterBlockStructureChange: afterBlockStructureChange,
+    makeBlockEl: makeBlockEl,
+    TURN_ITEMS: TURN_ITEMS
+  };
+  })();

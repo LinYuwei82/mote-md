@@ -4,8 +4,8 @@
   // 一致，尾部未改动的行直接复用（输出与整块重扫逐字相同）。el 传 null 表示不缓存。
   function highlightCode(el, raw, lang) {
     var lines = String(raw).split('\n');
-    var key = LANG_ALIAS[String(lang || '').trim().toLowerCase()] || '';
-    var spec = key ? SPEC[key] : null;
+    var key = HighlightLangs.LANG_ALIAS[String(lang || '').trim().toLowerCase()] || '';
+    var spec = key ? HighlightLangs.SPEC[key] : null;
     if (!spec) {
       // 未识别的语言没有跨行状态，逐行转义即可，也不留缓存
       if (el)

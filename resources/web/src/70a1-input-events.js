@@ -18,7 +18,7 @@
     if (badgeHit) {
       event.preventDefault();
       pendingOffset = null;
-      openLangMenu(el, badgeHit);
+      LangMenu.openLangMenu(el, badgeHit);
       return;
     }
 
@@ -215,7 +215,7 @@
     if (composing)
       return;
     el.dataset.raw = el.textContent;
-    updatePlaceholder();
+    MenuOverlay.updatePlaceholder();
     SlashMenu.handleSlashInput(el);
     DocumentModel.scheduleDirty();
     EditingSnapshot.scheduleCommit();

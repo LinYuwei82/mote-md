@@ -21,8 +21,10 @@ resources/web/editor.js 与 resources/web/editor.css 现在是构建产物（CMa
   python3 tools/editor/split_editor.py subsplit 70-dom-events.js --at 356:70b-xxx.js
 
 约束：
-- 分片不添加任何头注释，内容与原文完全一致。
-- 所有分片共用 editor.js 原有的外层 IIFE，拼接顺序由 manifest 决定。
+- 分片不添加任何头注释；除 P2 命名空间包裹外，不改动原有语句。
+- 00-boot.js 打开外层 IIFE、80b2-mermaid-init.js 关闭；其余分片各自包裹 IIFE，
+  公开符号经命名空间导出，共享可变状态集中在 00-boot.js 与 05-state.js。
+- 拼接顺序由 manifest 决定。
 - 换行与 BOM 原样保留（读写都使用 newline=""）。
 """
 

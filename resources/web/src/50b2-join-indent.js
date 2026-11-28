@@ -39,14 +39,14 @@
     for (i = 0; i < rest.length; i++)
       joined.push(rest[i]);
     EditingSnapshot.commitHistory();
-    applyRawToBlock(el, joined.join('\n'), acc - 1, acc - 1, true);
+    BlockParse.applyRawToBlock(el, joined.join('\n'), acc - 1, acc - 1, true);
     setTimeout(EditingSnapshot.commitHistory, 0);
     Toc.scheduleTocRefresh();
   }
 
   // 光标所在行的定位信息（块原文口径，代码块含围栏行）
   function caretLineInfo(el) {
-    var raw = rawOf(el);
+    var raw = BlockParse.rawOf(el);
     var off = CaretOffset.rawCaretOffset(el);
     var lines = raw.split('\n');
     var acc = 0, li = 0;
@@ -67,7 +67,7 @@
         EditingSnapshot.commitHistory();
         var lines = info.lines.slice();
         lines[info.li] = '  ' + lines[info.li];
-        applyRawToBlock(el, lines.join('\n'), info.off + 2, info.off + 2, true);
+        BlockParse.applyRawToBlock(el, lines.join('\n'), info.off + 2, info.off + 2, true);
         setTimeout(EditingSnapshot.commitHistory, 0);
         return;
       }
@@ -86,7 +86,7 @@
     var lines = info.lines.slice();
     lines[info.li] = line.slice(strip);
     var caret = Math.max(info.lineStart, info.off - strip);
-    applyRawToBlock(el, lines.join('\n'), caret, caret, true);
+    BlockParse.applyRawToBlock(el, lines.join('\n'), caret, caret, true);
     setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
@@ -99,14 +99,14 @@
     var range = selection.getRangeAt(0);
     if (range.collapsed)
       return false;
-    var first = blockAtBoundary(range.startContainer, range.startOffset, false);
-    var last = blockAtBoundary(range.endContainer, range.endOffset, true);
+    var first = BlockParse.blockAtBoundary(range.startContainer, range.startOffset, false);
+    var last = BlockParse.blockAtBoundary(range.endContainer, range.endOffset, true);
     if (!first || !last || first === last)
       return false;
     var from = CrossRange.absoluteOf(first, range.startContainer, range.startOffset);
     var to = CrossRange.absoluteOf(last, range.endContainer, range.endOffset);
     if (from === null || to === null) {
-      var list = blockList();
+      var list = BlockParse.blockList();
       var blocks = DocumentModel.collectBlocks();
       var gaps = DocumentModel.collectGaps();
       var fi = list.indexOf(first);
@@ -147,7 +147,7 @@
       // 死键——先剥掉围栏还原成正文（再按一次退格即可与上一段相接）。
       if (LayoutCode.isCodeBlock(el) && !LayoutCode.isCodeBlock(previous)) {
         EditingSnapshot.commitHistory();
-        applyRawToBlock(el, contentOfRaw(rawOf(el), 'code'), 0, 0, true);
+        BlockParse.applyRawToBlock(el, BlockParse.contentOfRaw(BlockParse.rawOf(el), 'code'), 0, 0, true);
         setTimeout(EditingSnapshot.commitHistory, 0);
         return;
       }
@@ -156,7 +156,7 @@
       var kind0 = blockType(el);
       if (kind0 === 'ul' || kind0 === 'ol' || kind0 === 'quote' || kind0.charAt(0) === 'h') {
         EditingSnapshot.commitHistory();
-        applyRawToBlock(el, contentOfRaw(rawOf(el), kind0), 0, 0, true);
+        BlockParse.applyRawToBlock(el, BlockParse.contentOfRaw(BlockParse.rawOf(el), kind0), 0, 0, true);
         setTimeout(EditingSnapshot.commitHistory, 0);
       }
       return;
@@ -189,7 +189,7 @@
     var mergeKind = blockType(el);
     var merged;
     if (mergeKind.charAt(0) === 'h')
-      merged = previousRaw + contentOfRaw(elRaw, mergeKind);
+      merged = previousRaw + BlockParse.contentOfRaw(elRaw, mergeKind);
     else if (mergeKind === 'ul' || mergeKind === 'ol' || mergeKind === 'quote')
       merged = previousRaw + '\n' + elRaw;
     else

@@ -1,3 +1,4 @@
+  var BlockParse = (function blockParseModule() {
   // 原文 → 块类型。与 renderBlock 的判定顺序保持一致。
   function kindOfRaw(raw) {
     raw = String(raw === undefined || raw === null ? '' : raw);
@@ -177,7 +178,7 @@
       var to = Math.max(from, Math.min(end === undefined || end === null ? from : end, limit));
       CaretEdit.placeBlockCaret(el, from, to);
     }
-    updatePlaceholder();
+    MenuOverlay.updatePlaceholder();
     DocumentModel.scheduleDirty();
     Toc.scheduleTocRefresh();
   }
@@ -203,3 +204,18 @@
     }
     return out;
   }
+  return {
+    kindOfRaw: kindOfRaw,
+    contentOfRaw: contentOfRaw,
+    buildBlockRaw: buildBlockRaw,
+    convertRaw: convertRaw,
+    leadLength: leadLength,
+    rawOf: rawOf,
+    blockList: blockList,
+    blockAtBoundary: blockAtBoundary,
+    selectedBlocks: selectedBlocks,
+    applyRawToBlock: applyRawToBlock,
+    crossSelBlocks: crossSelBlocks,
+    MERGE_TYPES: MERGE_TYPES
+  };
+  })();

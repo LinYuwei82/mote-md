@@ -1,3 +1,4 @@
+  var ExportHtml = (function exportHtmlModule() {
   /* ---------------- 导出自包含 HTML ---------------- */
   // 页面里已有渲染好的 DOM 与全部样式规则，导出时直接复用：
   // - CSS：把 document.styleSheets 的规则串接起来（其中 @font-face 是 data URI，无外链）
@@ -192,7 +193,6 @@
     return { cuts: out, bottom: Math.ceil(bottom) };
   }
 
-  var pdfSavedScrollY = 0;
 
   // 导出前确认内嵌字体与图片真正可用：图片 complete 只代表下载完成，解码是异步的，
   // createPDF 若在解码前取图会把图片画成空白（位置留着、内容没有）。
@@ -216,7 +216,7 @@
     pdfPrepareImages();
     // 导出要求所有 mermaid 块都已画成图（含光标所在块），否则会量到源码块的高度；
     // 库未就绪时 scanMermaid 会触发懒加载并计入 pending，这里统一等它完成
-    scanMermaid(true);
+    Mermaid.scanMermaid(true);
     if (mermaidPending > 0)
       return false;
     if (pdfImagesPending > 0)
@@ -230,3 +230,9 @@
     }
     return true;
   }
+  return {
+    buildExportHtml: buildExportHtml,
+    pdfSafeCuts: pdfSafeCuts,
+    pdfContentReady: pdfContentReady
+  };
+  })();

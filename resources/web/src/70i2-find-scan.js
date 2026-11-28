@@ -1,6 +1,6 @@
   var FindScan = (function findScanModule() {
   function findBuildDocument() {
-    var blocks = blockList();
+    var blocks = BlockParse.blockList();
     var parts = [];
     var chunks = [];
     var length = 0;
@@ -15,7 +15,7 @@
           sep('\0');
         continue;
       }
-      var runs = findRuns(block);
+      var runs = FindPaint.findRuns(block);
       for (var r = 0; r < runs.length; r++) {
         if (length)
           sep(r === 0 ? '\n' : '\0');
@@ -66,8 +66,8 @@
       if (head && tail) {
         var range = document.createRange();
         try {
-          var a = findPoint(head.run, at - head.at, false);
-          var z = findPoint(tail.run, last - tail.at + 1, true);
+          var a = FindPaint.findPoint(head.run, at - head.at, false);
+          var z = FindPaint.findPoint(tail.run, last - tail.at + 1, true);
           range.setStart(a.node, a.offset);
           range.setEnd(z.node, z.offset);
           findMatches.push({
@@ -106,8 +106,8 @@
     findActive = -1;
     findInSource = mode === 'source';
     if (!query) {
-      dropFindLayer();
-      updateFindCount();
+      FindPaint.dropFindLayer();
+      FindPaint.updateFindCount();
       return;
     }
     var needle = query.toLowerCase();
@@ -116,13 +116,13 @@
     else
       findScanBlocks(query, needle);
     if (!findMatches.length) {
-      dropFindLayer();
-      updateFindCount();
+      FindPaint.dropFindLayer();
+      FindPaint.updateFindCount();
       return;
     }
     findActive = 0;
-    paintFind();
-    updateFindCount();
+    FindPaint.paintFind();
+    FindPaint.updateFindCount();
   }
 
   // 命中落在代码块的横向滚动区里时，先把它横向带进可视区（否则高亮在屏幕外）
@@ -144,7 +144,7 @@
   function findSelectRange(match) {
     var range = match.range.cloneRange();
     if (match.cross && match.startRun) {
-      var tail = findPoint(match.startRun, match.startRun.text.length, true);
+      var tail = FindPaint.findPoint(match.startRun, match.startRun.text.length, true);
       try {
         range.setEnd(tail.node, tail.offset);
       } catch (error) { /* 起点段已失效时保持整段选区 */ }
@@ -187,22 +187,22 @@
       } catch (error) { /* ignore */ }
       scrollSourceTo(match.start);
       findJumped = match;
-      updateFindCount();
+      FindPaint.updateFindCount();
       return;
     }
 
-    var rects = findRects(match);
+    var rects = FindPaint.findRects(match);
     if (rects.length) {
       window.scrollBy(0, rects[0].top - window.innerHeight * 0.38);
       revealFindMatch(match, rects[0]);
     }
     // 覆盖层用「视口矩形 + 滚动量」换算成文档坐标；代码块内部横向滚动不改变
     // 文档滚动量，所以必须等横向滚动落定后再画。
-    paintFind();
+    FindPaint.paintFind();
     var wantCaret = !!findCaret || !!root.querySelector('.block.editing');
     if (wantCaret && applyFindCaret(match))
       findJumped = match;
-    updateFindCount();
+    FindPaint.updateFindCount();
   }
 
   return {

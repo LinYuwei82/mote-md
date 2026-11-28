@@ -2,7 +2,7 @@
   /* ---------- 块菜单 ---------- */
 
   function closeBlockMenu() {
-    removeMenu(blockMenu);
+    MenuOverlay.removeMenu(blockMenu);
     blockMenu = null;
     blockMenuTarget = null;
   }
@@ -10,7 +10,7 @@
   function openBlockMenu(block, x, y) {
     if (!block || mode === 'source')
       return;
-    closeTurnMenu();
+    TurnMenu.closeTurnMenu();
     SlashMenu.closeSlash(false);
     closeBlockMenu();
     blockMenuTarget = block;
@@ -23,7 +23,7 @@
     html += '<div class="turn-item" data-act="delete">删除</div>';
     html += '<div class="turn-sep"></div>';
     html += '<div class="turn-title">转为</div>';
-    TURN_ITEMS.forEach(function (item) {
+    TurnMenu.TURN_ITEMS.forEach(function (item) {
       html += '<div class="turn-item" data-key="' + item.key + '">' + Util.escapeHtml(item.label) + '</div>';
     });
     blockMenu.innerHTML = html;
@@ -53,7 +53,7 @@
       else if (key)
         BlockMenuActions.turnBlockTo(target, key);
     });
-    placeMenu(blockMenu, { left: x, top: y, bottom: y, right: x });
+    MenuOverlay.placeMenu(blockMenu, { left: x, top: y, bottom: y, right: x });
   }
 
   return {

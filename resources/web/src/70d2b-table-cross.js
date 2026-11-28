@@ -42,7 +42,7 @@
   function focusCrossAt(abs) {
     var blocks = DocumentModel.collectBlocks();
     var gaps = DocumentModel.collectGaps();
-    var list = blockList();
+    var list = BlockParse.blockList();
     var at = EditingSnapshot.locateBlock(blocks, gaps, abs);
     var el = list[at.index];
     if (!el)
@@ -90,7 +90,7 @@
     if (!crossSel) {
       var blocks = DocumentModel.collectBlocks();
       var gaps = DocumentModel.collectGaps();
-      var list = blockList();
+      var list = BlockParse.blockList();
       // 看移动端（焦点）是否已经顶到块首/块尾；原生单块选区在这里一并升格
       var focusEl = CaretCode.blockOf(selection.focusNode) || el;
       var index = list.indexOf(focusEl);
@@ -175,7 +175,7 @@
       return '';
     var blocks = DocumentModel.collectBlocks();
     var gaps = DocumentModel.collectGaps();
-    var list = blockList();
+    var list = BlockParse.blockList();
     var parts = [];
     var base = 0;
     for (var i = 0; i < blocks.length && base < bounds.to; i++) {

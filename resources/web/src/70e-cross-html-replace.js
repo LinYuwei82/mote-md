@@ -1,3 +1,4 @@
+  var CrossHtmlReplace = (function crossHtmlReplaceModule() {
   // 表格块在跨块选区里的 HTML：整表克隆后按区间裁行裁格，保留 <table> 结构。
   // 对齐行是编辑器内部的隐藏标记（原文里才有意义），HTML 里去掉。
   function crossTableHtml(el, from, to) {
@@ -55,7 +56,7 @@
       return '';
     var blocks = DocumentModel.collectBlocks();
     var gaps = DocumentModel.collectGaps();
-    var list = blockList();
+    var list = BlockParse.blockList();
     var holder = document.createElement('div');
     var base = 0;
     for (var i = 0; i < blocks.length && base < bounds.to; i++) {
@@ -129,7 +130,12 @@
      覆盖层画。松手后选区保留，可直接删除/输入/复制，与 Shift+方向键同一套
      状态与清除时机。 */
 
-  var dragCross = null;       // { anchor, el, x, y, goalX }
-  var dragScrollTimer = 0;
   var DRAG_EDGE = 24;         // 距视口上下边缘多近开始自动滚动
   var DRAG_STEP = 18;
+  return {
+    crossSelectionHtml: crossSelectionHtml,
+    replaceCrossSelection: replaceCrossSelection,
+    DRAG_EDGE: DRAG_EDGE,
+    DRAG_STEP: DRAG_STEP
+  };
+  })();

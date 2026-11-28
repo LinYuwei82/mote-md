@@ -4,6 +4,7 @@
   "note": "由 tools/editor/split_editor.py split 生成；files 顺序即拼接顺序。",
   "files": [
     "00-boot.js",
+    "05-state.js",
     "10-util.js",
     "20a-highlight-langs.js",
     "20b-highlight-scan.js",

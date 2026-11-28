@@ -182,7 +182,7 @@
     var el = li ? CaretCode.blockOf(li) : null;
     if (!li || !el || !el.classList.contains('block'))
       return;
-    var lines = rawOf(el).split('\n');
+    var lines = BlockParse.rawOf(el).split('\n');
     var index = Array.prototype.indexOf.call(el.querySelectorAll('li'), li);
     if (index < 0 || index >= lines.length)
       return;
@@ -193,7 +193,7 @@
       return;
     lines[index] = next;
     EditingSnapshot.commitHistory();
-    applyRawToBlock(el, lines.join('\n'), undefined, undefined, false);
+    BlockParse.applyRawToBlock(el, lines.join('\n'), undefined, undefined, false);
     setTimeout(EditingSnapshot.commitHistory, 0);
   }
 

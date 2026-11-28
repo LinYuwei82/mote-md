@@ -1,14 +1,14 @@
   var ReplaceRun = (function replaceRunModule() {
   function replaceCurrent() {
     if (!findMatches.length) {
-      setFindNote('没有可替换的命中');
+      FindPaint.setFindNote('没有可替换的命中');
       return;
     }
     var match = findMatches[findActive];
     var repl = findReplace ? findReplace.value : '';
     var problem = FindMatch.replacementProblem(match, repl);
     if (problem) {
-      setFindNote(problem);
+      FindPaint.setFindNote(problem);
       return;
     }
     var keep = findActive;
@@ -20,20 +20,20 @@
       FindScan.findScan(findInput.value);
       if (findMatches.length) {
         findActive = Math.min(keep, findMatches.length - 1);
-        updateFindCount();
+        FindPaint.updateFindCount();
       }
-      setFindNote('已替换 1 处');
+      FindPaint.setFindNote('已替换 1 处');
       return;
     }
     var span = FindMatch.findMatchSpan(match);
     if (!span) {
-      setFindNote('命中已失效，请重新查找');
+      FindPaint.setFindNote('命中已失效，请重新查找');
       return;
     }
     if (!span.sameBlock) {
       var text = DocumentModel.currentSource();
       if (span.end > text.length) {
-        setFindNote('命中已失效，请重新查找');
+        FindPaint.setFindNote('命中已失效，请重新查找');
         return;
       }
       var landed = FindMatch.rebuildFromSourceText(
@@ -44,12 +44,12 @@
       FindScan.findScan(findInput.value);
       if (findMatches.length) {
         findActive = Math.min(keep, findMatches.length - 1);
-        paintFind();
-        updateFindCount();
+        FindPaint.paintFind();
+        FindPaint.updateFindCount();
       }
       if (findInput)
         findInput.focus();
-      setFindNote('已替换 1 处（跨块）');
+      FindPaint.setFindNote('已替换 1 处（跨块）');
       return;
     }
     var block = span.startBlock;
@@ -62,10 +62,10 @@
     FindScan.findScan(findInput.value);
     if (findMatches.length) {
       findActive = Math.min(keep, findMatches.length - 1);
-      paintFind();
-      updateFindCount();
+      FindPaint.paintFind();
+      FindPaint.updateFindCount();
     }
-    setFindNote('已替换 1 处');
+    FindPaint.setFindNote('已替换 1 处');
   }
 
   // 只要有一个跨块命中就统一按绝对区间从后往前改整篇源码，最后重建一次。
@@ -86,7 +86,7 @@
       spans.push(span);
     }
     if (!spans.length) {
-      setFindNote('没有可替换的命中');
+      FindPaint.setFindNote('没有可替换的命中');
       return;
     }
     spans.sort(function (a, b) { return b.start - a.start; });
@@ -98,18 +98,18 @@
     findCaret = landed.block ? { block: landed.block, offset: landed.offset } : null;
     findJumped = null;
     FindScan.findScan(query);
-    paintFind();
-    updateFindCount();
+    FindPaint.paintFind();
+    FindPaint.updateFindCount();
     if (findInput)
       findInput.focus();
-    setFindNote(skipped
+    FindPaint.setFindNote(skipped
       ? '已替换 ' + spans.length + ' 处，跳过 ' + skipped + ' 处（跨行内标记/结构限制）'
       : '全部替换 ' + spans.length + ' 处');
   }
 
   function replaceAll() {
     if (!findMatches.length) {
-      setFindNote('没有可替换的命中');
+      FindPaint.setFindNote('没有可替换的命中');
       return;
     }
     var repl = findReplace ? findReplace.value : '';
@@ -126,8 +126,8 @@
       EditingSnapshot.commitHistory();
       Toc.scheduleTocRefresh();
       FindScan.findScan(query);
-      updateFindCount();
-      setFindNote('全部替换 ' + done + ' 处');
+      FindPaint.updateFindCount();
+      FindPaint.setFindNote('全部替换 ' + done + ' 处');
       return;
     }
 
@@ -185,10 +185,10 @@
       EditingSnapshot.commitHistory();
       Toc.scheduleTocRefresh();
       FindScan.findScan(query);
-      paintFind();
-      updateFindCount();
+      FindPaint.paintFind();
+      FindPaint.updateFindCount();
     }
-    setFindNote(skipped
+    FindPaint.setFindNote(skipped
       ? '已替换 ' + done + ' 处，跳过 ' + skipped + ' 处（跨行内标记/结构限制）'
       : '全部替换 ' + done + ' 处');
   }

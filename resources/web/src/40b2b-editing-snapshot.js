@@ -120,7 +120,7 @@
     var _t0 = window.MOTE_PERF ? performance.now() : 0;
     // 整篇重建后旧的绝对偏移全部失效，跨块选区必须先清掉
     CrossRange.clearCrossSelection();
-    closeLangMenu();
+    LangMenu.closeLangMenu();
     // 块菜单/手柄指向的旧节点即将全部脱离 DOM：撤销、重做、整篇载入都要收拢，
     // 否则菜单会悬空浮在重建后的文档上（动作虽有 parentNode 兜底不会误伤）
     BlockMenu.closeBlockMenu();
