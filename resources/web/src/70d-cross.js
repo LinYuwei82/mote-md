@@ -994,7 +994,7 @@
 
     // 组合输入（中文等）期间按键属于输入法：方向键选候选、回车/Esc 上屏或取消，
     // 一个都不能被下面的浮层或块级逻辑吃掉。判断必须放在最前面。
-    if (composing)
+    if (Composition.isComposing())
       return;
 
     // 斜杠浮层打开时先吃掉导航键：上下选择、Enter/Tab 插入、Esc 删除已输入的 /

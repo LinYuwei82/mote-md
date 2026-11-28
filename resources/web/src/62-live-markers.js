@@ -13,7 +13,7 @@
   // 不参与任何排版；因此只让离光标最近的一个标记显示标签，其余保持隐藏：
   // 无论多密集都不会叠字，也不会改变行高、宽度或块坐标。
   function updateLiveMarker() {
-    if (!Config.INLINE_PROTO || composing)
+    if (!Config.INLINE_PROTO || Composition.isComposing())
       return;
     clearLiveMarkers();
     var el = CaretCode.blockOf(document.activeElement);

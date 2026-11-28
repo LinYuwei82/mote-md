@@ -1,6 +1,7 @@
-  (function compositionHistoryModule() {
+  var Composition = (function compositionHistoryModule() {
   // 组合输入期间不落历史步骤，也不设置合并定时器；compositionend 时整段提交，
   // 这样中文候选上屏要么整体进入一步，要么整体回退，不会被切成多个碎片。
+  var composing = false;
   root.addEventListener('compositionstart', function () {
     if (suppressEvents)
       return;
@@ -130,4 +131,8 @@
       }
     }
   }, true);
+
+  return {
+    isComposing: function () { return composing; }
+  };
   })();

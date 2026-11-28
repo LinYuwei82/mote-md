@@ -1,6 +1,10 @@
   var DocumentModel = (function documentModelModule() {
   /* ---------------- 文档模型与选区 ---------------- */
 
+  var savedText = '';           // 最近一次载入或保存落盘时的源文本
+  var trailingNewlines = 0;     // 文末空行数量；改动前只记「有没有」，会归并成 1 个
+  var dirtyTimer = null;
+
   // 块原文：代码块的 DOM 里还有行号栏，textContent 不能代表原文，编辑期间由
   // dataset.raw 逐次同步（见 syncCode），渲染态本来就用 dataset.raw。
   function blockRawText(el) {
@@ -76,9 +80,25 @@
       clearTimeout(dirtyTimer);
     dirtyTimer = setTimeout(function () {
       dirtyTimer = null;
-      Util.post({ type: 'dirty', value: currentSource() !== savedText });
+      Util.post({ type: 'dirty', value: isDirty() });
       postWordCount();
     }, 220);
+  }
+
+  function markSaved(text) {
+    savedText = String(text === undefined || text === null ? '' : text);
+  }
+
+  function isDirty() {
+    return currentSource() !== savedText;
+  }
+
+  function setTrailing(count) {
+    trailingNewlines = count > 0 ? count : 0;
+  }
+
+  function trailing() {
+    return trailingNewlines;
   }
 
   // 字数口径（README 与 PACKAGING 同步说明）：
@@ -137,6 +157,10 @@
     blockStartOffset: blockStartOffset,
     currentSource: currentSource,
     scheduleDirty: scheduleDirty,
+    markSaved: markSaved,
+    isDirty: isDirty,
+    setTrailing: setTrailing,
+    trailing: trailing,
     postWordCount: postWordCount,
     plainTextOfRaw: plainTextOfRaw,
     countText: countText

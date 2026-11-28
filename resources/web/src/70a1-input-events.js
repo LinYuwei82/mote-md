@@ -7,7 +7,7 @@
     Cross.clearCrossSelection();
     var el = CaretCode.blockOf(event.target);
     if (!el || !document.caretRangeFromPoint) {
-      pendingOffset = null;
+      CaretEdit.clearPendingOffset();
       return;
     }
 
@@ -17,7 +17,7 @@
       ? event.target.closest('.code-lang') : null;
     if (badgeHit) {
       event.preventDefault();
-      pendingOffset = null;
+      CaretEdit.clearPendingOffset();
       Menus.openLangMenu(el, badgeHit);
       return;
     }
@@ -34,7 +34,7 @@
       if (el.classList.contains('editing')) {
         CaretOffset.setSelectionRange(code, offset);
       } else {
-        pendingOffset = offset;
+        CaretEdit.setPendingOffset(offset);
         el.focus();
       }
       return;
@@ -53,7 +53,7 @@
         if (nearest) {
           event.preventDefault();
           if (!el.classList.contains('editing')) {
-            pendingOffset = null;
+            CaretEdit.clearPendingOffset();
             el.focus();
           }
           CaretEdit.caretInCellEnd(nearest);
@@ -87,18 +87,18 @@
           CaretOffset.setSelectionRange(inner, inner.textContent.length);
         }
       }
-      pendingOffset = null;
+      CaretEdit.clearPendingOffset();
       return;
     }
     var range = document.caretRangeFromPoint(event.clientX, event.clientY);
     if (!range) {
-      pendingOffset = null;
+      CaretEdit.clearPendingOffset();
       return;
     }
     // 代码块只统计 <code> 正文，行号栏的数字不能算进偏移
     var scope = LayoutCode.isCodeBlock(el) ? LayoutCode.codeEl(el) : el;
     if (!scope) {
-      pendingOffset = null;
+      CaretEdit.clearPendingOffset();
       return;
     }
     var prefix = document.createRange();
@@ -106,14 +106,14 @@
     try {
       prefix.setEnd(range.startContainer, range.startOffset);
     } catch (error) {
-      pendingOffset = null;
+      CaretEdit.clearPendingOffset();
       return;
     }
-    pendingOffset = prefix.toString().length;
+    CaretEdit.setPendingOffset(prefix.toString().length);
   }, true);
 
   root.addEventListener('focusin', function (event) {
-    if (composing || suppressEvents)
+    if (Composition.isComposing() || suppressEvents)
       return;
     var el = CaretCode.blockOf(event.target);
     if (!el)
@@ -199,7 +199,7 @@
         EditingSnapshot.scheduleCommit();
         return;
       }
-      if (composing) {
+      if (Composition.isComposing()) {
         // 组合输入期间不重建 DOM（会打断输入法），只同步原文；结构等
         // compositionend 再一次性整理，光标位置交给输入法自己维护。
         el.dataset.raw = LayoutCode.codeRaw(el, LayoutCode.codeText(el));
@@ -212,7 +212,7 @@
       EditingSnapshot.scheduleCommit();
       return;
     }
-    if (composing)
+    if (Composition.isComposing())
       return;
     el.dataset.raw = el.textContent;
     MenuOverlay.updatePlaceholder();

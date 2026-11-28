@@ -1,4 +1,5 @@
   var CaretEdit = (function caretEditModule() {
+  var pendingOffset = null;   // 重建后要恢复的原文偏移，消费即清空
   // 命中点落在格线/边框/内边距上时，按几何距离挑最近的单元格
   function cellFromPoint(el, x, y) {
     var stack = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
@@ -190,6 +191,14 @@
   }
 
 
+  function setPendingOffset(value) {
+    pendingOffset = value === undefined ? null : value;
+  }
+
+  function clearPendingOffset() {
+    pendingOffset = null;
+  }
+
   return {
     cellFromPoint: cellFromPoint,
     caretInCellEnd: caretInCellEnd,
@@ -197,6 +206,8 @@
     ensureHrSource: ensureHrSource,
     placeBlockCaret: placeBlockCaret,
     enterEdit: enterEdit,
-    leaveEdit: leaveEdit
+    leaveEdit: leaveEdit,
+    setPendingOffset: setPendingOffset,
+    clearPendingOffset: clearPendingOffset
   };
   })();

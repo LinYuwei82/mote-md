@@ -5,12 +5,6 @@
   var sourceEl = document.getElementById('source');
   var tocList = document.getElementById('toc-list');
 
-  var savedText = '';           // 最近一次载入或保存落盘时的源文本
-  var trailingNewlines = 0;     // 文末空行数量；改动前只记「有没有」，会归并成 1 个
-  var composing = false;
-  var dirtyTimer = null;
-  var pendingOffset = null;
-
   var mode = 'wysiwyg';         // 'wysiwyg' | 'source'
   var zoomLevel = 1;            // 1 = 100%，基准 16.5px（≈ 旧版 16.5pt）
 

@@ -186,7 +186,7 @@
       renderLangItems();
     });
     input.addEventListener('keydown', function (event) {
-      if (langComposing || composing)
+      if (langComposing || Composition.isComposing())
         return;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
@@ -547,7 +547,7 @@
     if (event.key !== 'Escape')
       return;
     // 组字期间 Esc 属于输入法（取消候选/整段上屏），浮层不能抢
-    if (composing || langComposing)
+    if (Composition.isComposing() || langComposing)
       return;
     if (slashState) {
       event.preventDefault();

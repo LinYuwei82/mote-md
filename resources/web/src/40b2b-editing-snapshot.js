@@ -45,7 +45,7 @@
     var offsets = absoluteOffsets(blocks, sel);
     return {
       text: null,
-      blocks: blocks, gaps: gaps, trail: trailingNewlines,
+      blocks: blocks, gaps: gaps, trail: DocumentModel.trailing(),
       start: offsets.start, end: offsets.end, hasSel: offsets.has
     };
   }
@@ -105,7 +105,7 @@
   }
 
   function scheduleCommit() {
-    if (suppressEvents || composing || commitBatch > 0)
+    if (suppressEvents || Composition.isComposing() || commitBatch > 0)
       return;
     if (commitTimer)
       clearTimeout(commitTimer);
@@ -140,7 +140,7 @@
     root.appendChild(fragment);
     var _t2 = window.MOTE_PERF ? performance.now() : 0;
     if (typeof trail === 'number')
-      trailingNewlines = trail > 0 ? trail : 0;
+      DocumentModel.setTrailing(trail);
     // 全部挂载完成、文档结构稳定后再归一化，避免逐个元素强制布局；
     // 新页首挂（skipNormalize）时浏览器本来就按含滚动条的高度排版，跳过这次补偿。
     if (!skipNormalize)
@@ -176,7 +176,7 @@
 
     if (mode === 'source') {
       sourceEl.value = stateText(snap);
-      trailingNewlines = snap.trail > 0 ? snap.trail : 0;
+      DocumentModel.setTrailing(snap.trail);
     } else {
       var layout = snap.blocks
         ? { blocks: snap.blocks.slice(), gaps: snap.gaps || [], trail: snap.trail }

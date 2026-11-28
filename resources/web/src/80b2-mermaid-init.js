@@ -29,7 +29,7 @@
       var _t2 = _t1;
       if (mode === 'source') {
         sourceEl.value = normalized;
-        trailingNewlines = LayoutCode.trailingNewlineCount(normalized);
+        DocumentModel.setTrailing(LayoutCode.trailingNewlineCount(normalized));
       } else {
         var layout = LayoutCode.splitSourceLayout(normalized);
         _t2 = window.MOTE_PERF ? performance.now() : 0;
@@ -42,7 +42,7 @@
       var _t3 = window.MOTE_PERF ? performance.now() : 0;
 
       // 以规范化后的序列化结果为基准，避免尾部空行造成“一打开就是已修改”
-      savedText = DocumentModel.currentSource();
+      DocumentModel.markSaved(DocumentModel.currentSource());
       var _t4 = window.MOTE_PERF ? performance.now() : 0;
 
       // 换文档时历史从当前状态重新开始
@@ -70,8 +70,8 @@
     // 重做回保存点则圆点消失
     markSaved: function (text) {
       var normalized = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n');
-      savedText = normalized;
-      trailingNewlines = LayoutCode.trailingNewlineCount(normalized);
+      DocumentModel.markSaved(normalized);
+      DocumentModel.setTrailing(LayoutCode.trailingNewlineCount(normalized));
       DocumentModel.scheduleDirty();
     },
     requestSnapshot: function () {
@@ -212,7 +212,7 @@
         toc: Toc.isVisible(),
         zoom: zoomLevel,
         history: history.length,
-        dirty: DocumentModel.currentSource() !== savedText,
+        dirty: DocumentModel.isDirty(),
         source: DocumentModel.currentSource()
       };
     },
