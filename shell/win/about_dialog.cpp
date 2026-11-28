@@ -87,7 +87,7 @@ void layout(HWND dlg)
     static std::wstring version = version_line();
     make_static(dlg, ABO_VERSION, version.c_str(), g_text_font, 0, y, kWidth, 18);
     y += 18 + 4;
-    make_static(dlg, ABO_COPYRIGHT, L"© 2026 xiaotu · 小图在线", g_small_font,
+    make_static(dlg, ABO_COPYRIGHT, L"© 2026 xiaotu · 小兔在线", g_small_font,
                 0, y, kWidth, 16);
     y += 16 + 14;
 
