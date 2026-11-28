@@ -18,13 +18,15 @@ resources/web/editor.js 与 resources/web/editor.css 现在是构建产物（CMa
   python3 tools/editor/split_editor.py status
   python3 tools/editor/split_editor.py status --target css
   python3 tools/editor/split_editor.py split --from /path/to/old-editor.js
-  python3 tools/editor/split_editor.py subsplit 70-dom-events.js --at 356:70b-xxx.js
+  python3 tools/editor/split_editor.py subsplit 70c-navigation.js --at 40:70c2-xxx.js
 
 约束：
 - 分片不添加任何头注释；除 P2 命名空间包裹外，不改动原有语句。
 - 00-boot.js 打开外层 IIFE、80b2-mermaid-init.js 关闭；其余分片各自包裹 IIFE，
   公开符号经命名空间导出；内核状态集中在 00-boot.js，子系统域状态收在所属分片的
   模块闭包内。
+- split 仅用于从历史 bundle 重拆：LEGACY_SECTION_FILES 是 P1 时代的节名→旧文件名
+  映射；当前分片已命名空间化并合并，重拆结果需人工合并，不要直接覆盖现有分片。
 - 拼接顺序由 manifest 决定。
 - 换行与 BOM 原样保留（读写都使用 newline=""）。
 """
@@ -52,9 +54,9 @@ TARGETS = {
     "css": (CSS_DIR, CSS_MANIFEST, CSS_BUNDLE, "*.css"),
 }
 
-# 现有 editor.js 里的 section 注释 → 分片文件名。
-# 新增 section 时必须在这里登记，避免拆分顺序悄悄漂移。
-SECTION_FILES = {
+# 历史 editor.js 里的 section 注释 → P1 拆分时的旧文件名。
+# 仅 split（从旧 bundle 重拆）使用；当前分片已命名空间化/合并，重拆后需人工合并。
+LEGACY_SECTION_FILES = {
     "基础工具": "10-util.js",
     "代码块语法高亮": "20-highlight.js",
     "Markdown 渲染": "30-markdown-render.js",
@@ -189,11 +191,11 @@ def split_text(text: str) -> list[tuple[str, str]]:
     seen: set[str] = set()
     for index, marker in enumerate(markers):
         title = marker.group(1).strip()
-        name = SECTION_FILES.get(title)
+        name = LEGACY_SECTION_FILES.get(title)
         if name is None:
             raise SystemExit(
                 f"未登记的 section：{title!r}\n"
-                "请在 tools/editor/split_editor.py 的 SECTION_FILES 中补上文件名后再拆分"
+                "请在 tools/editor/split_editor.py 的 LEGACY_SECTION_FILES 中补上文件名后再拆分"
             )
         if name in seen:
             raise SystemExit(f"section 文件名重复：{name}")
@@ -468,7 +470,7 @@ def main() -> int:
     status.set_defaults(func=command_status)
 
     subsplit = sub.add_parser("subsplit", help="按行号把一个分片继续拆成多个")
-    subsplit.add_argument("shard", metavar="SHARD", help="现有分片名，如 70-dom-events.js")
+    subsplit.add_argument("shard", metavar="SHARD", help="现有分片名，如 70c-navigation.js")
     subsplit.add_argument("--target", choices=sorted(TARGETS), default="js",
                           help="分片属于哪套：js（默认）或 css")
     subsplit.add_argument(
