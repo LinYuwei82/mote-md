@@ -664,6 +664,26 @@ DocumentShim.prototype.createDocumentFragment = function () {
   return new DocumentFragment(this);
 };
 
+// 编辑器恢复光标时会遍历文本节点；垫片只实现 SHOW_TEXT 的前序 DFS。
+DocumentShim.prototype.createTreeWalker = function (root, whatToShow) {
+  var showText = !whatToShow || !!(whatToShow & 4);
+  var stack = [root];
+  return {
+    nextNode: function () {
+      while (stack.length) {
+        var node = stack.pop();
+        if (node !== root && showText && node.nodeType === 3)
+          return node;
+        if (node._children && node._children.length) {
+          for (var i = node._children.length - 1; i >= 0; i--)
+            stack.push(node._children[i]);
+        }
+      }
+      return null;
+    }
+  };
+};
+
 DocumentShim.prototype.getElementById = function (id) {
   if (Object.prototype.hasOwnProperty.call(this._byId, id))
     return this._byId[id];
@@ -759,19 +779,33 @@ function SelectionShim() {
   this.anchorOffset = 0;
   this.focusNode = null;
   this.focusOffset = 0;
+  this._range = null;
 }
 
 SelectionShim.prototype.removeAllRanges = function () {
   this.rangeCount = 0;
+  this.isCollapsed = true;
+  this.anchorNode = null;
+  this.anchorOffset = 0;
+  this.focusNode = null;
+  this.focusOffset = 0;
+  this._range = null;
 };
 
-SelectionShim.prototype.addRange = function () {
-  this.rangeCount = 1;
-  this.isCollapsed = false;
+SelectionShim.prototype.addRange = function (range) {
+  this._range = range || null;
+  this.rangeCount = this._range ? 1 : 0;
+  this.isCollapsed = this._range ? !!this._range.collapsed : true;
+  this.anchorNode = this._range ? this._range.startContainer : null;
+  this.anchorOffset = this._range ? this._range.startOffset : 0;
+  this.focusNode = this._range ? this._range.endContainer : null;
+  this.focusOffset = this._range ? this._range.endOffset : 0;
 };
 
-SelectionShim.prototype.getRangeAt = function () {
-  throw new Error('DOM 垫片没有真实选区，请先补充 Selection 桩件');
+SelectionShim.prototype.getRangeAt = function (index) {
+  if (!this._range)
+    throw new Error('DOM 垫片没有真实选区，请先补充 Selection 桩件');
+  return this._range;
 };
 
 SelectionShim.prototype.toString = function () {
@@ -1052,6 +1086,155 @@ function main() {
     assertEqual(list[0].type, 'openLink', '消息类型');
     assertEqual(list[0].href, 'https://example.com/doc', 'openLink.href');
     assert(event.defaultPrevented, '链接点击应 preventDefault');
+  });
+
+  // 8. 模式切换：源码 ↔ 渲染态，body class、textarea 与 view 消息都要同步。
+  runTest('mode/toggleSource：切换源码模式并回传 view', function () {
+    var text = 'a\n\nb';
+    mote.setMarkdown(text);
+    takeMessages();
+
+    mote.toggleSource();
+    var list = takeMessages();
+    var state = mote.state();
+    var views = messagesOfType(list, 'view');
+    assertEqual(state.mode, 'source', 'state.mode');
+    assert(doc.body.classList.contains('source-mode'), 'body 应带 source-mode');
+    assertEqual(doc.getElementById('source').value, text, 'source.value');
+    assert(views.length >= 1, '应回传 view 消息');
+    assertEqual(views[views.length - 1].source, true, 'view.source');
+
+    mote.toggleSource();
+    state = mote.state();
+    assertEqual(state.mode, 'wysiwyg', 'state.mode 切回');
+    assert(!doc.body.classList.contains('source-mode'), 'body 不应带 source-mode');
+    var blocks = editor.children;
+    assertEqual(blocks.length, 2, '块数');
+    assertEqual(blocks[0].dataset.raw, 'a', '首块原文');
+    assertEqual(blocks[1].dataset.raw, 'b', '次块原文');
+    takeMessages();
+  });
+
+  // 9. 缩放：步进 + 上下限夹取，并同步字号与 view.zoom。
+  runTest('zoom/zoomBy：步进、夹取并回传 view', function () {
+    mote.resetZoom();
+    takeMessages();
+
+    mote.zoomBy(1);
+    var list = takeMessages();
+    var views = messagesOfType(list, 'view');
+    assertEqual(mote.state().zoom, 1.1, 'state.zoom');
+    assertEqual(doc.documentElement.style.fontSize, '18.15px', 'font-size');
+    assert(views.length >= 1, '应回传 view 消息');
+    assertEqual(views[views.length - 1].zoom, 1.1, 'view.zoom');
+
+    mote.zoomBy(100);
+    assertEqual(mote.state().zoom, 2.6, '上限');
+    mote.zoomBy(-100);
+    assertEqual(mote.state().zoom, 0.6, '下限');
+    mote.resetZoom();
+    assertEqual(mote.state().zoom, 1, '复位');
+    takeMessages();
+  });
+
+  // 10. 撤销/重做：输入提交后整篇快照来回恢复。
+  runTest('undo/redo：输入后撤销与重做恢复整篇文本', function () {
+    mote.setMarkdown('a');
+    takeMessages();
+    var block = editor.querySelector('.block');
+    assert(block, '应挂载块');
+
+    block.textContent = 'ab';
+    fire(block, 'input', {});
+    flushTimers(1000);
+    takeMessages();
+    assertEqual(mote.state().source, 'ab', '提交后文本');
+
+    fire(doc, 'keydown', { key: 'z', metaKey: true });
+    var list = takeMessages();
+    assertEqual(mote.state().source, 'a', '撤销后文本');
+    var logs = messagesOfType(list, 'log');
+    assert(/undo -> index=0/.test((logs[logs.length - 1] || {}).message || ''), '撤销日志');
+
+    fire(doc, 'keydown', { key: 'z', metaKey: true, shiftKey: true });
+    takeMessages();
+    assertEqual(mote.state().source, 'ab', '重做后文本');
+  });
+
+  // 11. 组合输入：会话期间屏蔽撤销快捷键，结束后恢复可用。
+  runTest('composition：组合输入期间忽略撤销快捷键', function () {
+    mote.setMarkdown('x');
+    takeMessages();
+    var block = editor.querySelector('.block');
+    block.textContent = 'xy';
+    fire(block, 'input', {});
+    flushTimers(1000);
+    takeMessages();
+    assertEqual(mote.state().source, 'xy', '提交后文本');
+
+    fire(block, 'compositionstart', {});
+    takeMessages();
+    fire(doc, 'keydown', { key: 'z', metaKey: true });
+    var during = takeMessages();
+    assertEqual(messagesOfType(during, 'log').length, 0, '组合期间不应执行撤销');
+    assertEqual(mote.state().source, 'xy', '组合期间文本不变');
+
+    fire(block, 'compositionend', {});
+    takeMessages();
+    fire(doc, 'keydown', { key: 'z', metaKey: true });
+    takeMessages();
+    assertEqual(mote.state().source, 'x', '组合结束后可撤销');
+  });
+
+  // 12. 保存基准：markSaved 后 dirty 归零，撤销离开保存点又变脏。
+  runTest('dirty/markSaved：保存基准与撤销回退', function () {
+    mote.setMarkdown('m');
+    flushTimers(1000);
+    takeMessages();
+    assertEqual(mote.state().dirty, false, '载入后不脏');
+
+    var block = editor.querySelector('.block');
+    block.textContent = 'mn';
+    fire(block, 'input', {});
+    flushTimers(1000);
+    var list = takeMessages();
+    var dirty = messagesOfType(list, 'dirty');
+    assertEqual(mote.state().dirty, true, '编辑后变脏');
+    assertEqual(dirty[dirty.length - 1].value, true, 'dirty 消息');
+
+    mote.markSaved(mote.state().source);
+    flushTimers(1000);
+    list = takeMessages();
+    dirty = messagesOfType(list, 'dirty');
+    assertEqual(mote.state().dirty, false, '保存后不脏');
+    assertEqual(dirty[dirty.length - 1].value, false, 'dirty false 消息');
+
+    fire(doc, 'keydown', { key: 'z', metaKey: true });
+    flushTimers(1000);
+    takeMessages();
+    assertEqual(mote.state().source, 'm', '撤销回到保存点前');
+    assertEqual(mote.state().dirty, true, '撤销后变脏');
+  });
+
+  // 13. 目录开关：切换 body class、生成目录项并回传 view.toc。
+  runTest('toc/toggle：切换目录并回传 view.toc', function () {
+    mote.setMarkdown('# 标题\n\n正文');
+    takeMessages();
+    assertEqual(mote.state().toc, false, '默认关闭');
+
+    mote.toggleToc();
+    var list = takeMessages();
+    var views = messagesOfType(list, 'view');
+    assertEqual(mote.state().toc, true, '打开');
+    assertEqual(views[views.length - 1].toc, true, 'view.toc');
+    assert(doc.body.classList.contains('toc-open'), 'body 应带 toc-open');
+    flushTimers(1000);
+    assert(doc.getElementById('toc-list').innerHTML.indexOf('toc-item') >= 0, '目录项已生成');
+
+    mote.toggleToc();
+    takeMessages();
+    assertEqual(mote.state().toc, false, '关闭');
+    assert(!doc.body.classList.contains('toc-open'), 'body 不应带 toc-open');
   });
 
   out('');

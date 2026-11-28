@@ -48,6 +48,10 @@ jobs:
         shell: bash
         run: node tools/editor/test_pure.js
 
+      - name: 前端事件级测试
+        shell: bash
+        run: node tools/editor/test_events.js
+
       - name: 前端分片完整性
         shell: bash
         run: |
