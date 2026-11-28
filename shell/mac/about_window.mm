@@ -60,7 +60,7 @@ static MoteAboutWindowController *g_about_controller = nil;
 
         // 版权
         y -= 20;
-        NSTextField *copyright = [self labelWithText:@"© 2026 xiaotu · 小图在线"
+        NSTextField *copyright = [self labelWithText:@"© 2026 xiaotu · 小兔在线"
                                                 font:[NSFont systemFontOfSize:11]
                                                frame:NSMakeRect(0, y, w, 16)];
         copyright.alignment = NSTextAlignmentCenter;
