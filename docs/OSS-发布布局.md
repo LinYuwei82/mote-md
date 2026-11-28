@@ -1,13 +1,15 @@
 # OSS 发布布局（安装包 / 更新清单 / 手册 / 官网）
 
-> 更新日期：2026-11-28（末尾更新 2026-11-28：线上快照刷新为 Mote 1.0.32+29——1.0.30 多窗口关窗崩溃修复+关于对话框、1.0.31 win 关于链接居中、1.0.32 版权行「小兔在线」；发布实操教训见《发布工作流》，CI stamp `/INCLUDE` 加固已在 1.0.31/1.0.32 验证「✓ 构建号一致」）
+> 更新日期：2026-11-28（末尾更新 2026-11-28：线上快照刷新为 Mote 1.0.33+30——修复分隔线插入崩溃、前端与原生代码按域分片重构、新增 122 条测试并接入 CI；同日清理 mote 1.0.5–1.0.32 共 82 个历史包 208 MB，`mote/` 仅保留当前版本。发布实操教训见《发布工作流》，CI stamp `/INCLUDE` 加固自 1.0.31 起持续验证「✓ 构建号一致」）
 > **当前发布口径**：正式发布从 tag `v<semver>+<seq>` 触发，`build = seq`（从 1 起，无固定基数）；下面带日期的版本号与构建号是发布当时的快照，最新值以线上 `manifest.json` 为准。
 > 数据来源：`oss://xiaotu-update`、`oss://xiaotu-site` 线上对象与元数据实测
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 >
-> 2026-11-19：按三份 `manifest.json` 与三份 `appcast.xml` 的引用为白名单清理过一次历史安装包
-> （v1 命名 27 个 + v2 旧版本 9 个，共 116 MB）。之后随新版发布，桶内又出现上一版产物：
-> 实测 devcard 1.2.6 / 1.2.7、xiaotu 1.0.2 的包仍可访问，作为回滚保留。
+> - 2026-11-19：按三份 `manifest.json` 与三份 `appcast.xml` 的引用为白名单清理过一次历史安装包
+>   （v1 命名 27 个 + v2 旧版本 9 个，共 116 MB）。
+> - 2026-11-28：Mote 1.0.33 发布后按同一白名单清理 `mote/`：删除 1.0.5–1.0.32 共 82 个对象、
+>   约 208 MB，仅保留 1.0.33；1.0.32 的三个包已归档在 GitHub Release `v1.0.32+29`，需要时可回源。
+> - devcard / xiaotu 尚未做同类清理：devcard 1.2.6–1.4.5、xiaotu 1.0.2–1.0.28 的安装包仍在桶内。
 
 ## 一、总览：东西放在哪
 
@@ -53,12 +55,12 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 | 对象 | 大小 | Content-Type | Cache-Control |
 |---|---|---|---|
-| `devcard/updates/stable/manifest.json` | 1,420 B | `application/json; charset=utf-8` | `no-cache, max-age=60` |
-| `devcard/updates/stable/appcast.xml` | 1,277 B | `application/xml; charset=utf-8` | `no-cache, max-age=60` |
-| `xiaotu/updates/stable/manifest.json` | 1,411 B | `application/json` | `no-cache, max-age=60` |
-| `xiaotu/updates/stable/appcast.xml` | 714 B | `application/rss+xml` | `no-cache, max-age=60` |
+| `devcard/updates/stable/manifest.json` | 1,373 B | `application/json; charset=utf-8` | `no-cache, max-age=60` |
+| `devcard/updates/stable/appcast.xml` | 1,093 B | `application/xml; charset=utf-8` | `no-cache, max-age=60` |
+| `xiaotu/updates/stable/manifest.json` | 1,452 B | `application/json` | `no-cache, max-age=60` |
+| `xiaotu/updates/stable/appcast.xml` | 707 B | `application/rss+xml` | `no-cache, max-age=60` |
 | `mote/updates/stable/manifest.json` | 1,391 B | `application/json` | `no-cache, max-age=60` |
-| `mote/updates/stable/appcast.xml` | 833 B | `application/rss+xml` | `no-cache, max-age=60` |
+| `mote/updates/stable/appcast.xml` | 776 B | `application/rss+xml` | `no-cache, max-age=60` |
 
 > v1 清单（`latest.json` / `windows.json`）已删除，v2 清单与 appcast 是 updates/ 目录下仅有的内容。
 
@@ -69,23 +71,21 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 所有安装包均为 `public, max-age=31536000, immutable`。`dl.xiaotu.online` 是 CNAME 直连、无 CDN 层，同名重传会替换源站对象，但客户端侧仍可能按 1 年缓存继续用旧字节，**正常发版必须换版本号**。仅在修复清单错误（如 2026-11-19 的 `build` 错位）而同版本重发时才允许覆盖同名对象，重发后必须核对线上 SHA256 已变化。
 
-> 2026-11-19 已清理大部分历史版本；devcard 1.2.6 / 1.2.7 与 xiaotu 1.0.2 的包仍保留（见 3.1、3.2），回滚可直接复用。
+> 2026-11-19 清理过一次历史版本；2026-11-28 把 `mote/` 清到只剩当前 1.0.33（82 个对象、208 MB）。
+> devcard、xiaotu 的历史包尚未清理（见 3.1、3.2）。
 
-### 3.1 DevCard（macOS 当前 1.2.8，Windows 当前 1.2.8）
+### 3.1 DevCard（macOS 当前 1.4.5，Windows 当前 1.4.5）
 
-当前版本（v2 命名，`dl.xiaotu.online/devcard/`，2026-11-18 16:47 发布；
-2026-11-19 补齐 Windows 构建号注入机制，1.2.8 为启用前发布，客户端同版本不比 build，
-下一个 patch 版本起生效）：
+当前版本（v2 命名，`dl.xiaotu.online/devcard/`，build 19，双平台同值；以线上清单为准）：
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
-| DMG | `devcard/devcard-1.2.8-macos-arm64.dmg` | 6,018,835 | `application/octet-stream` |
-| EXE | `devcard/devcard-1.2.8-win64-setup.exe` | 5,817,717 | `application/octet-stream` |
-| ZIP | `devcard/devcard-1.2.8-win64-portable.zip` | 6,135,981 | `application/zip` |
+| DMG | `devcard/devcard-1.4.5-macos-arm64.dmg` | 6,030,386 | `application/octet-stream` |
+| EXE | `devcard/devcard-1.4.5-win64-setup.exe` | 5,807,461 | `application/octet-stream` |
+| ZIP | `devcard/devcard-1.4.5-win64-portable.zip` | 6,048,716 | `application/zip` |
 
-> 1.2.8 已按 v2 正式发布（WebView 侧改由本地服务端验签远端清单，见第四节）。
-> 1.2.7 与 1.2.6 的 3 个包仍可访问，回滚可直接复用；
-> 1.2.4 只发过 macOS、1.2.5 为过渡版本，二者已于 2026-11-19 清理。
+> 1.4.5 已按 v2 正式发布；macOS 侧同时上传 `.edSignature`（89 B）。
+> 桶内仍保留 1.2.6–1.4.4 的全部历史包（未清理），回滚可直接复用。
 >
 > DevCard Windows 构建号机制（2026-11-20 与小兔 / Mote 全链路对齐）：
 > CMake configure 传 `-DDEVCARD_BUILD=<tag 序号>`，由
@@ -103,38 +103,32 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > 校验同版本两平台 build 一致，单平台热修需 `--allow-build-drift`），
 > 跨平台清单必须同时含 `platforms.macos` + `platforms.windows`（`guard.py preflight` 强制，缺失任一 die 拦截）。
 
-### 3.2 小兔进销存（macOS 当前 1.0.6，Windows 当前 1.0.6）
+### 3.2 小兔进销存（macOS 当前 1.0.28，Windows 当前 1.0.28）
 
-当前版本（v2 命名，`dl.xiaotu.online/xiaotu/`，2026-11-19 发布）：
-
-| 类型 | 对象键 | 大小（字节） | Content-Type |
-|---|---|---|---|
-| DMG | `xiaotu/xiaotu-1.0.6-macos-arm64.dmg` | 6,392,837 | `application/octet-stream` |
-| EXE | `xiaotu/xiaotu-1.0.6-win64-setup.exe` | 3,823,063 | `application/octet-stream` |
-| ZIP | `xiaotu/xiaotu-1.0.6-win64-portable.zip` | 2,519,073 | `application/zip` |
-
-> Windows 1.0.6（build `202611191417`）与 macOS 1.0.6 均已按 v2 发布：
-> 壳内地址为 `https://dl.xiaotu.online/xiaotu/updates/stable/manifest.json`。
-> 该版为三产品对齐后的首个统一切换版本：包体从 0.9.0 的 2.84 MiB 增至 6.09 MiB（Sparkle.framework 嵌入）；
-> Windows 前端 bridge 已接入（`chrome.webview.hostObjects.updater_win`），应用内下载带百分比进度与 3 次自动重试。
-> macOS 侧自 1.0.3 起把「是否有更新 / 待安装 / 验证期 / 恢复模式」全部改为按 `version`
-> 判定（`build` 不参与 macOS 的更新判定，仅用于 Sparkle appcast、灰度分桶与诊断；
-> 清单 `platforms.macos.build` 自 1.0.6 起写入真实值），此前按构建号比较，更新入口实际不可用。
-> 发行说明 `xiaotu/release-notes-1.0.6.html` 已于 2026-11-19 补传，清单已含 `notes_url`。
-> dmg 卷名自 1.0.2 起改用英文 `Xiaotu Inventory`（中文卷名在自动化环境
-> 会被 TCC 拦截，见 `package_macos.sh` 注释）。
-
-### 3.3 Mote（macOS 当前 1.0.32，Windows 当前 1.0.32）
-
-当前版本（v2 命名，`dl.xiaotu.online/mote/`，2026-11-28 发布 1.0.32+29）：
+当前版本（v2 命名，`dl.xiaotu.online/xiaotu/`，build 24，双平台同值；以线上清单为准）：
 
 | 类型 | 对象键 | 大小（字节） | Content-Type |
 |---|---|---|---|
-| DMG | `mote/mote-1.0.32-macos-arm64.dmg` | 3,211,707 | `application/octet-stream` |
-| EXE | `mote/mote-1.0.32-win64-setup.exe` | 3,558,087 | `application/octet-stream` |
-| ZIP | `mote/mote-1.0.32-win64-portable.zip` | 1,871,587 | `application/zip` |
+| DMG | `xiaotu/xiaotu-1.0.28-macos-arm64.dmg` | 6,438,438 | `application/octet-stream` |
+| EXE | `xiaotu/xiaotu-1.0.28-win64-setup.exe` | 5,745,098 | `application/octet-stream` |
+| ZIP | `xiaotu/xiaotu-1.0.28-win64-portable.zip` | 5,428,888 | `application/zip` |
 
-> `build` 自 1.0.27 起统一为 tag 序号（1.0.32 = 29），双平台同值；macOS 客户端把编译期
+> 1.0.28 已按 v2 发布，壳内地址为 `https://dl.xiaotu.online/xiaotu/updates/stable/manifest.json`。
+> macOS 侧自 1.0.3 起按 `version` 判定更新（`build` 仅用于 Sparkle appcast、灰度分桶与诊断）；
+> dmg 卷名自 1.0.2 起为英文 `Xiaotu Inventory`。
+> 桶内仍保留 1.0.2–1.0.27 的历史包（未清理）。
+
+### 3.3 Mote（macOS 当前 1.0.33，Windows 当前 1.0.33）
+
+当前版本（v2 命名，`dl.xiaotu.online/mote/`，2026-11-28 发布 1.0.33+30）：
+
+| 类型 | 对象键 | 大小（字节） | Content-Type |
+|---|---|---|---|
+| DMG | `mote/mote-1.0.33-macos-arm64.dmg` | 3,218,500 | `application/octet-stream` |
+| EXE | `mote/mote-1.0.33-win64-setup.exe` | 3,563,428 | `application/octet-stream` |
+| ZIP | `mote/mote-1.0.33-win64-portable.zip` | 1,878,925 | `application/zip` |
+
+> `build` 自 1.0.27 起统一为 tag 序号（1.0.33 = 30），双平台同值；macOS 客户端把编译期
 > `MOTE_BUILD`（与 Info.plist `CFBundleVersion` 同源）传给更新判定：同版本重发按 build 区分，
 > 口径与小兔 / DevCard 一致。
 > Mote 的发布构建由脚本 / CI 显式传 `MOTE_RELEASE_BUILD=ON`（旧名 `MOTE_STRICT_BUILD` 仍兼容）：
@@ -143,37 +137,37 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > 发布脚本（`package_macos.sh` / `publish_macos.sh`）各加一层硬门禁：
 > `.app/Contents/Frameworks/Sparkle.framework` 必须存在 + `.app ≥ 1024 KB`，
 > 缺任何一个 exit 1 不进入公证队列。1.0.4 的残缺 DMG（750 KB，缺 Sparkle）已于
-> 2026-11-19 从 OSS 删除（连同 1.0.3 全套，共 8 个对象 10 MB），
-> 清理后彻底消除误伤可能。
+> 2026-11-19 从 OSS 删除（连同 1.0.3 全套，共 8 个对象 10 MB）。
+> 2026-11-28 又把 `mote/` 清到只剩 1.0.33：删除 1.0.5–1.0.32 共 82 个对象、约 208 MB；
+> 1.0.32 全套归档在 GitHub Release `v1.0.32+29`，可回源。
 
 ## 四、PDF 手册与发布说明
 
 | 对象键 | 大小（字节） | Content-Type | Cache-Control |
 |---|---|---|---|
-| `devcard/manual.pdf` | 5,563,312 | `application/pdf` | `public, max-age=86400` |
-| `devcard/release-notes-1.2.8.html` | 4,592 | `text/html; charset=utf-8` | `public, max-age=3600` |
-| `xiaotu/manual.pdf` | 3,702,580 | `application/pdf` | `public, max-age=86400` |
-| `mote/manual.pdf` | 8,140,873 | `application/pdf` | `public, max-age=86400` |
-| `mote/release-notes-1.0.3.html` | 5,410 | `text/html; charset=utf-8` | `public, max-age=3600` |
-| `mote/release-notes-1.0.2.html` | 5,664 | `text/html; charset=utf-8` | `public, max-age=3600` |
-| `mote/release-notes-1.0.1.html` | 7,453 | `text/html; charset=utf-8` | `public, max-age=3600` |
-| `mote/release-notes-1.0.0.html` | 9,184 | `text/html; charset=utf-8` | `public, max-age=3600` |
+| `devcard/manual.pdf` | 19,652,641 | `application/pdf` | `no-cache, max-age=60` |
+| `devcard/release-notes-1.4.5.html` | 2,380 | `text/html; charset=utf-8` | `public, max-age=3600` |
+| `xiaotu/manual.pdf` | 3,946,985 | `application/pdf` | 未设置 |
+| `xiaotu/release-notes-1.0.28.html` | 2,921 | `text/html; charset=utf-8` | `public, max-age=3600` |
+| `mote/manual.pdf` | 1,866,795 | `application/pdf` | `no-cache, max-age=60` |
+| `mote/release-notes-1.0.33.html` | 2,120 | `text/html; charset=utf-8` | `public, max-age=3600` |
 
-> `mote/release-notes-1.0.4.html`、`xiaotu/release-notes-1.0.3.html`、`xiaotu/release-notes-1.0.2.html`
-> 已于 2026-11-19 随 1.0.3 / 1.0.4 全套从 OSS 删除。
+> 历史版本的说明页仍按版本保留：mote 28 份（1.0.0–1.0.33）、devcard 18 份（1.2.8–1.4.5）、
+> xiaotu 22 份（1.0.3–1.0.28）。`mote/release-notes-1.0.4.html`、`xiaotu/release-notes-1.0.3.html`、
+> `xiaotu/release-notes-1.0.2.html` 已于 2026-11-19 随 1.0.3 / 1.0.4 全套从 OSS 删除。
 > 发布脚本（Mote / DevCard 的 `publish_macos.sh`、小兔的 `publish_macos.sh`）检测
 > 仓库里的 `docs/release-notes-<版本>.html`，存在才一并上传并写入清单 `notes_url`；
 > 缺 `.html` 则不写该字段。
 >
-> **⚠️ 当前三产品最新版本的 `notes_url` 全部缺失**：
-> 仓库里只存了 `.md`（小兔 `release-notes-1.0.6.md`、Mote `release-notes-1.0.6.md`、
-> DevCard `release-notes-1.3.0.md`），未转成 `.html`，发布脚本因此未检测到、未上传、
-> 未写入清单。客户端在 `notes_url` 为空时不显示「查看完整更新说明…」按钮。
-> 这是本轮对齐后发现的新缺口——需把三份 `.md` 转 `.html`、上传 OSS、`manifest_v2.py resign --notes-url` 重签清单。
->
-> 补发说明页不必重新打包：`manifest_v2.py resign --notes-url <绝对地址>` 只改该字段
+> **notes_url 现状（2026-11-28）**：Mote 1.0.33、小兔 1.0.28 双平台均已写入；
+> DevCard 1.4.5 仅 macOS 段有 `notes_url`，Windows 段缺（客户端在 `notes_url` 为空时
+> 不显示「查看完整更新说明…」按钮）。补发说明页不必重新打包：
+> `manifest_v2.py resign --notes-url <绝对地址>` 只改该字段
 > 并整体重签（自动刷新 `updated_at`，产物字段原样保留），完整四步见
 > [发布工作流 §9.1](./发布工作流.md)。清单因此会变大约 100 字节，属正常现象。
+>
+> 另：实测三份 `manual.pdf` 的缓存头与第七节期望值（`public, max-age=86400`）不一致
+> （devcard / mote 为 `no-cache, max-age=60`，xiaotu 未设置），后续上传时统一。
 
 ## 五、官网网页（`xiaotu-site` 桶 / ECS）
 
@@ -288,7 +282,7 @@ bash mote/tools/release/deploy_site.sh                 # → xiaotu.online（ECS
 发布脚本会在上传前自动调用 `preflight`、上传后自动调用 `verify-live`：
 
 ```bash
-python3 tools/release/guard.py selftest      # CI 每次跑（46 项）
+python3 tools/release/guard.py selftest      # CI 每次跑（50 项）
 python3 tools/release/guard.py preflight --product xiaotu --kind mac --file <dmg>
 python3 tools/release/guard.py verify-live --product xiaotu --kind win \
   --file <setup.exe> --zip <portable.zip>
@@ -366,7 +360,7 @@ PowerShell 5 在 Windows 上只读 UTF-8 + BOM（`\xef\xbb\xbf`）的 `.ps1`；�
 1. **安装包是 `immutable`**：正常发版必须升版本号；只有修复清单错误而同版本重发时才覆盖同名对象（CNAME 直连、无 CDN，源站立即换字节），重发后核对 SHA256 已变化。`Cache-Control` 只影响客户端侧缓存。
 2. **清单生效**：源站上传即生效；客户端可能因 `max-age=60` 缓存最多 1 分钟，验证时等 1 分钟或加时间戳。下载页版本号由 `site.js` 自动读取，无需改 HTML。
 3. **发布脚本会校验产物**：Mote 校验 dmg 内 `SUFeedURL` 与 appcast 地址一致；guard（v2）校验绿色包内壳 exe 含当前 `manifest.json` 地址、清单 Ed25519 签名与产物 SHA256；不一致直接拒绝上传。
-4. **三个产品已全部迁移到 v2**：当前线上版本 / 构建号以各自 `updates/stable/manifest.json` 为准；正式发布的 `build` 取 tag 序号（从 1 起，无固定基数），旧日期编号只保留在历史发布记录中。mote 1.0.3 / 1.0.4 全套已于 2026-11-19 从 OSS 清理（8 个对象 10 MB），其余历史保留（devcard 1.2.6/1.2.7、xiaotu 1.0.2）供回滚。
-5. **历史安装包未完全清零**：devcard 1.2.6 / 1.2.7、xiaotu 1.0.2 的包仍在桶内，作为回滚保留；`manual.pdf`、`release-notes-*.html`、`manifest.json`、`appcast.xml` 长期保留。
+4. **三个产品已全部迁移到 v2**：当前线上版本 / 构建号以各自 `updates/stable/manifest.json` 为准；正式发布的 `build` 取 tag 序号（从 1 起，无固定基数），旧日期编号只保留在历史发布记录中。Mote 历史包已于 2026-11-28 清理到只剩 1.0.33（删除 82 个对象、约 208 MB；1.0.32 归档在 GitHub Release `v1.0.32+29`）。
+5. **历史安装包**：Mote 已清零旧版本（仅 1.0.33）；devcard 1.2.6–1.4.5、xiaotu 1.0.2–1.0.28 的包仍在桶内，暂作回滚保留；`manual.pdf`、`release-notes-*.html`、`manifest.json`、`appcast.xml` 长期保留。
 6. `dl.xiaotu.online/logs/` 下是 OSS 每小时访问日志，属系统产出，不在发布范围内。
 7. 桶根的 `devcard/`、`mote/`、`xiaotu/updates/` 等是控制台创建的 0 字节目录占位对象，可忽略。
