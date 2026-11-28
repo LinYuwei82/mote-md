@@ -81,6 +81,18 @@ private:
     // 当前活跃窗口（前台优先，退回注册表首项）
     static MoteMainWindow *active_window();
     LRESULT handle_message(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
+    // handle_message 按消息域拆出的处理函数：直接返回 LRESULT 的表示该消息已处理完，
+    // 返回 bool 的用 *result 写回结果、true 表示已处理，false 交回默认窗口过程。
+    LRESULT handle_create(HWND hwnd);
+    LRESULT handle_forward();
+    LRESULT handle_command(HWND hwnd, WPARAM wparam);
+    bool handle_timer(HWND hwnd, WPARAM wparam, LRESULT *result);
+    bool handle_setting_change(WPARAM wparam, LPARAM lparam, LRESULT *result);
+    LRESULT handle_native_drop(LPARAM lparam);
+    bool handle_key_down(WPARAM wparam, LRESULT *result);
+    LRESULT handle_destroy(HWND hwnd);
+    LRESULT handle_get_min_max_info(HWND hwnd, LPARAM lparam);
+    LRESULT handle_dpi_changed(HWND hwnd, LPARAM lparam);
     void layout();
     void update_title();
     std::wstring display_name() const;
