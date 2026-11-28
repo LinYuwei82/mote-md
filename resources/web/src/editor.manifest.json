@@ -43,12 +43,7 @@
     "72a-source-convert.js",
     "72b1-menu-overlay.js",
     "72-menus.js",
-    "74-insert-line.js",
-    "75-block-handle.js",
-    "76-drag-reorder.js",
-    "77-block-menu.js",
-    "78-block-menu-actions.js",
-    "79-hover-focus-scroll.js",
+    "74-block-ops.js",
     "80a-export-html.js",
     "80b1-mermaid.js",
     "80b2-mermaid-init.js"

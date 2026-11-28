@@ -59,10 +59,8 @@
     Menus.closeLangMenu();
     // 块手柄与块菜单是渲染态浮层：切到源码模式必须一并收起，
     // 否则菜单悬空且动作会作用到即将被重建的旧 DOM 上
-    BlockMenu.closeBlockMenu();
-    if (blockHandle)
-      blockHandle.style.display = 'none';
-    blockHandleTarget = null;
+    BlockOps.closeBlockMenu();
+    BlockOps.reset();
     if (commitTimer) {
       clearTimeout(commitTimer);
       commitTimer = null;

@@ -18,8 +18,8 @@
       Menus.closeSlash(false);
       Menus.closeTurnMenu();
       Menus.closeLangMenu();
-      BlockMenu.closeBlockMenu();
-      BlockHandle.hideBlockHandle();
+      BlockOps.closeBlockMenu();
+      BlockOps.hideBlockHandle();
       var normalized = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n');
       var _t1 = window.MOTE_PERF ? performance.now() : 0;
 

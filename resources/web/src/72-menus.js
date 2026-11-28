@@ -533,9 +533,8 @@
     if (turnMenu && !turnMenu.contains(event.target))
       closeTurnMenu();
     // 手柄自己的按下会弹菜单，这里不能把它当成「点外部」提前关掉
-    if (blockMenu && !blockMenu.contains(event.target)
-        && !(blockHandle && blockHandle.contains(event.target)))
-      BlockMenu.closeBlockMenu();
+    if (!BlockOps.containsNode(event.target))
+      BlockOps.closeBlockMenu();
     if (slashMenu && !slashMenu.contains(event.target) && !CaretCode.blockOf(event.target))
       SlashMenu.closeSlash(true);
     // 徽标自己的 mousedown 会先打开/切换下拉，这里不能把它当成「点外部」关掉
@@ -559,9 +558,9 @@
     } else if (langMenu) {
       event.preventDefault();
       LangMenu.closeLangMenu();
-    } else if (blockMenu) {
+    } else if (BlockOps.isBlockMenuOpen()) {
       event.preventDefault();
-      BlockMenu.closeBlockMenu();
+      BlockOps.closeBlockMenu();
     }
   }, true);
 

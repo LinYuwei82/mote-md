@@ -123,10 +123,8 @@
     Menus.closeLangMenu();
     // 块菜单/手柄指向的旧节点即将全部脱离 DOM：撤销、重做、整篇载入都要收拢，
     // 否则菜单会悬空浮在重建后的文档上（动作虽有 parentNode 兜底不会误伤）
-    BlockMenu.closeBlockMenu();
-    blockHandleTarget = null;
-    if (blockHandle)
-      blockHandle.style.display = 'none';
+    BlockOps.closeBlockMenu();
+    BlockOps.reset();
     root.innerHTML = '';
     var _t1 = window.MOTE_PERF ? performance.now() : 0;
     var fragment = document.createDocumentFragment();
