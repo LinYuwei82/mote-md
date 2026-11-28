@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Mote 1.0.33 发布说明</title><style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+     max-width:720px;margin:40px auto;padding:0 20px;line-height:1.7;color:#222}
+h1{border-bottom:2px solid #eee;padding-bottom:8px}
+h2{margin-top:1.5em;color:#111}
+table{border-collapse:collapse;width:100%;margin:1em 0}
+th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}
+th{background:#f6f8fa}
+code{background:#f0f0f0;padding:1px 6px;border-radius:3px;font-size:.9em}
+pre{background:#f6f8fa;padding:12px 16px;border-radius:6px;overflow-x:auto}
+pre code{background:none;padding:0}
+blockquote{border-left:4px solid #ddd;margin:1em 0;padding:0 16px;color:#666}
+</style></head><body><h2>Mote 1.0.33</h2>
+<h3>修复</h3>
+<ul>
+<li><strong>插入分隔线时崩溃</strong>：修正分块构建逻辑把分隔线（<code>---</code>）误判为标题的问题，插入分隔线不再触发异常。</li>
+</ul>
+<h3>改进</h3>
+<ul>
+<li>前端源码按功能域拆分为 42 个独立作用域分片，原生端（macOS / Windows）大文件按域拆分；界面与操作行为不变。</li>
+<li>新增 109 条纯函数测试与 13 条事件级测试，并接入持续集成，为后续改动提供回归保障。</li>
+</ul>
+<h3>下载</h3>
+<table>
+<thead>
+<tr>
+<th>平台</th>
+<th>文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>macOS（Apple Silicon）</td>
+<td><code>mote-1.0.33-macos-arm64.dmg</code></td>
+<td>拖拽到「应用程序」即可</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>mote-1.0.33-win64-setup.exe</code></td>
+<td>安装版</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>mote-1.0.33-win64-portable.zip</code></td>
+<td>免安装绿色版</td>
+</tr>
+</tbody>
+</table>
+<h3>校验</h3>
+<p>随附 <code>SHA256SUMS.txt</code>，下载后可自行校验：</p>
+<pre><code class="language-bash"># macOS / Linux
+shasum -a 256 -c SHA256SUMS.txt
+
+# Windows（PowerShell）
+Get-FileHash SHA256SUMS.txt -Algorithm SHA256
+</code></pre></body></html>
