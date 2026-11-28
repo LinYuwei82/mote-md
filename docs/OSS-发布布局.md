@@ -145,11 +145,11 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 
 | 对象键 | 大小（字节） | Content-Type | Cache-Control |
 |---|---|---|---|
-| `devcard/manual.pdf` | 19,652,641 | `application/pdf` | `no-cache, max-age=60` |
+| `devcard/manual.pdf` | 19,652,641 | `application/pdf` | `public, max-age=86400` |
 | `devcard/release-notes-1.4.5.html` | 2,380 | `text/html; charset=utf-8` | `public, max-age=3600` |
-| `xiaotu/manual.pdf` | 3,946,985 | `application/pdf` | 未设置 |
+| `xiaotu/manual.pdf` | 3,946,985 | `application/pdf` | `public, max-age=86400` |
 | `xiaotu/release-notes-1.0.28.html` | 2,921 | `text/html; charset=utf-8` | `public, max-age=3600` |
-| `mote/manual.pdf` | 1,866,795 | `application/pdf` | `no-cache, max-age=60` |
+| `mote/manual.pdf` | 1,866,795 | `application/pdf` | `public, max-age=86400` |
 | `mote/release-notes-1.0.33.html` | 2,120 | `text/html; charset=utf-8` | `public, max-age=3600` |
 
 > 历史版本的说明页仍按版本保留：mote 28 份（1.0.0–1.0.33）、devcard 18 份（1.2.8–1.4.5）、
@@ -166,8 +166,8 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > 并整体重签（自动刷新 `updated_at`，产物字段原样保留），完整四步见
 > [发布工作流 §9.1](./发布工作流.md)。清单因此会变大约 100 字节，属正常现象。
 >
-> 另：实测三份 `manual.pdf` 的缓存头与第七节期望值（`public, max-age=86400`）不一致
-> （devcard / mote 为 `no-cache, max-age=60`，xiaotu 未设置），后续上传时统一。
+> 2026-11-28：三份 `manual.pdf` 的缓存头已用同键 CopyObject（`x-oss-metadata-directive: REPLACE`）
+> 统一为 `public, max-age=86400`，内容与 ETag 未变（devcard/mote 原为 `no-cache, max-age=60`，xiaotu 原未设置）。
 
 ## 五、官网网页（`xiaotu-site` 桶 / ECS）
 
