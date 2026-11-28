@@ -130,6 +130,76 @@
           "<span class=\"tok-s\">b`</span>;"
         ]
       }
+    },
+    {
+      "name": "sh-dollar-brace",
+      "lang": "sh",
+      "raw": "echo ${HOME}/bin",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-f\">echo</span> <span class=\"tok-t\">${HOME}</span>/bin"
+        ]
+      }
+    },
+    {
+      "name": "cpp-number-forms",
+      "lang": "cpp",
+      "raw": "int x = 0x1F + 1.5e3 + 42u;",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-t\">int</span> x = <span class=\"tok-n\">0x1F</span> + <span class=\"tok-n\">1.5e3</span> + <span class=\"tok-n\">42u</span>;"
+        ]
+      }
+    },
+    {
+      "name": "js-escaped-quote",
+      "lang": "js",
+      "raw": "var s = \"a\\\"b\";",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-k\">var</span> s = <span class=\"tok-s\">&quot;a\\&quot;b&quot;</span>;"
+        ]
+      }
+    },
+    {
+      "name": "python-triple-inline",
+      "lang": "python",
+      "raw": "x = '''a''' + 1",
+      "expect": {
+        "lines": [
+          "x = <span class=\"tok-s\">'''a'''</span> + <span class=\"tok-n\">1</span>"
+        ]
+      }
+    },
+    {
+      "name": "c-block-inline",
+      "lang": "c",
+      "raw": "int a; /* note */ int b;",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-t\">int</span> a; <span class=\"tok-c\">/* note */</span> <span class=\"tok-t\">int</span> b;"
+        ]
+      }
+    },
+    {
+      "name": "json-key-space",
+      "lang": "json",
+      "raw": "{\"a\" : 1}",
+      "expect": {
+        "lines": [
+          "{<span class=\"tok-t\">&quot;a&quot;</span> : <span class=\"tok-n\">1</span>}"
+        ]
+      }
+    },
+    {
+      "name": "sql-line-dash",
+      "lang": "sql",
+      "raw": "SELECT 1 -- note",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-k\">SELECT</span> <span class=\"tok-n\">1</span> <span class=\"tok-c\">-- note</span>"
+        ]
+      }
     }
   ]
 }
