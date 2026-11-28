@@ -994,17 +994,11 @@
   }
 
   window.addEventListener('scroll', function () {
-    if (!tocVisible || mode !== 'wysiwyg' || spyScheduled)
-      return;
-    spyScheduled = true;
-    requestAnimationFrame(function () {
-      spyScheduled = false;
-      Toc.updateActiveHeading();
-    });
+    Toc.scheduleActiveHeading();
   });
 
   // 视口或字号变化后标题纵坐标失效，下一次滚动高亮时重算
-  window.addEventListener('resize', function () { tocTops = null; });
+  window.addEventListener('resize', function () { Toc.invalidateTops(); });
 
   if (tocList) {
     tocList.addEventListener('click', function (event) {
@@ -1012,7 +1006,7 @@
       if (!node)
         return;
       event.preventDefault();
-      var item = tocItems[Number(node.getAttribute('data-toc'))];
+      var item = Toc.itemAt(Number(node.getAttribute('data-toc')));
       if (!item)
         return;
       item.el.scrollIntoView({ block: 'start' });

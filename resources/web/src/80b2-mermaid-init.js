@@ -1,6 +1,8 @@
   var MermaidInit = (function mermaidInitModule() {
   var mermaidTimer = null;
   var pdfSavedScrollY = 0;
+  // 页面加载后的第一次挂载：新页首布局已含滚动条高度，无需补偿。
+  var pageFresh = true;
   function scheduleMermaid() {
     if (mermaidTimer)
       return;
@@ -84,7 +86,7 @@
     newDocument: function () {
       if (Find.isOpen())
         Find.closeFind();
-      if (tocVisible)
+      if (Toc.isVisible())
         Toc.toggleToc();
       Menus.closeSlash(false);
       Menus.closeTurnMenu();
@@ -92,7 +94,7 @@
       ViewState.setZoom(1);
       window.mote.setMarkdown('');
       // 目录已关闭时 refreshToc 会早退，旧标题节点仍留在 DOM 里；新建必须清掉
-      tocItems = [];
+      Toc.resetItems();
       if (tocList)
         tocList.innerHTML = '';
       if (mode === 'source') {
@@ -207,7 +209,7 @@
     state: function () {
       return {
         mode: mode,
-        toc: tocVisible,
+        toc: Toc.isVisible(),
         zoom: zoomLevel,
         history: history.length,
         dirty: DocumentModel.currentSource() !== savedText,

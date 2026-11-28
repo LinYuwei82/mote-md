@@ -23,18 +23,3 @@
   var suppressEvents = false;   // 程序化重建 DOM 期间屏蔽 input/focus 等事件
   var commitBatch = 0;          // >0 时合并中间渲染，多块转换只记一个撤销步
 
-  var tocVisible = false;
-  var tocItems = [];
-  var tocTimer = null;
-  // 可见区外代码块延迟高亮（仅整篇载入路径启用）：首挂先渲染转义纯文本，
-  // 首屏立即补、其余空闲分批补，把大文档打开时的整篇着色成本摊平。
-  var deferredCode = null;
-  var deferredCodeTimer = 0;
-  // 页面加载后的第一次挂载：新页首布局已含滚动条高度，无需补偿。
-  var pageFresh = true;
-  // 目录项的文档纵坐标缓存：滚动高亮改二分查表，不再每次滚动对每个标题
-  // 调 getBoundingClientRect（900 个标题时每帧 900 次布局读取）。
-  var tocTops = null;
-  // 标题集合的签名：正文段落增删不应导致目录整天重建。
-  var tocSig = null;
-  var spyScheduled = false;

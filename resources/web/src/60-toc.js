@@ -1,6 +1,16 @@
   var Toc = (function tocModule() {
   /* ---------------- 目录侧栏 ---------------- */
 
+  var tocVisible = false;
+  var tocItems = [];
+  var tocTimer = null;
+  // 目录项的文档纵坐标缓存：滚动高亮改二分查表，不再每次滚动对每个标题
+  // 调 getBoundingClientRect（900 个标题时每帧 900 次布局读取）。
+  var tocTops = null;
+  // 标题集合的签名：正文段落增删不应导致目录整天重建。
+  var tocSig = null;
+  var spyScheduled = false;
+
   function headingLevel(el) {
     for (var level = 1; level <= 6; level++) {
       if (el.classList.contains('h' + level))
@@ -170,6 +180,33 @@
     ViewState.postView();
   }
 
+  // 滚动高亮：同一帧只安排一次；侧栏关闭或源码模式下不计算
+  function scheduleActiveHeading() {
+    if (!tocVisible || mode !== 'wysiwyg' || spyScheduled)
+      return;
+    spyScheduled = true;
+    requestAnimationFrame(function () {
+      spyScheduled = false;
+      updateActiveHeading();
+    });
+  }
+
+  function invalidateTops() {
+    tocTops = null;
+  }
+
+  function itemAt(index) {
+    return tocItems[index];
+  }
+
+  function resetItems() {
+    tocItems = [];
+  }
+
+  function isVisible() {
+    return tocVisible;
+  }
+
   return {
     headingLevel: headingLevel,
     headingSlug: headingSlug,
@@ -178,6 +215,11 @@
     refreshToc: refreshToc,
     scheduleTocRefresh: scheduleTocRefresh,
     updateActiveHeading: updateActiveHeading,
-    toggleToc: toggleToc
+    toggleToc: toggleToc,
+    scheduleActiveHeading: scheduleActiveHeading,
+    invalidateTops: invalidateTops,
+    itemAt: itemAt,
+    resetItems: resetItems,
+    isVisible: isVisible
   };
   })();

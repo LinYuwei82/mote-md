@@ -32,7 +32,7 @@
   function postView() {
     Util.post({
       type: 'view',
-      toc: tocVisible,
+      toc: Toc.isVisible(),
       source: mode === 'source',
       zoom: zoomLevel
     });
