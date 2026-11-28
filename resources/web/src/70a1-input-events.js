@@ -113,7 +113,7 @@
   }, true);
 
   root.addEventListener('focusin', function (event) {
-    if (Composition.isComposing() || suppressEvents)
+    if (Composition.isComposing() || EditingSnapshot.isSuppressed())
       return;
     var el = CaretCode.blockOf(event.target);
     if (!el)
@@ -122,7 +122,7 @@
   });
 
   root.addEventListener('focusout', function (event) {
-    if (suppressEvents)
+    if (EditingSnapshot.isSuppressed())
       return;
     var el = CaretCode.blockOf(event.target);
     if (!el)
@@ -178,7 +178,7 @@
   });
 
   root.addEventListener('input', function (event) {
-    if (suppressEvents)
+    if (EditingSnapshot.isSuppressed())
       return;
     var el = CaretCode.blockOf(event.target);
     if (!el)

@@ -1,4 +1,13 @@
   var EditingSnapshot = (function editingSnapshotModule() {
+  // 自建撤销栈：整篇快照（块数组或纯文本）+ 绝对字符选区。contenteditable 的
+  // 原生撤销只在单块未被重建时有效，跨块操作（回车分块、退格合并、撤销后整篇
+  // 重建）会失效，因此统一由这里接管 Cmd+Z / Cmd+Shift+Z。
+  var history = [];
+  var historyIndex = -1;
+  var commitTimer = null;
+  var suppressEvents = false;   // 程序化重建 DOM 期间屏蔽 input/focus 等事件
+  var commitBatch = 0;          // >0 时合并中间渲染，多块转换只记一个撤销步
+
   // 当前块内选区 → 整篇绝对偏移。失焦（没有活动编辑块）时 has 为 false
   function editingSelection() {
     var active = document.activeElement;
@@ -258,6 +267,43 @@
     rebuildFromSnapshot(history[historyIndex]);
   }
 
+  // 程序化重建 DOM 期间屏蔽事件；成对使用，避免各子模块各自持有同一个开关
+  function setSuppressed(value) {
+    suppressEvents = !!value;
+  }
+
+  function isSuppressed() {
+    return suppressEvents;
+  }
+
+  // 取消尚未触发的合并提交（切换模式、组合输入前调用）
+  function cancelCommit() {
+    if (commitTimer) {
+      clearTimeout(commitTimer);
+      commitTimer = null;
+    }
+  }
+
+  // 换文档时清空历史，回到“无历史”初始态
+  function resetHistory() {
+    cancelCommit();
+    history = [];
+    historyIndex = -1;
+  }
+
+  function historyLength() {
+    return history.length;
+  }
+
+  // 批量转换期间合并中间渲染，只记一个撤销步
+  function beginBatch() {
+    commitBatch++;
+  }
+
+  function endBatch() {
+    commitBatch--;
+  }
+
   return {
     editingSelection: editingSelection,
     absoluteOffsets: absoluteOffsets,
@@ -267,6 +313,13 @@
     mountBlocks: mountBlocks,
     locateBlock: locateBlock,
     undo: undo,
-    redo: redo
+    redo: redo,
+    setSuppressed: setSuppressed,
+    isSuppressed: isSuppressed,
+    cancelCommit: cancelCommit,
+    resetHistory: resetHistory,
+    historyLength: historyLength,
+    beginBatch: beginBatch,
+    endBatch: endBatch
   };
   })();

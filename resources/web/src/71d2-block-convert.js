@@ -38,7 +38,7 @@
     var splitting = type === 'p';
     EditingSnapshot.commitHistory();
     if (multi || splitting)
-      commitBatch++;
+      EditingSnapshot.beginBatch();
     blocks.forEach(function (el) {
       var raw = BlockParse.rawOf(el);
       var before = BlockParse.kindOfRaw(raw);
@@ -68,7 +68,7 @@
       BlockParse.applyRawToBlock(el, next, start, end, true);
     });
     if (multi || splitting)
-      commitBatch--;
+      EditingSnapshot.endBatch();
     if (!changed) {
       EditingSnapshot.commitHistory();
       return;

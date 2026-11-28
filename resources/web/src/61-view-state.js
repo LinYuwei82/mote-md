@@ -64,21 +64,18 @@
     // 否则菜单悬空且动作会作用到即将被重建的旧 DOM 上
     BlockOps.closeBlockMenu();
     BlockOps.reset();
-    if (commitTimer) {
-      clearTimeout(commitTimer);
-      commitTimer = null;
-    }
+    EditingSnapshot.cancelCommit();
     EditingSnapshot.commitHistory();
 
     var text = DocumentModel.currentSource();
     var caret = currentCaretOffset();
 
-    suppressEvents = true;
+    EditingSnapshot.setSuppressed(true);
     if (next === 'source') {
       mode = 'source';
       sourceEl.value = text;
       document.body.classList.add('source-mode');
-      suppressEvents = false;
+      EditingSnapshot.setSuppressed(false);
       try {
         sourceEl.focus();
         sourceEl.setSelectionRange(Math.min(caret, text.length), Math.min(caret, text.length));
@@ -89,7 +86,7 @@
       var blocks = layout.blocks;
       EditingSnapshot.mountBlocks(blocks, layout.gaps, layout.trail);
       document.body.classList.remove('source-mode');
-      suppressEvents = false;
+      EditingSnapshot.setSuppressed(false);
 
       var base = 0;
       for (var i = 0; i < blocks.length; i++) {

@@ -3,16 +3,13 @@
   // 这样中文候选上屏要么整体进入一步，要么整体回退，不会被切成多个碎片。
   var composing = false;
   root.addEventListener('compositionstart', function () {
-    if (suppressEvents)
+    if (EditingSnapshot.isSuppressed())
       return;
     // 组合输入不在原型范围，但也不能「选了却没删」：先按整篇源码删掉跨块选区，
     // 候选上屏就落在替换点上；若输入法因此中断，用户重新输入即可。
     if (Cross.isActive())
       Cross.replaceCrossSelection('');
-    if (commitTimer) {
-      clearTimeout(commitTimer);
-      commitTimer = null;
-    }
+    EditingSnapshot.cancelCommit();
     EditingSnapshot.commitHistory();   // 组合输入前的已输入内容先单独成步
     composing = true;
   });
@@ -32,7 +29,7 @@
 
   // 源码模式：textarea 自己的原生撤销也会被 beforeinput 拦下，统一走自建栈
   sourceEl.addEventListener('input', function () {
-    if (suppressEvents)
+    if (EditingSnapshot.isSuppressed())
       return;
     if (Find.isOpen())
       Find.scheduleFind();
@@ -42,12 +39,9 @@
   });
 
   sourceEl.addEventListener('compositionstart', function () {
-    if (suppressEvents)
+    if (EditingSnapshot.isSuppressed())
       return;
-    if (commitTimer) {
-      clearTimeout(commitTimer);
-      commitTimer = null;
-    }
+    EditingSnapshot.cancelCommit();
     EditingSnapshot.commitHistory();
     composing = true;
   });
@@ -76,7 +70,7 @@
     if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo')
       event.preventDefault();
     // 跨块选区上的输入：折叠光标只覆盖焦点一个字符，必须先按整篇源码替换区间
-    if (Cross.isActive() && !suppressEvents && ViewState.mode() === 'wysiwyg') {
+    if (Cross.isActive() && !EditingSnapshot.isSuppressed() && ViewState.mode() === 'wysiwyg') {
       if (event.inputType === 'insertText' && typeof event.data === 'string') {
         event.preventDefault();
         Cross.replaceCrossSelection(event.data);
@@ -92,7 +86,7 @@
     }
     // 表格单元格内输入裸 |：转成转义的 \|，否则下次重排会被当成列分隔符、
     // 把整表撑出多余一列。渲染时 \| 显示为 |（反斜杠零宽），raw 保留转义。
-    if (event.inputType === 'insertText' && event.data === '|' && !suppressEvents) {
+    if (event.inputType === 'insertText' && event.data === '|' && !EditingSnapshot.isSuppressed()) {
       var el = CaretCode.blockOf(event.target);
       if (el && el.classList.contains('table') && CellEdit.activeCell(el)) {
         event.preventDefault();

@@ -547,9 +547,9 @@
   function rebuildFromSourceText(text, caret) {
     var scrollY = window.scrollY;
     var layout = LayoutCode.splitSourceLayout(text);
-    suppressEvents = true;
+    EditingSnapshot.setSuppressed(true);
     EditingSnapshot.mountBlocks(layout.blocks, layout.gaps, layout.trail);
-    suppressEvents = false;
+    EditingSnapshot.setSuppressed(false);
     var at = EditingSnapshot.locateBlock(layout.blocks, layout.gaps, caret);
     EditingSnapshot.commitHistory();
     Toc.scheduleTocRefresh();

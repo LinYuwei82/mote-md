@@ -25,7 +25,7 @@
       var normalized = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n');
       var _t1 = window.MOTE_PERF ? performance.now() : 0;
 
-      suppressEvents = true;
+      EditingSnapshot.setSuppressed(true);
       var _t2 = _t1;
       if (ViewState.mode() === 'source') {
         sourceEl.value = normalized;
@@ -38,7 +38,7 @@
         pageFresh = false;
         EditingSnapshot.mountBlocks(layout.blocks, layout.gaps, layout.trail, true, fresh);
       }
-      suppressEvents = false;
+      EditingSnapshot.setSuppressed(false);
       var _t3 = window.MOTE_PERF ? performance.now() : 0;
 
       // 以规范化后的序列化结果为基准，避免尾部空行造成“一打开就是已修改”
@@ -46,12 +46,7 @@
       var _t4 = window.MOTE_PERF ? performance.now() : 0;
 
       // 换文档时历史从当前状态重新开始
-      if (commitTimer) {
-        clearTimeout(commitTimer);
-        commitTimer = null;
-      }
-      history = [];
-      historyIndex = -1;
+      EditingSnapshot.resetHistory();
       EditingSnapshot.commitHistory();
       window.scrollTo(0, 0);
       Toc.refreshToc();
@@ -211,7 +206,7 @@
         mode: ViewState.mode(),
         toc: Toc.isVisible(),
         zoom: ViewState.getZoomLevel(),
-        history: history.length,
+        history: EditingSnapshot.historyLength(),
         dirty: DocumentModel.isDirty(),
         source: DocumentModel.currentSource()
       };
