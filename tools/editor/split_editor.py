@@ -22,9 +22,9 @@ resources/web/editor.js 与 resources/web/editor.css 现在是构建产物（CMa
 
 约束：
 - 分片不添加任何头注释；除 P2 命名空间包裹外，不改动原有语句。
-- 00-boot.js 打开外层 IIFE、80b2-mermaid-init.js 关闭；其余分片各自包裹 IIFE，
-  公开符号经命名空间导出；内核状态集中在 00-boot.js，子系统域状态收在所属分片的
-  模块闭包内。
+- 00-boot.js 只打开外层 IIFE、80b2-mermaid-init.js 关闭；其余分片各自包裹 IIFE，
+  公开符号经命名空间导出；启动期共享资源（DOM 句柄、配置）与子系统域状态都收在
+  所属分片的模块闭包内。
 - split 仅用于从历史 bundle 重拆：LEGACY_SECTION_FILES 是 P1 时代的节名→旧文件名
   映射；当前分片已命名空间化并合并，重拆结果需人工合并，不要直接覆盖现有分片。
 - 拼接顺序由 manifest 决定。
