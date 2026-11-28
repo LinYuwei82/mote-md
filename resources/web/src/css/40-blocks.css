@@ -1,0 +1,214 @@
+/* 列表项间距与导出/Typora 对齐：21.6pt ≈ 28.8px（行盒 25.1px + 3.7px） */
+li { margin: 0.22em 0; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border-hair);
+  margin: 1.6em 0;
+}
+
+/* 分隔线进入编辑：<hr> 本身不动，原文 `---` 以淡色等宽行绝对定位叠在线上。
+   绝对定位不占高度，因此横线位置与块高（以及下方内容）都不会变化。 */
+.block.hr { position: relative; }
+
+.hr-src {
+  position: absolute;
+  left: 0;
+  top: calc(2px + 1.6rem);   /* .block 的 padding-top + hr 的 margin-top */
+  transform: translateY(-50%);
+  padding: 0 0.3em;
+  background: var(--bg);
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 300;
+  line-height: 1.2;
+  white-space: pre;
+  outline: none;
+}
+
+table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.95em;
+  /* 与 Typora 一致：表格铺满正文宽，列宽按内容比例分配（auto + width:100%
+     不会让表体收缩，PDF 导出即用此组合对齐样张）。fixed 的等宽分列会把
+     短标签列撑到半宽、长内容列挤成多行，与文件事实不符。 */
+  width: 100%;
+  table-layout: auto;
+  max-width: 100%;
+}
+
+/* 超宽表格（列的 min-content 总和放不下）不压缩单词，改为横向滚动，
+   与 wolai / Notion 的行为一致。min-width 由列宽算法在溢出时注入 table。 */
+.block.table {
+  overflow-x: auto;
+}
+
+th, td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  text-align: left;
+  /* 与 Typora 一致：单元格默认垂直居中。top 对齐会把单行文字钉在行首，
+     行高由最高的兄弟格决定时，文字下方出现大片空白，浪费空间。 */
+  vertical-align: middle;
+  /* 表格原文里的空格（| 两侧、单元格首尾）以文本节点保留，表格内按普通空白
+     折叠；不能让 .block 的 pre-wrap 漏进来，否则会画出多余的空隙。 */
+  white-space: normal;
+}
+
+th { background: var(--bg-th); font-weight: 600; }
+
+/* 对齐行（|---|:--:|）只是原文的容器：不参与排版，但按 DOM 顺序夹在表头与
+   表体之间，textContent 才能逐字拼回原始 Markdown。 */
+tr.tbl-align { display: none; }
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 3px;
+}
+
+/* ---------------- 行内标记（默认开启，MOTE_INLINE_PROTO=0 回退） ----------------
+   标记始终留在 DOM 里，但 font-size:0 使其零前进宽度；淡色提示由绝对定位的
+   <i> 画出，同样不参与排版。因此进入/离开某行只改变 class 与不透明度，
+   不会改变任何行的宽度、高度或后续行位置。 */
+.mk {
+  position: relative;
+  display: inline;
+  font-size: 0;
+  letter-spacing: 0;
+}
+
+.mk > i {
+  position: absolute;
+  left: 0;
+  bottom: 1.5em;              /* 抬到正文大写高度之上，避免压住字形 */
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: pre;
+  color: var(--faint);
+  opacity: 0;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 相邻标记的淡色标签会互相压字（如 **粗** 与紧邻的 *斜*）。标签是绝对定位的
+   零宽元素、不参与排版，因此只让离光标最近的一个显示：无论标记多密集都不会
+   重叠，也不改变行高或宽度。 */
+body.inline-proto .block.editing .mk > i { opacity: 0; }
+body.inline-proto .block.editing .mk.mk-live > i { opacity: 1; }
+
+/* 零宽换行：只用来让 textContent 逐字还原原文；视觉换行由 <br> / <li> 提供，
+   所以这里把 \n 当普通可折叠空白吃掉，不产生任何宽度或行高。 */
+.mk-nl {
+  white-space: normal;
+  letter-spacing: 0;
+}
+
+/* ---------------- 任务列表 ----------------
+   复选框只是控件：不进入 textContent，也不参与复制。尺寸与行高对齐，
+   点击由 JS 改写 dataset.raw 里的 [ ] / [x]，因此渲染态与原文始终一致。 */
+.block li > input.task-check {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.92em;
+  height: 0.92em;
+  margin: 0 0.45em 0 0.05em;
+  vertical-align: -0.08em;
+  border: 1.5px solid var(--border);
+  border-radius: 0.22em;
+  background: var(--check-bg);
+  cursor: pointer;
+  position: relative;
+}
+
+.block li > input.task-check:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.block li > input.task-check:checked::after {
+  content: '';
+  position: absolute;
+  left: 0.28em;
+  top: 0.08em;
+  width: 0.2em;
+  height: 0.42em;
+  border: solid var(--check-mark);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* 编辑态：控件只隐身、保留占位（display:none 会让整行文字左移一个复选框宽度），
+   标记文字用绝对定位压在那块占位上，仍然零前进宽度，因此进出编辑态文字不位移。 */
+.block.editing li > input.task-check { visibility: hidden; }
+
+.block.editing .mk.mk-task { font-size: inherit; }
+
+body.inline-proto .block.editing .mk.mk-task > i {
+  position: absolute;
+  /* 往左让出一点，"]" 才不会贴住后面的任务文字：只借左侧留白，不动文字位置 */
+  left: -0.22em;
+  top: 0;
+  right: auto;
+  bottom: auto;
+  opacity: 1;
+  font-size: inherit;
+  font-family: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  white-space: pre;
+  /* 标记文字要能用鼠标点、用键盘改，不受提示标签的禁用规则影响 */
+  pointer-events: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 标题标记挂在标题文字左侧（进入父级左侧留白），零宽、不推文字。
+   只靠 right:0 让右边缘贴住零宽锚点，元素整体向左展开，不能再叠加 translate。 */
+.mk.mk-head > i {
+  left: auto;
+  right: 0;
+  bottom: -0.16em;
+  color: var(--faint-2);
+}
+
+body.inline-proto .block.h1 .mk.mk-head > i { font-size: 1.05rem; }
+body.inline-proto .block.h2 .mk.mk-head > i { font-size: 0.88rem; }
+body.inline-proto .block.h3 .mk.mk-head > i { font-size: 0.74rem; }
+body.inline-proto .block.h4 .mk.mk-head > i { font-size: 0.66rem; }
+body.inline-proto .block.h5 .mk.mk-head > i { font-size: 0.62rem; }
+body.inline-proto .block.h6 .mk.mk-head > i { font-size: 0.6rem; }
+
+/* 原型里内容保持渲染态，块级“编辑态字号”不能再套一层（否则标题会变成 1.9×1.9） */
+body.inline-proto .block.editing {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* 原型不画整块底色/描边：活动行的唯一视觉变化是淡色标记与光标，
+   这样进入/离开某行时页面差异只剩标记本身，不产生“重排感”。 */
+body.inline-proto .block:focus {
+  background: transparent;
+  box-shadow: none;
+}
+
+body.inline-proto .block.h1.editing,
+body.inline-proto .block.h2.editing,
+body.inline-proto .block.h3.editing,
+body.inline-proto .block.h4.editing,
+body.inline-proto .block.h5.editing,
+body.inline-proto .block.h6.editing {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+

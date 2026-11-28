@@ -1,0 +1,172 @@
+/* 代码块顶部头栏：语言徽标靠左，复制按钮绝对定位在代码块内部右上角
+   （top/right 各留 0.35–0.45rem 内缩），整条都在边框内，不再挂到框外。
+   头栏只占很窄的一条，代码正文从下一行开始；横向滚动只发生在 .code-scroll 内，
+   按钮位置始终稳定。渲染态即可用，user-select:none，连选/三击整段复制都不会
+   把语言名或按钮带进剪贴板。头栏与代码之间不再画分隔线；min-height 在
+   border-box 下包含原来那 1px，去掉边框后条高与代码首行位置都保持不变。 */
+.code-tools {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  box-sizing: border-box;
+  min-height: 1.85rem;
+  /* 右侧给绝对定位的复制按钮留位，长语言名截断后也碰不到按钮 */
+  padding: 0 1.95rem 0 0.6rem;
+}
+
+.code-lang {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0.04rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 0.66rem;
+  line-height: 1.5;
+  white-space: pre;
+  outline: none;
+  opacity: 0.5;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  /* 语言名过长时省略，保证复制按钮始终留在代码块内、与徽标不重叠；
+     hover 有 title 可看全名，点开选择器可搜索切换。 */
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 徽标后的展开指示：用两条边画出的 V 形，空 span 没有文本，不会进入
+   textContent 或剪贴板；打开下拉（徽标 aria-expanded=true）时旋转 180°。 */
+.code-lang-caret {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid var(--faint-3);
+  border-bottom: 1px solid var(--faint-3);
+  transform: translateY(-1.5px) rotate(45deg);
+  transform-origin: center;
+  transition: transform 120ms ease;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.code-lang[aria-expanded="true"] + .code-lang-caret {
+  transform: translateY(1px) rotate(225deg);
+}
+
+/* 复制按钮：绝对定位在代码块内部右上角，平时半透明、hover 才显形；
+   成功后短暂换成对勾。top/right 的 0.35/0.45rem 内缩让按钮四边都落在
+   代码块边框以内，也不会碰到头栏左侧的语言徽标。 */
+.code-copy {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.45rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: pointer;
+  outline: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.code-copy:hover,
+.code-copy:focus-visible {
+  opacity: 1;
+  border-color: var(--border-hover);
+  background: var(--bg);
+}
+
+.code-copy .i-done { display: none; }
+.code-copy.copied { opacity: 1; color: var(--accent); }
+.code-copy.copied .i-copy { display: none; }
+.code-copy.copied .i-done { display: inline; }
+
+.code-lang:hover {
+  opacity: 1;
+  border-color: var(--border-hover);
+  background: var(--bg);
+}
+
+.code-lang:empty::before {
+  content: 'lang';
+  color: var(--faint-3);
+}
+
+/* 编辑态：完全显形、可选中（光标要能落进来才能改），位置不变 */
+body.inline-proto .block.code.editing .code-lang {
+  opacity: 1;
+  border-color: var(--border-hover);
+  background: var(--bg);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 代码滚动区：只有这里横向滚动，行号栏在滚动区之外，因而永远停在左侧。
+   不再用 position:sticky——sticky 与横向滚动条共存时，WebKit 在整篇重建后
+   会把块高少算一个滚动条高度（实测 15px）。 */
+.code-scroll {
+  /* flex-basis 必须是 0：头栏占满第一行后，若按内容宽度参与折行判断，
+     超长行会把滚动区挤到第三行（头栏/行号/代码各占一行）。 */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 行号栏：独立一栏、弱化颜色、不参与选中/复制；
+   右侧描边即行号与代码之间的竖向分隔线，随内容高度贯通整块 */
+.gutter {
+  flex: 0 0 2.8rem;
+  padding: 0.72rem 0.85rem 0.72rem 0;
+  border-right: 1px solid var(--border-soft);
+  background: var(--bg-code);
+  text-align: right;
+  color: var(--muted-2);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.2325rem;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+pre.code-block code {
+  display: block;
+  background: none;
+  padding: 0.72rem 1.1rem 0.72rem 0.95rem;
+  font-size: 0.85rem;
+  line-height: 1.2325rem;   /* 0.85rem × 145% */
+  white-space: pre;
+  outline: none;            /* 就地编辑时 <code> 自己可编辑，不能出现焦点框 */
+}
+
+.tok-k { color: var(--tok-keyword); }
+.tok-t { color: var(--tok-type); }
+.tok-f { color: var(--tok-function); }
+.tok-s { color: var(--tok-string); }
+.tok-c { color: var(--tok-comment); }
+.tok-n { color: var(--tok-number); }
+
+blockquote {
+  margin: 0.6em 0 1em;
+  padding: 0.1em 0 0.1em 1em;
+  border-left: 3px solid var(--border-soft);
+  color: var(--muted-4);
+}
+
+ul, ol { margin: 0.4em 0 0.9em; padding-left: 1.6em; }

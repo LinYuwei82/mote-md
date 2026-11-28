@@ -266,7 +266,7 @@ git pull --rebase
 
 ```powershell
 git status --short
-git add resources/web/editor.css
+git add resources/web/src/css
 git commit -m "目录栏整栏改为手型光标，避免条目间移动时闪烁"
 ```
 

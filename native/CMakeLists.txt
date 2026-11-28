@@ -13,8 +13,9 @@ get_filename_component(MOTE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 set(MOTE_SHELL_MAC "${MOTE_REPO_ROOT}/shell/mac")
 set(MOTE_SHELL_WIN "${MOTE_REPO_ROOT}/shell/win")
 
-# 前端源码唯一来源：resources/web/src/*.js。构建时按 manifest 顺序拼成
-# editor.js；运行时仍是单个内联脚本，不引入模块加载器。
+# 前端源码唯一来源：resources/web/src/（JS）与 resources/web/src/css/（CSS）。
+# 构建时各按自己的 manifest 拼成单个 editor.js / editor.css；运行时仍是单文件，
+# 不引入模块加载器，也不改 __MOTE_JS__ / __MOTE_CSS__ 的内联方式。
 set(MOTE_EDITOR_SRC_DIR "${MOTE_REPO_ROOT}/resources/web/src")
 set(MOTE_EDITOR_MANIFEST "${MOTE_EDITOR_SRC_DIR}/editor.manifest.json")
 set(MOTE_EDITOR_BUNDLE "${CMAKE_CURRENT_BINARY_DIR}/web/editor.js")
@@ -32,6 +33,24 @@ add_custom_command(
   COMMENT "Bundle resources/web/src -> editor.js"
   VERBATIM)
 add_custom_target(mote_editor_bundle DEPENDS "${MOTE_EDITOR_BUNDLE}")
+
+set(MOTE_EDITOR_CSS_DIR "${MOTE_EDITOR_SRC_DIR}/css")
+set(MOTE_EDITOR_CSS_MANIFEST "${MOTE_EDITOR_SRC_DIR}/css.manifest.json")
+set(MOTE_EDITOR_CSS_BUNDLE "${CMAKE_CURRENT_BINARY_DIR}/web/editor.css")
+file(GLOB MOTE_EDITOR_CSS_PARTS CONFIGURE_DEPENDS "${MOTE_EDITOR_CSS_DIR}/*.css")
+add_custom_command(
+  OUTPUT "${MOTE_EDITOR_CSS_BUNDLE}"
+  COMMAND "${CMAKE_COMMAND}"
+    "-DMOTE_EDITOR_SRC_DIR=${MOTE_EDITOR_CSS_DIR}"
+    "-DMOTE_EDITOR_MANIFEST=${MOTE_EDITOR_CSS_MANIFEST}"
+    "-DMOTE_EDITOR_OUT=${MOTE_EDITOR_CSS_BUNDLE}"
+    -P "${MOTE_REPO_ROOT}/tools/editor/bundle_editor.cmake"
+  DEPENDS ${MOTE_EDITOR_CSS_PARTS}
+          "${MOTE_EDITOR_CSS_MANIFEST}"
+          "${MOTE_REPO_ROOT}/tools/editor/bundle_editor.cmake"
+  COMMENT "Bundle resources/web/src/css -> editor.css"
+  VERBATIM)
+add_custom_target(mote_editor_css_bundle DEPENDS "${MOTE_EDITOR_CSS_BUNDLE}")
 
 # 版本号唯一来源：仓库根的 VERSION.txt（单行 x.y.z）
 file(STRINGS "${MOTE_REPO_ROOT}/VERSION.txt" MOTE_VERSION LIMIT_COUNT 1)
@@ -220,9 +239,10 @@ if(WIN32)
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Mote>/web"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       "${MOTE_REPO_ROOT}/resources/web/editor.html"
-      "${MOTE_REPO_ROOT}/resources/web/editor.css"
       "${MOTE_REPO_ROOT}/resources/web/mermaid.min.js"
       "$<TARGET_FILE_DIR:Mote>/web"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${MOTE_EDITOR_CSS_BUNDLE}" "$<TARGET_FILE_DIR:Mote>/web/editor.css"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       "${MOTE_EDITOR_BUNDLE}" "$<TARGET_FILE_DIR:Mote>/web/editor.js"
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Mote>/fonts"
@@ -253,10 +273,10 @@ else()
   set(CMAKE_OBJCXX_STANDARD 20)
 
   # 前端资源只有一份：直接引用仓库 resources/，构建时拷进 bundle。
-  # editor.js 不在这里：它由 resources/web/src 在构建期拼接生成（见文件顶部）。
+  # editor.js / editor.css 不在这里：它们由 resources/web/src 在构建期拼接生成（见文件顶部）。
   set(MOTE_WEB_FILES
     "${MOTE_REPO_ROOT}/resources/web/editor.html"
-    "${MOTE_REPO_ROOT}/resources/web/editor.css"
+    "${MOTE_EDITOR_CSS_BUNDLE}"
     "${MOTE_REPO_ROOT}/resources/web/mermaid.min.js"
     "${MOTE_EDITOR_BUNDLE}")
   set(MOTE_FONT_FILES
@@ -425,7 +445,7 @@ endif()
 
 # 生成的前端 bundle 必须先于 Mote 构建完成：macOS 把它作为 bundle 资源，
 # Windows 在 POST_BUILD 里复制到 exe 同级的 web/ 目录。
-add_dependencies(Mote mote_editor_bundle)
+add_dependencies(Mote mote_editor_bundle mote_editor_css_bundle)
 
 # 只对本次配置生效：避免缓存把发布态带到同一目录后续的开发构建
 # （与 xiaotu / devcard 的 *_RELEASE_BUILD 处理一致）。

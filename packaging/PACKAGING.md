@@ -744,7 +744,8 @@ Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip 
 
 ## 4. 资源与路径策略
 
-- 前端只有一份：`resources/web/`（`editor.html` / `editor.css` / `editor.js`）。
+- 前端只有一份产物：`resources/web/`（`editor.html` / `mermaid.min.js`）加构建期由
+  `resources/web/src/`（`editor.css` / `editor.js`）拼出的两个单文件。
   构建时 CMake 把它拷进 macOS bundle 的 `Contents/Resources/web/`，Windows 则拷到 exe 同级的
   `web/`；运行时不依赖仓库路径。
 - 内置示例 `resources/samples/welcome.md` 同样随构建拷入；发布包额外在包内保留

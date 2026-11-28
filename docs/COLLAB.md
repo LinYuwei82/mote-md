@@ -24,7 +24,7 @@ git clone git@gitee.com:lin-yuwei168/mote-md.git
 **共享处同一时间只允许一台机器改**：
 
 - `core/*`（协议、状态机、菜单表、图片落盘、分片切分、更新判定）
-- `resources/web/*`（`editor.js` / `editor.css` / `editor.html`）
+- `resources/web/*`（`editor.html` / `mermaid.min.js`，以及 `src/*.js`、`src/css/*.css` 源码分片）
 - `native/CMakeLists.txt`、`VERSION.txt`
 - 其它两端共用的外壳与接口：`shell/*` 里的公共头文件
 

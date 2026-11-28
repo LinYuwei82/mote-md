@@ -1,0 +1,175 @@
+/* ---------------- 打印 / 导出 PDF ----------------
+   宿主按 A4、无页眉页脚打印当前页面；这里只用 @media print 清掉界面外壳，
+   不改 DOM、不动撤销栈，导出前后文档与脏标记都不变。
+   正文、表格、图片与代码高亮全部保留原有内联样式；深色主题在纸上统一转浅色，
+   避免导出黑底 PDF。 */
+@media print {
+  :root,
+  :root[data-theme="dark"] {
+    color-scheme: light;
+    --bg: #ffffff;
+    --bg-soft: #f6f8fa;
+    --bg-hover: #f6f8fa;
+    --text: #1d2129;
+    --text-strong: #24303d;
+    --text-soft: #4a5563;
+    --heading: #0f172a;
+    --muted: #6b7480;
+    --border-soft: #d8dee4;
+    --border-toc: #e5e8ec;
+    --border-hair: #e5e8ec;
+  }
+
+  body { background: #fff; }
+
+  /* min-height:100% 在分页时会被解析成“每页满高”，WKWebView 打印会一直追加
+     空页直到磁盘写满；打印上下文里必须把根节点高度交还给内容自身。 */
+  html,
+  body {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* 侧栏、查找条、斜杠菜单、块的操作标记、行号栏与右上角浮层都不进纸面 */
+  #toc,
+  #find-bar,
+  #slash-menu,
+  #turn-menu,
+  #lang-menu,
+  #block-handle,
+  #block-insert-line,
+  #block-menu,
+  .mk,
+  .code-tools,
+  .gutter { display: none !important; }
+
+  #layout { display: block !important; }
+
+  #main { overflow: visible !important; }
+
+  #editor {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .block {
+    outline: none !important;
+    background: transparent !important;
+  }
+
+  /* 代码块与表格尽量不跨页；标题不要孤零零留在页底 */
+  pre,
+  table,
+  img,
+  .block.code { break-inside: avoid; }
+
+  .block h1,
+  .block h2,
+  .block h3 { break-after: avoid; }
+
+  .code-scroll { overflow: visible !important; }
+}
+
+/* createPDF / PrintToPdf 实际按屏幕媒体渲染，@media print 不生效；导出期间宿主给
+   body 加 .pdf-export（完成后立即移除），这里用同一套规则清外壳。只动 class，
+   不改正文节点，文档内容、撤销栈与脏标记都不受影响。 */
+body.pdf-export {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-soft: #f6f8fa;
+  --bg-hover: #f6f8fa;
+  --text: #1d2129;
+  --text-strong: #24303d;
+  --text-soft: #4a5563;
+  --heading: #0f172a;
+  --muted: #6b7480;
+  --border-soft: #d8dee4;
+  --border-toc: #e5e8ec;
+  --border-hair: #e5e8ec;
+  background: #fff;
+}
+
+body.pdf-export #toc,
+body.pdf-export #find-bar,
+body.pdf-export #slash-menu,
+body.pdf-export #turn-menu,
+body.pdf-export #lang-menu,
+body.pdf-export #block-handle,
+body.pdf-export #block-insert-line,
+body.pdf-export #block-menu,
+body.pdf-export .mk,
+body.pdf-export .code-tools,
+body.pdf-export .gutter { display: none !important; }
+
+body.pdf-export #layout { display: block !important; }
+
+body.pdf-export #main { overflow: visible !important; }
+
+body.pdf-export #editor {
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+body.pdf-export .block {
+  outline: none !important;
+  background: transparent !important;
+}
+
+body.pdf-export pre,
+body.pdf-export table,
+body.pdf-export img,
+body.pdf-export .block.code { break-inside: avoid; }
+
+body.pdf-export .block h1,
+body.pdf-export .block h2,
+body.pdf-export .block h3 { break-after: avoid; }
+
+body.pdf-export .code-scroll { overflow: visible !important; }
+
+/* 状态栏移入页面：native 外壳给 body 加 platform-mac 后才显示。
+   Qt/Windows 构建不加这个类，继续用原有 QStatusBar，不会出现两条状态栏。 */
+#statusbar { display: none; }
+
+body.platform-mac,
+body.platform-win {
+  padding-bottom: 24px;
+  box-sizing: border-box;
+}
+
+body.platform-mac #statusbar,
+body.platform-win #statusbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 24px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border-top: 1px solid var(--border-hair);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+#status-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#status-stats { margin-left: auto; flex: none; }
+
+/* 导出 PDF 时页面要按整篇排版，状态栏与底部留白都必须让位 */
+body.pdf-export { padding-bottom: 0; }
+body.pdf-export #statusbar { display: none; }
+

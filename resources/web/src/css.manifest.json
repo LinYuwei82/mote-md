@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "bundle": "resources/web/editor.css",
+  "note": "由 tools/editor/split_editor.py 生成；files 顺序即拼接顺序。",
+  "files": [
+    "00-tokens.css",
+    "10-base.css",
+    "20-markdown.css",
+    "30-code.css",
+    "40-blocks.css",
+    "50-find.css",
+    "60-overlays.css",
+    "70-print.css",
+    "80-pdf.css"
+  ]
+}

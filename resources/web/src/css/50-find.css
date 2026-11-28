@@ -1,0 +1,147 @@
+/* ---------------- 查找（Cmd+F） ----------------
+   查找条 fixed 悬浮在右上角，不参与文档排版；覆盖层挂在 body、pointer-events:none，
+   因此都不会改变正文几何。关闭时两者都被移除（不是隐藏），不会留下残留元素。 */
+#find-bar {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--shadow-bar);
+  font-family: -apple-system, "PingFang SC", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+
+#find-input,
+#find-replace {
+  width: 168px;
+  margin: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: var(--bg);
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-strong);
+  outline: none;
+}
+
+#find-replace {
+  width: 140px;
+}
+
+#find-input {
+  height: 22px;
+  max-height: 72px;
+  resize: none;
+  overflow-y: auto;
+  white-space: pre;
+  line-height: 1.35;
+  font-family: inherit;
+}
+
+#find-input:focus,
+#find-replace:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+#find-count {
+  min-width: 42px;
+  text-align: center;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+#find-note {
+  max-width: 260px;
+  color: var(--note);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#find-bar button {
+  height: 22px;
+  min-width: 22px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-4);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#find-bar button:hover {
+  border-color: var(--border-soft);
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}
+
+#find-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.find-hit {
+  position: absolute;
+  border-radius: 2px;
+  background: var(--find-hit);
+}
+
+.find-hit.active {
+  background: var(--find-hit-active);
+  box-shadow: 0 0 0 1px var(--find-hit-ring);
+}
+
+/* 跨块 Shift+方向键选区：与查找高亮同一条覆盖层思路，只画不占排版 */
+#cross-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.cross-hit {
+  position: absolute;
+  border-radius: 2px;
+  background: var(--cross-hit);
+}
+
+
+/* 空白文档占位提示：::before 不属于 textContent，绝不进入 dataset.raw。
+   只在整篇只有一个空块（#editor.bare）时出现。 */
+#editor.bare > .block:first-child {
+  position: relative;
+}
+
+#editor.bare > .block:first-child::before {
+  content: "开始输入，或按 / 插入内容";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--faint-2);
+  pointer-events: none;
+  user-select: none;
+}
+

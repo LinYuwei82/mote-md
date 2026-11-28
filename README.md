@@ -238,8 +238,9 @@ modules/update/          更新清单解析、版本比较与升级判定（两�
 shell/mac/               AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
 shell/win/               Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
 resources/
-  web/                   前端资源（editor.html / editor.css / mermaid.min.js）
-  web/src/               前端源码分片（唯一源码；构建期按 editor.manifest.json 拼成 editor.js）
+  web/                   前端资源（editor.html / mermaid.min.js；editor.js / editor.css 为构建产物）
+  web/src/               前端 JS 源码分片（唯一源码；构建期按 editor.manifest.json 拼成 editor.js）
+  web/src/css/           前端 CSS 源码分片（唯一源码；构建期按 css.manifest.json 拼成 editor.css）
   fonts/                 JetBrains Mono（Light）与 OFL.txt
   icons/                 应用图标
   samples/               内置示例文档与示例图

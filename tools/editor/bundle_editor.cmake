@@ -1,4 +1,4 @@
-# 按 resources/web/src/editor.manifest.json 的顺序拼接前端分片。
+# 按清单（editor.manifest.json / css.manifest.json）的顺序拼接前端分片。
 #
 # 由 native/CMakeLists.txt 在构建期调用（cmake -P），不依赖 Python/Node：
 #   cmake -DMOTE_EDITOR_SRC_DIR=... -DMOTE_EDITOR_MANIFEST=... \

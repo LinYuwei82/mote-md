@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 """Mote 前端源码拆分 / 拼接。
 
-P1 机械拆分已完成：resources/web/src/*.js 是唯一源码，
-resources/web/editor.js 现在是构建产物（CMake 在构建期按 manifest 拼接）。
+P1 机械拆分已完成：resources/web/src/*.js 与 resources/web/src/css/*.css 是唯一源码，
+resources/web/editor.js 与 resources/web/editor.css 现在是构建产物（CMake 在构建期
+按各自 manifest 拼接）。
 
 本脚本保留两个用途：
-- bundle：本地手动生成 editor.js（--check 校验，--out - 输出到 stdout）
+- bundle：本地手动生成 editor.js / editor.css（--check 校验，--out - 输出到 stdout）
 - split：从历史 bundle 重新拆分分片（需要 --from 指定旧文件）
+- subsplit：按行号继续拆分单个分片（JS / CSS 都支持）
 
 用法（在仓库根执行）：
   python3 tools/editor/split_editor.py bundle            # 写回 resources/web/editor.js
   python3 tools/editor/split_editor.py bundle --check
   python3 tools/editor/split_editor.py bundle --out -    # 输出到 stdout
+  python3 tools/editor/split_editor.py bundle --target css
   python3 tools/editor/split_editor.py status
+  python3 tools/editor/split_editor.py status --target css
   python3 tools/editor/split_editor.py split --from /path/to/old-editor.js
   python3 tools/editor/split_editor.py subsplit 70-dom-events.js --at 356:70b-xxx.js
 
@@ -34,6 +38,15 @@ ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = ROOT / "resources/web/editor.js"
 SRC_DIR = ROOT / "resources/web/src"
 MANIFEST = SRC_DIR / "editor.manifest.json"
+CSS_BUNDLE = ROOT / "resources/web/editor.css"
+CSS_DIR = SRC_DIR / "css"
+CSS_MANIFEST = SRC_DIR / "css.manifest.json"
+
+# target → (分片目录, 清单, 产物, 分片扩展名)
+TARGETS = {
+    "js": (SRC_DIR, MANIFEST, BUNDLE, "*.js"),
+    "css": (CSS_DIR, CSS_MANIFEST, CSS_BUNDLE, "*.css"),
+}
 
 # 现有 editor.js 里的 section 注释 → 分片文件名。
 # 新增 section 时必须在这里登记，避免拆分顺序悄悄漂移。
@@ -108,22 +121,28 @@ def split_text(text: str) -> list[tuple[str, str]]:
     return parts
 
 
-def load_manifest() -> dict:
-    if not MANIFEST.exists():
-        raise SystemExit(f"缺少清单：{MANIFEST.relative_to(ROOT)}，请先执行 split")
-    with MANIFEST.open("r", encoding="utf-8") as handle:
+def load_manifest(manifest_path: Path = MANIFEST) -> dict:
+    if not manifest_path.exists():
+        raise SystemExit(f"缺少清单：{manifest_path.relative_to(ROOT)}，请先执行 split")
+    with manifest_path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
-def bundle_text() -> str:
-    manifest = load_manifest()
+def bundle_text(src_dir: Path = SRC_DIR, manifest_path: Path = MANIFEST) -> str:
+    manifest = load_manifest(manifest_path)
     names = manifest.get("files") or []
     if not names:
         raise SystemExit("清单 files 为空")
-    return "".join(read_text(SRC_DIR / name) for name in names)
+    return "".join(read_text(src_dir / name) for name in names)
 
 
-def first_difference(left: str, right: str) -> str:
+def target_paths(target: str) -> tuple[Path, Path, Path, str]:
+    if target not in TARGETS:
+        raise SystemExit(f"未知 target：{target}")
+    return TARGETS[target]
+
+
+def first_difference(left: str, right: str, bundle_name: str = "editor.js") -> str:
     limit = min(len(left), len(right))
     for index in range(limit):
         if left[index] != right[index]:
@@ -131,10 +150,10 @@ def first_difference(left: str, right: str) -> str:
             end = index + 30
             return (
                 f"首个差异在偏移 {index}\n"
-                f"  editor.js: {left[start:end]!r}\n"
+                f"  {bundle_name}: {left[start:end]!r}\n"
                 f"  src 拼接:  {right[start:end]!r}"
             )
-    return f"长度不同：editor.js={len(left)}，src 拼接={len(right)}"
+    return f"长度不同：{bundle_name}={len(left)}，src 拼接={len(right)}"
 
 
 def command_split(args: argparse.Namespace) -> int:
@@ -196,24 +215,26 @@ def command_split(args: argparse.Namespace) -> int:
 
 
 def command_bundle(args: argparse.Namespace) -> int:
-    text = bundle_text()
+    src_dir, manifest_path, bundle_path, _ = target_paths(args.target)
+    name = bundle_path.name
+    text = bundle_text(src_dir, manifest_path)
     if args.check:
-        if not BUNDLE.exists():
-            print("editor.js 未生成（构建产物）；分片清单完整")
+        if not bundle_path.exists():
+            print(f"{name} 未生成（构建产物）；分片清单完整")
             return 0
-        current = read_text(BUNDLE)
+        current = read_text(bundle_path)
         if current != text:
-            print("失败：src 拼接结果与 editor.js 不一致", file=sys.stderr)
-            print(first_difference(current, text), file=sys.stderr)
+            print(f"失败：src 拼接结果与 {name} 不一致", file=sys.stderr)
+            print(first_difference(current, text, name), file=sys.stderr)
             return 1
-        print("通过：src 拼接结果与 editor.js 逐字节一致")
+        print(f"通过：src 拼接结果与 {name} 逐字节一致")
         return 0
 
     if args.out == "-":
         sys.stdout.write(text)
         return 0
 
-    out = Path(args.out) if args.out else BUNDLE
+    out = Path(args.out) if args.out else bundle_path
     if not out.is_absolute():
         out = ROOT / out
     write_text(out, text)
@@ -226,13 +247,14 @@ def command_bundle(args: argparse.Namespace) -> int:
 
 
 def command_subsplit(args: argparse.Namespace) -> int:
-    manifest = load_manifest()
+    src_dir, manifest_path, _, _ = target_paths(args.target)
+    manifest = load_manifest(manifest_path)
     names = list(manifest.get("files") or [])
-    target = args.target
+    target = args.shard
     if target not in names:
         raise SystemExit(f"清单中没有分片：{target}")
 
-    target_path = SRC_DIR / target
+    target_path = src_dir / target
     text = read_text(target_path)
     lines = text.splitlines(keepends=True)
 
@@ -267,7 +289,7 @@ def command_subsplit(args: argparse.Namespace) -> int:
     for name in part_names:
         if name in others:
             raise SystemExit(f"新分片名已存在于清单：{name}")
-        if (SRC_DIR / name).exists() and name != target:
+        if (src_dir / name).exists() and name != target:
             raise SystemExit(f"目标文件已存在：{name}")
 
     bounds = [1] + [line for line, _ in specs] + [len(lines) + 1]
@@ -282,14 +304,14 @@ def command_subsplit(args: argparse.Namespace) -> int:
         raise SystemExit("内部错误：subsplit 拼接结果与目标文件不一致")
 
     for name, chunk in parts:
-        write_text(SRC_DIR / name, chunk)
+        write_text(src_dir / name, chunk)
     if target not in part_names:
         target_path.unlink()
 
     position = names.index(target)
     names[position:position + 1] = part_names
     manifest["files"] = names
-    write_text(MANIFEST, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
 
     print(f"已把 {target} 拆成 {len(parts)} 个分片：")
     for name, chunk in parts:
@@ -299,31 +321,33 @@ def command_subsplit(args: argparse.Namespace) -> int:
 
 
 def command_status(args: argparse.Namespace) -> int:
-    if not MANIFEST.exists():
-        print("尚未拆分：没有 src/editor.manifest.json")
+    src_dir, manifest_path, bundle_path, pattern = target_paths(args.target)
+    name = bundle_path.name
+    if not manifest_path.exists():
+        print(f"尚未拆分：没有 {manifest_path.name}")
         return 1
-    manifest = load_manifest()
+    manifest = load_manifest(manifest_path)
     names = manifest.get("files") or []
-    missing = [name for name in names if not (SRC_DIR / name).exists()]
-    on_disk = {path.name for path in SRC_DIR.glob("*.js")}
+    missing = [name for name in names if not (src_dir / name).exists()]
+    on_disk = {path.name for path in src_dir.glob(pattern)}
     extra = sorted(on_disk - set(names))
-    print(f"分片：{len(names)} 个；缺失：{len(missing)}；清单外 .js：{len(extra)}")
+    print(f"{name} 分片：{len(names)} 个；缺失：{len(missing)}；清单外 {pattern}：{len(extra)}")
     if missing:
         print("  缺失：" + ", ".join(missing))
     if extra:
         print("  清单外：" + ", ".join(extra))
     if missing or extra:
         return 1
-    if not BUNDLE.exists():
-        print("editor.js 未生成（构建产物）；分片清单完整")
+    if not bundle_path.exists():
+        print(f"{name} 未生成（构建产物）；分片清单完整")
         return 0
-    current = read_text(BUNDLE)
-    rebuilt = bundle_text()
+    current = read_text(bundle_path)
+    rebuilt = bundle_text(src_dir, manifest_path)
     if current != rebuilt:
-        print("editor.js 与 src 拼接结果不一致")
-        print(first_difference(current, rebuilt))
+        print(f"{name} 与 src 拼接结果不一致")
+        print(first_difference(current, rebuilt, name))
         return 1
-    print("editor.js 与 src 拼接结果一致")
+    print(f"{name} 与 src 拼接结果一致")
     return 0
 
 
@@ -338,14 +362,20 @@ def main() -> int:
 
     bundle = sub.add_parser("bundle", help="按清单拼接分片")
     bundle.add_argument("--check", action="store_true", help="只校验，不写出")
-    bundle.add_argument("--out", help="输出路径；缺省写回 resources/web/editor.js，- 表示 stdout")
+    bundle.add_argument("--out", help="输出路径；缺省写回对应产物，- 表示 stdout")
+    bundle.add_argument("--target", choices=sorted(TARGETS), default="js",
+                        help="拼接哪套分片：js（默认）或 css")
     bundle.set_defaults(func=command_bundle)
 
-    status = sub.add_parser("status", help="检查清单、分片与 editor.js 是否一致")
+    status = sub.add_parser("status", help="检查清单、分片与产物是否一致")
+    status.add_argument("--target", choices=sorted(TARGETS), default="js",
+                        help="检查哪套分片：js（默认）或 css")
     status.set_defaults(func=command_status)
 
     subsplit = sub.add_parser("subsplit", help="按行号把一个分片继续拆成多个")
-    subsplit.add_argument("target", help="现有分片名，如 70-dom-events.js")
+    subsplit.add_argument("shard", metavar="SHARD", help="现有分片名，如 70-dom-events.js")
+    subsplit.add_argument("--target", choices=sorted(TARGETS), default="js",
+                          help="分片属于哪套：js（默认）或 css")
     subsplit.add_argument(
         "--at",
         action="append",

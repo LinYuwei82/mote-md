@@ -288,7 +288,7 @@ git pull --rebase              # 用 rebase，保持 main 线性，避免无意�
 - 显式列文件，不要 `git add -A`：
 
 ```powershell
-git add resources/web/src resources/web/editor.css
+git add resources/web/src resources/web/src/css
 git commit -m "目录栏整栏改为手型光标，避免条目间移动时闪烁"
 ```
 
@@ -309,7 +309,7 @@ git push
 
 ### 5.4 两边同时改同一个文件
 
-Mac 和 Windows 同时在改（比如都在改 `resources/web/editor.css`）时：
+Mac 和 Windows 同时在改（比如都在改 `resources/web/src/css/00-tokens.css`）时：
 
 1. **小块快推**。不要攒一天的改动再一次推，冲突面积和痛苦程度是超线性增长的。
 2. 动手前先 `git pull --rebase`，改完尽快 `push`。
@@ -359,7 +359,7 @@ git diff --name-only --diff-filter=U        # 只列冲突文件
 编辑成你想要的最终内容（删掉三行标记），然后：
 
 ```powershell
-git add resources/web/editor.css
+git add resources/web/src/css
 git rebase --continue
 ```
 
