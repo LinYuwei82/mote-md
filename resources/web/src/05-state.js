@@ -3,12 +3,6 @@
   var crossAnnounced = false; // 与外壳同步的「是否有跨块选区」状态
   var dragCross = null;       // { anchor, el, x, y, goalX }
   var dragScrollTimer = 0;
-  var findBar = null, findInput = null, findReplace = null;
-  var findCount = null, findNote = null, findLayer = null;
-  var findMatches = [], findActive = -1, findTimer = 0, findNoteTimer = 0;
-  var findCaret = null;         // 打开查找前的原光标
-  var findJumped = null;        // 最近一次跳转到的命中
-  var findInSource = false;     // 本轮命中是 sourceEl.value 上的区间
   var slashState = null;   // { el, start, end, index }
   var slashMenu = null;
   var turnMenu = null;

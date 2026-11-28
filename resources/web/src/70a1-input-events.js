@@ -183,8 +183,8 @@
     var el = CaretCode.blockOf(event.target);
     if (!el)
       return;
-    if (findBar)
-      FindUi.scheduleFind();
+    if (Find.isOpen())
+      Find.scheduleFind();
     if (LayoutCode.isCodeBlock(el)) {
       // 徽标被原生删除（整块选中后删除）：语义等于清空语言，补回空徽标，
       // 用户可再点开选择器重选；徽标不可编辑，光标放回正文首行。

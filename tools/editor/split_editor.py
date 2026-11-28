@@ -23,7 +23,8 @@ resources/web/editor.js 与 resources/web/editor.css 现在是构建产物（CMa
 约束：
 - 分片不添加任何头注释；除 P2 命名空间包裹外，不改动原有语句。
 - 00-boot.js 打开外层 IIFE、80b2-mermaid-init.js 关闭；其余分片各自包裹 IIFE，
-  公开符号经命名空间导出，共享可变状态集中在 00-boot.js 与 05-state.js。
+  公开符号经命名空间导出；内核状态集中在 00-boot.js，子系统域状态收在所属分片的
+  模块闭包内（05-state.js 只保留尚未迁移的部分）。
 - 拼接顺序由 manifest 决定。
 - 换行与 BOM 原样保留（读写都使用 newline=""）。
 """

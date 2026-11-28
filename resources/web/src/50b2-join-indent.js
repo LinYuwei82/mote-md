@@ -126,7 +126,7 @@
     var text = DocumentModel.currentSource();
     var next = text.slice(0, from) + text.slice(to);
     EditingSnapshot.commitHistory();
-    var landed = FindMatch.rebuildFromSourceText(next, from);
+    var landed = Find.rebuildFromSourceText(next, from);
     if (landed && landed.block) {
       landed.block.classList.add('editing');
       landed.block.focus();

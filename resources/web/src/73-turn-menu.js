@@ -168,8 +168,8 @@
     MermaidInit.scheduleMermaid();
     // 结构一变，查找命中引用的旧文本节点可能已被重建（拖拽重排实测会失联），
     // 原地重画只会把高亮层清空：查找条开着就按当前关键词重扫，命中与位置一起刷新
-    if (findBar)
-      FindUi.scheduleFind();
+    if (Find.isOpen())
+      Find.scheduleFind();
   }
 
   function makeBlockEl(raw) {

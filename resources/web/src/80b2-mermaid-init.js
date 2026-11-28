@@ -80,8 +80,8 @@
     // 新建空白文档：先关查找（否则高亮区间还指向旧块），目录与缩放回默认，
     // 再整篇清空（mountBlocks 会替换所有旧块），最后把光标放进唯一的空块。
     newDocument: function () {
-      if (findBar)
-        FindUi.closeFind();
+      if (Find.isOpen())
+        Find.closeFind();
       if (tocVisible)
         Toc.toggleToc();
       SlashMenu.closeSlash(false);

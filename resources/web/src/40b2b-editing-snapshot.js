@@ -231,8 +231,8 @@
     DocumentModel.scheduleDirty();
     Toc.refreshToc();
     // 撤销/重做会整篇重建，旧的命中区间已经失效；查找条开着就重扫一遍
-    if (findBar)
-      FindUi.scheduleFind();
+    if (Find.isOpen())
+      Find.scheduleFind();
   }
 
   function undo() {

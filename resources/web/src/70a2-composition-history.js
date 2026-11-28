@@ -33,8 +33,8 @@
   sourceEl.addEventListener('input', function () {
     if (suppressEvents)
       return;
-    if (findBar)
-      FindUi.scheduleFind();
+    if (Find.isOpen())
+      Find.scheduleFind();
     DocumentModel.scheduleDirty();
     EditingSnapshot.scheduleCommit();
     Toc.scheduleTocRefresh();

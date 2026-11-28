@@ -115,7 +115,7 @@
     CrossRange.announceCross();
     // 改动前的整篇状态先入栈：撤销要回到「选区还在」的那一步
     EditingSnapshot.commitHistory();
-    var landed = FindMatch.rebuildFromSourceText(next, from + insert.length);
+    var landed = Find.rebuildFromSourceText(next, from + insert.length);
     if (landed && landed.block) {
       landed.block.classList.add('editing');
       landed.block.focus();
