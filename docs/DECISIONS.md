@@ -82,19 +82,19 @@
 - **理由**：与编辑器内核「页面即文档」模型一致，隔离性最好；聚焦而非重复打开避免同文件双窗口互踩。
 - **代价**：菜单状态/键监视器上收到应用级；关窗/退出要遍历注册表逐个做脏保存询问。「最近打开」存储 mac=`UserDefaults Moterecent_files`、win=`HKCU\Software\Mote`，各 10 条、最新在前、不存在置灰。
 
-### 12. 「关于 Mote」双平台原生控件对话框（1.0.30 待发布）
+### 12. 「关于 Mote」双平台原生控件对话框（1.0.30 已发布）
 
 - **问题**：mac 原用系统 `orderFrontStandardAboutPanel:`（只有图标+版本，过于简陋），win 完全没有关于入口。
 - **选择**：mac `shell/mac/about_window.mm` 代码构建 NSWindow（无 xib）；win `shell/win/about_dialog.cpp` 手写 Win32 模态框（无 .rc 资源）。文案版式逐字对齐：图标 / Mote / 版本 x.y.z (build) / 版权 / 官网链接 / 检查更新… / 关闭。入口不进 core 命令表，走 shell 私有 id（win `kAboutCommandId=40007`）。
 - **理由**：与薄壳架构一致、零额外资源、打开开销小；复用各自现成更新链路。
-- **代价**：双端两处实现要人工保持文案同步。win 侧踩坑：控制 id 不能用 `IDC_*` 前缀（`IDC_ICON` 是 winuser.h 游标宏），变量名避开 `small`（rpcndr.h `#define small char`）。
+- **代价**：双端两处实现要人工保持文案同步（1.0.32 版权行「小图→小兔」即双端同改）。win 侧踩坑：控制 id 不能用 `IDC_*` 前缀（`IDC_ICON` 是 winuser.h 游标宏），变量名避开 `small`（rpcndr.h `#define small char`）；SysLink 超链接控件**不支持 `SS_CENTER`**（永远左对齐），需 `LM_GETIDEALSIZE` 取理想宽度后手动居中（1.0.31 修复）。
 
 ### 13. 构建号 stamp 用 extern "C" + /INCLUDE 强制保留
 
 - **问题**：1.0.29 CI 产物（MSVC 14.52）把 `static const char kBuildStamp[]` + `[[maybe_unused]]` 引用当死代码剥离，guard.py 的 BUILD_STR 二次校验降级 WARN，二进制字符串防线在 CI 产物上失效（本机 VS2022 14.44 不剥离，本地测不出）。
 - **选择**：`extern "C" const char kMoteBuildStamp[]` + `#pragma comment(linker, "/INCLUDE:kMoteBuildStamp")`（x64 C 符号无修饰）。
 - **理由**：/INCLUDE 是 MSVC 官方强制保留机制，链接器与 LTCG 都尊重。
-- **代价**：客户端更新判定本就读编译整数值，不受影响；此改动只恢复发布校验强度，最终确认看下次发布 preflight 输出「✓ 构建号一致」。
+- **代价**：客户端更新判定本就读编译整数值，不受影响；此改动只恢复发布校验强度。已验证：1.0.31/1.0.32 发布 preflight 均输出「✓ EXE 内构建号与参数一致」。
 
 ## 二、硬约束（改动会连带破坏其它功能）
 

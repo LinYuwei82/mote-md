@@ -434,7 +434,7 @@ Gitee 在 `tag_name` 不存在时会按 `target_commitish` 自建 tag。
 
 **P40 macOS 多窗口关闭非最后一个窗口必崩（1.0.29 实际发生）**
 `NSWindow` 默认 `releasedWhenClosed=YES`，关窗时 AppKit release 一次；ARC strong 属性（注册表/控制器持有）再 release 一次 → 双重释放，主 runloop 排空自动释放池时 `objc_release` 野指针 SIGSEGV。只关最后一个窗口时进程随即退出，掩盖问题。
-→ 所有代码创建的窗口显式 `window.releasedWhenClosed = NO`，生命周期只交给 ARC。
+→ 所有代码创建的窗口显式 `window.releasedWhenClosed = NO`，生命周期只交给 ARC。修复已随 1.0.30 发布。
 
 **P41 win32 手写对话框撞 SDK 宏**
 控制 id 命名 `IDC_ICON` 会撞上 winuser.h 的游标宏（`MAKEINTRESOURCE` 展开成语法错误）；局部变量名 `small` 撞上 rpcndr.h 的 `#define small char`。报错行号指向自己的代码，很迷惑。
@@ -442,7 +442,11 @@ Gitee 在 `tag_name` 不存在时会按 `target_commitish` 自建 tag。
 
 **P42 CI 产物里找不到构建号 stamp 字符串**
 MSVC 14.52（GitHub runner）会把无人引用的内部静态 `static const char kBuildStamp[]` 当死代码剥离，`[[maybe_unused]]` + 指针引用挡不住；本机 VS2022 14.44 保留，本地测不出。guard.py 缺标记只 WARN 跳过，不阻断。
-→ `extern "C"` 外部符号 + `#pragma comment(linker, "/INCLUDE:kMoteBuildStamp")` 强制保留（x64 C 符号无修饰）。客户端更新判定用编译整数值，与此字符串无关，功能不受影响。
+→ `extern "C"` 外部符号 + `#pragma comment(linker, "/INCLUDE:kMoteBuildStamp")` 强制保留（x64 C 符号无修饰）。客户端更新判定用编译整数值，与此字符串无关，功能不受影响。已验证：1.0.31/1.0.32 发布 preflight 均输出「✓ EXE 内构建号与参数一致」。
+
+**P43 SysLink 控件不支持 SS_CENTER**
+win32 关于对话框的版权/链接行用 `SYSLINK` 控件，加 `SS_CENTER` 样式无效，文字永远贴左边缘（1.0.30 实机发现）。
+→ 发 `LM_GETIDEALSIZE`(0x165B) 取理想宽度，再 `MoveWindow` 手动居中。1.0.31 修复。
 
 ---
 

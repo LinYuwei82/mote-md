@@ -4,7 +4,7 @@
 
 ## 功能
 
-按当前实际已实现的能力（macOS 与 Windows 原生外壳均已实机验收，仍有 mac 对照等缺口，见 [阶段 B 验收记录](docs/thin-shell-stage-b-acceptance.md)；Windows 上快捷键把 `Cmd` 换成 `Ctrl`）：
+按当前实际已实现的能力（macOS 与 Windows 原生外壳均已实机验收并发布至 1.0.32；Windows 上快捷键把 `Cmd` 换成 `Ctrl`）：
 
 - **所见即所得块编辑**：正文按空行切块，点击某块即就地显示该块的 Markdown 原文，其余块保持排版效果；离开该块后按原文重新渲染。
 - **上下方向键跨块**：光标在块首/块尾时，`↑`/`↓` 移到相邻块，并按原光标的横向位置落到目标块的首行/末行；块内逐行移动、表格 `Tab` 与 `Shift+方向键` 保持原生行为。
@@ -26,6 +26,8 @@
 - **导出 PDF**：`Cmd+P`（「文件 → 导出 PDF…」）导出 A4 多页、无页眉页脚；源码模式下禁用。macOS 端按 Typora GitHub 主题的版式对齐（正文 10.33pt、页边距 37.6/45.4pt、表格铺满正文宽、代码块不超过一页时整块保留），已用样张逐页比对；Windows 端走 Chromium `PrintToPdf`，分页由引擎决定，未做逐页像素比对。
 - **在线更新**：启动 10 秒后检查一次，之后每 24 小时一次；macOS 在「Mote → 检查更新…」、Windows 在「文件 → 检查更新…」可随时手动触发。两端共用 `core/update` 解析清单、比较版本、给出判定（已是最新 / 有新版本 / 当前系统过低），提示文案统一为中文。「发现新版本」弹窗显示版本号、发布时间、包大小，清单带可选 `notes_url` 时追加一行可点击的「查看完整更新说明…」。两端读同一份带 Ed25519 签名的 `manifest.json`：macOS 取 `platforms.macos`，用户确认后交给 Sparkle 下载 `artifacts.dmg`、验证 EdDSA 签名并替换重启；若处于 Gatekeeper App Translocation（隔离路径）只读路径，先提示把 Mote 移到「应用程序」再更新。Windows 取 `platforms.windows`，确认后应用内下载更新包，弹窗内显示百分比与「已下载 / 总大小」并可取消，失败自动重试最多 3 次（间隔 2 秒；4xx 与非法地址不重试），下载完用 SHA256 校验——安装版取 `artifacts.setup`（静默安装后自动重启），绿色版取 `artifacts.portable`（校验通过后打开所在文件夹，解压覆盖）。
 - **页面内状态栏**：原生外壳把状态栏画在前端页面底部（`body.platform-mac` / `body.platform-win`），显示打开/保存/导出提示与字数统计。
+- **多窗口与最近打开**：一窗一文档；`Cmd/Ctrl+Shift+N` 新建窗口，外部再次打开文件走新窗口、同路径已打开则聚焦原窗口。每窗口独立撤销栈，关非最后窗口不影响其他窗口。「文件 → 最近打开」列最近 10 条（mac `UserDefaults` / win `HKCU\Software\Mote`），失效路径置灰、可清除。关窗/退出遇未保存修改询问「保存 / 不保存 / 取消」。
+- **关于 Mote**：macOS 在「Mote → 关于 Mote」、Windows 在「文件 → 关于 Mote…」，双平台同版式自定义对话框（图标、版本号、版权、官网链接、检查更新入口）。
 - **目录手型光标**：鼠标移到目录栏（条目文字行、行间空隙、栏内空白）都是系统手型指针，避免移动时手型闪烁；折叠按钮与滚动条保留自身光标语义。
 
 ## 构建与运行（macOS）
@@ -97,8 +99,7 @@ powershell -ExecutionPolicy Bypass -File tools\package\package_windows.ps1
 powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 ```
 
-验收项、实测结论与仍未覆盖的项（干净机、IME 组词、mac 截图对照）见
-[docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)；
+验收与实测记录见 [docs/REBUILD-GUIDE.md](docs/REBUILD-GUIDE.md) 与 [docs/发布工作流.md](docs/发布工作流.md)；
 打包细节见 [packaging/PACKAGING.md](packaging/PACKAGING.md) 第 6 节。
 
 快捷键说明：`Ctrl+Shift+S`（另存为）与 `Ctrl+Alt+E`（导出 HTML）会被 WebView2/Chromium 在浏览器层先消费，外壳用进程内低级键盘钩子提前截获，键位与 mac 侧保持一致（`Cmd` 对应 `Ctrl`）；其余 `Ctrl+S/O/P/…`、`Ctrl+Shift+L/D`、`Ctrl+/` 走 `AcceleratorKeyPressed` 分发。
@@ -262,10 +263,7 @@ VERSION.txt              版本号唯一来源（单行 x.y.z）
 - [docs/release-notes-1.0.4.html](docs/release-notes-1.0.4.html)：1.0.4 发布说明（Windows 编码识别、构建号修正；当时线上 `notes_url` 指向此页）
 - [docs/release-notes-1.0.3.html](docs/release-notes-1.0.3.html) / [1.0.2](docs/release-notes-1.0.2.html) / [1.0.1](docs/release-notes-1.0.1.html) / [1.0.0](docs/release-notes-1.0.0.html)：1.0 各版发布说明
 - [docs/release-notes-0.3.9.md](docs/release-notes-0.3.9.md) / [docs/release-notes-0.3.10.md](docs/release-notes-0.3.10.md)：0.3.x 近期版本发行说明（Windows 应用内更新、新图标）
-- [docs/thin-shell-stage-a.md](docs/thin-shell-stage-a.md) / [docs/thin-shell-stage-b.md](docs/thin-shell-stage-b.md)：macOS / Windows 薄外壳设计稿（历史归档）
-- [docs/thin-shell-stage-a-acceptance.md](docs/thin-shell-stage-a-acceptance.md) / [docs/thin-shell-stage-b-acceptance.md](docs/thin-shell-stage-b-acceptance.md)：macOS / Windows 原生外壳验收记录（历史归档）
-- [docs/windows-handoff-n1.md](docs/windows-handoff-n1.md)：Windows 实机验证交接单（历史归档）
-- [docs/REBUILD-GUIDE.md](docs/REBUILD-GUIDE.md)：复刻技术手册（主体为 Qt 时代，历史归档）
+- [docs/REBUILD-GUIDE.md](docs/REBUILD-GUIDE.md)：复刻技术手册（含当前构建、坑清单 P1–P43）
 - [docs/回滚Runbook.md](docs/回滚Runbook.md)：清单 / appcast / 整版本回退的紧急操作
 - [packaging/PACKAGING.md](packaging/PACKAGING.md)：打包、产物与验收记录（含 Qt 时代历史数据，当前命令以本节与脚本为准）
 - [docs/WEBVIEW-ARCHITECTURE.md](docs/WEBVIEW-ARCHITECTURE.md)：分层、消息协议、按键链路与前端块模型
