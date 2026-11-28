@@ -29,6 +29,7 @@ resources/web/editor.js 与 resources/web/editor.css 现在是构建产物（CMa
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import re
 import sys
@@ -75,6 +76,88 @@ SECTION_FILES = {
 BOOT_FILE = "00-boot.js"
 
 SECTION_RE = re.compile(r"^  /\* -{2,} (.+?) -{2,} \*/\n?", re.MULTILINE)
+
+# 内联 sourcemap：拼接不改变行内容，因此可以用逐行恒等映射把生成行指回分片。
+SOURCEMAP_MARKER = "//# sourceMappingURL=data:application/json;charset=utf-8;base64,"
+_VLQ_B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+
+def _vlq(value: int) -> str:
+    """有符号整数 → sourcemap VLQ（base64）编码。"""
+    vlq = (value << 1) if value >= 0 else ((-value) << 1 | 1)
+    out = []
+    while True:
+        digit = vlq & 0x1F
+        vlq >>= 5
+        if vlq:
+            digit |= 0x20
+        out.append(_VLQ_B64[digit])
+        if not vlq:
+            break
+    return "".join(out)
+
+
+def sourcemap_mappings(contents: list[str]) -> str:
+    """按分片顺序生成逐行恒等映射（拼接不改变任何一行的内容）。"""
+    line_count = sum(text.count("\n") for text in contents) + 1
+    segments: list[tuple[int, int] | None] = [None] * line_count
+    gen_line = 0
+    col = 0
+    for source_index, text in enumerate(contents):
+        parts = text.split("\n")
+        for local_line, part in enumerate(parts):
+            is_last = local_line == len(parts) - 1
+            if col == 0 and part and gen_line < line_count:
+                segments[gen_line] = (source_index, local_line)
+            if not is_last:
+                gen_line += 1
+                col = 0
+            else:
+                col += len(part)
+    while segments and segments[-1] is None:
+        segments.pop()
+
+    prev_source = 0
+    prev_line = 0
+    prev_col = 0
+    encoded: list[str] = []
+    for segment in segments:
+        if segment is None:
+            encoded.append("")
+            continue
+        source_index, original_line = segment
+        encoded.append(
+            _vlq(0)
+            + _vlq(source_index - prev_source)
+            + _vlq(original_line - prev_line)
+            + _vlq(0 - prev_col)
+        )
+        prev_source = source_index
+        prev_line = original_line
+        prev_col = 0
+    return ";".join(encoded)
+
+
+def inline_sourcemap(bundle: str, names: list[str], contents: list[str], file_name: str) -> str:
+    """把含 sourcesContent 的 sourcemap 以 data URI 内联进产物末尾。"""
+    document = {
+        "version": 3,
+        "file": file_name,
+        "sources": names,
+        "sourcesContent": contents,
+        "names": [],
+        "mappings": sourcemap_mappings(contents),
+    }
+    payload = json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    encoded = base64.b64encode(payload).decode("ascii")
+    return bundle + "\n" + SOURCEMAP_MARKER + encoded + "\n"
+
+
+def strip_sourcemap(text: str) -> str:
+    """去掉构建期内联的尾部 sourcemap 注释，还原为纯拼接结果。"""
+    marker = "\n" + SOURCEMAP_MARKER
+    index = text.rfind(marker)
+    return text if index < 0 else text[:index]
 
 
 def read_text(path: Path) -> str:
@@ -218,11 +301,18 @@ def command_bundle(args: argparse.Namespace) -> int:
     src_dir, manifest_path, bundle_path, _ = target_paths(args.target)
     name = bundle_path.name
     text = bundle_text(src_dir, manifest_path)
+    out_text = text
+    if args.sourcemap:
+        if args.target != "js":
+            raise SystemExit("--sourcemap 只支持 target=js")
+        names = list(load_manifest(manifest_path).get("files") or [])
+        contents = [read_text(src_dir / part) for part in names]
+        out_text = inline_sourcemap(text, names, contents, name)
     if args.check:
         if not bundle_path.exists():
             print(f"{name} 未生成（构建产物）；分片清单完整")
             return 0
-        current = read_text(bundle_path)
+        current = strip_sourcemap(read_text(bundle_path))
         if current != text:
             print(f"失败：src 拼接结果与 {name} 不一致", file=sys.stderr)
             print(first_difference(current, text, name), file=sys.stderr)
@@ -231,13 +321,13 @@ def command_bundle(args: argparse.Namespace) -> int:
         return 0
 
     if args.out == "-":
-        sys.stdout.write(text)
+        sys.stdout.write(out_text)
         return 0
 
     out = Path(args.out) if args.out else bundle_path
     if not out.is_absolute():
         out = ROOT / out
-    write_text(out, text)
+    write_text(out, out_text)
     try:
         shown = out.relative_to(ROOT)
     except ValueError:
@@ -341,7 +431,7 @@ def command_status(args: argparse.Namespace) -> int:
     if not bundle_path.exists():
         print(f"{name} 未生成（构建产物）；分片清单完整")
         return 0
-    current = read_text(bundle_path)
+    current = strip_sourcemap(read_text(bundle_path))
     rebuilt = bundle_text(src_dir, manifest_path)
     if current != rebuilt:
         print(f"{name} 与 src 拼接结果不一致")
@@ -363,6 +453,8 @@ def main() -> int:
     bundle = sub.add_parser("bundle", help="按清单拼接分片")
     bundle.add_argument("--check", action="store_true", help="只校验，不写出")
     bundle.add_argument("--out", help="输出路径；缺省写回对应产物，- 表示 stdout")
+    bundle.add_argument("--sourcemap", action="store_true",
+                        help="在产物末尾内联逐行 sourcemap（仅 target=js，开发调试用）")
     bundle.add_argument("--target", choices=sorted(TARGETS), default="js",
                         help="拼接哪套分片：js（默认）或 css")
     bundle.set_defaults(func=command_bundle)

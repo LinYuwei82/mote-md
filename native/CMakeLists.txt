@@ -13,6 +13,29 @@ get_filename_component(MOTE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 set(MOTE_SHELL_MAC "${MOTE_REPO_ROOT}/shell/mac")
 set(MOTE_SHELL_WIN "${MOTE_REPO_ROOT}/shell/win")
 
+# 发布/出包构建开关：与 xiaotu / devcard 的 *_RELEASE_BUILD 同一语义。
+# MOTE_STRICT_BUILD 是历史名字，保留为兼容别名；两个平台分支共用这一处定义。
+option(MOTE_RELEASE_BUILD "发布/出包构建：MOTE_BUILD 必须显式提供且不能是占位值" OFF)
+if(MOTE_STRICT_BUILD)
+  set(MOTE_RELEASE_BUILD ON)
+  message(DEPRECATION "MOTE_STRICT_BUILD 已并入 MOTE_RELEASE_BUILD，请改用 -DMOTE_RELEASE_BUILD=ON")
+endif()
+
+# 前端 sourcemap：开发构建默认把含源码的 sourcemap 内联进 editor.js，发布构建强制关闭
+# （sourcesContent 会随包带出完整前端源码）。editor.js 由页面内联，外部 .map 的相对路径
+# 无法稳定解析，因此采用 data URI 内联。
+option(MOTE_EDITOR_SOURCEMAP "前端构建内联 sourcemap（开发调试用）" ON)
+if(MOTE_RELEASE_BUILD)
+  set(MOTE_EDITOR_SOURCEMAP OFF)
+endif()
+if(MOTE_EDITOR_SOURCEMAP)
+  find_package(Python3 COMPONENTS Interpreter QUIET)
+  if(NOT Python3_Interpreter_FOUND)
+    message(STATUS "未找到 Python3，前端 sourcemap 已跳过（退回纯 CMake 拼接）")
+    set(MOTE_EDITOR_SOURCEMAP OFF)
+  endif()
+endif()
+
 # 前端源码唯一来源：resources/web/src/（JS）与 resources/web/src/css/（CSS）。
 # 构建时各按自己的 manifest 拼成单个 editor.js / editor.css；运行时仍是单文件，
 # 不引入模块加载器，也不改 __MOTE_JS__ / __MOTE_CSS__ 的内联方式。
@@ -20,16 +43,27 @@ set(MOTE_EDITOR_SRC_DIR "${MOTE_REPO_ROOT}/resources/web/src")
 set(MOTE_EDITOR_MANIFEST "${MOTE_EDITOR_SRC_DIR}/editor.manifest.json")
 set(MOTE_EDITOR_BUNDLE "${CMAKE_CURRENT_BINARY_DIR}/web/editor.js")
 file(GLOB MOTE_EDITOR_PARTS CONFIGURE_DEPENDS "${MOTE_EDITOR_SRC_DIR}/*.js")
-add_custom_command(
-  OUTPUT "${MOTE_EDITOR_BUNDLE}"
-  COMMAND "${CMAKE_COMMAND}"
+if(MOTE_EDITOR_SOURCEMAP)
+  set(MOTE_EDITOR_JS_COMMAND
+    "${Python3_EXECUTABLE}"
+    "${MOTE_REPO_ROOT}/tools/editor/split_editor.py"
+    bundle --target js --sourcemap --out "${MOTE_EDITOR_BUNDLE}")
+  set(MOTE_EDITOR_JS_DEP "${MOTE_REPO_ROOT}/tools/editor/split_editor.py")
+else()
+  set(MOTE_EDITOR_JS_COMMAND
+    "${CMAKE_COMMAND}"
     "-DMOTE_EDITOR_SRC_DIR=${MOTE_EDITOR_SRC_DIR}"
     "-DMOTE_EDITOR_MANIFEST=${MOTE_EDITOR_MANIFEST}"
     "-DMOTE_EDITOR_OUT=${MOTE_EDITOR_BUNDLE}"
-    -P "${MOTE_REPO_ROOT}/tools/editor/bundle_editor.cmake"
+    -P "${MOTE_REPO_ROOT}/tools/editor/bundle_editor.cmake")
+  set(MOTE_EDITOR_JS_DEP "${MOTE_REPO_ROOT}/tools/editor/bundle_editor.cmake")
+endif()
+add_custom_command(
+  OUTPUT "${MOTE_EDITOR_BUNDLE}"
+  COMMAND ${MOTE_EDITOR_JS_COMMAND}
   DEPENDS ${MOTE_EDITOR_PARTS}
           "${MOTE_EDITOR_MANIFEST}"
-          "${MOTE_REPO_ROOT}/tools/editor/bundle_editor.cmake"
+          "${MOTE_EDITOR_JS_DEP}"
   COMMENT "Bundle resources/web/src -> editor.js"
   VERBATIM)
 add_custom_target(mote_editor_bundle DEPENDS "${MOTE_EDITOR_BUNDLE}")
@@ -58,13 +92,6 @@ if(NOT MOTE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
   message(FATAL_ERROR "无法从 VERSION.txt 读取版本号")
 endif()
 
-# 发布/出包构建开关：与 xiaotu / devcard 的 *_RELEASE_BUILD 同一语义。
-# MOTE_STRICT_BUILD 是历史名字，保留为兼容别名；两个平台分支共用这一处定义。
-option(MOTE_RELEASE_BUILD "发布/出包构建：MOTE_BUILD 必须显式提供且不能是占位值" OFF)
-if(MOTE_STRICT_BUILD)
-  set(MOTE_RELEASE_BUILD ON)
-  message(DEPRECATION "MOTE_STRICT_BUILD 已并入 MOTE_RELEASE_BUILD，请改用 -DMOTE_RELEASE_BUILD=ON")
-endif()
 set(MOTE_DEFAULT_BUILD "999999999")
 
 if(NOT CMAKE_BUILD_TYPE)
