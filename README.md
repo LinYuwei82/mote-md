@@ -1,6 +1,6 @@
 # Mote
 
-**C++20 原生薄外壳 + 系统 WebView 的 Markdown 查看 / 编辑器：macOS 用 AppKit + WKWebView（发布包不含 Qt），Windows 用 Win32 + WebView2；正文的渲染与编辑交给系统 WebView，前端零框架、零构建，不引入 Electron 一类运行时。两端共用 `core/` 与同一份前端资源。**
+**C++20 原生薄外壳 + 系统 WebView 的 Markdown 查看 / 编辑器：macOS 用 AppKit + WKWebView（发布包不含 Qt），Windows 用 Win32 + WebView2；正文的渲染与编辑交给系统 WebView，前端零框架、无打包器（构建期按清单把 `resources/web/src/` 拼成单文件），不引入 Electron 一类运行时。两端共用 `core/` 与同一份前端资源。**
 
 ## 功能
 
@@ -238,7 +238,8 @@ modules/update/          更新清单解析、版本比较与升级判定（两�
 shell/mac/               AppKit + WKWebView：窗口、菜单、对话框、PDF/HTML、拖放、更新检查
 shell/win/               Win32 + WebView2：窗口、菜单、对话框、拖放、PDF/HTML、更新检查
 resources/
-  web/                   前端编辑器（editor.html / editor.css / editor.js / mermaid.min.js，唯一一份）
+  web/                   前端资源（editor.html / editor.css / mermaid.min.js）
+  web/src/               前端源码分片（唯一源码；构建期按 editor.manifest.json 拼成 editor.js）
   fonts/                 JetBrains Mono（Light）与 OFL.txt
   icons/                 应用图标
   samples/               内置示例文档与示例图

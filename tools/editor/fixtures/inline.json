@@ -1,0 +1,170 @@
+{
+  "suite": "inline",
+  "cases": [
+    {
+      "name": "plain",
+      "input": "plain",
+      "expect": {
+        "html": "plain",
+        "inlineHtml": "plain",
+        "text": "plain",
+        "escaped": "plain",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "bold",
+      "input": "**bold**",
+      "expect": {
+        "html": "<span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span><strong>bold</strong><span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span>",
+        "inlineHtml": "<span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span><strong>bold</strong><span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span>",
+        "text": "**bold**",
+        "escaped": "**bold**",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "italic",
+      "input": "*italic*",
+      "expect": {
+        "html": "<span class=\"mk mk-em\" contenteditable=\"false\"><i>*</i></span><em>italic</em><span class=\"mk mk-em\" contenteditable=\"false\"><i>*</i></span>",
+        "inlineHtml": "<span class=\"mk mk-em\" contenteditable=\"false\"><i>*</i></span><em>italic</em><span class=\"mk mk-em\" contenteditable=\"false\"><i>*</i></span>",
+        "text": "*italic*",
+        "escaped": "*italic*",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "inline-code",
+      "input": "`code`",
+      "expect": {
+        "html": "<span class=\"mk mk-code\" contenteditable=\"false\"><i>`</i></span><code>code</code><span class=\"mk mk-code\" contenteditable=\"false\"><i>`</i></span>",
+        "inlineHtml": "<span class=\"mk mk-code\" contenteditable=\"false\"><i>`</i></span><code>code</code><span class=\"mk mk-code\" contenteditable=\"false\"><i>`</i></span>",
+        "text": "`code`",
+        "escaped": "`code`",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "link",
+      "input": "[text](https://example.com)",
+      "expect": {
+        "html": "<span class=\"mk mk-link\" contenteditable=\"false\"><i>[</i></span><a class=\"md-link\" href=\"https://example.com\" data-href=\"https://example.com\">text</a><span class=\"mk mk-link\" contenteditable=\"false\"><i>](https://example.com)</i></span>",
+        "inlineHtml": "<span class=\"mk mk-link\" contenteditable=\"false\"><i>[</i></span><a class=\"md-link\" href=\"https://example.com\" data-href=\"https://example.com\">text</a><span class=\"mk mk-link\" contenteditable=\"false\"><i>](https://example.com)</i></span>",
+        "text": "[text](https://example.com)",
+        "escaped": "[text](https://example.com)",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "image",
+      "input": "![alt](img.png)",
+      "expect": {
+        "html": "<span class=\"mk mk-img\" contenteditable=\"false\"><i>![alt](img.png)</i></span><img alt=\"alt\" src=\"img.png\">",
+        "inlineHtml": "<span class=\"mk mk-img\" contenteditable=\"false\"><i>![alt](img.png)</i></span><img alt=\"alt\" src=\"img.png\">",
+        "text": "![alt](img.png)",
+        "escaped": "![alt](img.png)",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "nested-emphasis",
+      "input": "**a *b* c**",
+      "expect": {
+        "html": "<span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span><strong>a <span class=\"mk mk-em\" contenteditable=\"false\"><i>*</i></span><em>b</em><span class=\"mk mk-em\" contenteditable=\"false\"><i>*</i></span> c</strong><span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span>",
+        "inlineHtml": "<span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span><strong>a <span class=\"mk mk-em\" contenteditable=\"false\"><i>*</i></span><em>b</em><span class=\"mk mk-em\" contenteditable=\"false\"><i>*</i></span> c</strong><span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span>",
+        "text": "**a *b* c**",
+        "escaped": "**a *b* c**",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "escaping",
+      "input": "<tag> & \"quote\"",
+      "expect": {
+        "html": "&lt;tag&gt; &amp; &quot;quote&quot;",
+        "inlineHtml": "&lt;tag&gt; &amp; &quot;quote&quot;",
+        "text": "<tag> & \"quote\"",
+        "escaped": "&lt;tag&gt; &amp; &quot;quote&quot;",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "mixed",
+      "input": "a **b** c `d`",
+      "expect": {
+        "html": "a <span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span><strong>b</strong><span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span> c <span class=\"mk mk-code\" contenteditable=\"false\"><i>`</i></span><code>d</code><span class=\"mk mk-code\" contenteditable=\"false\"><i>`</i></span>",
+        "inlineHtml": "a <span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span><strong>b</strong><span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span> c <span class=\"mk mk-code\" contenteditable=\"false\"><i>`</i></span><code>d</code><span class=\"mk mk-code\" contenteditable=\"false\"><i>`</i></span>",
+        "text": "a **b** c `d`",
+        "escaped": "a **b** c `d`",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "triple-star",
+      "input": "***both***",
+      "expect": {
+        "html": "<span class=\"mk mk-strong\" contenteditable=\"false\"><i>***</i></span><strong><em>both</em></strong><span class=\"mk mk-strong\" contenteditable=\"false\"><i>***</i></span>",
+        "inlineHtml": "<span class=\"mk mk-strong\" contenteditable=\"false\"><i>***</i></span><strong><em>both</em></strong><span class=\"mk mk-strong\" contenteditable=\"false\"><i>***</i></span>",
+        "text": "***both***",
+        "escaped": "***both***",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "link-with-bold",
+      "input": "[**bold**](u)",
+      "expect": {
+        "html": "<span class=\"mk mk-link\" contenteditable=\"false\"><i>[</i></span><a class=\"md-link\" href=\"u\" data-href=\"u\"><span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span><strong>bold</strong><span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span></a><span class=\"mk mk-link\" contenteditable=\"false\"><i>](u)</i></span>",
+        "inlineHtml": "<span class=\"mk mk-link\" contenteditable=\"false\"><i>[</i></span><a class=\"md-link\" href=\"u\" data-href=\"u\"><span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span><strong>bold</strong><span class=\"mk mk-strong\" contenteditable=\"false\"><i>**</i></span></a><span class=\"mk mk-link\" contenteditable=\"false\"><i>](u)</i></span>",
+        "text": "[**bold**](u)",
+        "escaped": "[**bold**](u)",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "unclosed-bold",
+      "input": "unclosed **",
+      "expect": {
+        "html": "unclosed **",
+        "inlineHtml": "unclosed **",
+        "text": "unclosed **",
+        "escaped": "unclosed **",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "plain-pipes",
+      "input": "| a | b |",
+      "expect": {
+        "html": "| a | b |",
+        "inlineHtml": "| a | b |",
+        "text": "| a | b |",
+        "escaped": "| a | b |",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "ampersand-and-angle",
+      "input": "a & b < c > d",
+      "expect": {
+        "html": "a &amp; b &lt; c &gt; d",
+        "inlineHtml": "a &amp; b &lt; c &gt; d",
+        "text": "a & b < c > d",
+        "escaped": "a &amp; b &lt; c &gt; d",
+        "sameEntry": true
+      }
+    },
+    {
+      "name": "empty",
+      "input": "",
+      "expect": {
+        "html": "",
+        "inlineHtml": "",
+        "text": "",
+        "escaped": "",
+        "sameEntry": true
+      }
+    }
+  ]
+}

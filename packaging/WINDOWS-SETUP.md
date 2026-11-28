@@ -288,7 +288,7 @@ git pull --rebase              # 用 rebase，保持 main 线性，避免无意�
 - 显式列文件，不要 `git add -A`：
 
 ```powershell
-git add resources/web/editor.js resources/web/editor.css
+git add resources/web/src resources/web/editor.css
 git commit -m "目录栏整栏改为手型光标，避免条目间移动时闪烁"
 ```
 

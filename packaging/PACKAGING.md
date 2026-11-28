@@ -754,7 +754,7 @@ Compress-Archive -Path dist\Mote-Windows -DestinationPath dist\Mote-Windows.zip 
 - 代码字体 JetBrains Mono 以 `.ttf` 形式放在 `resources/fonts/`，构建时拷进产物，
   运行时不依赖系统已安装字体；`OFL.txt` 随发布目录的 `licenses/` 提供。
   回退链为 JetBrains Mono → Menlo → SF Mono → 系统等宽，改动字体时不要破坏这条链。
-- 语法高亮与块模型全部在 `resources/web/editor.js`，不依赖第三方解析/高亮库；
+- 语法高亮与块模型全部在 `resources/web/src/`（构建期按 manifest 拼成 `editor.js`），不依赖第三方解析/高亮库；
   分层与消息协议见 `docs/WEBVIEW-ARCHITECTURE.md`。
 
 ---

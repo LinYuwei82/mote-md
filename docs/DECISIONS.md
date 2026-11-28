@@ -120,7 +120,7 @@
 ## 四、分支命名与归属
 
 - **平台专属工作**用 `win/<主题>`、`mac/<主题>`。平台专属文件包括 `shell/win/*`、`shell/mac/*`、`tools/package/package_macos.sh`、`tools/package/package_windows.ps1`，以及 `packaging/` 下的安装包资源（`build_installer.ps1`、`mote.iss`、`macos/` 等）。
-- **共享代码**（`core/*`、`resources/web/editor.js`、`resources/web/editor.css`、`native/CMakeLists.txt`、`resources/` 其余内容）的改动可以落在任一功能分支上，但提交信息里要写明「共享层」。
+- **共享代码**（`core/*`、`resources/web/src/*`、`resources/web/editor.css`、`native/CMakeLists.txt`、`resources/` 其余内容）的改动可以落在任一功能分支上，但提交信息里要写明「共享层」。
 - 一条分支上如果混入了另一平台机器的提交，**合并前在 PR 描述里注明**，不通过改写历史来「纠正」。
 - **现状记录（2026-11-11）**：`mac/clipboard` 上除 Mac 侧三笔外，还包含 Windows 机器提交的 `64c8780`、`aa561f9` 两笔共享层修复；内容不涉及 Windows 专属文件，按上述规则处理、不改写历史。
 

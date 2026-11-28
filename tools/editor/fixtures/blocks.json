@@ -1,0 +1,404 @@
+{
+  "suite": "blocks",
+  "cases": [
+    {
+      "name": "paragraph",
+      "raw": "hello",
+      "expect": {
+        "kind": "p",
+        "content": "hello",
+        "built": "hello",
+        "lead": 0,
+        "toggled": "hello",
+        "conversions": {
+          "p": "hello",
+          "h1": "# hello",
+          "h2": "## hello",
+          "h3": "### hello",
+          "ul": "- hello",
+          "ol": "1. hello",
+          "quote": "> hello",
+          "code": "```\nhello\n```"
+        }
+      }
+    },
+    {
+      "name": "paragraph-multiline",
+      "raw": "a\nb",
+      "expect": {
+        "kind": "p",
+        "content": "a\nb",
+        "built": "a\nb",
+        "lead": 0,
+        "toggled": "a\nb",
+        "conversions": {
+          "p": "a\nb",
+          "h1": "# a b",
+          "h2": "## a b",
+          "h3": "### a b",
+          "ul": "- a\n- b",
+          "ol": "1. a\n2. b",
+          "quote": "> a\n> b",
+          "code": "```\na\nb\n```"
+        }
+      }
+    },
+    {
+      "name": "heading-1",
+      "raw": "# Title",
+      "expect": {
+        "kind": "h1",
+        "content": "Title",
+        "built": "# Title",
+        "lead": 2,
+        "toggled": "Title",
+        "conversions": {
+          "p": "Title",
+          "h1": "# Title",
+          "h2": "## Title",
+          "h3": "### Title",
+          "ul": "- Title",
+          "ol": "1. Title",
+          "quote": "> Title",
+          "code": "```\nTitle\n```"
+        }
+      }
+    },
+    {
+      "name": "heading-2",
+      "raw": "## Two",
+      "expect": {
+        "kind": "h2",
+        "content": "Two",
+        "built": "## Two",
+        "lead": 3,
+        "toggled": "Two",
+        "conversions": {
+          "p": "Two",
+          "h1": "# Two",
+          "h2": "## Two",
+          "h3": "### Two",
+          "ul": "- Two",
+          "ol": "1. Two",
+          "quote": "> Two",
+          "code": "```\nTwo\n```"
+        }
+      }
+    },
+    {
+      "name": "heading-3",
+      "raw": "### Three",
+      "expect": {
+        "kind": "h3",
+        "content": "Three",
+        "built": "### Three",
+        "lead": 4,
+        "toggled": "Three",
+        "conversions": {
+          "p": "Three",
+          "h1": "# Three",
+          "h2": "## Three",
+          "h3": "### Three",
+          "ul": "- Three",
+          "ol": "1. Three",
+          "quote": "> Three",
+          "code": "```\nThree\n```"
+        }
+      }
+    },
+    {
+      "name": "heading-6",
+      "raw": "###### Six",
+      "expect": {
+        "kind": "h6",
+        "content": "Six",
+        "built": "###### Six",
+        "lead": 7,
+        "toggled": "Six",
+        "conversions": {
+          "p": "Six",
+          "h1": "# Six",
+          "h2": "## Six",
+          "h3": "### Six",
+          "ul": "- Six",
+          "ol": "1. Six",
+          "quote": "> Six",
+          "code": "```\nSix\n```"
+        }
+      }
+    },
+    {
+      "name": "unordered-list-dash",
+      "raw": "- a\n- b",
+      "expect": {
+        "kind": "ul",
+        "content": "a\nb",
+        "built": "- a\n- b",
+        "lead": 2,
+        "toggled": "a\nb",
+        "conversions": {
+          "p": "a\nb",
+          "h1": "# a b",
+          "h2": "## a b",
+          "h3": "### a b",
+          "ul": "- a\n- b",
+          "ol": "1. a\n2. b",
+          "quote": "> a\n> b",
+          "code": "```\na\nb\n```"
+        }
+      }
+    },
+    {
+      "name": "unordered-list-star",
+      "raw": "* a\n* b",
+      "expect": {
+        "kind": "ul",
+        "content": "a\nb",
+        "built": "- a\n- b",
+        "lead": 2,
+        "toggled": "a\nb",
+        "conversions": {
+          "p": "a\nb",
+          "h1": "# a b",
+          "h2": "## a b",
+          "h3": "### a b",
+          "ul": "* a\n* b",
+          "ol": "1. a\n2. b",
+          "quote": "> a\n> b",
+          "code": "```\na\nb\n```"
+        }
+      }
+    },
+    {
+      "name": "ordered-list-dot",
+      "raw": "1. a\n2. b",
+      "expect": {
+        "kind": "ol",
+        "content": "a\nb",
+        "built": "1. a\n2. b",
+        "lead": 3,
+        "toggled": "a\nb",
+        "conversions": {
+          "p": "a\nb",
+          "h1": "# a b",
+          "h2": "## a b",
+          "h3": "### a b",
+          "ul": "- a\n- b",
+          "ol": "1. a\n2. b",
+          "quote": "> a\n> b",
+          "code": "```\na\nb\n```"
+        }
+      }
+    },
+    {
+      "name": "ordered-list-paren",
+      "raw": "1) a\n2) b",
+      "expect": {
+        "kind": "ol",
+        "content": "a\nb",
+        "built": "1. a\n2. b",
+        "lead": 3,
+        "toggled": "a\nb",
+        "conversions": {
+          "p": "a\nb",
+          "h1": "# a b",
+          "h2": "## a b",
+          "h3": "### a b",
+          "ul": "- a\n- b",
+          "ol": "1) a\n2) b",
+          "quote": "> a\n> b",
+          "code": "```\na\nb\n```"
+        }
+      }
+    },
+    {
+      "name": "quote",
+      "raw": "> a\n> b",
+      "expect": {
+        "kind": "quote",
+        "content": "a\nb",
+        "built": "> a\n> b",
+        "lead": 2,
+        "toggled": "a\nb",
+        "conversions": {
+          "p": "a\nb",
+          "h1": "# a b",
+          "h2": "## a b",
+          "h3": "### a b",
+          "ul": "- a\n- b",
+          "ol": "1. a\n2. b",
+          "quote": "> a\n> b",
+          "code": "```\na\nb\n```"
+        }
+      }
+    },
+    {
+      "name": "fenced-code",
+      "raw": "```python\nprint(1)\n```",
+      "expect": {
+        "kind": "code",
+        "content": "print(1)",
+        "built": "```\nprint(1)\n```",
+        "lead": 10,
+        "toggled": "print(1)",
+        "conversions": {
+          "p": "print(1)",
+          "h1": "# print(1)",
+          "h2": "## print(1)",
+          "h3": "### print(1)",
+          "ul": "- print(1)",
+          "ol": "1. print(1)",
+          "quote": "> print(1)",
+          "code": "```python\nprint(1)\n```"
+        }
+      }
+    },
+    {
+      "name": "fenced-code-no-language",
+      "raw": "```\nplain\n```",
+      "expect": {
+        "kind": "code",
+        "content": "plain",
+        "built": "```\nplain\n```",
+        "lead": 4,
+        "toggled": "plain",
+        "conversions": {
+          "p": "plain",
+          "h1": "# plain",
+          "h2": "## plain",
+          "h3": "### plain",
+          "ul": "- plain",
+          "ol": "1. plain",
+          "quote": "> plain",
+          "code": "```\nplain\n```"
+        }
+      }
+    },
+    {
+      "name": "horizontal-rule-dash",
+      "raw": "---",
+      "expect": {
+        "kind": "hr",
+        "content": "",
+        "built": "---",
+        "lead": 0,
+        "toggled": "",
+        "conversions": {
+          "p": "",
+          "h1": "# ",
+          "h2": "## ",
+          "h3": "### ",
+          "ul": "- ",
+          "ol": "1. ",
+          "quote": "> ",
+          "code": "```\n\n```"
+        }
+      }
+    },
+    {
+      "name": "horizontal-rule-star",
+      "raw": "***",
+      "expect": {
+        "kind": "hr",
+        "content": "",
+        "built": "---",
+        "lead": 0,
+        "toggled": "",
+        "conversions": {
+          "p": "",
+          "h1": "# ",
+          "h2": "## ",
+          "h3": "### ",
+          "ul": "- ",
+          "ol": "1. ",
+          "quote": "> ",
+          "code": "```\n\n```"
+        }
+      }
+    },
+    {
+      "name": "table",
+      "raw": "| a | b |\n| --- | --- |\n| 1 | 2 |",
+      "expect": {
+        "kind": "table",
+        "content": "a b\n1 2",
+        "built": "a b\n1 2",
+        "lead": 0,
+        "toggled": "a b\n1 2",
+        "conversions": {
+          "p": "a b\n1 2",
+          "h1": "# a b 1 2",
+          "h2": "## a b 1 2",
+          "h3": "### a b 1 2",
+          "ul": "- a b\n- 1 2",
+          "ol": "1. a b\n2. 1 2",
+          "quote": "> a b\n> 1 2",
+          "code": "```\na b\n1 2\n```"
+        }
+      }
+    },
+    {
+      "name": "heading-with-inline-markup",
+      "raw": "## **bold** title",
+      "expect": {
+        "kind": "h2",
+        "content": "**bold** title",
+        "built": "## **bold** title",
+        "lead": 3,
+        "toggled": "**bold** title",
+        "conversions": {
+          "p": "**bold** title",
+          "h1": "# **bold** title",
+          "h2": "## **bold** title",
+          "h3": "### **bold** title",
+          "ul": "- **bold** title",
+          "ol": "1. **bold** title",
+          "quote": "> **bold** title",
+          "code": "```\n**bold** title\n```"
+        }
+      }
+    },
+    {
+      "name": "empty",
+      "raw": "",
+      "expect": {
+        "kind": "p",
+        "content": "",
+        "built": "",
+        "lead": 0,
+        "toggled": "",
+        "conversions": {
+          "p": "",
+          "h1": "# ",
+          "h2": "## ",
+          "h3": "### ",
+          "ul": "- ",
+          "ol": "1. ",
+          "quote": "> ",
+          "code": "```\n\n```"
+        }
+      }
+    },
+    {
+      "name": "spaces-only",
+      "raw": "   ",
+      "expect": {
+        "kind": "p",
+        "content": "   ",
+        "built": "   ",
+        "lead": 0,
+        "toggled": "   ",
+        "conversions": {
+          "p": "   ",
+          "h1": "#    ",
+          "h2": "##    ",
+          "h3": "###    ",
+          "ul": "-    ",
+          "ol": "1.    ",
+          "quote": ">    ",
+          "code": "```\n   \n```"
+        }
+      }
+    }
+  ]
+}

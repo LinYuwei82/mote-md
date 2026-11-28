@@ -1,0 +1,69 @@
+{
+  "suite": "builders",
+  "cases": [
+    {
+      "name": "hr-builder",
+      "type": "hr",
+      "content": "ignored",
+      "expect": {
+        "built": "---"
+      }
+    },
+    {
+      "name": "hr-empty-content",
+      "type": "hr",
+      "content": "",
+      "expect": {
+        "built": "---"
+      }
+    },
+    {
+      "name": "heading-6",
+      "type": "h6",
+      "content": "Title",
+      "expect": {
+        "built": "###### Title"
+      }
+    },
+    {
+      "name": "heading-collapses-newlines",
+      "type": "h1",
+      "content": "a\nb",
+      "expect": {
+        "built": "# a b"
+      }
+    },
+    {
+      "name": "unknown-h-type-falls-through",
+      "type": "hello",
+      "content": "x",
+      "expect": {
+        "built": "x"
+      }
+    },
+    {
+      "name": "paragraph-to-hr",
+      "raw": "hello",
+      "type": "hr",
+      "expect": {
+        "converted": "---"
+      }
+    },
+    {
+      "name": "heading-to-hr",
+      "raw": "## Title",
+      "type": "hr",
+      "expect": {
+        "converted": "---"
+      }
+    },
+    {
+      "name": "hr-to-hr-keeps-source",
+      "raw": "---",
+      "type": "hr",
+      "expect": {
+        "converted": "---"
+      }
+    }
+  ]
+}

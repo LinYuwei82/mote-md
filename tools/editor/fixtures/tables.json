@@ -1,0 +1,271 @@
+{
+  "suite": "tables",
+  "cases": [
+    {
+      "name": "padded-cells",
+      "line": "| a | b |",
+      "expect": {
+        "split": {
+          "lead": "|",
+          "cells": [
+            {
+              "text": " a ",
+              "sep": "|"
+            },
+            {
+              "text": " b ",
+              "sep": "|"
+            }
+          ],
+          "tail": ""
+        },
+        "cells": [
+          "a",
+          "b"
+        ],
+        "alignments": [
+          "",
+          ""
+        ],
+        "isTable": true
+      }
+    },
+    {
+      "name": "no-outer-pipes",
+      "line": "a | b",
+      "expect": {
+        "split": {
+          "lead": "",
+          "cells": [
+            {
+              "text": "a ",
+              "sep": "|"
+            },
+            {
+              "text": " b",
+              "sep": ""
+            }
+          ],
+          "tail": ""
+        },
+        "cells": [
+          "a",
+          "b"
+        ],
+        "alignments": [
+          "",
+          ""
+        ],
+        "isTable": true
+      }
+    },
+    {
+      "name": "alignment-row",
+      "line": "| --- | :---: |",
+      "expect": {
+        "split": {
+          "lead": "|",
+          "cells": [
+            {
+              "text": " --- ",
+              "sep": "|"
+            },
+            {
+              "text": " :---: ",
+              "sep": "|"
+            }
+          ],
+          "tail": ""
+        },
+        "cells": [
+          "---",
+          ":---:"
+        ],
+        "alignments": [
+          "",
+          "center"
+        ],
+        "isTable": true
+      }
+    },
+    {
+      "name": "escaped-pipe",
+      "line": "| a \\| b | c |",
+      "expect": {
+        "split": {
+          "lead": "|",
+          "cells": [
+            {
+              "text": " a \\| b ",
+              "sep": "|"
+            },
+            {
+              "text": " c ",
+              "sep": "|"
+            }
+          ],
+          "tail": ""
+        },
+        "cells": [
+          "a | b",
+          "c"
+        ],
+        "alignments": [
+          "",
+          ""
+        ],
+        "isTable": true
+      }
+    },
+    {
+      "name": "single-pipe",
+      "line": "|",
+      "expect": {
+        "split": {
+          "lead": "|",
+          "cells": [
+            {
+              "text": "",
+              "sep": ""
+            }
+          ],
+          "tail": ""
+        },
+        "cells": [
+          ""
+        ],
+        "alignments": [
+          ""
+        ],
+        "isTable": true
+      }
+    },
+    {
+      "name": "missing-trailing-pipe",
+      "line": "| a | b",
+      "expect": {
+        "split": {
+          "lead": "|",
+          "cells": [
+            {
+              "text": " a ",
+              "sep": "|"
+            },
+            {
+              "text": " b",
+              "sep": ""
+            }
+          ],
+          "tail": ""
+        },
+        "cells": [
+          "a",
+          "b"
+        ],
+        "alignments": [
+          "",
+          ""
+        ],
+        "isTable": true
+      }
+    },
+    {
+      "name": "compact-alignment",
+      "line": "|---|",
+      "expect": {
+        "split": {
+          "lead": "|",
+          "cells": [
+            {
+              "text": "---",
+              "sep": "|"
+            }
+          ],
+          "tail": ""
+        },
+        "cells": [
+          "---"
+        ],
+        "alignments": [
+          ""
+        ],
+        "isTable": true
+      }
+    },
+    {
+      "name": "single-cell",
+      "line": "| a |",
+      "expect": {
+        "split": {
+          "lead": "|",
+          "cells": [
+            {
+              "text": " a ",
+              "sep": "|"
+            }
+          ],
+          "tail": ""
+        },
+        "cells": [
+          "a"
+        ],
+        "alignments": [
+          ""
+        ],
+        "isTable": true
+      }
+    },
+    {
+      "name": "empty-line",
+      "line": "",
+      "expect": {
+        "split": {
+          "lead": "",
+          "cells": [
+            {
+              "text": "",
+              "sep": ""
+            }
+          ],
+          "tail": ""
+        },
+        "cells": [
+          ""
+        ],
+        "alignments": [
+          ""
+        ],
+        "isTable": false
+      }
+    },
+    {
+      "name": "cjk-cells",
+      "line": "| 中文 | English |",
+      "expect": {
+        "split": {
+          "lead": "|",
+          "cells": [
+            {
+              "text": " 中文 ",
+              "sep": "|"
+            },
+            {
+              "text": " English ",
+              "sep": "|"
+            }
+          ],
+          "tail": ""
+        },
+        "cells": [
+          "中文",
+          "English"
+        ],
+        "alignments": [
+          "",
+          ""
+        ],
+        "isTable": true
+      }
+    }
+  ]
+}

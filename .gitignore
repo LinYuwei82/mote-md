@@ -3,6 +3,8 @@
 /build/
 /build-*/
 /*_build/
+# 前端运行时产物：源码在 resources/web/src/，由 CMake 按 manifest 拼接生成
+/resources/web/editor.js
 Makefile
 *.o
 *.obj

@@ -43,6 +43,15 @@ jobs:
             python3 tools/release/$t.py
           done
 
+      # 前端源码在 resources/web/src/，editor.js 由构建期拼接生成。
+      - name: 前端纯函数测试
+        shell: bash
+        run: node tools/editor/test_pure.js
+
+      - name: 前端分片完整性
+        shell: bash
+        run: python3 tools/editor/split_editor.py status
+
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -88,3 +97,16 @@ jobs:
 
       - name: 单元测试
         run: ctest --test-dir build/windows --output-on-failure
+
+      - name: 校验构建期前端 bundle
+        shell: bash
+        run: |
+          python3 tools/editor/split_editor.py bundle --out build/editor.expected.js
+          python3 - <<'PY'
+          from pathlib import Path
+          expected = Path('build/editor.expected.js').read_bytes()
+          actual = Path('build/windows/web/editor.js').read_bytes()
+          if expected != actual and expected.replace(b'\r\n', b'\n') != actual.replace(b'\r\n', b'\n'):
+              raise SystemExit('构建期 editor.js 与 src 拼接结果不一致')
+          print('构建期 editor.js 与 src 拼接结果一致')
+          PY

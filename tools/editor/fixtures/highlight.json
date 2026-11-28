@@ -1,0 +1,135 @@
+{
+  "suite": "highlight",
+  "cases": [
+    {
+      "name": "cpp-function",
+      "lang": "cpp",
+      "raw": "int main() {\n  return 0;\n}",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-t\">int</span> <span class=\"tok-f\">main</span>() {",
+          "  <span class=\"tok-k\">return</span> <span class=\"tok-n\">0</span>;",
+          "}"
+        ]
+      }
+    },
+    {
+      "name": "cpp-multiline-comment",
+      "lang": "cpp",
+      "raw": "/* a\nb */\nint x;",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-c\">/* a</span>",
+          "<span class=\"tok-c\">b */</span>",
+          "<span class=\"tok-t\">int</span> x;"
+        ]
+      }
+    },
+    {
+      "name": "python-function",
+      "lang": "python",
+      "raw": "def f(x):\n    return x + 1",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-k\">def</span> <span class=\"tok-f\">f</span>(x):",
+          "    <span class=\"tok-k\">return</span> x + <span class=\"tok-n\">1</span>"
+        ]
+      }
+    },
+    {
+      "name": "javascript",
+      "lang": "js",
+      "raw": "const a = 1; // hi\nfunction f() { return a; }",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-k\">const</span> a = <span class=\"tok-n\">1</span>; <span class=\"tok-c\">// hi</span>",
+          "<span class=\"tok-k\">function</span> <span class=\"tok-f\">f</span>() { <span class=\"tok-k\">return</span> a; }"
+        ]
+      }
+    },
+    {
+      "name": "json",
+      "lang": "json",
+      "raw": "{\"a\": 1, \"b\": true}",
+      "expect": {
+        "lines": [
+          "{<span class=\"tok-t\">&quot;a&quot;</span>: <span class=\"tok-n\">1</span>, <span class=\"tok-t\">&quot;b&quot;</span>: <span class=\"tok-k\">true</span>}"
+        ]
+      }
+    },
+    {
+      "name": "shell",
+      "lang": "shell",
+      "raw": "echo \"hi\" | grep h",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-f\">echo</span> <span class=\"tok-s\">&quot;hi&quot;</span> | grep h"
+        ]
+      }
+    },
+    {
+      "name": "sql",
+      "lang": "sql",
+      "raw": "SELECT * FROM t WHERE id = 1;",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-k\">SELECT</span> * <span class=\"tok-k\">FROM</span> t <span class=\"tok-k\">WHERE</span> id = <span class=\"tok-n\">1</span>;"
+        ]
+      }
+    },
+    {
+      "name": "html",
+      "lang": "html",
+      "raw": "<div class=\"x\">hi</div>",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-k\">&lt;div</span> class=&quot;x&quot;&gt;hi<span class=\"tok-k\">&lt;/div</span>&gt;"
+        ]
+      }
+    },
+    {
+      "name": "unknown-language",
+      "lang": "text",
+      "raw": "a < b & c",
+      "expect": {
+        "lines": [
+          "a &lt; b &amp; c"
+        ]
+      }
+    },
+    {
+      "name": "c-include",
+      "lang": "c",
+      "raw": "#include <stdio.h>\nint main(void) { return 0; }",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-k\">#include</span> &lt;stdio.h&gt;",
+          "<span class=\"tok-t\">int</span> <span class=\"tok-f\">main</span>(<span class=\"tok-t\">void</span>) { <span class=\"tok-k\">return</span> <span class=\"tok-n\">0</span>; }"
+        ]
+      }
+    },
+    {
+      "name": "python-triple-quote",
+      "lang": "python",
+      "raw": "\"\"\"doc\nstring\"\"\"\nprint(1)",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-s\">&quot;&quot;&quot;doc</span>",
+          "<span class=\"tok-s\">string&quot;&quot;&quot;</span>",
+          "<span class=\"tok-t\">print</span>(<span class=\"tok-n\">1</span>)"
+        ]
+      }
+    },
+    {
+      "name": "javascript-template",
+      "lang": "js",
+      "raw": "const s = `a\nb`;",
+      "expect": {
+        "lines": [
+          "<span class=\"tok-k\">const</span> s = <span class=\"tok-s\">`a</span>",
+          "<span class=\"tok-s\">b`</span>;"
+        ]
+      }
+    }
+  ]
+}

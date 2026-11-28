@@ -1,0 +1,281 @@
+{
+  "suite": "layout",
+  "cases": [
+    {
+      "name": "empty",
+      "input": "",
+      "expect": {
+        "blocks": [
+          ""
+        ],
+        "gaps": [
+          0
+        ],
+        "trail": 0,
+        "roundtrip": "",
+        "starts": [
+          0
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "single-block",
+      "input": "hello",
+      "expect": {
+        "blocks": [
+          "hello"
+        ],
+        "gaps": [
+          0
+        ],
+        "trail": 0,
+        "roundtrip": "hello",
+        "starts": [
+          0
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "two-blocks",
+      "input": "a\n\nb",
+      "expect": {
+        "blocks": [
+          "a",
+          "b"
+        ],
+        "gaps": [
+          0,
+          2
+        ],
+        "trail": 0,
+        "roundtrip": "a\n\nb",
+        "starts": [
+          0,
+          3
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "leading-blank-lines",
+      "input": "\n\n# Title",
+      "expect": {
+        "blocks": [
+          "# Title"
+        ],
+        "gaps": [
+          2
+        ],
+        "trail": 0,
+        "roundtrip": "\n\n# Title",
+        "starts": [
+          2
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "many-blank-lines",
+      "input": "a\n\n\n\nb",
+      "expect": {
+        "blocks": [
+          "a",
+          "b"
+        ],
+        "gaps": [
+          0,
+          4
+        ],
+        "trail": 0,
+        "roundtrip": "a\n\n\n\nb",
+        "starts": [
+          0,
+          5
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "trailing-newlines",
+      "input": "a\n\n",
+      "expect": {
+        "blocks": [
+          "a"
+        ],
+        "gaps": [
+          0
+        ],
+        "trail": 2,
+        "roundtrip": "a\n\n",
+        "starts": [
+          0
+        ],
+        "trailingNewlineCount": 2
+      }
+    },
+    {
+      "name": "fence-keeps-inner-blank-lines",
+      "input": "```js\nconst a = 1;\n\nconst b = 2;\n```\n\nafter",
+      "expect": {
+        "blocks": [
+          "```js\nconst a = 1;\n\nconst b = 2;\n```",
+          "after"
+        ],
+        "gaps": [
+          0,
+          2
+        ],
+        "trail": 0,
+        "roundtrip": "```js\nconst a = 1;\n\nconst b = 2;\n```\n\nafter",
+        "starts": [
+          0,
+          38
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "list-kind-switch-splits",
+      "input": "- a\n1. b",
+      "expect": {
+        "blocks": [
+          "- a",
+          "1. b"
+        ],
+        "gaps": [
+          0,
+          1
+        ],
+        "trail": 0,
+        "roundtrip": "- a\n1. b",
+        "starts": [
+          0,
+          4
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "crlf-normalized",
+      "input": "a\r\n\r\nb",
+      "expect": {
+        "blocks": [
+          "a",
+          "b"
+        ],
+        "gaps": [
+          0,
+          2
+        ],
+        "trail": 0,
+        "roundtrip": "a\n\nb",
+        "starts": [
+          0,
+          3
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "only-newlines",
+      "input": "\n\n\n",
+      "expect": {
+        "blocks": [
+          ""
+        ],
+        "gaps": [
+          0
+        ],
+        "trail": 3,
+        "roundtrip": "\n\n\n",
+        "starts": [
+          0
+        ],
+        "trailingNewlineCount": 3
+      }
+    },
+    {
+      "name": "quote-then-paragraph",
+      "input": "> a\n> b\n\nc",
+      "expect": {
+        "blocks": [
+          "> a\n> b",
+          "c"
+        ],
+        "gaps": [
+          0,
+          2
+        ],
+        "trail": 0,
+        "roundtrip": "> a\n> b\n\nc",
+        "starts": [
+          0,
+          9
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "unclosed-fence",
+      "input": "```\ncode\n\nstill code",
+      "expect": {
+        "blocks": [
+          "```\ncode\n\nstill code"
+        ],
+        "gaps": [
+          0
+        ],
+        "trail": 0,
+        "roundtrip": "```\ncode\n\nstill code",
+        "starts": [
+          0
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "indentation-preserved",
+      "input": "  a\n\n\tb",
+      "expect": {
+        "blocks": [
+          "  a",
+          "\tb"
+        ],
+        "gaps": [
+          0,
+          2
+        ],
+        "trail": 0,
+        "roundtrip": "  a\n\n\tb",
+        "starts": [
+          0,
+          5
+        ],
+        "trailingNewlineCount": 0
+      }
+    },
+    {
+      "name": "blank-line-between-list-items",
+      "input": "- a\n\n- b",
+      "expect": {
+        "blocks": [
+          "- a",
+          "- b"
+        ],
+        "gaps": [
+          0,
+          2
+        ],
+        "trail": 0,
+        "roundtrip": "- a\n\n- b",
+        "starts": [
+          0,
+          5
+        ],
+        "trailingNewlineCount": 0
+      }
+    }
+  ]
+}

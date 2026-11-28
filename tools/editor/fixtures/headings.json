@@ -1,0 +1,113 @@
+{
+  "suite": "headings",
+  "cases": [
+    {
+      "name": "english",
+      "raw": "# Hello World",
+      "expect": {
+        "label": "Hello World",
+        "slug": "hello-world",
+        "escaped": "# Hello World"
+      }
+    },
+    {
+      "name": "cjk-punctuation",
+      "raw": "## 你好，世界！",
+      "expect": {
+        "label": "你好，世界！",
+        "slug": "你好世界",
+        "escaped": "## 你好，世界！"
+      }
+    },
+    {
+      "name": "multiple-spaces",
+      "raw": "### A  B",
+      "expect": {
+        "label": "A  B",
+        "slug": "a-b",
+        "escaped": "### A  B"
+      }
+    },
+    {
+      "name": "link-label",
+      "raw": "#### [link](u) title",
+      "expect": {
+        "label": "link title",
+        "slug": "link-title",
+        "escaped": "#### [link](u) title"
+      }
+    },
+    {
+      "name": "bold-label",
+      "raw": "##### **Bold**",
+      "expect": {
+        "label": "Bold",
+        "slug": "bold",
+        "escaped": "##### **Bold**"
+      }
+    },
+    {
+      "name": "leading-trailing-spaces",
+      "raw": "######  Multiple   Spaces ",
+      "expect": {
+        "label": "Multiple   Spaces",
+        "slug": "multiple-spaces",
+        "escaped": "######  Multiple   Spaces "
+      }
+    },
+    {
+      "name": "symbols",
+      "raw": "## C++ & Rust",
+      "expect": {
+        "label": "C++ & Rust",
+        "slug": "c-rust",
+        "escaped": "## C++ &amp; Rust"
+      }
+    },
+    {
+      "name": "cjk-english-digits",
+      "raw": "## 中文 English 123",
+      "expect": {
+        "label": "中文 English 123",
+        "slug": "中文-english-123",
+        "escaped": "## 中文 English 123"
+      }
+    },
+    {
+      "name": "empty",
+      "raw": "## ",
+      "expect": {
+        "label": "",
+        "slug": "",
+        "escaped": "## "
+      }
+    },
+    {
+      "name": "existing-hyphens",
+      "raw": "## a---b",
+      "expect": {
+        "label": "a---b",
+        "slug": "a---b",
+        "escaped": "## a---b"
+      }
+    },
+    {
+      "name": "image-alt",
+      "raw": "## ![img](a.png) alt",
+      "expect": {
+        "label": "img alt",
+        "slug": "img-alt",
+        "escaped": "## ![img](a.png) alt"
+      }
+    },
+    {
+      "name": "cjk-punctuation-only",
+      "raw": "## 标点：；！？（）【】《》「」『』—…·",
+      "expect": {
+        "label": "标点：；！？（）【】《》「」『』—…·",
+        "slug": "标点",
+        "escaped": "## 标点：；！？（）【】《》「」『』—…·"
+      }
+    }
+  ]
+}

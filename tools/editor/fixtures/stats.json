@@ -1,0 +1,185 @@
+{
+  "suite": "stats",
+  "cases": [
+    {
+      "name": "english-two-words",
+      "raw": "hello world",
+      "expect": {
+        "plain": "hello world",
+        "rawStats": {
+          "cjk": 0,
+          "words": 2
+        },
+        "plainStats": {
+          "cjk": 0,
+          "words": 2
+        }
+      }
+    },
+    {
+      "name": "cjk-four-chars",
+      "raw": "中文测试",
+      "expect": {
+        "plain": "中文测试",
+        "rawStats": {
+          "cjk": 4,
+          "words": 0
+        },
+        "plainStats": {
+          "cjk": 4,
+          "words": 0
+        }
+      }
+    },
+    {
+      "name": "heading-and-bold",
+      "raw": "# 标题\n\nhello **world** 中文",
+      "expect": {
+        "plain": "标题\n\nhello **world** 中文",
+        "rawStats": {
+          "cjk": 4,
+          "words": 2
+        },
+        "plainStats": {
+          "cjk": 4,
+          "words": 2
+        }
+      }
+    },
+    {
+      "name": "fenced-code",
+      "raw": "```js\nconst x = 1;\n```",
+      "expect": {
+        "plain": "const x = 1;",
+        "rawStats": {
+          "cjk": 0,
+          "words": 4
+        },
+        "plainStats": {
+          "cjk": 0,
+          "words": 3
+        }
+      }
+    },
+    {
+      "name": "table",
+      "raw": "| a | b |\n| --- | --- |\n| 1 | 2 |",
+      "expect": {
+        "plain": " a b \n\n 1 2 ",
+        "rawStats": {
+          "cjk": 0,
+          "words": 4
+        },
+        "plainStats": {
+          "cjk": 0,
+          "words": 4
+        }
+      }
+    },
+    {
+      "name": "cjk-extension-a",
+      "raw": "㐀㐁",
+      "expect": {
+        "plain": "㐀㐁",
+        "rawStats": {
+          "cjk": 2,
+          "words": 0
+        },
+        "plainStats": {
+          "cjk": 2,
+          "words": 0
+        }
+      }
+    },
+    {
+      "name": "apostrophe-and-hyphen",
+      "raw": "don't state-of-the-art",
+      "expect": {
+        "plain": "don't state-of-the-art",
+        "rawStats": {
+          "cjk": 0,
+          "words": 2
+        },
+        "plainStats": {
+          "cjk": 0,
+          "words": 2
+        }
+      }
+    },
+    {
+      "name": "link-and-image",
+      "raw": "![alt](a.png) [text](b.md)",
+      "expect": {
+        "plain": "![alt](a.png) [text](b.md)",
+        "rawStats": {
+          "cjk": 0,
+          "words": 2
+        },
+        "plainStats": {
+          "cjk": 0,
+          "words": 2
+        }
+      }
+    },
+    {
+      "name": "empty",
+      "raw": "",
+      "expect": {
+        "plain": "",
+        "rawStats": {
+          "cjk": 0,
+          "words": 0
+        },
+        "plainStats": {
+          "cjk": 0,
+          "words": 0
+        }
+      }
+    },
+    {
+      "name": "punctuation-only",
+      "raw": "*** ---",
+      "expect": {
+        "plain": "*** ---",
+        "rawStats": {
+          "cjk": 0,
+          "words": 0
+        },
+        "plainStats": {
+          "cjk": 0,
+          "words": 0
+        }
+      }
+    },
+    {
+      "name": "task-list",
+      "raw": "- [ ] task\n- [x] done",
+      "expect": {
+        "plain": "task\ndone",
+        "rawStats": {
+          "cjk": 0,
+          "words": 3
+        },
+        "plainStats": {
+          "cjk": 0,
+          "words": 2
+        }
+      }
+    },
+    {
+      "name": "fullwidth-letters",
+      "raw": "Ｈｅｌｌｏ",
+      "expect": {
+        "plain": "Ｈｅｌｌｏ",
+        "rawStats": {
+          "cjk": 0,
+          "words": 0
+        },
+        "plainStats": {
+          "cjk": 0,
+          "words": 0
+        }
+      }
+    }
+  ]
+}
