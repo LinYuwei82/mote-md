@@ -93,10 +93,15 @@ void layout(HWND dlg)
 
     HWND link = CreateWindowExW(0, WC_LINK,
                                 L"<a href=\"https://dl.xiaotu.online/mote/\">官网与下载</a>",
-                                WS_CHILD | WS_VISIBLE | SS_CENTER,
+                                WS_CHILD | WS_VISIBLE,
                                 0, y, kWidth, 18, dlg,
                                 reinterpret_cast<HMENU>(ABO_LINK), instance, nullptr);
     SendMessageW(link, WM_SETFONT, reinterpret_cast<WPARAM>(g_text_font), TRUE);
+    // SysLink 不支持 SS_CENTER（永远左对齐）：取理想宽度后手动居中
+    SIZE ideal = {0, 0};
+    SendMessageW(link, LM_GETIDEALSIZE, 0, reinterpret_cast<LPARAM>(&ideal));
+    const int link_w = ideal.cx > 0 ? ideal.cx : 120;
+    MoveWindow(link, (kWidth - link_w) / 2, y, link_w, 18, TRUE);
     y += 18 + 18;
 
     const int check_w = 150;
