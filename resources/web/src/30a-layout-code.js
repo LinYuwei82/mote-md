@@ -233,7 +233,7 @@
   // 一次布局，再全部还原。把 N 次强制重排压缩成 1 次（9000+ 块场景从 ~5.5s 降到
   // 几十毫秒）。
   function normalizeCodeScrolls(scope) {
-    var list = (scope || root).querySelectorAll('.code-scroll');
+    var list = (scope || Core.root).querySelectorAll('.code-scroll');
     if (!list.length)
       return;
     var original = new Array(list.length);

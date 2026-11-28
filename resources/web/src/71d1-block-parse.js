@@ -114,7 +114,7 @@
   }
 
   function blockList() {
-    return Array.prototype.filter.call(root.children, function (el) {
+    return Array.prototype.filter.call(Core.root.children, function (el) {
       return el.classList && el.classList.contains('block');
     });
   }
@@ -126,20 +126,20 @@
     var el = CaretCode.blockOf(node);
     if (el)
       return el;
-    if (node !== root)
+    if (node !== Core.root)
       return null;
     var kids = blockList();
     if (!kids.length)
       return null;
     if (preferPrevious) {
       for (var i = Math.min(offset, kids.length) - 1; i >= 0; i--) {
-        if (kids[i].parentNode === root)
+        if (kids[i].parentNode === Core.root)
           return kids[i];
       }
       return kids[0];
     }
     for (var j = Math.max(0, offset); j < kids.length; j++) {
-      if (kids[j].parentNode === root)
+      if (kids[j].parentNode === Core.root)
         return kids[j];
     }
     return kids[kids.length - 1];

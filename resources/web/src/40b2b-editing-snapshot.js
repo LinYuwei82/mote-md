@@ -41,11 +41,11 @@
   // 纯文本。wysiwyg 的整篇文本由 layoutText 按需拼出，不额外存副本。
   function snapshotState() {
     if (ViewState.mode() === 'source') {
-      var text = sourceEl.value;
+      var text = Core.sourceEl.value;
       return {
         text: text, blocks: null, gaps: null, trail: LayoutCode.trailingNewlineCount(text),
-        start: sourceEl.selectionStart, end: sourceEl.selectionEnd,
-        hasSel: document.activeElement === sourceEl
+        start: Core.sourceEl.selectionStart, end: Core.sourceEl.selectionEnd,
+        hasSel: document.activeElement === Core.sourceEl
       };
     }
     var blocks = DocumentModel.collectBlocks();
@@ -134,7 +134,7 @@
     // 否则菜单会悬空浮在重建后的文档上（动作虽有 parentNode 兜底不会误伤）
     BlockOps.closeBlockMenu();
     BlockOps.reset();
-    root.innerHTML = '';
+    Core.root.innerHTML = '';
     var _t1 = window.MOTE_PERF ? performance.now() : 0;
     var fragment = document.createDocumentFragment();
     for (var i = 0; i < blocks.length; i++) {
@@ -146,7 +146,7 @@
       RenderBlocks.renderBlock(el, blocks[i], deferHi);
       fragment.appendChild(el);
     }
-    root.appendChild(fragment);
+    Core.root.appendChild(fragment);
     var _t2 = window.MOTE_PERF ? performance.now() : 0;
     if (typeof trail === 'number')
       DocumentModel.setTrailing(trail);
@@ -184,7 +184,7 @@
     var scrollY = window.scrollY;
 
     if (ViewState.mode() === 'source') {
-      sourceEl.value = stateText(snap);
+      Core.sourceEl.value = stateText(snap);
       DocumentModel.setTrailing(snap.trail);
     } else {
       var layout = snap.blocks
@@ -209,8 +209,8 @@
           }
           base = stop;
         }
-        if (index >= 0 && root.children[index]) {
-          var target = root.children[index];
+        if (index >= 0 && Core.root.children[index]) {
+          var target = Core.root.children[index];
           if (CellEdit.inPlaceEditable(target)) {
             RenderBlocks.renderBlock(target, blocks[index]);
             LayoutCode.normalizeCodeScrolls(target);
@@ -230,8 +230,8 @@
     suppressEvents = false;
     if (ViewState.mode() === 'source' && snap.hasSel) {
       try {
-        sourceEl.focus();
-        sourceEl.setSelectionRange(snap.start, snap.end);
+        Core.sourceEl.focus();
+        Core.sourceEl.setSelectionRange(snap.start, snap.end);
       } catch (error) { /* ignore */ }
     }
     window.scrollTo(0, scrollY);

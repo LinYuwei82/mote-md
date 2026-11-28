@@ -26,7 +26,7 @@
   }
 
   function blockIndex(el) {
-    return Array.prototype.indexOf.call(root.children, el);
+    return Array.prototype.indexOf.call(Core.root.children, el);
   }
 
   // 字符偏移 → DOM 位置（用于撤销后恢复选区）。

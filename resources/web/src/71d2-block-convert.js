@@ -182,10 +182,10 @@
     block.className = 'block';
     block.setAttribute('contenteditable', 'true');
     RenderBlocks.renderBlock(block, raw);
-    if (el && el.parentNode === root)
-      root.insertBefore(block, el.nextSibling);
+    if (el && el.parentNode === Core.root)
+      Core.root.insertBefore(block, el.nextSibling);
     else
-      root.appendChild(block);
+      Core.root.appendChild(block);
     LayoutCode.normalizeCodeScrolls(block);
     block.classList.add('editing');
     block.focus();
@@ -198,7 +198,7 @@
   // 表格 / 分隔线：不改动已有内容，在当前块之后插入
   function insertTableBlock() {
     var blocks = BlockParse.selectedBlocks();
-    var el = blocks.length ? blocks[blocks.length - 1] : root.lastElementChild;
+    var el = blocks.length ? blocks[blocks.length - 1] : Core.root.lastElementChild;
     EditingSnapshot.commitHistory();
     var elKind = el && el.classList.contains('block') ? BlockParse.kindOfRaw(BlockParse.rawOf(el)) : '';
     // hr/表格的内容按定义可能为空，但它们是实打实的结构块：不能当成空块被替换掉
@@ -217,7 +217,7 @@
 
   function insertHrBlock() {
     var blocks = BlockParse.selectedBlocks();
-    var el = blocks.length ? blocks[blocks.length - 1] : root.lastElementChild;
+    var el = blocks.length ? blocks[blocks.length - 1] : Core.root.lastElementChild;
     EditingSnapshot.commitHistory();
     var elKind = el && el.classList.contains('block') ? BlockParse.kindOfRaw(BlockParse.rawOf(el)) : '';
     // hr/表格的内容按定义可能为空，但它们是实打实的结构块：不能当成空块被替换掉

@@ -1,6 +1,6 @@
   var CaretCode = (function caretCodeModule() {
   function blockOf(node) {
-    while (node && node !== root) {
+    while (node && node !== Core.root) {
       if (node.classList && node.classList.contains('block'))
         return node;
       node = node.parentNode;
@@ -36,8 +36,8 @@
     selection.addRange(range);
   }
 
-  // 任意 DOM 位置 → 相对 root 的字符偏移（只数字符，不计元素）。位置不在
-  // root 内时返回 -1。
+  // 任意 DOM 位置 → 相对 rootEl 的字符偏移（只数字符，不计元素）。位置不在
+  // rootEl 内时返回 -1。
   function offsetIn(rootEl, container, offset) {
     var range = document.createRange();
     range.selectNodeContents(rootEl);

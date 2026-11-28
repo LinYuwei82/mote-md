@@ -22,7 +22,7 @@
   }
 
   function exportBodyHtml() {
-    var body = root.cloneNode(true);
+    var body = Core.root.cloneNode(true);
     // 零宽标记（含链接的 [ / ](url)）只服务编辑与 raw 不变量，导出时全部去掉
     var marks = body.querySelectorAll('.mk');
     for (var i = marks.length - 1; i >= 0; i--) {

@@ -7,13 +7,13 @@
     EditingSnapshot.commitHistory();
 
     if (ViewState.mode() === 'source') {
-      var start = sourceEl.selectionStart;
-      var end = sourceEl.selectionEnd;
+      var start = Core.sourceEl.selectionStart;
+      var end = Core.sourceEl.selectionEnd;
       if (start === null || start === undefined)
-        start = end = sourceEl.value.length;
-      sourceEl.value = sourceEl.value.slice(0, start) + md + sourceEl.value.slice(end);
-      sourceEl.selectionStart = sourceEl.selectionEnd = start + md.length;
-      sourceEl.dispatchEvent(new Event('input', { bubbles: true }));
+        start = end = Core.sourceEl.value.length;
+      Core.sourceEl.value = Core.sourceEl.value.slice(0, start) + md + Core.sourceEl.value.slice(end);
+      Core.sourceEl.selectionStart = Core.sourceEl.selectionEnd = start + md.length;
+      Core.sourceEl.dispatchEvent(new Event('input', { bubbles: true }));
       setTimeout(EditingSnapshot.commitHistory, 0);
       return;
     }
@@ -36,11 +36,11 @@
       block.className = 'block';
       block.setAttribute('contenteditable', 'true');
       RenderBlocks.renderBlock(block, md);
-      var anchor = host && host.parentNode === root ? host : root.lastElementChild;
-      if (anchor && anchor.parentNode === root)
-        root.insertBefore(block, anchor.nextSibling);
+      var anchor = host && host.parentNode === Core.root ? host : Core.root.lastElementChild;
+      if (anchor && anchor.parentNode === Core.root)
+        Core.root.insertBefore(block, anchor.nextSibling);
       else
-        root.appendChild(block);
+        Core.root.appendChild(block);
       block.classList.add('editing');
       block.focus();
       CaretOffset.setSelectionRange(block, md.length);

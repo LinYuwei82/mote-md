@@ -3,13 +3,13 @@
      提示用 CSS ::before 绘制，不属于 textContent，因此绝不会写进 dataset.raw；
      只在「整篇只有一个空块」时出现，正常文档里回车产生的新空块不受影响。 */
   function updatePlaceholder() {
-    if (!root)
+    if (!Core.root)
       return;
     var blocks = BlockParse.blockList();
     var bare = ViewState.mode() !== 'source' && blocks.length === 1
       && String(BlockParse.rawOf(blocks[0])).trim() === '';
-    if (bare !== root.classList.contains('bare'))
-      root.classList.toggle('bare', bare);
+    if (bare !== Core.root.classList.contains('bare'))
+      Core.root.classList.toggle('bare', bare);
   }
 
   /* ---------- 斜杠命令浮层 ----------

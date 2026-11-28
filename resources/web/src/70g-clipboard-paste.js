@@ -105,7 +105,7 @@
       neo.setAttribute('contenteditable', 'true');
       // 粘贴文本里的连续空行原样保留，不压回 2 个换行
       neo.dataset.gap = String(DocumentModel.gapBefore(layout.gaps, i));
-      root.insertBefore(neo, last.nextSibling);
+      Core.root.insertBefore(neo, last.nextSibling);
       RenderBlocks.renderBlock(neo, '');
       neo.innerHTML = multilinePasteHtml(chunks[i]);
       neo.classList.add('editing');
@@ -121,14 +121,14 @@
   }
 
   // 光标停在块外（#editor 直接子节点之间）时，在光标处补一个空段落块并交还
-  // 焦点。块外没有可归属的原文，直接 insertText 会把文本写到 root 层，
+  // 焦点。块外没有可归属的原文，直接 insertText 会把文本写到 Core.root 层，
   // collectBlocks 序列化时看不到它，等于粘贴后一保存就丢。
   function caretParagraphBlock() {
     var selection = window.getSelection();
     if (!selection || !selection.rangeCount)
       return null;
     var range = selection.getRangeAt(0);
-    if (range.startContainer !== root && !root.contains(range.startContainer))
+    if (range.startContainer !== Core.root && !Core.root.contains(range.startContainer))
       return null;
     var neo = document.createElement('div');
     neo.className = 'block';
@@ -146,7 +146,7 @@
     var neo = document.createElement('div');
     neo.className = 'block';
     neo.setAttribute('contenteditable', 'true');
-    root.appendChild(neo);
+    Core.root.appendChild(neo);
     RenderBlocks.renderBlock(neo, '');
     neo.classList.add('editing');
     neo.focus();
@@ -157,7 +157,7 @@
   }
 
   // 粘贴统一转为纯文本，避免把富文本结构带进 Markdown；粘贴整体作为一个撤销步骤。
-  // 监听挂在 document 上：块外空白区的 paste 事件目标是 body，挂在 root 上收不到。
+  // 监听挂在 document 上：块外空白区的 paste 事件目标是 body，挂在 Core.root 上收不到。
   document.addEventListener('paste', function (event) {
     if (ViewState.mode() === 'source')
       return;
@@ -168,7 +168,7 @@
     var clipboard = event.clipboardData || window.clipboardData;
     if (!clipboard)
       return;
-    var inRoot = target === root || (root.contains && root.contains(target));
+    var inRoot = target === Core.root || (Core.root.contains && Core.root.contains(target));
     var picture = clipboardImageFile(clipboard);
     if (picture) {
       event.preventDefault();

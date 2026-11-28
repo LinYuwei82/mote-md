@@ -4,7 +4,7 @@
   var findMatches = [], findActive = -1, findTimer = 0, findNoteTimer = 0;
   var findCaret = null;         // 打开查找前的原光标
   var findJumped = null;        // 最近一次跳转到的命中
-  var findInSource = false;     // 本轮命中是 sourceEl.value 上的区间
+  var findInSource = false;     // 本轮命中是 Core.sourceEl.value 上的区间
   var FindPaint = (function findPaintModule() {
   /* ---------------- 查找 / 替换（Cmd+F） ----------------
      高亮用「覆盖层」画：用 Range.getClientRects() 取每个命中的几何，把绝对定位的
@@ -297,7 +297,7 @@
   }
 
   function findScanSource(query, needle) {
-    var text = sourceEl.value;
+    var text = Core.sourceEl.value;
     var hay = text.toLowerCase();
     var use = needle;
     if (hay.length !== text.length) {
@@ -379,10 +379,10 @@
   }
 
   function scrollSourceTo(start) {
-    var line = sourceEl.value.slice(0, start).split('\n').length;
-    var lineHeight = parseFloat(getComputedStyle(sourceEl).lineHeight) || 22;
-    var visible = sourceEl.clientHeight / lineHeight;
-    sourceEl.scrollTop = Math.max(0, (line - visible / 2) * lineHeight);
+    var line = Core.sourceEl.value.slice(0, start).split('\n').length;
+    var lineHeight = parseFloat(getComputedStyle(Core.sourceEl).lineHeight) || 22;
+    var visible = Core.sourceEl.clientHeight / lineHeight;
+    Core.sourceEl.scrollTop = Math.max(0, (line - visible / 2) * lineHeight);
   }
 
   function goFind(delta) {
@@ -392,9 +392,9 @@
     var match = findMatches[findActive];
 
     if (findInSource) {
-      sourceEl.focus();
+      Core.sourceEl.focus();
       try {
-        sourceEl.setSelectionRange(match.start, match.end);
+        Core.sourceEl.setSelectionRange(match.start, match.end);
       } catch (error) { /* ignore */ }
       scrollSourceTo(match.start);
       findJumped = match;
@@ -410,7 +410,7 @@
     // 覆盖层用「视口矩形 + 滚动量」换算成文档坐标；代码块内部横向滚动不改变
     // 文档滚动量，所以必须等横向滚动落定后再画。
     FindPaint.paintFind();
-    var wantCaret = !!findCaret || !!root.querySelector('.block.editing');
+    var wantCaret = !!findCaret || !!Core.root.querySelector('.block.editing');
     if (wantCaret && applyFindCaret(match))
       findJumped = match;
     FindPaint.updateFindCount();
@@ -554,7 +554,7 @@
     EditingSnapshot.commitHistory();
     Toc.scheduleTocRefresh();
     window.scrollTo(window.scrollX, scrollY);
-    return { block: root.children[at.index] || null, offset: at.start };
+    return { block: Core.root.children[at.index] || null, offset: at.start };
   }
 
   return {
@@ -580,8 +580,8 @@
     }
     var keep = findActive;
     if (findInSource) {
-      var value = sourceEl.value;
-      sourceEl.value = value.slice(0, match.start) + repl + value.slice(match.end);
+      var value = Core.sourceEl.value;
+      Core.sourceEl.value = value.slice(0, match.start) + repl + value.slice(match.end);
       EditingSnapshot.commitHistory();
       Toc.scheduleTocRefresh();
       FindScan.findScan(findInput.value);
@@ -685,11 +685,11 @@
     var skipped = 0;
 
     if (findInSource) {
-      var value = sourceEl.value;
+      var value = Core.sourceEl.value;
       for (var i = findMatches.length - 1; i >= 0; i--)
         value = value.slice(0, findMatches[i].start) + repl + value.slice(findMatches[i].end);
       done = findMatches.length;
-      sourceEl.value = value;
+      Core.sourceEl.value = value;
       EditingSnapshot.commitHistory();
       Toc.scheduleTocRefresh();
       FindScan.findScan(query);
@@ -840,7 +840,7 @@
     Cross.clearCrossSelection();
     findInSource = ViewState.mode() === 'source';
     if (findInSource) {
-      findCaret = { source: true, start: sourceEl.selectionStart, end: sourceEl.selectionEnd };
+      findCaret = { source: true, start: Core.sourceEl.selectionStart, end: Core.sourceEl.selectionEnd };
     } else {
       var block = document.activeElement ? CaretCode.blockOf(document.activeElement) : null;
       // 关掉查找栏时走 placeBlockCaret（原文口径），这里也按原文口径取
@@ -854,8 +854,8 @@
 
     var picked = '';
     if (findInSource) {
-      if (sourceEl.selectionEnd > sourceEl.selectionStart)
-        picked = sourceEl.value.slice(sourceEl.selectionStart, sourceEl.selectionEnd);
+      if (Core.sourceEl.selectionEnd > Core.sourceEl.selectionStart)
+        picked = Core.sourceEl.value.slice(Core.sourceEl.selectionStart, Core.sourceEl.selectionEnd);
     } else {
       var selection = window.getSelection();
       if (selection && !selection.isCollapsed && selection.rangeCount)
@@ -892,11 +892,11 @@
     findBar = findInput = findReplace = findCount = findNote = null;
 
     if (inSource) {
-      sourceEl.focus();
+      Core.sourceEl.focus();
       var target = jumped && jumped.source ? jumped : caret;
       if (target) {
         try {
-          sourceEl.setSelectionRange(target.start, target.end === undefined ? target.start : target.end);
+          Core.sourceEl.setSelectionRange(target.start, target.end === undefined ? target.start : target.end);
         } catch (error) { /* ignore */ }
         FindScan.scrollSourceTo(target.start);
       }
@@ -1000,8 +1000,8 @@
   // 视口或字号变化后标题纵坐标失效，下一次滚动高亮时重算
   window.addEventListener('resize', function () { Toc.invalidateTops(); });
 
-  if (tocList) {
-    tocList.addEventListener('click', function (event) {
+  if (Core.tocList) {
+    Core.tocList.addEventListener('click', function (event) {
       var node = event.target.closest ? event.target.closest('.toc-item') : null;
       if (!node)
         return;

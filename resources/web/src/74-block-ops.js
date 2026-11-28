@@ -77,7 +77,7 @@
     if (!blockHandle)
       return;
     var el = blockHandleTarget;
-    if (!el || el.parentNode !== root || ViewState.mode() === 'source' || blockDrag
+    if (!el || el.parentNode !== Core.root || ViewState.mode() === 'source' || blockDrag
         || document.body.classList.contains('pdf-export')) {
       blockHandle.style.display = 'none';
       return;
@@ -156,7 +156,7 @@
       if (Math.abs(event.clientY - dragPending.y) < 4 && Math.abs(event.clientX - dragPending.x) < 4)
         return;
       blockDrag = blockHandleTarget;
-      if (!blockDrag || blockDrag.parentNode !== root) {
+      if (!blockDrag || blockDrag.parentNode !== Core.root) {
         dragPending = null;
         return;
       }
@@ -182,11 +182,11 @@
       var moved = false;
       if (ref) {
         if (ref !== blockDrag.nextElementSibling) {
-          root.insertBefore(blockDrag, ref);
+          Core.root.insertBefore(blockDrag, ref);
           moved = true;
         }
-      } else if (root.lastElementChild !== blockDrag) {
-        root.appendChild(blockDrag);
+      } else if (Core.root.lastElementChild !== blockDrag) {
+        Core.root.appendChild(blockDrag);
         moved = true;
       }
       blockDrag.classList.remove('block-dragging');
@@ -283,9 +283,9 @@
     EditingSnapshot.commitHistory();
     var el = Menus.makeBlockEl('');
     if (above)
-      root.insertBefore(el, block);
+      Core.root.insertBefore(el, block);
     else
-      root.insertBefore(el, block.nextSibling);
+      Core.root.insertBefore(el, block.nextSibling);
     Menus.afterBlockStructureChange();
     el.classList.add('editing');
     el.focus();
@@ -300,7 +300,7 @@
       return;
     EditingSnapshot.commitHistory();
     var el = Menus.makeBlockEl(BlockParse.rawOf(block));
-    root.insertBefore(el, block.nextSibling);
+    Core.root.insertBefore(el, block.nextSibling);
     Menus.afterBlockStructureChange();
   }
 
@@ -384,7 +384,7 @@
     }
     if (blockMenu && blockMenu.contains(t))
       return;
-    if (ViewState.mode() === 'source' || !root.contains(t)) {
+    if (ViewState.mode() === 'source' || !Core.root.contains(t)) {
       BlockHandle.hideBlockHandle();
       return;
     }
@@ -405,7 +405,7 @@
     BlockHandle.hideBlockHandle();
   });
 
-  root.addEventListener('focusin', function (event) {
+  Core.root.addEventListener('focusin', function (event) {
     var el = CaretCode.blockOf(event.target);
     if (el) {
       BlockHandle.ensureBlockHandle();

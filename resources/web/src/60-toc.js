@@ -43,8 +43,8 @@
     var seen = {};
     if (ViewState.mode() !== 'wysiwyg')
       return map;
-    for (var i = 0; i < root.children.length; i++) {
-      var el = root.children[i];
+    for (var i = 0; i < Core.root.children.length; i++) {
+      var el = Core.root.children[i];
       if (!el.classList || !el.classList.contains('block'))
         continue;
       if (!headingLevel(el))
@@ -86,8 +86,8 @@
     var items = [];
     if (ViewState.mode() !== 'wysiwyg')
       return items;
-    for (var i = 0; i < root.children.length; i++) {
-      var el = root.children[i];
+    for (var i = 0; i < Core.root.children.length; i++) {
+      var el = Core.root.children[i];
       if (!el.classList || !el.classList.contains('block'))
         continue;
       var level = headingLevel(el);
@@ -100,7 +100,7 @@
   }
 
   function refreshToc() {
-    if (!tocVisible || !tocList) {
+    if (!tocVisible || !Core.tocList) {
       tocSig = null;
       return;
     }
@@ -122,7 +122,7 @@
       html += '<a class="toc-item" data-toc="' + i + '" style="padding-left:'
         + (0.5 + (item.level - 1) * 0.75) + 'rem">' + Util.escapeHtml(item.label) + '</a>';
     }
-    tocList.innerHTML = html || '<div class="toc-empty">没有标题</div>';
+    Core.tocList.innerHTML = html || '<div class="toc-empty">没有标题</div>';
     tocTops = null;
     updateActiveHeading();
   }
@@ -165,7 +165,7 @@
         hi = mid - 1;
       }
     }
-    var nodes = tocList.querySelectorAll('.toc-item');
+    var nodes = Core.tocList.querySelectorAll('.toc-item');
     for (var j = 0; j < nodes.length; j++)
       nodes[j].classList.toggle('active', j === active);
   }

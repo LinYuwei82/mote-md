@@ -4,7 +4,7 @@
   var liveFrame = 0;
 
   function clearLiveMarkers() {
-    var nodes = root.querySelectorAll('.mk.mk-live');
+    var nodes = Core.root.querySelectorAll('.mk.mk-live');
     for (var i = 0; i < nodes.length; i++)
       nodes[i].classList.remove('mk-live');
   }

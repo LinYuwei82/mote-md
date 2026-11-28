@@ -28,17 +28,17 @@
   }
 
   function applySourceText(text, start, end) {
-    sourceEl.value = text;
-    sourceEl.focus();
-    sourceEl.setSelectionRange(start, end);
-    sourceEl.dispatchEvent(new Event('input', { bubbles: true }));
+    Core.sourceEl.value = text;
+    Core.sourceEl.focus();
+    Core.sourceEl.setSelectionRange(start, end);
+    Core.sourceEl.dispatchEvent(new Event('input', { bubbles: true }));
     setTimeout(EditingSnapshot.commitHistory, 0);
   }
 
   function sourceInline(kind) {
-    var text = sourceEl.value;
-    var start = sourceEl.selectionStart;
-    var end = sourceEl.selectionEnd;
+    var text = Core.sourceEl.value;
+    var start = Core.sourceEl.selectionStart;
+    var end = Core.sourceEl.selectionEnd;
     var out = BlockConvert.inlineTransform(text, start, end, kind);
     if (out.raw === text)
       return;
@@ -47,9 +47,9 @@
   }
 
   function sourceConvert(type, toggle) {
-    var text = sourceEl.value;
-    var start = sourceEl.selectionStart;
-    var end = sourceEl.selectionEnd;
+    var text = Core.sourceEl.value;
+    var start = Core.sourceEl.selectionStart;
+    var end = Core.sourceEl.selectionEnd;
     // 多行选区：按当前段落范围整体转换（与块模型一致）
     var range = (start === end || /^\s*$/.test(text.slice(start, end)))
       ? sourceParagraph(text, start, end)

@@ -2,7 +2,7 @@
   // 组合输入期间不落历史步骤，也不设置合并定时器；compositionend 时整段提交，
   // 这样中文候选上屏要么整体进入一步，要么整体回退，不会被切成多个碎片。
   var composing = false;
-  root.addEventListener('compositionstart', function () {
+  Core.root.addEventListener('compositionstart', function () {
     if (EditingSnapshot.isSuppressed())
       return;
     // 组合输入不在原型范围，但也不能「选了却没删」：先按整篇源码删掉跨块选区，
@@ -14,7 +14,7 @@
     composing = true;
   });
 
-  root.addEventListener('compositionend', function (event) {
+  Core.root.addEventListener('compositionend', function (event) {
     composing = false;
     var el = CaretCode.blockOf(event.target);
     if (el) {
@@ -28,7 +28,7 @@
   });
 
   // 源码模式：textarea 自己的原生撤销也会被 beforeinput 拦下，统一走自建栈
-  sourceEl.addEventListener('input', function () {
+  Core.sourceEl.addEventListener('input', function () {
     if (EditingSnapshot.isSuppressed())
       return;
     if (Find.isOpen())
@@ -38,7 +38,7 @@
     Toc.scheduleTocRefresh();
   });
 
-  sourceEl.addEventListener('compositionstart', function () {
+  Core.sourceEl.addEventListener('compositionstart', function () {
     if (EditingSnapshot.isSuppressed())
       return;
     EditingSnapshot.cancelCommit();
@@ -46,12 +46,12 @@
     composing = true;
   });
 
-  sourceEl.addEventListener('compositionend', function () {
+  Core.sourceEl.addEventListener('compositionend', function () {
     composing = false;
     EditingSnapshot.commitHistory();
   });
 
-  sourceEl.addEventListener('paste', function (event) {
+  Core.sourceEl.addEventListener('paste', function (event) {
     var clipboard = event.clipboardData || window.clipboardData;
     var picture = clipboard ? ClipboardPaste.clipboardImageFile(clipboard) : null;
     if (picture) {

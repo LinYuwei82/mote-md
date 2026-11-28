@@ -105,7 +105,7 @@
     var neo = document.createElement('div');
     neo.className = 'block';
     neo.setAttribute('contenteditable', 'true');
-    root.insertBefore(neo, el.nextSibling);
+    Core.root.insertBefore(neo, el.nextSibling);
     RenderBlocks.renderBlock(neo, after);
     neo.classList.add('editing');
     neo.focus();

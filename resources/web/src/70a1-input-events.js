@@ -112,7 +112,7 @@
     CaretEdit.setPendingOffset(prefix.toString().length);
   }, true);
 
-  root.addEventListener('focusin', function (event) {
+  Core.root.addEventListener('focusin', function (event) {
     if (Composition.isComposing() || EditingSnapshot.isSuppressed())
       return;
     var el = CaretCode.blockOf(event.target);
@@ -121,7 +121,7 @@
     CaretEdit.enterEdit(el);
   });
 
-  root.addEventListener('focusout', function (event) {
+  Core.root.addEventListener('focusout', function (event) {
     if (EditingSnapshot.isSuppressed())
       return;
     var el = CaretCode.blockOf(event.target);
@@ -133,7 +133,7 @@
   });
 
   // 任务复选框：按下时阻止聚焦与选区折叠，点击只切换该行的勾选标记。
-  root.addEventListener('mousedown', function (event) {
+  Core.root.addEventListener('mousedown', function (event) {
     var box = event.target;
     // 复制按钮不抢焦点：preventDefault 后选区/光标都留在原处，既不会把代码块
     // 切进编辑态，也不会触发 focusin 里的编辑流程。
@@ -145,7 +145,7 @@
       event.preventDefault();
   });
 
-  root.addEventListener('click', function (event) {
+  Core.root.addEventListener('click', function (event) {
     var target = event.target;
     var copyBtn = target && target.closest ? target.closest('.code-copy') : null;
     if (copyBtn) {
@@ -177,7 +177,7 @@
     RenderBlocks.toggleTaskCheckbox(box);
   });
 
-  root.addEventListener('input', function (event) {
+  Core.root.addEventListener('input', function (event) {
     if (EditingSnapshot.isSuppressed())
       return;
     var el = CaretCode.blockOf(event.target);

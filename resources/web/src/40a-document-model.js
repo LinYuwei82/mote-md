@@ -71,7 +71,7 @@
 
   function currentSource() {
     if (ViewState.mode() === 'source')
-      return sourceEl.value;
+      return Core.sourceEl.value;
     return layoutText(collectBlocks(), collectGaps(), trailingNewlines);
   }
 

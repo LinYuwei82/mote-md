@@ -43,7 +43,7 @@
 
   function currentCaretOffset() {
     if (mode === 'source')
-      return sourceEl.selectionStart;
+      return Core.sourceEl.selectionStart;
     var el = CaretCode.blockOf(document.activeElement);
     if (!el || !el.classList.contains('editing'))
       return 0;
@@ -73,12 +73,12 @@
     EditingSnapshot.setSuppressed(true);
     if (next === 'source') {
       mode = 'source';
-      sourceEl.value = text;
+      Core.sourceEl.value = text;
       document.body.classList.add('source-mode');
       EditingSnapshot.setSuppressed(false);
       try {
-        sourceEl.focus();
-        sourceEl.setSelectionRange(Math.min(caret, text.length), Math.min(caret, text.length));
+        Core.sourceEl.focus();
+        Core.sourceEl.setSelectionRange(Math.min(caret, text.length), Math.min(caret, text.length));
       } catch (error) { /* ignore */ }
     } else {
       mode = 'wysiwyg';
@@ -93,7 +93,7 @@
         base += DocumentModel.gapBefore(layout.gaps, i);
         var stop = base + blocks[i].length;
         if (caret <= stop || i === blocks.length - 1) {
-          var target = root.children[i];
+          var target = Core.root.children[i];
           if (target) {
             if (CellEdit.inPlaceEditable(target)) {
               RenderBlocks.renderBlock(target, blocks[i]);

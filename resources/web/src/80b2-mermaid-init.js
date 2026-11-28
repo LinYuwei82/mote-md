@@ -28,7 +28,7 @@
       EditingSnapshot.setSuppressed(true);
       var _t2 = _t1;
       if (ViewState.mode() === 'source') {
-        sourceEl.value = normalized;
+        Core.sourceEl.value = normalized;
         DocumentModel.setTrailing(LayoutCode.trailingNewlineCount(normalized));
       } else {
         var layout = LayoutCode.splitSourceLayout(normalized);
@@ -90,14 +90,14 @@
       window.mote.setMarkdown('');
       // 目录已关闭时 refreshToc 会早退，旧标题节点仍留在 DOM 里；新建必须清掉
       Toc.resetItems();
-      if (tocList)
-        tocList.innerHTML = '';
+      if (Core.tocList)
+        Core.tocList.innerHTML = '';
       if (ViewState.mode() === 'source') {
-        sourceEl.focus();
-        sourceEl.setSelectionRange(0, 0);
+        Core.sourceEl.focus();
+        Core.sourceEl.setSelectionRange(0, 0);
         return;
       }
-      var first = root.querySelector('.block');
+      var first = Core.root.querySelector('.block');
       if (first) {
         first.focus();
         CaretOffset.setSelectionRange(first, 0);
@@ -212,7 +212,7 @@
       };
     },
     focus: function () {
-      var first = root.querySelector('.block');
+      var first = Core.root.querySelector('.block');
       if (first)
         first.focus();
     },

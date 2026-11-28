@@ -987,7 +987,7 @@
     DragScroll.stopDragScroll();
   });
 
-  root.addEventListener('keydown', function (event) {
+  Core.root.addEventListener('keydown', function (event) {
     var el = CaretCode.blockOf(event.target);
     if (!el)
       return;
