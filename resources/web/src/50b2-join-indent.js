@@ -91,7 +91,7 @@
   }
 
   // 原生跨块选区（Cmd+A 全选、鼠标拖出块）上的删除：按整篇源码拼接删掉选区。
-  // 不接管的话 INLINE_PROTO 会把选区收成折叠光标，退格变成死键。
+  // 不接管的话 Config.INLINE_PROTO 会把选区收成折叠光标，退格变成死键。
   function deleteNativeCrossSelection() {
     var selection = window.getSelection();
     if (!selection || !selection.rangeCount)

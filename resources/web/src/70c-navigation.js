@@ -181,7 +181,7 @@
       return false;
 
     var x = caret ? caret.left : null;
-    target.focus();   // focusin → enterEdit；INLINE_PROTO 下不重排
+    target.focus();   // focusin → enterEdit；Config.INLINE_PROTO 下不重排
     placeCaretInBlock(target, up, x);
     return true;
   }

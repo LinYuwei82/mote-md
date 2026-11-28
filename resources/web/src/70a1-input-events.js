@@ -41,7 +41,7 @@
     }
 
     // 表格：点在格线、边框或格内标记上时，光标必须收回单元格里
-    if (INLINE_PROTO && el.classList.contains('table')) {
+    if (Config.INLINE_PROTO && el.classList.contains('table')) {
       var tableHit = document.caretRangeFromPoint(event.clientX, event.clientY);
       var hitNode = tableHit ? tableHit.startContainer : null;
       var hitParent = hitNode ? (hitNode.nodeType === 1 ? hitNode : hitNode.parentNode) : null;
@@ -63,7 +63,7 @@
     }
 
     // 分隔线：点到横线本身（而不是叠在上面的原文）时，光标放回原文行尾
-    if (INLINE_PROTO && el.classList.contains('hr') && el.classList.contains('editing')) {
+    if (Config.INLINE_PROTO && el.classList.contains('hr') && el.classList.contains('editing')) {
       var hrSrc = el.querySelector('.hr-src');
       var hrHit = document.caretRangeFromPoint(event.clientX, event.clientY);
       var inSource = hrSrc && hrHit

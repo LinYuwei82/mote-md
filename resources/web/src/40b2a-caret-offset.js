@@ -38,7 +38,7 @@
     var node = null;
     var last = null;
     while ((node = walker.nextNode())) {
-      if (INLINE_PROTO) {
+      if (Config.INLINE_PROTO) {
         var mk = node.parentNode && node.parentNode.closest ? node.parentNode.closest('.mk') : null;
         if (mk) {
           var mkLen = node.nodeValue.length;

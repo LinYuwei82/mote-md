@@ -161,15 +161,15 @@
     var indent = /^\s*/.exec(lead)[0].length;
     // 缩进子项在扁平列表里用左边距表达层级（原文的前导空格仍由标记承载）
     var style = indent ? ' style="margin-left:' + (indent * 0.6) + 'em"' : '';
-    var head = (index && INLINE_PROTO ? Util.newlineMarker() : '')
-      + (INLINE_PROTO ? Util.marker(lead, 'bullet') : '');
+    var head = (index && Config.INLINE_PROTO ? Util.newlineMarker() : '')
+      + (Config.INLINE_PROTO ? Util.marker(lead, 'bullet') : '');
     if (!task)
       return '<li' + style + '>' + head + Util.renderInline(rest) + '</li>';
     return '<li class="task"' + style + '>' + head
       // 任务标记不做成原子对象：编辑态它显示为可见文本，光标可以进入并用键盘
       // 把 [ ] 改成 [x]；渲染态 font-size:0 隐藏，由复选框代替。文字包一层 <i>，
       // 编辑态才能绝对定位压到复选框那块占位上，做到进出编辑态零位移。
-      + (INLINE_PROTO ? '<span class="mk mk-task"><i>' + Util.escapeHtml(task[0]) + '</i></span>' : '')
+      + (Config.INLINE_PROTO ? '<span class="mk mk-task"><i>' + Util.escapeHtml(task[0]) + '</i></span>' : '')
       + '<input type="checkbox" class="task-check" contenteditable="false" tabindex="-1"'
       + (task[1] === ' ' ? '' : ' checked') + '>'
       + Util.renderInline(rest.slice(task[0].length)) + '</li>';
@@ -215,7 +215,7 @@
       kind = 'h' + level;
       // 前缀按原文原样折叠（含 # 后的空白），否则 textContent 少一个空格，
       // 离开编辑态时块类型会悄悄变掉
-      var prefix = INLINE_PROTO ? Util.marker(heading[1] + heading[2], 'head') : '';
+      var prefix = Config.INLINE_PROTO ? Util.marker(heading[1] + heading[2], 'head') : '';
       html = '<h' + level + '>' + prefix + Util.renderInline(heading[3]) + '</h' + level + '>';
     } else if (TableParse.isTableSource(lines)) {
       kind = 'table';
@@ -242,15 +242,15 @@
       lines.forEach(function (line, index) {
         var lead = /^\s*>\s?/.exec(line)[0];
         if (index)
-          html += '<br>' + (INLINE_PROTO ? Util.newlineMarker() : '');
-        html += (INLINE_PROTO ? Util.marker(lead, 'quote') : '') + Util.renderInline(line.slice(lead.length));
+          html += '<br>' + (Config.INLINE_PROTO ? Util.newlineMarker() : '');
+        html += (Config.INLINE_PROTO ? Util.marker(lead, 'quote') : '') + Util.renderInline(line.slice(lead.length));
       });
       html += '</blockquote>';
     } else if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(raw.trim())) {
       kind = 'hr';
       html = '<hr>';
     } else {
-      html = lines.map(Util.renderInline).join(INLINE_PROTO ? '<br>' + Util.newlineMarker() : '<br>');
+      html = lines.map(Util.renderInline).join(Config.INLINE_PROTO ? '<br>' + Util.newlineMarker() : '<br>');
     }
 
     el.dataset.raw = raw;

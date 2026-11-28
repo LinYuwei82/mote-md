@@ -5,7 +5,7 @@
   // 用零宽标记补回 | 与对齐行的表格、用绝对定位叠出原文的 <hr>。回退模式下
   // 仍走整块替换。
   function inPlaceEditable(el) {
-    return INLINE_PROTO;
+    return Config.INLINE_PROTO;
   }
 
   function caretAtEdge(node, atStart) {

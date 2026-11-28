@@ -13,7 +13,7 @@
   // 不参与任何排版；因此只让离光标最近的一个标记显示标签，其余保持隐藏：
   // 无论多密集都不会叠字，也不会改变行高、宽度或块坐标。
   function updateLiveMarker() {
-    if (!INLINE_PROTO || composing)
+    if (!Config.INLINE_PROTO || composing)
       return;
     clearLiveMarkers();
     var el = CaretCode.blockOf(document.activeElement);
@@ -53,7 +53,7 @@
   }
 
   function scheduleLiveMarker() {
-    if (!INLINE_PROTO || liveFrame)
+    if (!Config.INLINE_PROTO || liveFrame)
       return;
     // 用定时器而不是 rAF：拖选时 selectionchange 很密，节流到一帧即可；
     // 窗口在后台/锁屏时 rAF 可能不跑，定时器仍能保证标签状态正确。

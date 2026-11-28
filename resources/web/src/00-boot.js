@@ -11,16 +11,8 @@
   var dirtyTimer = null;
   var pendingOffset = null;
 
-  // 行内标记（阶段一）：默认开启——标记文本常驻 DOM、零宽折叠，进入某行不再
-  // 整块替换成 Markdown 原文，因而不产生重排。MOTE_INLINE_PROTO=0/false/off
-  // 时由 Qt 注入 false，回退到旧的「整块替换」行为，作为应急路径保留。
-  var INLINE_PROTO = window.MOTE_INLINE_PROTO !== false;
-
   var mode = 'wysiwyg';         // 'wysiwyg' | 'source'
   var zoomLevel = 1;            // 1 = 100%，基准 16.5px（≈ 旧版 16.5pt）
-  var ZOOM_MIN = 0.6;
-  var ZOOM_MAX = 2.6;
-  var ZOOM_STEP = 0.1;
 
   // 自建撤销栈：整篇快照（块数组或纯文本）+ 绝对字符选区。contenteditable 的
   // 原生撤销只在单块未被重建时有效，跨块操作（回车分块、退格合并、撤销后整篇
@@ -30,10 +22,6 @@
   var commitTimer = null;
   var suppressEvents = false;   // 程序化重建 DOM 期间屏蔽 input/focus 等事件
   var commitBatch = 0;          // >0 时合并中间渲染，多块转换只记一个撤销步
-  var COALESCE_MS = 600;        // 连续输入的合并窗口
-  // 历史步数上限：整篇快照虽然只共享未改动块的字符串，但步数不封顶时块数组
-  // 会随编辑时长无限堆积（4500 块 / 170KB 文档尤为明显），超出丢最旧的。
-  var MAX_HISTORY = 100;
 
   var tocVisible = false;
   var tocItems = [];

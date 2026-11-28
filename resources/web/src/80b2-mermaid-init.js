@@ -198,7 +198,7 @@
       ViewState.setMode(mode === 'source' ? 'wysiwyg' : 'source');
     },
     zoomBy: function (steps) {
-      ViewState.setZoom(zoomLevel + steps * ZOOM_STEP);
+      ViewState.setZoom(zoomLevel + steps * Config.ZOOM_STEP);
     },
     resetZoom: function () {
       ViewState.setZoom(1);
@@ -257,7 +257,7 @@
   }
 
   ViewState.applyZoom();
-  if (INLINE_PROTO)
+  if (Config.INLINE_PROTO)
     document.body.classList.add('inline-proto');
   if (window.MOTE_PERF)
     Util.post({ type: 'log', message: 'PERF page_scripts ' + performance.now().toFixed(1) + 'ms' });

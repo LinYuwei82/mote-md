@@ -10,7 +10,7 @@
 
   function setCaret(el, offset) {
     // 折叠标记模式下，偏移必须按零宽原子取整，否则光标会落进 <i> 里
-    if (INLINE_PROTO) {
+    if (Config.INLINE_PROTO) {
       CaretOffset.setSelectionRange(el, offset);
       return;
     }

@@ -16,7 +16,7 @@
   }
 
   function clampZoom(value) {
-    return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value * 100) / 100));
+    return Math.max(Config.ZOOM_MIN, Math.min(Config.ZOOM_MAX, Math.round(value * 100) / 100));
   }
 
   function setZoom(value) {

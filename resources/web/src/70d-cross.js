@@ -1110,7 +1110,7 @@
         return;
     }
 
-    if (INLINE_PROTO && (event.key === 'Backspace' || event.key === 'Delete')) {
+    if (Config.INLINE_PROTO && (event.key === 'Backspace' || event.key === 'Delete')) {
       var backward = event.key === 'Backspace';
       var neighbour = MarkerCaret.markerAdjacent(el, backward ? -1 : 1);
       if (neighbour) {
@@ -1160,7 +1160,7 @@
       }
     }
 
-    if (INLINE_PROTO && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+    if (Config.INLINE_PROTO && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
       // 正常方向键会跳过零宽原子；只有程序化选区落进标记内部时才需要纠正。
       var inside = MarkerCaret.caretInsideMarker();
       if (inside) {

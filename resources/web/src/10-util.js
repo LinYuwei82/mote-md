@@ -227,7 +227,7 @@
 
   function renderInline(text) {
     text = String(text === undefined || text === null ? '' : text);
-    if (INLINE_PROTO)
+    if (Config.INLINE_PROTO)
       return inlineHtml(text, 0);
     // 回退路径：旧的整块替换渲染，保持原样以便对照/应急
     var out = escapeHtml(text);

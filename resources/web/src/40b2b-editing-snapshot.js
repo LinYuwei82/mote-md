@@ -98,8 +98,8 @@
     }
     history = history.slice(0, historyIndex + 1);
     history.push(snap);
-    if (history.length > MAX_HISTORY)
-      history.splice(0, history.length - MAX_HISTORY);
+    if (history.length > Config.MAX_HISTORY)
+      history.splice(0, history.length - Config.MAX_HISTORY);
     historyIndex = history.length - 1;
     DocumentModel.scheduleDirty();
   }
@@ -112,7 +112,7 @@
     commitTimer = setTimeout(function () {
       commitTimer = null;
       commitHistory();
-    }, COALESCE_MS);
+    }, Config.COALESCE_MS);
   }
 
   // gaps 省略时全部按默认间隔（新建块之间的 2 个换行），供只关心文本的调用方使用
