@@ -3,8 +3,8 @@
 > 状态：**迁移完成**（2026-11-18 全量上线并退役 v1）。
 > 全链路完成：生成器 `manifest_v2.py`、guard v2 检查、三仓库发布脚本、
 > 三个客户端解析 + Ed25519 验签、下载页改读 manifest.json；
-> 新内测版已发布：当前线上为 mote 1.0.6（Windows build 为旧编号 `202611191435`）、
-> xiaotu 1.0.3（build `202611190001`）、devcard 1.2.8（build `202611181646`）。
+> 新内测版已发布：当前线上为 mote 1.0.33（build 30）、
+> xiaotu 1.0.28（build 24）、devcard 1.4.5（build 19）。
 > **构建号口径（当前）**：正式发布的 tag 为 `v<semver>+<seq>`，`build = seq`
 > （从 1 起、无固定基数）；下面的日期构建号只出现在历史发布记录里。
 > 升级链路实测全绿后，v1 清单（`latest.json` / `windows.json`）已全部删除
@@ -94,8 +94,8 @@
 > `docs/release-notes-<版本>.html`，存在时连同产物一起上传到
 > `<product>/release-notes-<版本>.html` 并填入该字段；缺页则不写，避免客户端出现死链。
 > Mote 的 macOS 脚本自 2026-11-19 起也走同一规则（此前只接受显式的 `NOTES_URL`）。
-> 当前三份线上清单均含该字段：devcard 1.2.8、xiaotu 1.0.3、mote 1.0.4。其中后两份是
-> 发布后补传说明页、再改 `notes_url` 整体重签并自验签完成的，详见 `OSS-发布布局.md` 第四节。
+> 当前线上：mote 1.0.33 与 xiaotu 1.0.28 的双平台清单均已写入该字段；devcard 1.4.5 仅
+> macOS 段有 `notes_url`，Windows 段为空（客户端不显示该链接），详见 `OSS-发布布局.md` 第四节。
 > 小兔 1.0.3 起，Windows 更新卡片在 `notes_url` 非空时显示「查看更新详情」，
 > 调用系统默认浏览器打开；该字段为空则按钮不出现。
 
@@ -191,7 +191,7 @@ DevCard Windows 发版前验证工具：`dev_card_cpp/tools/release/verify_build
   原文交回 `POST /api/version/verify`，服务端用内嵌公钥验签后才返回 `artifacts`
   （WebView 自身无法验签，不能让它直接采信远端资产）。验签失败一律放弃本次更新。
 
-## 五、完整示例（mote 1.0.6，取自线上实际清单，`signature` 省略）
+## 五、历史完整示例（mote 1.0.6，当时线上清单，`signature` 省略）
 
 ```json
 {
@@ -237,7 +237,7 @@ DevCard Windows 发版前验证工具：`dev_card_cpp/tools/release/verify_build
 }
 ```
 
-> 示例取自线上 1.0.6 清单（签名保留完整值；该版生成于旧口径，macOS `build` 仍为 0，
+> 示例取自 1.0.6 历史清单（签名保留完整值；该版本已从 OSS 清理，生成于旧口径，macOS `build` 仍为 0，
 > 新发布的清单一律两端写真实 `MOTE_BUILD`）。与 1.0.4 残缺 DMG（750 KB、缺
 > Sparkle.framework）不同，1.0.6 DMG 含完整 Sparkle.framework（`.app` 约 4.2 MB），
 > macOS 端自动更新恢复正常。生成该清单时 `docs/release-notes-1.0.6.html` 尚未上传，

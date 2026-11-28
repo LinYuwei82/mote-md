@@ -4,7 +4,7 @@
 
 ## 功能
 
-按当前实际已实现的能力（macOS 与 Windows 原生外壳均已实机验收并发布至 1.0.32；Windows 上快捷键把 `Cmd` 换成 `Ctrl`）：
+按当前实际已实现的能力（macOS 与 Windows 原生外壳均已实机验收并发布至 1.0.33；Windows 上快捷键把 `Cmd` 换成 `Ctrl`）：
 
 - **所见即所得块编辑**：正文按空行切块，点击某块即就地显示该块的 Markdown 原文，其余块保持排版效果；离开该块后按原文重新渲染。
 - **上下方向键跨块**：光标在块首/块尾时，`↑`/`↓` 移到相邻块，并按原光标的横向位置落到目标块的首行/末行；块内逐行移动、表格 `Tab` 与 `Shift+方向键` 保持原生行为。
@@ -54,7 +54,7 @@ open build/release/Mote.app                      # 或直接运行
 ```bash
 bash tools/package/package_macos.sh --dmg
 # 产物：dist/Mote-macOS-native.zip / dist/Mote-macOS-native-*.dmg
-# 体积约 4.1 MB（.app，含 Sparkle.framework） / DMG 约 1.7 MB
+# 体积（1.0.33 实测）：.app 约 7.5 MB（含 Sparkle.framework）/ DMG 约 3.2 MB（3,218,500 字节）
 ```
 
 **发布前有四层门禁（2026-11-19 起），杜绝 1.0.4 残缺 DMG 回归：**
@@ -153,7 +153,7 @@ CI 用 `release_tag.py parse --ensure-latest` 解析 tag 并注入 `MOTE_BUILD`�
 
 - 产物定位：绿色包默认取 `dist/Mote-<版本>-win64-portable.zip`，不存在时回落 `dist/Mote*.zip`（含打包脚本默认的 `dist/Mote-Windows.zip`）；安装包自动找 `dist/Mote-Setup-*.exe`（也可用 `ZIP_PATH` / `SETUP_PATH` 显式指定）。
 - 正式发布必须显式传 `BUILD=<seq>`（seq = tag 序号，与 Windows 构建时的 `-DMOTE_BUILD` 相同）：清单 `build` 比安装包新会让客户端反复提示同一版本。
-- 官网与下载页统一由 `web/` 维护：ECS 用 `deploy_site.sh` 发布，备案前的 OSS 镜像用 `publish_site_oss.sh` 发布。旧的单页 `site/index.html` 与 `publish_site.ps1` 已退役，`dl.xiaotu.online` 根路径只做跳转，不再承载页面。
+- 官网与下载页统一由 `web/` 维护：ECS 用 `deploy_site.sh` 发布正式站；独立 OSS 桶 `xiaotu-site-sz` 用 `publish_site_oss.sh` 发布 `pre.xiaotu.online` 预览镜像。旧的单页 `site/index.html` 与 `publish_site.ps1` 已退役，`dl.xiaotu.online` 根路径只做跳转，不再承载页面。
 - 版本号只改仓库根的 `VERSION.txt`（单行 `x.y.z`），各发布脚本与 CMake 都从那里读。
 - 发布说明页：把 `docs/release-notes-<版本>.html` 放进仓库即可，macOS 与 Windows 发布脚本都会自动上传并写进清单 `notes_url`，客户端弹窗据此显示「查看完整更新说明…」。要指向外部页面时用 `NOTES_URL`（绝对地址）覆盖，此时脚本不再上传本地文件；缺页则不写该字段，老清单与老客户端都不受影响。已发布版本可用 `tools/release/manifest_v2.py resign --notes-url <地址>` 补发，无需重新打包。
 - Sparkle 2 强制 EdDSA：私钥在发布机 `~/.config/mote-updates/`，公钥写进 `Info.plist` 的 `SUPublicEDKey`，都不随仓库分发。
@@ -164,11 +164,11 @@ CI 用 `release_tag.py parse --ensure-latest` 解析 tag 并注入 `MOTE_BUILD`�
 
 ### 官网（xiaotu.online）
 
-官网是 `web/` 下的多页静态站（首页、三款产品页、下载页、文档页、隐私页、404、sitemap 与 robots）。正式站托管在 ECS 的 nginx 上；备案未通过期间用独立的 OSS 桶 `xiaotu-site` 做镜像，走 `pre.xiaotu.online`：
+官网是 `web/` 下的多页静态站（首页、三款产品页、下载页、文档页、隐私页、404、sitemap 与 robots）。备案（粤ICP备2026190345）已通过，正式站托管在 ECS 的 nginx 上；独立 OSS 桶 `xiaotu-site-sz` 作为 `pre.xiaotu.online` 的预览镜像：
 
 ```bash
 bash tools/release/deploy_site.sh                    # rsync web/ → ECS:/var/www/xiaotu
-bash tools/release/publish_site_oss.sh               # 同步 web/ → OSS 桶 xiaotu-site（pre 镜像）
+bash tools/release/publish_site_oss.sh               # 同步 web/ → OSS 桶 xiaotu-site-sz（pre 预览镜像）
 bash packaging/renew_site_cert.sh                # 续期 pre 域名证书并更新到 OSS
 SKIP_LINK_CHECK=1 bash tools/release/deploy_site.sh  # 跳过死链门禁（不推荐）
 DEPLOY_HOST=user@host bash tools/release/deploy_site.sh
@@ -211,15 +211,15 @@ macOS 用 `Cmd`；Windows 把 `Cmd` 换成 `Ctrl`（`Option` 换成 `Alt`）。
 - **仅 arm64**：macOS 包只含 arm64 切片，Intel Mac 需自行重新构建。
 - **发布包需 Developer ID + 公证**：`package_macos.sh` 把签名证书与 notarytool 凭据作为硬性前提，不满足直接失败；已删除 `--skip-sign` / `--skip-notarize` 旁路参数。
 - **更新包强制 EdDSA 验签**：Sparkle 2 不接受只签 Developer ID 的更新包；签名私钥只在发布机上，丢失后无法为已发布版本续签。
-- **macOS 包只依赖系统框架**：正式发布一律带 Sparkle.framework（`.app` 约 4.1 MB、DMG 约 1.7 MB），由 `MOTE_RELEASE_BUILD=ON` + `package_macos.sh` / `publish_macos.sh` 多层门禁硬拦截缺 framework 的产物；WebKit 由系统提供。
+- **macOS 包只依赖系统框架**：正式发布一律带 Sparkle.framework（1.0.33 实测 `.app` 约 7.5 MB、DMG 约 3.2 MB），由 `MOTE_RELEASE_BUILD=ON` + `package_macos.sh` / `publish_macos.sh` 多层门禁硬拦截缺 framework 的产物；WebKit 由系统提供。
 - **源码模式无语法高亮**：`Cmd+E` 下是纯文本编辑区。
 - **跨块查找需要显式换行**：块与块之间在检索文本里按一个换行计算，查询需用 `⌥↩` 或粘贴多行输入换行；命中边界落在行内格式内部时替换会拒绝（查找与高亮仍正常）。
 - **深色模式只覆盖正文区域**：网页侧（正文、标题、引用、表格、行内代码、代码块与语法高亮、目录、查找高亮、斜杠浮层）全部跟随主题；状态栏在深色下单独上色。菜单栏仍是系统原生外观，不随文档主题变化。
 - **链接跳转**：`Cmd+Click` 外部链接（http/https/mailto）与相对路径的 `.md`；**锚点链接**（`#标题`）按 GitHub 风格的 slug 在文档内跳转（中文保留、去标点、空格转 `-`，重名标题依次加 `-1`、`-2`），未命中时状态栏提示「未找到对应标题」；**图片**按 `img` 渲染，没有 `<a>` 包裹，`Cmd+Click` 不触发任何跳转（相对路径图片仍按文档目录正常显示与导出内嵌）。
 - **导出 HTML 是「网页快照」**：单文件、无外部依赖、无脚本；导出后不提供任何交互（链接仍可点，但任务复选框是静态图形）。
 - **导出能力两端已实现**：macOS 与 Windows 的 PDF、HTML 导出均已实现并验收；macOS 的 PDF 按 Typora 样张对齐版式与分页（表格铺满正文宽、代码块不跨页），Windows 的分页切点由 Chromium 决定。
-- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；当前双平台均为 1.0.9（`build` = tag 序号，两端同号），更早的 `0.3.10`、`1.0.3`、`1.0.4` 的 OSS 包已清理，升级路径不再逐一冒烟；**1.0.4 的 macOS 包曾因缺 Sparkle.framework（DMG 750 KB）导致应用内更新退回浏览器下载**，该残缺包已从 OSS 删除，且 `MOTE_RELEASE_BUILD=ON` + 打包/发布脚本多层门禁硬拦截缺 framework 的产物，后续不会再出现同类包；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证（Windows 现在会对可重试错误自动重试 3 次）；Windows 安装版静默安装并自动重启，绿色版下载校验后提示、自动退出并打开所在目录，由用户解压覆盖。
-- **OSS 在中国香港**：国内下载偏慢；备案完成后把回源迁到国内桶，`dl.xiaotu.online` 域名不变，已安装客户端无需改动。
+- **更新链路的已知边界**：`0.3.5` 启动即崩，只能手动重新下载新版本；当前双平台均为 1.0.33（`build` = 30，tag `v1.0.33+30`，两端同号），`0.3.10` 与 `1.0.3`–`1.0.32` 的 OSS 包已清理（1.0.32 全套归档在 GitHub Release `v1.0.32+29`），升级路径不再逐一冒烟；**1.0.4 的 macOS 包曾因缺 Sparkle.framework（DMG 750 KB）导致应用内更新退回浏览器下载**，该残缺包已从 OSS 删除，且 `MOTE_RELEASE_BUILD=ON` + 打包/发布脚本多层门禁硬拦截缺 framework 的产物，后续不会再出现同类包；干净状态与带 quarantine 的首次安装已在 macOS 手工验证，但尚无自动化覆盖，断网/下载中断仍未验证（Windows 现在会对可重试错误自动重试 3 次）；Windows 安装版静默安装并自动重启，绿色版下载校验后提示、自动退出并打开所在目录，由用户解压覆盖。
+- **OSS 已迁至深圳**：2026-11-26 备案通过后从香港迁到华南1（深圳）桶 `xiaotu-update-sz`，`dl.xiaotu.online` 域名与对象键不变，已安装客户端无需改动；旧香港桶已清空删除。
 - **任务复选框的复制**：复制处理器剔除隐藏标记；脚本用 `DataTransfer` 走产品同一条 `copy` 处理逻辑验证，真实 `Cmd+C` 写入系统剪贴板的最终结果仍需人工确认。
 - 目录在源码模式下隐藏；正在编辑的块在重排前标题高亮可能滞后一帧。
 
@@ -258,11 +258,12 @@ VERSION.txt              版本号唯一来源（单行 x.y.z）
 ## 文档
 
 - [docs/技术方案.md](docs/技术方案.md)：当前实际架构、在线更新方案、方案 A/B 取舍与实施状态
-- [docs/Mote-用户手册.md](docs/Mote-用户手册.md)：面向使用者的完整手册（19 章，`packaging/tools/make_user_manual.py` 生成 PDF）
+- [docs/Mote-用户手册.md](docs/Mote-用户手册.md)：面向使用者的完整手册（20 章，`packaging/tools/make_user_manual.py` 生成 PDF）
 - [docs/发布工作流.md](docs/发布工作流.md)：从打包到 OSS 上线、补发说明页、凭据位置与验收命令
 - [docs/OSS-发布布局.md](docs/OSS-发布布局.md)：三个产品在 OSS 上的对象布局、缓存策略与体积
 - [docs/更新清单Schema-v2.md](docs/更新清单Schema-v2.md)：manifest.json 字段、验签规则与 `resign` 用法
-- [docs/release-notes-1.0.4.html](docs/release-notes-1.0.4.html)：1.0.4 发布说明（Windows 编码识别、构建号修正；当时线上 `notes_url` 指向此页）
+- [docs/release-notes-1.0.33.html](docs/release-notes-1.0.33.html) / [.md](docs/release-notes-1.0.33.md)：当前版本发布说明；其余历史版本见 `docs/release-notes-*`
+- [docs/release-notes-1.0.4.html](docs/release-notes-1.0.4.html)：1.0.4 发布说明（Windows 编码识别、构建号修正）
 - [docs/release-notes-1.0.3.html](docs/release-notes-1.0.3.html) / [1.0.2](docs/release-notes-1.0.2.html) / [1.0.1](docs/release-notes-1.0.1.html) / [1.0.0](docs/release-notes-1.0.0.html)：1.0 各版发布说明
 - [docs/release-notes-0.3.9.md](docs/release-notes-0.3.9.md) / [docs/release-notes-0.3.10.md](docs/release-notes-0.3.10.md)：0.3.x 近期版本发行说明（Windows 应用内更新、新图标）
 - [docs/REBUILD-GUIDE.md](docs/REBUILD-GUIDE.md)：复刻技术手册（含当前构建、坑清单 P1–P43）

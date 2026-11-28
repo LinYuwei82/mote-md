@@ -9,7 +9,7 @@
 #
 # 用法：
 #   tools/release/publish_site_oss.sh
-#   SITE_BUCKET=xiaotu-site tools/release/publish_site_oss.sh
+#   SITE_BUCKET=xiaotu-site-sz tools/release/publish_site_oss.sh
 #
 # 依赖：python3 + oss2。系统 Python 受 PEP 668 保护不能直接装，
 # 推荐用专用虚拟环境：python3 -m venv ~/.venvs/xiaotu-oss &&

@@ -1,7 +1,7 @@
 # Mote 用户手册
 
-> **Mote v1.0.26** · macOS / Windows 双平台 · 最后更新 2026-11-26
-> C++20 原生薄外壳 + 系统 WebView 的 Markdown 查看 / 编辑器。macOS 用 AppKit + WKWebView，Windows 用 Win32 + WebView2。前端零框架、零构建，不含 Electron 运行时。
+> **Mote v1.0.33** · macOS / Windows 双平台 · 最后更新 2026-11-28
+> C++20 原生薄外壳 + 系统 WebView 的 Markdown 查看 / 编辑器。macOS 用 AppKit + WKWebView，Windows 用 Win32 + WebView2。前端零框架、无打包器（构建期按清单拼成单文件），不含 Electron 运行时。
 
 ---
 
@@ -36,7 +36,7 @@
 
 从官方下载页获取最新版本：
 
-- **macOS**：macOS 14+ · Apple Silicon（M 系列）· [下载 .dmg](https://dl.xiaotu.online/mote/mote-1.0.26-macos-arm64.dmg)
+- **macOS**：macOS 14+ · Apple Silicon（M 系列）· [下载 .dmg](https://dl.xiaotu.online/mote/mote-1.0.33-macos-arm64.dmg)
 - **Windows**：Windows 10/11 · 64 位 · 下载安装包（setup.exe）或绿色版（zip）
 
 Windows 首次安装时，若系统缺少 WebView2 Runtime，安装包会显示一个可选的 WebView2 安装任务（默认勾选），随 Mote 一起自动安装，无需手动下载。
@@ -564,7 +564,7 @@ Mote 已通过 Apple 公证（Notarized Developer ID）。macOS 14+ 在 Gatekeep
 
 ### Q：更新进度很慢 / 失败？
 
-- 检查网络：更新包托管在阿里云 OSS（`oss-cn-hongkong`），通过 `dl.xiaotu.online` 直连访问
+- 检查网络：更新包托管在阿里云 OSS（`oss-cn-shenzhen`），通过 `dl.xiaotu.online` 直连访问
 - macOS 用户如果看到 Sparkle 自动重启后失败，通常是隔离路径（App Translocation）问题——把 Mote 拖进「应用程序」后重试
 
 ### Q：Windows 绿色版怎么更新？
@@ -585,4 +585,4 @@ Mote 已通过 Apple 公证（Notarized Developer ID）。macOS 14+ 在 Gatekeep
 
 ---
 
-**Mote · v1.0.26 用户手册 · © 2026**
+**Mote · v1.0.33 用户手册 · © 2026**

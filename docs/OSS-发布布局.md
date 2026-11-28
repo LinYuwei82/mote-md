@@ -2,7 +2,7 @@
 
 > 更新日期：2026-11-28（末尾更新 2026-11-28：线上快照刷新为 Mote 1.0.33+30——修复分隔线插入崩溃、前端与原生代码按域分片重构、新增 122 条测试并接入 CI；同日清理 mote 1.0.5–1.0.32 共 82 个历史包 208 MB，`mote/` 仅保留当前版本。发布实操教训见《发布工作流》，CI stamp `/INCLUDE` 加固自 1.0.31 起持续验证「✓ 构建号一致」）
 > **当前发布口径**：正式发布从 tag `v<semver>+<seq>` 触发，`build = seq`（从 1 起，无固定基数）；下面带日期的版本号与构建号是发布当时的快照，最新值以线上 `manifest.json` 为准。
-> 数据来源：`oss://xiaotu-update`、`oss://xiaotu-site` 线上对象与元数据实测
+> 数据来源：`oss://xiaotu-update-sz`、`oss://xiaotu-site-sz` 线上对象与元数据实测
 > 适用仓库：`xiaotu-inventory`、`dev_card_cpp`、`mote`
 >
 > - 2026-11-19：按三份 `manifest.json` 与三份 `appcast.xml` 的引用为白名单清理过一次历史安装包
@@ -23,7 +23,7 @@
 
 > 2026-11-26 备案通过后从香港迁移到深圳，域名与对象键完全不变；旧香港桶（`xiaotu-update` / `xiaotu-site`）已于当天验证深圳线路正常后清空删除。
 
-一句话：**自动更新相关文件全部在 `xiaotu-update` 桶的 `<product>/updates/stable/` 下；安装包在 `<product>/` 根下；PDF 也在 `<product>/` 根下。** `<product>` 只有三个值：`devcard`、`xiaotu`、`mote`。
+一句话：**自动更新相关文件全部在 `xiaotu-update-sz` 桶的 `<product>/updates/stable/` 下；安装包在 `<product>/` 根下；PDF 也在 `<product>/` 根下。** `<product>` 只有三个值：`devcard`、`xiaotu`、`mote`。
 
 两个桶都已开启静态网站托管：
 
@@ -173,9 +173,9 @@ https://dl.xiaotu.online/<product>/updates/stable/appcast.xml      # Sparkle
 > 2026-11-28：三份 `manual.pdf` 的缓存头已用同键 CopyObject（`x-oss-metadata-directive: REPLACE`）
 > 统一为 `public, max-age=86400`，内容与 ETag 未变（devcard/mote 原为 `no-cache, max-age=60`，xiaotu 原未设置）。
 
-## 五、官网网页（`xiaotu-site` 桶 / ECS）
+## 五、官网网页（`xiaotu-site-sz` 桶 / ECS）
 
-`xiaotu-site` 桶共 21 个对象，ECS `/var/www/xiaotu` 与之一一对应。
+`xiaotu-site-sz` 桶共 21 个对象，ECS `/var/www/xiaotu` 与之一一对应。
 
 | 类型 | 对象键 | Cache-Control |
 |---|---|---|
@@ -225,7 +225,7 @@ https://xiaotu.online/                      # ECS 正式站（已启用 HTTPS）
 | `dev_card_cpp/tools/release/publish_windows.ps1` | `devcard/devcard-<ver>-win64-setup.exe`、`devcard/devcard-<ver>-win64-portable.zip`、`devcard/updates/stable/manifest.json`、`devcard/release-notes-<ver>.html`（存在时） |
 | `mote/tools/release/publish_macos.sh` | `mote/mote-<ver>-macos-arm64.dmg`、`mote/updates/stable/appcast.xml`、`mote/updates/stable/manifest.json`、`mote/release-notes-<ver>.html`（存在时） |
 | `mote/tools/release/publish_windows.sh`（或 `.ps1`） | `mote/mote-<ver>-win64-portable.zip`、`mote/mote-<ver>-win64-setup.exe`（存在时）、`mote/updates/stable/manifest.json`、`mote/release-notes-<ver>.html`（存在时） |
-| `mote/tools/release/publish_site_oss.sh` | 本地 `web/` 的 21 个文件 → `xiaotu-site` 桶 |
+| `mote/tools/release/publish_site_oss.sh` | 本地 `web/` 的 21 个文件 → `xiaotu-site-sz` 桶 |
 | `mote/tools/release/deploy_site.sh` | 本地 `web/` 的 21 个文件 → ECS `/var/www/xiaotu` |
 | 手工 | `<product>/manual.pdf`、README 等 |
 

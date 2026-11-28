@@ -43,7 +43,7 @@ python3 tools/release/manifest_v2.py verify --manifest /tmp/manifest-live.json \
 
 # ④ 上传覆盖（OSS 直连，上传即生效）
 ossutil -c ~/.config/xiaotu-updates/.env cp /tmp/manifest-live.json \
-  oss://xiaotu-update/$PRODUCT_DIR/updates/stable/manifest.json \
+  oss://xiaotu-update-sz/$PRODUCT_DIR/updates/stable/manifest.json \
   -f
 
 # ⑤ 线上校验
@@ -167,7 +167,7 @@ curl -fsSL https://dl.xiaotu.online/$PRODUCT_DIR/updates/stable/appcast.xml \
 #   3) 把输出的 sparkle:edSignature / length 填进 /tmp/appcast-live.xml 对应 <enclosure>
 #   4) 上传 appcast.xml（Cache-Control: public, max-age=60）
 ossutil -c ~/.config/xiaotu-updates/.env cp /tmp/appcast-live.xml \
-  oss://xiaotu-update/$PRODUCT_DIR/updates/stable/appcast.xml \
+  oss://xiaotu-update-sz/$PRODUCT_DIR/updates/stable/appcast.xml \
   -f --headers "Cache-Control:public, max-age=60"
 ```
 

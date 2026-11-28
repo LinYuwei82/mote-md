@@ -9,7 +9,7 @@
 - **问题**：早期用 `QTextDocument`/自绘做编辑器（`backup/` 里留有快照），排版能力与 Markdown 语义（表格、代码块、行内标记）都要自己实现，维护成本高。
 - **选择**：早期由 Qt 只做窗口、菜单、文件与打包；正文交给系统 WebView（macOS 为 WKWebView，Windows 为 WebView2），用 HTML/CSS 渲染 Markdown。
 - **理由**：排版、选择、输入法、滚动交给系统内核；前端可以用成熟的 HTML/CSS 表达块结构，迭代速度远高于自绘。重构后正文层为零第三方前端依赖（无框架、无 bundler）。
-- **代价**：历史 Qt 包体积较大（`libicudata` 约 32 MB、Qt 框架约 18 MB）。**2026-11-19 起 Qt 代码与打包链已整体删除**，当前为 AppKit/Win32 + 系统 WebView 的原生外壳：macOS `.app` 约 4.1 MB、DMG 约 1.7 MB，Windows 绿色包 zip 约 0.7 MB；不再受 Qt 体积制约。
+- **代价**：历史 Qt 包体积较大（`libicudata` 约 32 MB、Qt 框架约 18 MB）。**2026-11-19 起 Qt 代码与打包链已整体删除**，当前为 AppKit/Win32 + 系统 WebView 的原生外壳：macOS `.app` 约 7.5 MB、DMG 约 3.2 MB（1.0.33 实测），Windows 绿色包 zip 约 1.8 MB；不再受 Qt 体积制约。
 - **与 Typora 的体积对比**：立项时以 Typora 作为体积参照，但仓库内没有保留当时的对比数字，**未验证**；当前可引用的只有上面这组实测值。
 
 ### 2. 行内编辑的「零位移」
