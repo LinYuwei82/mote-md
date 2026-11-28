@@ -41,7 +41,7 @@
   function headingAnchors() {
     var map = {};
     var seen = {};
-    if (mode !== 'wysiwyg')
+    if (ViewState.mode() !== 'wysiwyg')
       return map;
     for (var i = 0; i < root.children.length; i++) {
       var el = root.children[i];
@@ -84,7 +84,7 @@
 
   function tocData() {
     var items = [];
-    if (mode !== 'wysiwyg')
+    if (ViewState.mode() !== 'wysiwyg')
       return items;
     for (var i = 0; i < root.children.length; i++) {
       var el = root.children[i];
@@ -182,7 +182,7 @@
 
   // 滚动高亮：同一帧只安排一次；侧栏关闭或源码模式下不计算
   function scheduleActiveHeading() {
-    if (!tocVisible || mode !== 'wysiwyg' || spyScheduled)
+    if (!tocVisible || ViewState.mode() !== 'wysiwyg' || spyScheduled)
       return;
     spyScheduled = true;
     requestAnimationFrame(function () {

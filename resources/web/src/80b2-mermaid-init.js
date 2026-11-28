@@ -27,7 +27,7 @@
 
       suppressEvents = true;
       var _t2 = _t1;
-      if (mode === 'source') {
+      if (ViewState.mode() === 'source') {
         sourceEl.value = normalized;
         DocumentModel.setTrailing(LayoutCode.trailingNewlineCount(normalized));
       } else {
@@ -97,7 +97,7 @@
       Toc.resetItems();
       if (tocList)
         tocList.innerHTML = '';
-      if (mode === 'source') {
+      if (ViewState.mode() === 'source') {
         sourceEl.focus();
         sourceEl.setSelectionRange(0, 0);
         return;
@@ -117,7 +117,7 @@
     // WebView2 只有自带加速键），所以复制/剪切由页面算出纯文本经 clipboardWrite
     // 交给外壳写系统剪贴板；粘贴由外壳读剪贴板后回灌，插入路径与原生粘贴一致。
     clipboardCopy: function (cut) {
-      if (mode === 'source')
+      if (ViewState.mode() === 'source')
         return false;
       var text = CopySelection.selectionPlainText();
       // 空段落块会算出 "\n"，纯空白一律按「没有内容」处理：只提示、不写剪贴板。
@@ -149,7 +149,7 @@
       return true;
     },
     clipboardPaste: function (text) {
-      if (mode === 'source')
+      if (ViewState.mode() === 'source')
         return false;
       text = String(text === undefined || text === null ? '' : text);
       if (!text) {
@@ -177,7 +177,7 @@
     },
     // 右键「转为」/ 工具栏下拉：不做 toggle，已是目标类型保持不动
     convert: function (kind) {
-      if (mode === 'source') {
+      if (ViewState.mode() === 'source') {
         var sourceType = { paragraph: 'p', h1: 'h1', h2: 'h2', h3: 'h3', ul: 'ul', ol: 'ol', quote: 'quote', codeBlock: 'code' }[kind];
         if (sourceType)
           SourceConvert.sourceConvert(sourceType, false);
@@ -197,10 +197,10 @@
       Toc.toggleToc();
     },
     toggleSource: function () {
-      ViewState.setMode(mode === 'source' ? 'wysiwyg' : 'source');
+      ViewState.setMode(ViewState.mode() === 'source' ? 'wysiwyg' : 'source');
     },
     zoomBy: function (steps) {
-      ViewState.setZoom(zoomLevel + steps * Config.ZOOM_STEP);
+      ViewState.setZoom(ViewState.getZoomLevel() + steps * Config.ZOOM_STEP);
     },
     resetZoom: function () {
       ViewState.setZoom(1);
@@ -208,9 +208,9 @@
     // 诊断/测试用只读状态
     state: function () {
       return {
-        mode: mode,
+        mode: ViewState.mode(),
         toc: Toc.isVisible(),
-        zoom: zoomLevel,
+        zoom: ViewState.getZoomLevel(),
         history: history.length,
         dirty: DocumentModel.isDirty(),
         source: DocumentModel.currentSource()

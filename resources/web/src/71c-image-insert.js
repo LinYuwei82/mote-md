@@ -6,7 +6,7 @@
     var md = '![](' + rel + ')';
     EditingSnapshot.commitHistory();
 
-    if (mode === 'source') {
+    if (ViewState.mode() === 'source') {
       var start = sourceEl.selectionStart;
       var end = sourceEl.selectionEnd;
       if (start === null || start === undefined)

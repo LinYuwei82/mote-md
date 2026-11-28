@@ -159,7 +159,7 @@
   // 粘贴统一转为纯文本，避免把富文本结构带进 Markdown；粘贴整体作为一个撤销步骤。
   // 监听挂在 document 上：块外空白区的 paste 事件目标是 body，挂在 root 上收不到。
   document.addEventListener('paste', function (event) {
-    if (mode === 'source')
+    if (ViewState.mode() === 'source')
       return;
     var target = event.target;
     // 页面内的表单控件（查找框、重命名输入等）保留原生粘贴

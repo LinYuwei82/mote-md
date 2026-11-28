@@ -315,7 +315,7 @@
   function findScan(query) {
     findMatches = [];
     findActive = -1;
-    findInSource = mode === 'source';
+    findInSource = ViewState.mode() === 'source';
     if (!query) {
       FindPaint.dropFindLayer();
       FindPaint.updateFindCount();
@@ -838,7 +838,7 @@
       return;
     // 查找条打开后焦点交给查找框，覆盖层选区先收起
     Cross.clearCrossSelection();
-    findInSource = mode === 'source';
+    findInSource = ViewState.mode() === 'source';
     if (findInSource) {
       findCaret = { source: true, start: sourceEl.selectionStart, end: sourceEl.selectionEnd };
     } else {

@@ -494,7 +494,7 @@
   var lastRangeSelection = null;
 
   document.addEventListener('contextmenu', function (event) {
-    if (mode === 'source')
+    if (ViewState.mode() === 'source')
       return;
     var el = CaretCode.blockOf(event.target);
     if (!el)

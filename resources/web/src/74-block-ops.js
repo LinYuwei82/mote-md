@@ -77,7 +77,7 @@
     if (!blockHandle)
       return;
     var el = blockHandleTarget;
-    if (!el || el.parentNode !== root || mode === 'source' || blockDrag
+    if (!el || el.parentNode !== root || ViewState.mode() === 'source' || blockDrag
         || document.body.classList.contains('pdf-export')) {
       blockHandle.style.display = 'none';
       return;
@@ -141,7 +141,7 @@
       return;
     // 手柄不参与选字与聚焦：块保持原状，拖拽与菜单都由这里接管
     event.preventDefault();
-    if (!blockHandleTarget || mode === 'source')
+    if (!blockHandleTarget || ViewState.mode() === 'source')
       return;
     BlockHandle.ensureBlockHandle();
     dragPending = { x: event.clientX, y: event.clientY };
@@ -220,7 +220,7 @@
   }
 
   function openBlockMenu(block, x, y) {
-    if (!block || mode === 'source')
+    if (!block || ViewState.mode() === 'source')
       return;
     Menus.closeTurnMenu();
     Menus.closeSlash(false);
@@ -384,7 +384,7 @@
     }
     if (blockMenu && blockMenu.contains(t))
       return;
-    if (mode === 'source' || !root.contains(t)) {
+    if (ViewState.mode() === 'source' || !root.contains(t)) {
       BlockHandle.hideBlockHandle();
       return;
     }

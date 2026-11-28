@@ -1,16 +1,19 @@
   var ViewState = (function viewStateModule() {
   /* ---------------- 缩放与视图状态 ---------------- */
 
+  var mode = 'wysiwyg';         // 'wysiwyg' | 'source'
+  var zoomLevel = 1;            // 1 = 100%，基准 16.5px（≈ 旧版 16.5pt）
+
   function applyZoom() {
     document.documentElement.style.fontSize = (16.5 * zoomLevel).toFixed(2) + 'px';
   }
 
   // 主题只切换 CSS 变量（data-theme），不触碰 DOM 内容与尺寸：
   // 正文、代码高亮、目录、查找、浮层、状态栏颜色都走同一套变量。
-  function setTheme(mode) {
+  function setTheme(theme) {
     var el = document.documentElement;
-    if (mode === 'dark' || mode === 'light')
-      el.setAttribute('data-theme', mode);
+    if (theme === 'dark' || theme === 'light')
+      el.setAttribute('data-theme', theme);
     else
       el.removeAttribute('data-theme');
   }
@@ -126,6 +129,8 @@
     setTheme: setTheme,
     setZoom: setZoom,
     postView: postView,
-    setMode: setMode
+    setMode: setMode,
+    mode: function () { return mode; },
+    getZoomLevel: function () { return zoomLevel; }
   };
   })();

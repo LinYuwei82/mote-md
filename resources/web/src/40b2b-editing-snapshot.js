@@ -31,7 +31,7 @@
   // 快照：wysiwyg 只保留块数组与块间空行（保住文首/文末空行），source 只保留
   // 纯文本。wysiwyg 的整篇文本由 layoutText 按需拼出，不额外存副本。
   function snapshotState() {
-    if (mode === 'source') {
+    if (ViewState.mode() === 'source') {
       var text = sourceEl.value;
       return {
         text: text, blocks: null, gaps: null, trail: LayoutCode.trailingNewlineCount(text),
@@ -174,7 +174,7 @@
     suppressEvents = true;
     var scrollY = window.scrollY;
 
-    if (mode === 'source') {
+    if (ViewState.mode() === 'source') {
       sourceEl.value = stateText(snap);
       DocumentModel.setTrailing(snap.trail);
     } else {
@@ -219,7 +219,7 @@
     }
 
     suppressEvents = false;
-    if (mode === 'source' && snap.hasSel) {
+    if (ViewState.mode() === 'source' && snap.hasSel) {
       try {
         sourceEl.focus();
         sourceEl.setSelectionRange(snap.start, snap.end);

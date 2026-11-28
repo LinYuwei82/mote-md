@@ -279,7 +279,7 @@
 
   // Shift+↑/↓：块首/块尾才升级成跨块选区；升级后一直由这里接管，直到清除
   function extendCrossSelection(el, up) {
-    if (mode !== 'wysiwyg' || !el.classList.contains('editing'))
+    if (ViewState.mode() !== 'wysiwyg' || !el.classList.contains('editing'))
       return false;
     var selection = window.getSelection();
     if (!selection || !selection.rangeCount)
@@ -539,7 +539,7 @@
   // Shift+←/→：块首/块尾才升级成跨块选区；升级后由这里逐字接管，块内横向
   // 选区仍交回原生
   function extendCrossSelectionHorizontal(el, left) {
-    if (mode !== 'wysiwyg' || !el.classList.contains('editing'))
+    if (ViewState.mode() !== 'wysiwyg' || !el.classList.contains('editing'))
       return false;
     var selection = window.getSelection();
     if (!selection || !selection.rangeCount)
@@ -957,7 +957,7 @@
   document.addEventListener('mousedown', function (event) {
     dragCross = null;
     if (event.defaultPrevented || event.button !== 0 || event.shiftKey
-        || mode !== 'wysiwyg')
+        || ViewState.mode() !== 'wysiwyg')
       return;
     var el = CaretCode.blockOf(event.target);
     if (!el)

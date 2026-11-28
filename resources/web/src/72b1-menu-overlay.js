@@ -6,7 +6,7 @@
     if (!root)
       return;
     var blocks = BlockParse.blockList();
-    var bare = mode !== 'source' && blocks.length === 1
+    var bare = ViewState.mode() !== 'source' && blocks.length === 1
       && String(BlockParse.rawOf(blocks[0])).trim() === '';
     if (bare !== root.classList.contains('bare'))
       root.classList.toggle('bare', bare);

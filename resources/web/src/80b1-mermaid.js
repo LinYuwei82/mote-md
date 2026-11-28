@@ -113,7 +113,7 @@
   // force=true 时连正在编辑的块也渲染（导出前用），否则让开光标所在的块
   function scanMermaid(force) {
     var ed = document.getElementById('editor');
-    if (!ed || mode === 'source')
+    if (!ed || ViewState.mode() === 'source')
       return;
     if (!mermaidReady) {
       if (!window.MOTE_MERMAID_SRC)

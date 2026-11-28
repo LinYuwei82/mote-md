@@ -168,7 +168,7 @@
   // text/plain 给粘回 Mote 与纯文本编辑器；text/html 给 Word / 邮件这类目标，
   // macOS 由 WebKit 落到 NSPasteboard 的 public.html，Windows 由宿主写 CF_HTML。
   document.addEventListener('copy', function (event) {
-    if (!event.clipboardData || mode === 'source')
+    if (!event.clipboardData || ViewState.mode() === 'source')
       return;
     var text = selectionPlainText();
     if (clipboardTextIsBlank(text)) {
@@ -187,7 +187,7 @@
   // 剪切事件：macOS 走 AppKit 的 cut: 时进入这里（Windows 由宿主直接调
   // clipboardCopy）。纯空白选区要连同删除一起取消，两个平台行为才一致。
   document.addEventListener('cut', function (event) {
-    if (mode === 'source')
+    if (ViewState.mode() === 'source')
       return;
     if (Cross.isActive()) {
       // 原生选区是折叠的，WebKit 不会自己剪切：算好内容写剪贴板再删区间

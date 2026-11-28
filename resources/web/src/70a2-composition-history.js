@@ -76,7 +76,7 @@
     if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo')
       event.preventDefault();
     // 跨块选区上的输入：折叠光标只覆盖焦点一个字符，必须先按整篇源码替换区间
-    if (Cross.isActive() && !suppressEvents && mode === 'wysiwyg') {
+    if (Cross.isActive() && !suppressEvents && ViewState.mode() === 'wysiwyg') {
       if (event.inputType === 'insertText' && typeof event.data === 'string') {
         event.preventDefault();
         Cross.replaceCrossSelection(event.data);

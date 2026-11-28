@@ -1,6 +1,6 @@
   var BlockConvert = (function blockConvertModule() {
   function convertBlocks(type, toggle) {
-    if (mode === 'source') {
+    if (ViewState.mode() === 'source') {
       SourceConvert.sourceConvert(type, toggle);
       return;
     }
@@ -150,7 +150,7 @@
   }
 
   function toggleInline(kind) {
-    if (mode === 'source') {
+    if (ViewState.mode() === 'source') {
       SourceConvert.sourceInline(kind);
       return;
     }
